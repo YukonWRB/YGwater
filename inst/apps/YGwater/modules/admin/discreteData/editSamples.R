@@ -107,7 +107,6 @@ editSamples <- function(id, language) {
         column = "collection_method"
       ),
       sample_type = list(label = "Sample type", column = "sample_type"),
-      linked_with = list(label = "Linked with", column = "linked_with"),
       sample_volume_ml = list(
         label = "Sample volume (mL)",
         column = "sample_volume_ml"
@@ -153,7 +152,10 @@ editSamples <- function(id, language) {
         column = "share_with",
         cast = "::text[]"
       ),
-      import_source = list(label = "Import source", column = "import_source"),
+      source_adapter_function = list(
+        label = "Source adapter function",
+        column = "source_adapter_function"
+      ),
       no_source_update = list(
         label = "Lock sample from updates by automatic import processes",
         column = "no_source_update"
@@ -578,11 +580,6 @@ editSamples <- function(id, language) {
       } else {
         NA_integer_
       }
-      linked_with <- if (length(input$linked_with)) {
-        as.integer(input$linked_with[[1]])
-      } else {
-        NA_integer_
-      }
       owner <- if (length(input$owner)) {
         as.integer(input$owner[[1]])
       } else {
@@ -643,7 +640,6 @@ editSamples <- function(id, language) {
         target_datetime = scalar_utc_datetime(input$target_datetime),
         collection_method = collection_method,
         sample_type = sample_type,
-        linked_with = linked_with,
         sample_volume_ml = if (
           !length(input$sample_volume_ml) || is.na(input$sample_volume_ml)
         ) {
@@ -688,15 +684,15 @@ editSamples <- function(id, language) {
         document_ids = document_ids,
         sample_group_ids = sample_group_ids,
         share_with = share_with_to_array(input$share_with),
-        import_source = if (isTruthy(input$import_source)) {
-          input$import_source
+        source_adapter_function = if (isTruthy(input$source_adapter_function)) {
+          input$source_adapter_function
         } else {
           NA_character_
         },
         no_source_update = isTRUE(input$no_source_update),
         note = if (isTruthy(input$note)) input$note else NA_character_,
-        import_source_id = if (isTruthy(input$import_source_id)) {
-          input$import_source_id
+        external_sample_id = if (isTruthy(input$external_sample_id)) {
+          input$external_sample_id
         } else {
           NA_character_
         }
@@ -1653,7 +1649,6 @@ editSamples <- function(id, language) {
         selected = character(0)
       )
       updateSelectizeInput(session, "sample_type", selected = character(0))
-      updateSelectizeInput(session, "linked_with", selected = character(0))
       updateNumericInput(session, "sample_volume_ml", value = NA)
       updateNumericInput(session, "purge_volume_l", value = NA)
       updateNumericInput(session, "purge_time_min", value = NA)
@@ -1678,8 +1673,8 @@ editSamples <- function(id, language) {
       updateSelectizeInput(session, "documents", selected = character(0))
       updateSelectizeInput(session, "sample_groups", selected = character(0))
       updateSelectizeInput(session, "share_with", selected = "public_reader")
-      updateTextInput(session, "import_source", value = "")
-      updateTextInput(session, "import_source_id", value = "")
+      updateTextInput(session, "source_adapter_function", value = "")
+      updateTextInput(session, "external_sample_id", value = "")
       updateTextAreaInput(session, "note", value = "")
       updateCheckboxInput(session, "no_source_update", value = FALSE)
       if (!is.null(input$multi_fields)) {
@@ -1750,15 +1745,6 @@ editSamples <- function(id, language) {
         session,
         "sample_type",
         selected = as.character(details$sample_type)
-      )
-      updateSelectizeInput(
-        session,
-        "linked_with",
-        selected = if (is.na(details$linked_with)) {
-          character(0)
-        } else {
-          as.character(details$linked_with)
-        }
       )
       updateNumericInput(
         session,
@@ -1858,16 +1844,16 @@ editSamples <- function(id, language) {
       )
       updateTextInput(
         session,
-        "import_source",
-        value = if (is.na(details$import_source)) "" else details$import_source
+        "source_adapter_function",
+        value = if (is.na(details$source_adapter_function)) "" else details$source_adapter_function
       )
       updateTextInput(
         session,
-        "import_source_id",
-        value = if (is.na(details$import_source_id)) {
+        "external_sample_id",
+        value = if (is.na(details$external_sample_id)) {
           ""
         } else {
-          details$import_source_id
+          details$external_sample_id
         }
       )
       updateTextAreaInput(
@@ -1886,7 +1872,7 @@ editSamples <- function(id, language) {
       con <- session$userData$AquaCache
       moduleData$samples <- DBI::dbGetQuery(
         con,
-        "SELECT sample_id, location_id, sub_location_id, media_id, z, datetime, target_datetime, collection_method, sample_type, linked_with, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, sample_grade, sample_approval, owner, contributor, comissioning_org, sampling_org, share_with, import_source, no_source_update, note, import_source_id FROM discrete.samples ORDER BY datetime DESC"
+        "SELECT sample_id, location_id, sub_location_id, media_id, z, datetime, target_datetime, collection_method, sample_type, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, sample_grade, sample_approval, owner, contributor, comissioning_org, sampling_org, share_with, source_adapter_function, no_source_update, note, external_sample_id, import_source_id FROM discrete.samples ORDER BY datetime DESC"
       )
       moduleData$samples_display <- DBI::dbGetQuery(
         con,
@@ -2410,33 +2396,9 @@ editSamples <- function(id, language) {
             ),
             fluidRow(
               multi_field_ui(
-                "linked_with",
-                column(
-                  6,
-                  selectizeInput(
-                    ns("linked_with"),
-                    "Linked sample (optional)",
-                    choices = named_choices(
-                      moduleData$samples$sample_id,
-                      paste0(
-                        moduleData$samples$sample_id,
-                        " – ",
-                        format(
-                          as.POSIXct(moduleData$samples$datetime, tz = "UTC"),
-                          "%Y-%m-%d %H:%M"
-                        )
-                      )
-                    ),
-                    multiple = TRUE,
-                    options = list(maxItems = 1, placeholder = "Optional"),
-                    width = "100%"
-                  )
-                )
-              ),
-              multi_field_ui(
                 "documents",
                 column(
-                  6,
+                  12,
                   selectizeInput(
                     ns("documents"),
                     "Associated documents",
@@ -2736,12 +2698,12 @@ editSamples <- function(id, language) {
             ),
             fluidRow(
               multi_field_ui(
-                "import_source",
+                "source_adapter_function",
                 column(
                   6,
                   textInput(
-                    ns("import_source"),
-                    "Import source",
+                    ns("source_adapter_function"),
+                    "Source adapter function",
                     placeholder = "Optional"
                   )
                 )
@@ -2750,8 +2712,8 @@ editSamples <- function(id, language) {
                 column(
                   6,
                   textInput(
-                    ns("import_source_id"),
-                    "Import source ID",
+                    ns("external_sample_id"),
+                    "External sample ID",
                     placeholder = "Optional"
                   )
                 )
@@ -3626,24 +3588,23 @@ editSamples <- function(id, language) {
           target_datetime = $6,
           collection_method = $7,
           sample_type = $8,
-          linked_with = $9,
-          sample_volume_ml = $10,
-          purge_volume_l = $11,
-          purge_time_min = $12,
-          flow_rate_l_min = $13,
-          wave_hgt_m = $14,
-          sample_grade = $15,
-          sample_approval = $16,
-          owner = $17,
-          contributor = $18,
-          comissioning_org = $19,
-          sampling_org = $20,
-          share_with = $21::text[],
-          import_source = $22,
-          no_source_update = $23,
-          note = $24,
-          import_source_id = $25
-        WHERE sample_id = $26;
+          sample_volume_ml = $9,
+          purge_volume_l = $10,
+          purge_time_min = $11,
+          flow_rate_l_min = $12,
+          wave_hgt_m = $13,
+          sample_grade = $14,
+          sample_approval = $15,
+          owner = $16,
+          contributor = $17,
+          comissioning_org = $18,
+          sampling_org = $19,
+          share_with = $20::text[],
+          source_adapter_function = $21,
+          no_source_update = $22,
+          note = $23,
+          external_sample_id = $24
+        WHERE sample_id = $25;
       "
 
         params <- list(
@@ -3655,7 +3616,6 @@ editSamples <- function(id, language) {
           form$target_datetime,
           form$collection_method,
           form$sample_type,
-          form$linked_with,
           form$sample_volume_ml,
           form$purge_volume_l,
           form$purge_time_min,
@@ -3668,10 +3628,10 @@ editSamples <- function(id, language) {
           form$comissioning_org,
           form$sampling_org,
           form$share_with,
-          form$import_source,
+          form$source_adapter_function,
           form$no_source_update,
           form$note,
-          form$import_source_id,
+          form$external_sample_id,
           sample_id
         )
 

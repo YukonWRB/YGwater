@@ -23,6 +23,134 @@ test_that("get_state_style_elements returns correct color mapping", {
     expect_length(cols, length(vals))
 })
 
+test_that("get_display_data does not require polygon labels for point layers", {
+    state <- data.frame(
+        name = c("Station A", "Station B"),
+        location = c("A", "B"),
+        latest_date = as.POSIXct(c("2026-05-01", "2026-05-01"), tz = "UTC"),
+        value = c(120, 140),
+        relative_to_med = c(80, 110),
+        historic_median = c(150, 127),
+        percentile = c(25, 60),
+        anomalies = c(-30, 13)
+    )
+
+    result <- testthat::with_mocked_bindings(
+        get_display_data(
+            dataset = list(
+                timeseries = list(data = data.frame()),
+                metadata = data.frame(),
+                geom = "point",
+                continuity = "discrete",
+                param_name = "snow water equivalent"
+            ),
+            year = 2026,
+            month = 5,
+            statistic = "relative_to_med",
+            october_start = FALSE
+        ),
+        get_state_as_shp = function(...) state,
+        .package = "YGwater"
+    )
+
+    expect_equal(nrow(result), nrow(state))
+    expect_false(any(c("annotation_en", "annotation_fr") %in% names(result)))
+})
+
+test_that("get_display_data requires translated labels for polygon layers", {
+    state <- data.frame(
+        name = "Basin A",
+        value = 120,
+        relative_to_med = 80,
+        historic_median = 150,
+        percentile = 25,
+        anomalies = -30
+    )
+
+    expect_error(
+        testthat::with_mocked_bindings(
+            get_display_data(
+                dataset = list(
+                    timeseries = list(data = data.frame()),
+                    metadata = data.frame(),
+                    geom = "poly",
+                    continuity = "discrete",
+                    param_name = "snow water equivalent"
+                ),
+                year = 2026,
+                month = 5,
+                statistic = "relative_to_med",
+                october_start = FALSE
+            ),
+            get_state_as_shp = function(...) state,
+            .package = "YGwater"
+        ),
+        "Polygon metadata is missing required annotation column"
+    )
+})
+
+test_that("get_display_data preserves generated polygon line breaks", {
+    state <- data.frame(
+        name = "Lower_Yukon",
+        value = 120,
+        relative_to_med = 80,
+        historic_median = 150,
+        percentile = 25,
+        anomalies = -30,
+        annotation_en = "Lower<br>Yukon",
+        annotation_fr = "Bas<br>Yukon <script>"
+    )
+
+    result <- testthat::with_mocked_bindings(
+        get_display_data(
+            dataset = list(
+                timeseries = list(data = data.frame()),
+                metadata = data.frame(),
+                geom = "poly",
+                continuity = "discrete",
+                param_name = "snow water equivalent"
+            ),
+            year = 2026,
+            month = 5,
+            statistic = "relative_to_med",
+            october_start = FALSE
+        ),
+        get_state_as_shp = function(...) state,
+        .package = "YGwater"
+    )
+
+    expect_identical(result$annotation_en, "Lower<br>Yukon<br>(80 %)")
+    expect_identical(
+        result$annotation_fr,
+        "Bas<br>Yukon &lt;script&gt;<br>(80 %)"
+    )
+})
+
+test_that("make_snowbull_map preserves its language interface", {
+    captured_language <- NULL
+
+    expect_error(
+        testthat::with_mocked_bindings(
+            make_snowbull_map(
+                year = 2026,
+                month = 5,
+                param_name = "snow water equivalent",
+                language = "fr",
+                format = "ggplot"
+            ),
+            get_dynamic_style_elements = function(..., language) {
+                captured_language <<- language
+                stop("language captured", call. = FALSE)
+            },
+            .package = "YGwater"
+        ),
+        "language captured"
+    )
+
+    expect_identical(captured_language, "Fran\u00e7ais")
+    expect_identical(formals(make_snowbull_map)$language, "English")
+})
+
 test_that("standardize_swe_param_name returns valid param", {
     expect_equal(
         standardize_swe_param_name("snow water equivalent"),

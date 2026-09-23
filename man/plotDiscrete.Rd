@@ -118,7 +118,9 @@ plotDiscrete(
 
 \item{include_blanks}{Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.}
 
-\item{duplicate_action}{How AquaCache duplicate/replicate samples should be handled. One of "show", "hide", or "average".}
+\item{duplicate_action}{How AquaCache duplicate/replicate samples should be
+handled. One of \code{"show"}, \code{"hide"}, or \code{"average"}. Averaging uses active
+\code{replicate_set} memberships in \code{discrete.sample_groups}.}
 
 \item{sample_ids}{Optional AquaCache sample ids to include. This is used by Shiny browse-table selections.}
 

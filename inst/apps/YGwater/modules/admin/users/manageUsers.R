@@ -463,6 +463,7 @@ ORDER BY schema_name;"
 FROM pg_catalog.pg_roles
 WHERE rolname !~ '^pg_'
   AND rolname <> 'public'
+  AND rolname <> 'public_reader'
 ORDER BY rolname"
       )
       current_user <- DBI::dbGetQuery(

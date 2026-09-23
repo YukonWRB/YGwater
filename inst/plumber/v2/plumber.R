@@ -605,7 +605,17 @@ v2_request_cache_allowed <- function(credentials) {
 }
 
 v2_validate_lang <- function(lang) {
-  lang <- tolower(as.character(lang[[1]]))
+  if (is.null(lang) || length(lang) == 0L || is.na(lang[[1L]])) {
+    return(NULL)
+  }
+
+  lang <- tolower(trimws(as.character(lang[[1L]])))
+
+  if (lang %in% c("english", "anglais")) {
+    lang <- "en"
+  } else if (lang %in% c("french", "fran\u00e7ais", "francais", "fran")) {
+    lang <- "fr"
+  }
 
   if (!lang %in% c("en", "fr")) {
     return(NULL)
@@ -940,7 +950,7 @@ v2_snowbull_stamp <- function(
       JOIN discrete.results r ON s.sample_id = r.sample_id
       WHERE r.parameter_id = %s
         AND r.result IS NOT NULL
-        AND DATE(s.target_datetime) < DATE('%s')
+        AND DATE(s.target_datetime) <= DATE('%s')
         AND DATE(s.target_datetime) >= DATE('1990-10-01')
       ",
         as.integer(param_id),
@@ -963,7 +973,7 @@ v2_snowbull_stamp <- function(
 v2_snow_stamp <- function(con) {
   rows <- DBI::dbGetQuery(
     con,
-    "SELECT count(*) FROM discrete.samples WHERE import_source = 'downloadSnowCourseYG'"
+    "SELECT count(*) FROM discrete.samples WHERE source_adapter_function = 'downloadSnowCourseYG'"
   )[1L, 1L]
 
   stamp <- DBI::dbGetQuery(
@@ -972,12 +982,12 @@ v2_snow_stamp <- function(con) {
   SELECT GREATEST(
     (SELECT MAX(COALESCE(s.modified, s.created))
        FROM discrete.samples s
-      WHERE s.import_source = 'downloadSnowCourseYG'),
+      WHERE s.source_adapter_function = 'downloadSnowCourseYG'),
 
     (SELECT MAX(COALESCE(r.modified, r.created))
        FROM discrete.results r
        JOIN discrete.samples s ON s.sample_id = r.sample_id
-      WHERE s.import_source = 'downloadSnowCourseYG'
+      WHERE s.source_adapter_function = 'downloadSnowCourseYG'
         AND r.parameter_id IN (21, 1220))
   ) AS stamp
 "
@@ -1097,15 +1107,23 @@ function(request, response, client_id) {
 
 #* List available locations
 #* @get /locations
-#* @query lang:string("en") Language for location names and descriptions ("en" or "fr").
+#* @query lang:string("en") Language for location names and descriptions ("en" or "fr" or things this API recognizes and can coerce to "en" or "fr").
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
-  lang <- v2_validate_lang(v2_query_value(query, "lang", "en"))
+  lang <- v2_validate_lang(
+    v2_query_value(
+      query,
+      "lang",
+      "en"
+    )
+  )
   if (is.null(lang)) {
     return(v2_apply_response(
       v2_response(
-        v2_error_df("Invalid language parameter. Use 'en' or 'fr'."),
+        v2_error_df(
+          "Invalid language parameter. Refer to the API documentation."
+        ),
         status = 400L,
         headers = list("X-Status" = "error")
       ),
@@ -1151,15 +1169,23 @@ function(request, response, query) {
 
 #* List available timeseries
 #* @get /timeseries
-#* @query lang:string("en") Language for timeseries names and descriptions ("en" or "fr").
+#* @query lang:string("en") Language for timeseries names and descriptions ("en" or "fr" or things this API recognizes and can coerce to "en" or "fr").
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
-  lang <- v2_validate_lang(v2_query_value(query, "lang", "en"))
+  lang <- v2_validate_lang(
+    v2_query_value(
+      query,
+      "lang",
+      "en"
+    )
+  )
   if (is.null(lang)) {
     return(v2_apply_response(
       v2_response(
-        v2_error_df("Invalid language parameter. Use 'en' or 'fr'."),
+        v2_error_df(
+          "Invalid language parameter. Refer to the API documentation."
+        ),
         status = 400L,
         headers = list("X-Status" = "error")
       ),
@@ -3241,7 +3267,7 @@ v2_finalize_response
 #* @query year:integer Bulletin year.
 #* @query month:integer Bulletin month.
 #* @query statistic:string("relative_to_med") Statistic to display.
-#* @query language:string("English") Language for labels.
+#* @query lang:string("en") Language for labels. "en" or "fr" or things this API recognizes and can coerce to "en" or "fr".
 #* @query continuous:boolean(false) Consider continuous data for latest bulletin.
 #* @query discrete:boolean(true) Consider discrete data for latest bulletin.
 #* @serializer text/html v2_text_serializer()
@@ -3384,7 +3410,25 @@ function(client_id, query) {
   }
 
   statistic <- v2_query_value(query, "statistic", "relative_to_med")
-  language <- v2_query_value(query, "language", "English")
+
+  lang <- v2_validate_lang(
+    v2_query_value(
+      query,
+      "lang",
+      "en"
+    )
+  )
+  if (is.null(lang)) {
+    return(v2_response(
+      v2_error_df(
+        "Invalid language parameter. Refer to the API documentation."
+      ),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+  language <- lengthenLanguage(lang)
+
   continuous <- v2_parse_logical(v2_query_value(query, "continuous"), FALSE)
   discrete <- v2_parse_logical(v2_query_value(query, "discrete"), TRUE)
   latest_stamp <- v2_snowbull_stamp(ctx$con, year, month, continuous, discrete)
@@ -3484,7 +3528,10 @@ function(client_id, query) {
 #* @then
 v2_finalize_response
 
-#* Return CSW layer data
+#* Return CSW layer data to drive Yukon Flood Hub maps
+#*
+#* Returns a CSV or JSON table of CSW layer data for use in Yukon Flood Hub maps. The data is derived from the public.get_csw_layer() database function.
+#*
 #* @get /csw-layer
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()

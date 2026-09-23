@@ -5,6 +5,42 @@ continuous_timeseries_has_measurements_sql <-
   # alias keeps empty series out without excluding composite/derived series.
   "ts.start_datetime IS NOT NULL AND ts.end_datetime IS NOT NULL"
 
+# Normalize selectize inputs that expose an "all" sentinel. Selectize briefly
+# reports both the sentinel and a concrete value while the user changes the
+# selection, so downstream observers must not interpret "all" as a database ID.
+data_filter_normalize_selection <- function(values, all_value = "all") {
+  values <- as.character(values)
+  if (!length(values)) {
+    return(all_value)
+  }
+  if (!(all_value %in% values) || length(values) == 1L) {
+    return(values)
+  }
+  if (identical(values[[length(values)]], all_value)) {
+    all_value
+  } else {
+    setdiff(values, all_value)
+  }
+}
+
+# Select every row unless the table is already fully selected. Deriving the
+# action from DT's real selection avoids a private toggle drifting after a user
+# manually changes the selected rows or after the table is re-rendered.
+data_table_toggle_all_rows <- function(selected_rows, row_count) {
+  row_count <- as.integer(row_count)
+  if (is.na(row_count) || row_count <= 0L) {
+    return(NULL)
+  }
+  selected_rows <- unique(suppressWarnings(as.integer(selected_rows)))
+  selected_rows <- selected_rows[!is.na(selected_rows)]
+  if (length(selected_rows) == row_count &&
+      setequal(selected_rows, seq_len(row_count))) {
+    NULL
+  } else {
+    seq_len(row_count)
+  }
+}
+
 # continuous plot and data modules ######
 cont_data_cache_signature <- function(con) {
   # Cache identity follows each timeseries' latest UTC calendar date. It
