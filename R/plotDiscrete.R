@@ -531,10 +531,10 @@ plotDiscrete <- function(
     }
 
     if ("replicate_group_id" %in% names(df) && "sample_id" %in% names(df)) {
-      df$duplicate_group <- data.table::fifelse(
+      df$duplicate_group <- ifelse(
         is.na(df$replicate_group_id),
-        df$sample_id,
-        df$replicate_group_id
+        paste0("sample:", df$sample_id),
+        paste0("group:", df$replicate_group_id)
       )
     }
 

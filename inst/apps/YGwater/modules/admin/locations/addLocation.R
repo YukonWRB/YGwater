@@ -2519,7 +2519,20 @@ addLocation <- function(id, inputs, language) {
       estimate_applied <- isTRUE(applied_elevation()) &&
         !is.null(applied_estimate) &&
         isTRUE(all.equal(as.numeric(input$lat), applied_estimate$lat)) &&
-        isTRUE(all.equal(as.numeric(input$lon), applied_estimate$lon))
+        isTRUE(all.equal(as.numeric(input$lon), applied_estimate$lon)) &&
+        isTRUE(all.equal(
+          suppressWarnings(as.numeric(input$elev)),
+          as.numeric(applied_estimate$details$elevation)
+        )) &&
+        identical(as.character(input$datum_id_from), "10") &&
+        if (is.na(applied_estimate$datum_id)) {
+          !isTruthy(input$datum_id_to)
+        } else {
+          isTRUE(all.equal(
+            suppressWarnings(as.numeric(input$datum_id_to)),
+            as.numeric(applied_estimate$datum_id)
+          ))
+        }
       automatic_elevation <- identical(input$mode, "add") &&
         (missing_numeric_input(input$elev) || estimate_applied)
 

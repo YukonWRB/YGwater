@@ -7,12 +7,12 @@ test_that("Add Location offers automatic elevation lookup", {
 
   expect_match(
     module,
-    "Elevation conversion (meters; leave blank to estimate)",
+    "Elevation conversion (meters)",
     fixed = TRUE
   )
   expect_match(
     module,
-    "AquaCache will estimate it from the coordinates",
+    "leave it blank to estimate it automatically when the location is added",
     fixed = TRUE
   )
   expect_match(
