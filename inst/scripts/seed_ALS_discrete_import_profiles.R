@@ -117,86 +117,41 @@ upsert_source <- function(con, source_code, source_name, source_description) {
 }
 
 upsert_profile <- function(con, source_id, profile) {
-  DBI::dbGetQuery(
+  source <- DBI::dbGetQuery(
     con,
-    "INSERT INTO discrete.import_profiles (
-       import_source_id,
-       profile_code,
-       profile_name,
-       profile_description,
-       file_type,
-       parser_type,
-       sheet_strategy,
-       sheet_name,
-       sheet_index,
-       header_row,
-       units_row,
-       parameter_row,
-       data_start_row,
-       datetime_origin,
-       timezone,
-       column_map,
-       wide_config,
-       defaults,
-       sample_identity,
-       result_identity,
-       validation_rules,
-       active,
-       note
-     ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-       $11, $12, $13, $14, $15, $16::jsonb, $17::jsonb,
-       $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb, $22, $23
-     )
-     ON CONFLICT (import_source_id, profile_code) DO UPDATE
-     SET profile_name = EXCLUDED.profile_name,
-         profile_description = EXCLUDED.profile_description,
-         file_type = EXCLUDED.file_type,
-         parser_type = EXCLUDED.parser_type,
-         sheet_strategy = EXCLUDED.sheet_strategy,
-         sheet_name = EXCLUDED.sheet_name,
-         sheet_index = EXCLUDED.sheet_index,
-         header_row = EXCLUDED.header_row,
-         units_row = EXCLUDED.units_row,
-         parameter_row = EXCLUDED.parameter_row,
-         data_start_row = EXCLUDED.data_start_row,
-         datetime_origin = EXCLUDED.datetime_origin,
-         timezone = EXCLUDED.timezone,
-         column_map = EXCLUDED.column_map,
-         wide_config = EXCLUDED.wide_config,
-         defaults = EXCLUDED.defaults,
-         sample_identity = EXCLUDED.sample_identity,
-         result_identity = EXCLUDED.result_identity,
-         validation_rules = EXCLUDED.validation_rules,
-         active = EXCLUDED.active,
-         note = EXCLUDED.note
-     RETURNING import_profile_id;",
-    params = list(
-      source_id,
-      profile$profile_code,
-      profile$profile_name,
-      profile$profile_description,
-      profile$file_type,
-      profile$parser_type,
-      profile$sheet_strategy,
-      profile$sheet_name,
-      profile$sheet_index,
-      as.integer(profile$header_row),
-      profile$units_row,
-      profile$parameter_row,
-      as.integer(profile$data_start_row),
-      profile$datetime_origin,
-      profile$timezone,
-      json_value(profile$column_map, object = TRUE),
-      json_value(profile$wide_config, object = TRUE),
-      json_value(profile$defaults, object = TRUE),
-      json_value(profile$sample_identity, object = FALSE),
-      json_value(profile$result_identity, object = FALSE),
-      json_value(profile$validation_rules, object = TRUE),
-      isTRUE(profile$active),
-      profile$note
-    )
-  )$import_profile_id[[1]]
+    "SELECT source_code, source_name, source_description
+     FROM discrete.import_sources
+     WHERE import_source_id = $1",
+    params = list(source_id)
+  )
+  AquaCache::upsertImportProfile(
+    con = con,
+    source_code = source$source_code[[1]],
+    source_name = source$source_name[[1]],
+    source_description = source$source_description[[1]],
+    profile_code = profile$profile_code,
+    profile_name = profile$profile_name,
+    profile_description = profile$profile_description,
+    file_type = profile$file_type,
+    parser_type = profile$parser_type,
+    sheet_strategy = profile$sheet_strategy,
+    sheet_name = profile$sheet_name,
+    sheet_index = profile$sheet_index,
+    header_row = profile$header_row,
+    units_row = profile$units_row,
+    parameter_row = profile$parameter_row,
+    data_start_row = profile$data_start_row,
+    datetime_origin = profile$datetime_origin,
+    timezone = profile$timezone,
+    column_map = profile$column_map,
+    wide_config = profile$wide_config,
+    defaults = profile$defaults,
+    sample_identity = profile$sample_identity,
+    result_identity = profile$result_identity,
+    validation_rules = profile$validation_rules,
+    active = profile$active,
+    note = profile$note
+  )
 }
 
 upsert_parameter_mappings <- function(con, source_id, key) {
@@ -253,7 +208,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     "SELECT result_speciation_id FROM discrete.result_speciations;"
   )$result_speciation_id
 
-  inserted <- 0L
+  resolved <- vector("list", nrow(key))
   for (i in seq_len(nrow(key))) {
     sample_fraction_id <- if ("sample_fraction_id" %in% names(key)) {
       scalar_int(key$sample_fraction_id[[i]])
@@ -262,6 +217,9 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     }
     if (is.na(sample_fraction_id) && "sample_fraction_AC" %in% names(key)) {
       sample_fraction_id <- scalar_int(key$sample_fraction_AC[[i]])
+    }
+    if (is.na(sample_fraction_id) && "sample_fraction" %in% names(key)) {
+      sample_fraction_id <- scalar_int(key$sample_fraction[[i]])
     }
     if (!is.na(sample_fraction_id) && !(sample_fraction_id %in% valid_sample_fractions)) {
       sample_fraction_id <- NA_integer_
@@ -275,121 +233,257 @@ upsert_parameter_mappings <- function(con, source_id, key) {
       result_speciation_id <- NA_integer_
     }
 
-    source_match <- json_value(list(
+    resolved[[i]] <- data.frame(
       parameter_code = as.character(key$input_param[[i]]),
-      unit = as.character(key$input_unit[[i]])
-    ))
-    DBI::dbExecute(
-      con,
-      "INSERT INTO discrete.import_parameter_mappings (
-         import_source_id,
-         source_match,
-         parameter_id,
-         result_type,
-         sample_fraction_id,
-         result_value_type,
-         result_speciation_id,
-         matrix_state_id,
-         conversion,
-         result_offset,
-         priority,
-         active,
-         note
-       ) VALUES (
-         $1, $2::jsonb, $3, $4, $5, $6, $7, $8, $9, $10, 100, TRUE, $11
-       )
-       ON CONFLICT (import_source_id, source_match) DO UPDATE
-       SET parameter_id = EXCLUDED.parameter_id,
-           result_type = EXCLUDED.result_type,
-           sample_fraction_id = EXCLUDED.sample_fraction_id,
-           result_value_type = EXCLUDED.result_value_type,
-           result_speciation_id = EXCLUDED.result_speciation_id,
-           matrix_state_id = EXCLUDED.matrix_state_id,
-           conversion = EXCLUDED.conversion,
-           result_offset = EXCLUDED.result_offset,
-           active = TRUE,
-           note = EXCLUDED.note;",
-      params = list(
-        source_id,
-        source_match,
-        key$parameter_id_int[[i]],
-        scalar_int(key$result_type[[i]], 2L),
-        sample_fraction_id,
-        result_value_type,
-        result_speciation_id,
-        scalar_int(key$matrix_state[[i]], 1L),
-        scalar_num(key$conversion[[i]], 1),
-        scalar_num(key$result_offset[[i]], 0),
-        as.character(key$FLAG_notes_combined[[i]])
-      )
+      unit = as.character(key$input_unit[[i]]),
+      parameter_id = key$parameter_id_int[[i]],
+      result_type = scalar_int(key$result_type[[i]], 2L),
+      sample_fraction_id = sample_fraction_id,
+      result_value_type = result_value_type,
+      result_speciation_id = result_speciation_id,
+      matrix_state_id = scalar_int(key$matrix_state[[i]], 1L),
+      conversion = scalar_num(key$conversion[[i]], 1),
+      result_offset = scalar_num(key$result_offset[[i]], 0),
+      priority = 100L,
+      active = TRUE,
+      note = as.character(key$FLAG_notes_combined[[i]]),
+      stringsAsFactors = FALSE
     )
-    inserted <- inserted + 1L
   }
-  inserted
-}
-
-upsert_qualifier_mappings <- function(con, source_id) {
-  qualifiers <- data.table::data.table(
-    qualifier_column = "result",
-    qualifier_value = c("<", ">"),
-    result_condition = c(1L, 2L),
-    result_condition_value_source = "result",
-    result_action = "set_result_null",
-    note_template = c(
-      "Result reported below detection or quantification limit.",
-      "Result reported above detection or quantification limit."
-    ),
-    priority = c(10L, 10L),
-    active = c(TRUE, TRUE),
-    note = c("Seeded for ALS result imports.", "Seeded for ALS result imports.")
+  resolved <- data.table::rbindlist(resolved, fill = TRUE)
+  source <- DBI::dbGetQuery(
+    con,
+    "SELECT source_code, source_name
+     FROM discrete.import_sources
+     WHERE import_source_id = $1",
+    params = list(source_id)
+  )
+  AquaCache::upsertImportParameterMappings(
+    con = con,
+    source_code = source$source_code[[1]],
+    source_name = source$source_name[[1]],
+    mappings = resolved,
+    match_columns = c("parameter_code", "unit")
   )
 
-  for (i in seq_len(nrow(qualifiers))) {
-    DBI::dbExecute(
-      con,
-      "INSERT INTO discrete.import_qualifier_mappings (
-         import_source_id,
-         import_profile_id,
-         qualifier_column,
-         qualifier_value,
-         result_condition,
-         result_condition_value_source,
-         result_action,
-         note_template,
-         priority,
-         active,
-         note
-       ) VALUES (
-         $1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, $10
-       )
-       ON CONFLICT (
-         import_source_id,
-         import_profile_id,
-         qualifier_column,
-         qualifier_value
-       ) DO UPDATE
-       SET result_condition = EXCLUDED.result_condition,
-           result_condition_value_source = EXCLUDED.result_condition_value_source,
-           result_action = EXCLUDED.result_action,
-           note_template = EXCLUDED.note_template,
-           priority = EXCLUDED.priority,
-           active = EXCLUDED.active,
-           note = EXCLUDED.note;",
-      params = list(
-        source_id,
-        qualifiers$qualifier_column[[i]],
-        qualifiers$qualifier_value[[i]],
-        qualifiers$result_condition[[i]],
-        qualifiers$result_condition_value_source[[i]],
-        qualifiers$result_action[[i]],
-        qualifiers$note_template[[i]],
-        qualifiers$priority[[i]],
-        qualifiers$active[[i]],
-        qualifiers$note[[i]]
+  # The Detailed Report labels and units differ from the ECCC/EQWin source
+  # vocabulary even when they describe the same target parameter. Publish
+  # explicit profile-scoped rows so those differences remain inspectable in
+  # the database rather than being hidden in parser code.
+  target_units <- DBI::dbGetQuery(
+    con,
+    "SELECT p.parameter_id,
+            liquid.unit_name AS unit_liquid,
+            solid.unit_name AS unit_solid,
+            gas.unit_name AS unit_gas
+     FROM public.parameters p
+     LEFT JOIN public.units liquid ON liquid.unit_id = p.units_liquid
+     LEFT JOIN public.units solid ON solid.unit_id = p.units_solid
+     LEFT JOIN public.units gas ON gas.unit_id = p.units_gas"
+  )
+  xlr <- merge(
+    data.table::copy(resolved),
+    data.table::as.data.table(target_units),
+    by = "parameter_id",
+    all.x = TRUE
+  )
+  source_labels <- toupper(trimws(gsub(
+    "[[:space:]]+",
+    " ",
+    xlr$parameter_code
+  )))
+  xlr[, parameter_code := vapply(
+    source_labels,
+    function(label) {
+      if (grepl("^HARDNESS DISSOLVED", label)) {
+        return("Hardness (as CaCO3), dissolved")
+      }
+      if (
+        grepl("^TOTAL DISSOLVED SOLIDS", label) ||
+          identical(label, "RESIDUE FILTERABLE")
+      ) {
+        return("Solids, total dissolved [TDS]")
+      }
+      if (grepl(" DISSOLVED$", label)) {
+        analyte <- sub(" DISSOLVED$", "", label)
+        return(paste0(tools::toTitleCase(tolower(analyte)), ", dissolved"))
+      }
+      NA_character_
+    },
+    character(1)
+  )]
+  xlr[, unit := data.table::fcase(
+    matrix_state_id == 1L, unit_liquid,
+    matrix_state_id == 2L, unit_solid,
+    matrix_state_id == 3L, unit_gas,
+    default = NA_character_
+  )]
+  xlr <- xlr[
+    is_present(parameter_code) & is_present(unit),
+    .(
+      parameter_code,
+      unit,
+      parameter_id,
+      result_type,
+      sample_fraction_id,
+      result_value_type,
+      result_speciation_id,
+      matrix_state_id,
+      conversion = 1,
+      result_offset = 0,
+      priority = 100L,
+      active = TRUE,
+      note = "ALS XLR Detailed Report label and target-unit mapping."
+    )
+  ]
+  xlr_mg_l <- data.table::copy(xlr)
+  target_unit_key <- tolower(gsub("[µμ]", "u", xlr_mg_l$unit))
+  xlr_mg_l[, conversion := data.table::fcase(
+    target_unit_key == "mg/l", 1,
+    target_unit_key == "ug/l", 1000,
+    target_unit_key == "ng/l", 1000000,
+    target_unit_key == "g/l", 0.001,
+    default = NA_real_
+  )]
+  xlr_mg_l[, unit := "mg/L"]
+  xlr_mg_l[, note := paste(
+    "ALS XLR Detailed Report mg/L source-unit conversion to the",
+    "parameter target unit."
+  )]
+  xlr <- data.table::rbindlist(
+    list(xlr, xlr_mg_l[is.finite(conversion)]),
+    fill = TRUE
+  )
+  suspended_solids <- DBI::dbGetQuery(
+    con,
+    "SELECT p.parameter_id, u.unit_name
+     FROM public.parameters p
+     JOIN public.units u ON u.unit_id = p.units_liquid
+     WHERE lower(p.param_name) = 'total suspended solids'"
+  )
+  if (nrow(suspended_solids) == 1L) {
+    total_fraction <- if (19L %in% valid_sample_fractions) {
+      19L
+    } else {
+      DBI::dbGetQuery(
+        con,
+        "SELECT sample_fraction_id
+         FROM discrete.sample_fractions
+         WHERE lower(sample_fraction) LIKE 'total%'
+         ORDER BY sample_fraction_id
+         LIMIT 1"
+      )$sample_fraction_id
+    }
+    xlr <- data.table::rbindlist(list(
+      xlr,
+      data.table::data.table(
+        parameter_code = "Solids, total suspended [TSS]",
+        unit = suspended_solids$unit_name[[1]],
+        parameter_id = suspended_solids$parameter_id[[1]],
+        result_type = 2L,
+        sample_fraction_id = if (length(total_fraction) == 1L) {
+          total_fraction[[1]]
+        } else {
+          NA_integer_
+        },
+        result_value_type = 1L,
+        result_speciation_id = NA_integer_,
+        matrix_state_id = 1L,
+        conversion = 1,
+        result_offset = 0,
+        priority = 100L,
+        active = TRUE,
+        note = "ALS XLR Detailed Report label and target-unit mapping."
       )
+    ), fill = TRUE)
+  }
+
+  # A few XLR labels have no exact counterpart in the legacy EQWin key (or
+  # use qualifiers such as "dissolved/filtered" there). Keep these aliases
+  # explicit and profile-scoped so their fraction and unit treatment remains
+  # visible to import-profile editors.
+  dissolved_fraction <- DBI::dbGetQuery(
+    con,
+    "SELECT sample_fraction_id
+     FROM discrete.sample_fractions
+     WHERE lower(sample_fraction) = 'dissolved'"
+  )$sample_fraction_id
+  explicit_xlr_aliases <- data.table::data.table(
+    parameter_code = c(
+      "Mercury, dissolved",
+      "Phosphorus, dissolved",
+      "Potassium, dissolved",
+      "Sodium, dissolved",
+      "Sulfur, dissolved",
+      "Thorium, dissolved"
+    ),
+    param_name = c(
+      "mercury",
+      "phosphorus, elemental",
+      "potassium",
+      "sodium",
+      "sulfur",
+      "thorium"
+    )
+  )
+  explicit_targets <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    "SELECT p.parameter_id, lower(p.param_name) AS param_name,
+            u.unit_name AS unit
+     FROM public.parameters p
+     JOIN public.units u ON u.unit_id = p.units_liquid"
+  ))
+  explicit_targets <- explicit_targets[
+    param_name %chin% explicit_xlr_aliases$param_name
+  ]
+  explicit_xlr_aliases <- merge(
+    explicit_xlr_aliases,
+    explicit_targets,
+    by = "param_name",
+    all.x = TRUE,
+    sort = FALSE
+  )
+  missing_explicit <- explicit_xlr_aliases[is.na(parameter_id), param_name]
+  if (length(missing_explicit)) {
+    stop(
+      "Could not resolve ALS XLR target parameter(s): ",
+      paste(missing_explicit, collapse = ", "),
+      call. = FALSE
     )
   }
-  nrow(qualifiers)
+  if (length(dissolved_fraction) != 1L) {
+    stop("Could not uniquely resolve the dissolved sample fraction.", call. = FALSE)
+  }
+  explicit_xlr_aliases[, `:=`(
+    result_type = 2L,
+    sample_fraction_id = dissolved_fraction[[1]],
+    result_value_type = 1L,
+    result_speciation_id = NA_integer_,
+    matrix_state_id = 1L,
+    conversion = 1,
+    result_offset = 0,
+    priority = 100L,
+    active = TRUE,
+    note = "ALS XLR Detailed Report dissolved-analyte alias."
+  )]
+  xlr <- data.table::rbindlist(list(
+    xlr,
+    explicit_xlr_aliases[, setdiff(names(explicit_xlr_aliases), "param_name"), with = FALSE]
+  ), fill = TRUE)
+  xlr <- unique(xlr, by = c("parameter_code", "unit"))
+  AquaCache::upsertImportParameterMappings(
+    con = con,
+    source_code = source$source_code[[1]],
+    source_name = source$source_name[[1]],
+    profile_code = "als_xlr_detailed",
+    mappings = xlr,
+    match_columns = c("parameter_code", "unit")
+  )
+  message(
+    "Processed ", nrow(resolved), " source-wide and ", nrow(xlr),
+    " ALS XLR profile-specific parameter mappings."
+  )
+  nrow(resolved) + nrow(xlr)
 }
 
 profile_definitions <- function() {
@@ -443,8 +537,8 @@ profile_definitions <- function() {
         result = "Result",
         unit = "Units",
         result_comment = "Result_Comment",
-        lab_mdl = "Lab_MDL",
-        lab_rdl = "Meth_Rprt_Limit_(RDL)",
+        method_detection_limit = "Lab_MDL",
+        reporting_detection_limit = "Meth_Rprt_Limit_(RDL)",
         lab_name = "Lab_Name",
         lab_report_no = "Lab_Rport_No",
         lab_sample_id = "Lab_Smpl_#",
@@ -467,7 +561,7 @@ profile_definitions <- function() {
       ),
       sample_identity = sample_identity,
       result_identity = result_identity,
-      validation_rules = list(),
+      validation_rules = list(parser_family = "long"),
       active = TRUE,
       note = "Seeded by seed_ALS_discrete_import_profiles.R."
     ),
@@ -517,7 +611,7 @@ profile_definitions <- function() {
       ),
       sample_identity = sample_identity,
       result_identity = result_identity,
-      validation_rules = list(),
+      validation_rules = list(parser_family = "transposed"),
       active = TRUE,
       note = "Seeded by seed_ALS_discrete_import_profiles.R."
     ),
@@ -544,9 +638,9 @@ profile_definitions <- function() {
         sub_matrix = "Sub-Matrix",
         analytical_method_code = "Method",
         result = "Results",
-        lab_rdl = "Detection Limit",
+        reporting_detection_limit = "Detection Limit",
         unit = "Units",
-        result_comment = "Qual",
+        result_flag = "Qual",
         sample_date = "Date Sampled",
         sample_time = "Time Sampled",
         prep_datetime = "Prep Date",
@@ -565,7 +659,7 @@ profile_definitions <- function() {
       ),
       sample_identity = sample_identity,
       result_identity = result_identity,
-      validation_rules = list(),
+      validation_rules = list(parser_family = "xlr"),
       active = TRUE,
       note = "Seeded by seed_ALS_discrete_import_profiles.R."
     )
@@ -579,6 +673,8 @@ if (file.exists("C:/Users/gtdelapl/Documents/.Renviron")) {
 repo_root <- normalizePath(".", winslash = "/", mustWork = TRUE)
 mapping_key <- first_existing_path(c(
   arg_value("--mapping-key", NA_character_),
+  file.path(repo_root, "..", "AquaCache", "inst", "import_keys", "downloadECCCeq1.csv"),
+  "C:/Users/gtdelapl/Documents/AquaCache/inst/import_keys/downloadECCCeq1.csv",
   file.path(repo_root, "inst", "import_keys", "EQWin.csv"),
   "C:/Users/gtdelapl/Documents/AquaCache/inst/import_keys/EQWin.csv"
 ))
@@ -632,10 +728,20 @@ required <- DBI::dbGetQuery(
      to_regclass('discrete.import_sources') IS NOT NULL AS has_sources,
      to_regclass('discrete.import_profiles') IS NOT NULL AS has_profiles,
      to_regclass('discrete.import_parameter_mappings') IS NOT NULL AS has_parameter_mappings,
-     to_regclass('discrete.import_qualifier_mappings') IS NOT NULL AS has_qualifier_mappings;"
+     to_regclass('discrete.import_result_flag_mappings') IS NOT NULL AS has_result_flag_mappings,
+     to_regclass('discrete.import_location_mappings') IS NOT NULL AS has_location_mappings,
+     EXISTS (
+       SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = 'discrete'
+         AND table_name = 'import_parameter_mappings'
+         AND column_name = 'import_mapping_set_id'
+     ) AS has_versioned_parameter_mappings;"
 )
 if (!all(unlist(required))) {
-  stop("Import mapping tables are missing. Apply AquaCache patch 49 before running this script.")
+  stop(
+    "The Patch 61 import mapping schema is missing. Apply AquaCache patch 61 before running this script."
+  )
 }
 
 profiles <- profile_definitions()
@@ -662,7 +768,6 @@ tryCatch(
       profile_ids <- c(profile_ids, upsert_profile(con, source_id, profile))
     }
 
-    qualifier_count <- upsert_qualifier_mappings(con, source_id)
     mapping_count <- 0L
     if (upload_mappings && is_present(mapping_key)) {
       key <- read_mapping_input(mapping_key)
@@ -677,7 +782,6 @@ tryCatch(
     }
 
     message("Profile IDs: ", paste(profile_ids, collapse = ", "))
-    message("Qualifier mappings processed: ", qualifier_count)
     message("Parameter mappings processed: ", mapping_count)
   },
   error = function(e) {

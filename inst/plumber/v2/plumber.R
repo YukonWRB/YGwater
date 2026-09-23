@@ -973,7 +973,7 @@ v2_snowbull_stamp <- function(
 v2_snow_stamp <- function(con) {
   rows <- DBI::dbGetQuery(
     con,
-    "SELECT count(*) FROM discrete.samples WHERE import_source = 'downloadSnowCourseYG'"
+    "SELECT count(*) FROM discrete.samples WHERE source_adapter_function = 'downloadSnowCourseYG'"
   )[1L, 1L]
 
   stamp <- DBI::dbGetQuery(
@@ -982,12 +982,12 @@ v2_snow_stamp <- function(con) {
   SELECT GREATEST(
     (SELECT MAX(COALESCE(s.modified, s.created))
        FROM discrete.samples s
-      WHERE s.import_source = 'downloadSnowCourseYG'),
+      WHERE s.source_adapter_function = 'downloadSnowCourseYG'),
 
     (SELECT MAX(COALESCE(r.modified, r.created))
        FROM discrete.results r
        JOIN discrete.samples s ON s.sample_id = r.sample_id
-      WHERE s.import_source = 'downloadSnowCourseYG'
+      WHERE s.source_adapter_function = 'downloadSnowCourseYG'
         AND r.parameter_id IN (21, 1220))
   ) AS stamp
 "

@@ -101,6 +101,36 @@ addLocation <- function(id, inputs, language) {
       }
     }
 
+    missing_numeric_input <- function(x) {
+      is.null(x) || !length(x) || is.na(suppressWarnings(as.numeric(x)))
+    }
+
+    fetched_elevation <- reactiveVal(NULL)
+    applied_elevation <- reactiveVal(FALSE)
+
+    find_elevation_datum <- function(datum_name) {
+      normalize <- function(x) {
+        toupper(gsub("[^A-Z0-9]", "", trimws(as.character(x))))
+      }
+      target <- normalize(datum_name)
+      datums <- moduleData$datums
+      exact <- which(normalize(datums$datum_name_en) == target)
+      if (length(exact)) {
+        return(datums$datum_id[[exact[[1]]]])
+      }
+      # Canadian DEM services report CGVD28; use AquaCache's derived-elevation
+      # datum when present rather than a year-specific HYDAT datum.
+      if (identical(target, "CGVD28")) {
+        approximate <- which(
+          normalize(datums$datum_name_en) == "CGVD28APPROXIMATE"
+        )
+        if (length(approximate)) {
+          return(datums$datum_id[[approximate[[1]]]])
+        }
+      }
+      NA_integer_
+    }
+
     collect_fn_modal_rows <- function(n_rows) {
       parsed_rows <- lapply(seq_len(n_rows), function(i) {
         lang <- input[[paste0("fn_language_", i)]]
@@ -263,9 +293,61 @@ addLocation <- function(id, inputs, language) {
             inline = TRUE
           )
         ),
+        hr(),
         # Placeholder uiOutput for conditional panel with a different order depending on if WSC or not and with some different fields
         uiOutput(ns("wsc_conditional_panel")),
 
+        splitLayout(
+          cellWidths = c("33.3%", "33.3%", "33.3%"),
+          selectizeInput(
+            ns("datum_id_from"),
+            "Vertical datum from (Assumed datum is station 0)",
+            choices = stats::setNames(
+              moduleData$datums$datum_id,
+              titleCase(moduleData$datums$datum_name_en, "en")
+            ),
+            selected = 10,
+            width = "100%",
+            multiple = FALSE
+          ) |>
+            tooltip(
+              "This should almost always be 'Assumed Datum', the local measurements."
+            ),
+          selectizeInput(
+            ns("datum_id_to"),
+            "Vertical datum to (Use assumed datum if no conversion to apply)",
+            choices = stats::setNames(
+              moduleData$datums$datum_id,
+              titleCase(moduleData$datums$datum_name_en, "en")
+            ),
+            selected = 10,
+            width = "100%",
+            multiple = FALSE
+          ) |>
+            tooltip(
+              "This is the datum you want to convert to. Use 'Assumed Datum' if no conversion is needed."
+            ),
+          numericInput(
+            ns("elev"),
+            "Elevation conversion (meters)",
+            value = 0,
+            width = "100%"
+          )
+        ),
+        helpText(
+          "If the elevation is unknown or of poor accuracy, leave it blank to estimate it automatically when the location is added, or fetch an estimate now to review its source and datum."
+        ),
+        conditionalPanel(
+          condition = "input.mode == 'add'",
+          ns = ns,
+          bslib::input_task_button(
+            ns("fetch_elevation"),
+            "Fetch elevation estimate"
+          )
+        ),
+        uiOutput(ns("elev_warning")),
+
+        hr(),
         # Add UI for well association
         checkboxInput(
           ns("associate_well"),
@@ -292,8 +374,8 @@ addLocation <- function(id, inputs, language) {
             )
           ),
           uiOutput(ns("selected_well_note")),
-          br()
         ),
+        hr(),
 
         selectizeInput(
           ns("share_with"),
@@ -313,44 +395,6 @@ addLocation <- function(id, inputs, language) {
           "Contact details (optional)",
           width = "100%"
         ),
-
-        splitLayout(
-          cellWidths = c("33.3%", "33.3%", "33.3%"),
-          selectizeInput(
-            ns("datum_id_from"),
-            "Vertical datum from (Assumed datum is station 0)",
-            choices = stats::setNames(
-              moduleData$datums$datum_id,
-              titleCase(moduleData$datums$datum_name_en, "en")
-            ),
-            selected = 10,
-            width = "100%",
-            multiple = FALSE
-          ) |>
-            tooltip(
-              "This should almost always be 'Assumed Datum', the local measurements."
-            ),
-          selectizeInput(
-            ns("datum_id_to"),
-            "Vertical datum to (Use assumed datum if no conversion to apply)",
-            choices = stats::setNames(
-              moduleData$datums$datum_id,
-              titleCase(moduleData$datums$datum_name_en, "en")
-            ),
-            selected = 10,
-            width = "100%"
-          ) |>
-            tooltip(
-              "This is the datum you want to convert to. Use 'Assumed Datum' if no conversion is needed."
-            ),
-          numericInput(
-            ns("elev"),
-            "Elevation conversion (meters, use 0 if not converting)",
-            value = 0,
-            width = "100%"
-          )
-        ),
-        uiOutput(ns("elev_warning")),
 
         splitLayout(
           cellWidths = c("50%", "50%"),
@@ -482,6 +526,7 @@ addLocation <- function(id, inputs, language) {
               "Add/Modify names in other languages",
               width = "100%"
             ),
+            hr(),
             selectizeInput(
               ns("loc_type"),
               "Location type",
@@ -560,6 +605,7 @@ addLocation <- function(id, inputs, language) {
               "Add/Modify names in other languages",
               width = "100%"
             ),
+            hr(),
             selectizeInput(
               ns("loc_type"),
               "Location type",
@@ -1065,8 +1111,12 @@ addLocation <- function(id, inputs, language) {
             )
           ))
           updateSelectizeInput(session, "datum_id_from", selected = 10)
-          updateSelectizeInput(session, "datum_id_to", selected = 10)
-          updateNumericInput(session, "elev", value = 0)
+          updateSelectizeInput(
+            session,
+            "datum_id_to",
+            selected = character(0)
+          )
+          updateNumericInput(session, "elev", value = NA)
         } else {
           datum_list <- tidyhydat::hy_datum_list()
           # Replace DATUM_FROM with DATUM_ID
@@ -1135,6 +1185,158 @@ addLocation <- function(id, inputs, language) {
     ## Make messages for lat/lon warnings #########################################
     # Reactive values to track warnings
     warnings <- reactiveValues(lat = NULL, lon = NULL, elev = NULL)
+
+    elevation_lookup_task <- ExtendedTask$new(function(request) {
+      promises::future_promise({
+        details <- AquaCache::get_elevation(
+          lat = request$lat,
+          lon = request$lon,
+          details = TRUE
+        )
+        list(details = details, lat = request$lat, lon = request$lon)
+      })
+    }) |>
+      bslib::bind_task_button("fetch_elevation")
+
+    observeEvent(
+      input$fetch_elevation,
+      {
+        lat <- suppressWarnings(as.numeric(input$lat))
+        lon <- suppressWarnings(as.numeric(input$lon))
+        if (
+          !identical(input$mode, "add") || length(lat) != 1L ||
+            length(lon) != 1L || !is.finite(lat) || !is.finite(lon) ||
+            lat < -90 || lat > 90 || lon < -180 || lon > 180
+        ) {
+          showModal(modalDialog(
+            "Enter valid latitude and longitude before fetching an elevation.",
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          return()
+        }
+
+        fetched_elevation(NULL)
+        applied_elevation(FALSE)
+        elevation_lookup_task$invoke(request = list(lat = lat, lon = lon))
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      elevation_lookup_task$result(),
+      {
+        result <- tryCatch(
+          elevation_lookup_task$result(),
+          error = function(e) e
+        )
+        if (inherits(result, "error")) {
+          fetched_elevation(NULL)
+          showModal(modalDialog(
+            paste("Elevation lookup failed:", conditionMessage(result)),
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          return()
+        }
+        details <- result$details
+        if (
+          is.null(details) ||
+            length(details$elevation) != 1L ||
+            !is.finite(details$elevation)
+        ) {
+          fetched_elevation(NULL)
+          showModal(modalDialog(
+            "No elevation was returned by the available services. You can leave the field blank and AquaCache will retry when the location is added.",
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          return()
+        }
+
+        datum_id <- find_elevation_datum(details$vertical_datum)
+        fetched_elevation(list(
+          details = details,
+          lat = result$lat,
+          lon = result$lon,
+          datum_id = datum_id
+        ))
+        metadata_row <- function(label, value) {
+          tags$tr(tags$th(label), tags$td(value))
+        }
+        metadata <- tagList(
+          tags$p(
+            "Review the elevation estimate before applying it to the form."
+          ),
+          tags$table(
+            class = "table table-sm",
+            tags$tbody(
+              metadata_row("Elevation", paste0(details$elevation, " m")),
+              metadata_row("Source", details$source),
+              metadata_row("Resolution", paste0(details$resolution, " m")),
+              metadata_row("Vertical datum", details$vertical_datum)
+            )
+          )
+        )
+        if (is.na(datum_id)) {
+          metadata <- tagAppendChildren(
+            metadata,
+            tags$p(
+              "This datum is not in the current datum list. It will be added automatically when you add the location."
+            )
+          )
+        }
+        showModal(modalDialog(
+          title = "Elevation estimate",
+          metadata,
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("use_fetched_elevation"), "Use this elevation"),
+            modalButton("Close")
+          )
+        ))
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$use_fetched_elevation,
+      {
+        estimate <- fetched_elevation()
+        req(estimate)
+        if (
+          !isTRUE(all.equal(as.numeric(input$lat), estimate$lat)) ||
+            !isTRUE(all.equal(as.numeric(input$lon), estimate$lon))
+        ) {
+          removeModal()
+          showModal(modalDialog(
+            "The coordinates changed after this estimate was fetched. Fetch a new estimate for the current coordinates.",
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          return()
+        }
+
+        updateSelectizeInput(session, "datum_id_from", selected = 10)
+        if (is.na(estimate$datum_id)) {
+          updateSelectizeInput(session, "datum_id_to", selected = character(0))
+        } else {
+          updateSelectizeInput(
+            session,
+            "datum_id_to",
+            selected = estimate$datum_id
+          )
+        }
+        updateNumericInput(
+          session,
+          "elev",
+          value = estimate$details$elevation
+        )
+        applied_elevation(TRUE)
+        removeModal()
+      },
+      ignoreInit = TRUE
+    )
 
     # Update reactive values for latitude warning
     observe({
@@ -1505,7 +1707,15 @@ addLocation <- function(id, inputs, language) {
 
     # Elevation conversion warning ################################################
     observe({
-      req(input$datum_id_from, input$datum_id_to, input$elev)
+      if (
+        missing_numeric_input(input$elev) ||
+          !isTruthy(input$datum_id_from) ||
+          !isTruthy(input$datum_id_to)
+      ) {
+        shinyjs::js$backgroundCol(ns("elev"), "#fff")
+        warnings$elev <- NULL
+        return()
+      }
       if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
         shinyjs::js$backgroundCol(ns("elev"), "#fdd")
         warnings$elev <- "Warning: Elevation conversion is set to a non-zero value but the from/to datums are the same. Are you sure you want to do this?"
@@ -2302,8 +2512,19 @@ addLocation <- function(id, inputs, language) {
         return()
       }
 
-      # Ensure that datum_id_from and datum_id_to are truthy
-      if (!isTruthy(input$datum_id_from) || !isTruthy(input$datum_id_to)) {
+      applied_estimate <- fetched_elevation()
+      estimate_applied <- isTRUE(applied_elevation()) &&
+        !is.null(applied_estimate) &&
+        isTRUE(all.equal(as.numeric(input$lat), applied_estimate$lat)) &&
+        isTRUE(all.equal(as.numeric(input$lon), applied_estimate$lon))
+      automatic_elevation <- identical(input$mode, "add") &&
+        (missing_numeric_input(input$elev) || estimate_applied)
+
+      # Manual conversions and edits require complete datum information.
+      if (
+        !automatic_elevation &&
+          (!isTruthy(input$datum_id_from) || !isTruthy(input$datum_id_to))
+      ) {
         showModal(modalDialog(
           "Datum ID from and to are mandatory (use assumed datum for both if there is no conversion to apply)",
           easyClose = TRUE,
@@ -2314,8 +2535,23 @@ addLocation <- function(id, inputs, language) {
         return()
       }
 
+      if (!automatic_elevation && missing_numeric_input(input$elev)) {
+        showModal(modalDialog(
+          "Elevation conversion is mandatory when modifying a location.",
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
+        ))
+        return()
+      }
+
       # If datums are both the same make sure elevation is 0
-      if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
+      if (
+        !automatic_elevation &&
+          input$datum_id_from == input$datum_id_to &&
+          input$elev != 0
+      ) {
         showModal(modalDialog(
           "Elevation conversion must be 0 if the datums are the same",
           easyClose = TRUE,
@@ -2938,9 +3174,17 @@ addLocation <- function(id, inputs, language) {
         location_type = as.numeric(input$loc_type),
         note = if (isTruthy(input$loc_note)) input$loc_note else NA,
         contact = if (isTruthy(input$loc_contact)) input$loc_contact else NA,
-        datum_id_from = as.numeric(input$datum_id_from),
-        datum_id_to = as.numeric(input$datum_id_to),
-        conversion_m = input$elev,
+        datum_id_from = if (automatic_elevation) {
+          NA_real_
+        } else {
+          as.numeric(input$datum_id_from)
+        },
+        datum_id_to = if (automatic_elevation) {
+          NA_real_
+        } else {
+          as.numeric(input$datum_id_to)
+        },
+        conversion_m = if (automatic_elevation) NA_real_ else input$elev,
         current = TRUE,
         network = if (length(network_ids)) {
           network_ids[1]
@@ -2978,10 +3222,22 @@ addLocation <- function(id, inputs, language) {
         }
       )
 
+      if (estimate_applied) {
+        # Sending the estimate details in the data frame lets AquaCache create
+        # an unmatched datum within its location transaction.
+        df$datum_id_from <- NA_real_
+        df$datum_id_to <- NA_real_
+        df$conversion_m <- NA_real_
+        df$elevation_details <- list(applied_estimate$details)
+      }
+
       tryCatch(
         {
           # addACLocation is all done within a transaction, including additions to accessory tables
-          AquaCache::addACLocation(con = session$userData$AquaCache, df = df)
+          added_location <- AquaCache::addACLocation(
+            con = session$userData$AquaCache,
+            df = df
+          )
 
           new_loc_id <- DBI::dbGetQuery(
             session$userData$AquaCache,
@@ -3015,8 +3271,25 @@ addLocation <- function(id, inputs, language) {
           }
 
           # Show a modal to the user that the location was added
+          success_message <- "Location added successfully."
+          if (
+            automatic_elevation &&
+              is.data.frame(added_location) &&
+              nrow(added_location) == 1
+          ) {
+            success_message <- paste0(
+              success_message,
+              " Estimated elevation: ",
+              round(added_location$elevation_m[[1]], 1),
+              " m (",
+              added_location$vertical_datum[[1]],
+              ", source: ",
+              added_location$elevation_source[[1]],
+              ")."
+            )
+          }
           showModal(modalDialog(
-            "Location added successfully",
+            success_message,
             easyClose = TRUE,
             footer = tagList(
               actionButton(ns("close"), "Close")
@@ -3025,6 +3298,20 @@ addLocation <- function(id, inputs, language) {
 
           # Update the moduleData reactiveValues
           getModuleData() # This should trigger an update to the table
+          if ("elevation_details" %in% names(df)) {
+            updateSelectizeInput(
+              session,
+              "datum_id_to",
+              choices = stats::setNames(
+                c(moduleData$datums$datum_id, added_location$datum_id_to[[1]]),
+                c(
+                  titleCase(moduleData$datums$datum_name_en, "en"),
+                  titleCase(applied_estimate$details$vertical_datum, "en")
+                )
+              ),
+              selected = added_location$datum_id_to[[1]]
+            )
+          }
 
           # Reset all fields
           updateTextInput(session, "loc_code", value = character(0))
@@ -3042,8 +3329,12 @@ addLocation <- function(id, inputs, language) {
           )
           updateTextInput(session, "loc_contact", value = character(0))
           updateSelectizeInput(session, "datum_id_from", selected = 10)
-          updateSelectizeInput(session, "datum_id_to", selected = 10)
-          updateNumericInput(session, "elev", value = 0)
+          updateSelectizeInput(
+            session,
+            "datum_id_to",
+            selected = character(0)
+          )
+          updateNumericInput(session, "elev", value = NA)
           updateSelectizeInput(session, "network", selected = character(0))
           updateSelectizeInput(session, "project", selected = character(0))
           updateTextInput(session, "loc_note", value = character(0))

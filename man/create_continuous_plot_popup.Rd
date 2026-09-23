@@ -9,7 +9,7 @@ create_continuous_plot_popup(
   year,
   con,
   station_name,
-  language = "English"
+  language = "en"
 )
 }
 \arguments{

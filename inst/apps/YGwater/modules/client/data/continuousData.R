@@ -11,16 +11,6 @@ continuous_data_daily_stats_columns <- c(
   "doy_count"
 )
 
-continuous_data_daily_stats_available_columns <- function(con) {
-  DBI::dbGetQuery(
-    con,
-    "SELECT column_name
-     FROM information_schema.columns
-     WHERE table_schema = 'continuous'
-       AND table_name = 'measurements_calculated_daily'"
-  )$column_name
-}
-
 continuous_data_quote_column <- function(con, column, table_alias = "m") {
   prefix <- if (is.null(table_alias) || !nzchar(table_alias)) {
     ""
@@ -34,70 +24,15 @@ continuous_data_daily_stats_preview_select_sql <- function(
   con,
   table_alias = "m"
 ) {
-  available <- continuous_data_daily_stats_available_columns(con)
-  base_select <- vapply(
-    continuous_data_daily_stats_columns,
+  vapply(
+    c(
+      continuous_data_daily_stats_columns,
+      paste0(continuous_data_daily_stats_columns, "_30yr")
+    ),
     continuous_data_quote_column,
     character(1),
     con = con,
     table_alias = table_alias
-  )
-
-  thirty_year_select <- vapply(
-    continuous_data_daily_stats_columns,
-    function(column) {
-      column_30yr <- paste0(column, "_30yr")
-      if (column_30yr %in% available) {
-        continuous_data_quote_column(con, column_30yr, table_alias)
-      } else {
-        cast <- if (identical(column, "doy_count")) "integer" else "numeric"
-        paste0(
-          "NULL::",
-          cast,
-          " AS ",
-          as.character(DBI::dbQuoteIdentifier(con, column_30yr))
-        )
-      }
-    },
-    character(1)
-  )
-
-  c(base_select, thirty_year_select)
-}
-
-continuous_data_missing_30yr_select_sql <- function(con) {
-  available <- continuous_data_daily_stats_available_columns(con)
-  missing_30yr <- setdiff(
-    paste0(continuous_data_daily_stats_columns, "_30yr"),
-    available
-  )
-
-  if (length(missing_30yr) == 0) {
-    return("")
-  }
-
-  paste0(
-    ", ",
-    paste(
-      vapply(
-        missing_30yr,
-        function(column) {
-          cast <- if (identical(column, "doy_count_30yr")) {
-            "integer"
-          } else {
-            "numeric"
-          }
-          paste0(
-            "NULL::",
-            cast,
-            " AS ",
-            as.character(DBI::dbQuoteIdentifier(con, column))
-          )
-        },
-        character(1)
-      ),
-      collapse = ", "
-    )
   )
 }
 
@@ -171,18 +106,9 @@ contData <- function(id, language, inputs) {
       observeEvent(
         input[[inputId]],
         {
-          values <- input[[inputId]]
-          if (is.null(values) || length(values) == 0) {
-            updateSelectizeInput(session, inputId, selected = "all")
-            return()
-          }
-          values <- as.character(values)
-          if (length(values) > 1 && "all" %in% values) {
-            selected <- if (identical(values[[length(values)]], "all")) {
-              "all"
-            } else {
-              setdiff(values, "all")
-            }
+          values <- as.character(input[[inputId]])
+          selected <- data_filter_normalize_selection(values)
+          if (!identical(values, selected)) {
             updateSelectizeInput(session, inputId, selected = selected)
           }
         },
@@ -1788,6 +1714,15 @@ contData <- function(id, language, inputs) {
           return()
         }
 
+        media_selection <- data_filter_normalize_selection(input$media)
+        if (!identical(as.character(input$media), media_selection)) {
+          return()
+        }
+        if (identical(media_selection, "all")) {
+          input_values$media <- media_selection
+          return()
+        }
+
         # Filter the data based on the selected media types
         if (input$media[1] != "all") {
           # If 'all' is not selected, filter the timeseries data
@@ -2351,15 +2286,14 @@ contData <- function(id, language, inputs) {
     })
 
     # Select/deselect all rows in the table #
-    select_all <- reactiveVal(FALSE)
     observeEvent(input$select_all, {
-      if (select_all()) {
-        DT::selectRows(proxy, NULL)
-        select_all(FALSE)
-      } else {
-        DT::selectRows(proxy, seq_len(nrow(table_data())))
-        select_all(TRUE)
-      }
+      DT::selectRows(
+        proxy,
+        data_table_toggle_all_rows(
+          input$tbl_rows_selected,
+          nrow(table_data())
+        )
+      )
     })
 
     # Show a modal with the data when the view button is clicked ################
@@ -2881,9 +2815,6 @@ contData <- function(id, language, inputs) {
         } else {
           "end_datetime_utc"
         }
-        missing_30yr_select <- continuous_data_missing_30yr_select_sql(
-          session$userData$AquaCache
-        )
         data <- list(
           location_metadata = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2903,9 +2834,7 @@ contData <- function(id, language, inputs) {
           daily_means_stats = dbGetQueryDT(
             session$userData$AquaCache,
             paste0(
-              "SELECT m.*",
-              missing_30yr_select,
-              " FROM continuous.measurements_calculated_daily AS m WHERE timeseries_id IN (",
+              "SELECT m.* FROM continuous.measurements_calculated_daily AS m WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
               ") AND date >= $1::date AND date <= $2::date;"
             ),

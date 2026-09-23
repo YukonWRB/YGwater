@@ -36,7 +36,9 @@
 #' @param result_value_types Optional AquaCache result value type ids or names to include, for example Actual or Calculated.
 #' @param result_speciations Optional AquaCache result speciation ids or names to include.
 #' @param include_blanks Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.
-#' @param duplicate_action How AquaCache duplicate/replicate samples should be handled. One of "show", "hide", or "average".
+#' @param duplicate_action How AquaCache duplicate/replicate samples should be
+#'   handled. One of `"show"`, `"hide"`, or `"average"`. Averaging uses active
+#'   `replicate_set` memberships in `discrete.sample_groups`.
 #' @param sample_ids Optional AquaCache sample ids to include. This is used by Shiny browse-table selections.
 #' @param season_ranges Optional AquaCache seasonal date ranges to include. Dates are accepted, but only the day-of-year is used; ranges may cross New Year.
 #' @param season_highlight_ranges Optional date ranges to highlight on the plot background. Dates are accepted, but only month/day is used; ranges may cross New Year.
@@ -528,11 +530,11 @@ plotDiscrete <- function(
       return(df)
     }
 
-    if ("linked_with" %in% names(df) && "sample_id" %in% names(df)) {
+    if ("replicate_group_id" %in% names(df) && "sample_id" %in% names(df)) {
       df$duplicate_group <- data.table::fifelse(
-        is.na(df$linked_with),
+        is.na(df$replicate_group_id),
         df$sample_id,
-        df$linked_with
+        df$replicate_group_id
       )
     }
 
@@ -624,8 +626,8 @@ plotDiscrete <- function(
       )) {
         out[[col]] <- rows[[col]][NA_integer_]
       }
-      if ("linked_with" %in% names(out)) {
-        out$linked_with <- rows$duplicate_group[[1]]
+      if ("replicate_group_id" %in% names(out)) {
+        out$replicate_group_id <- rows$duplicate_group[[1]]
       }
       if ("sample_type" %in% names(out)) {
         out$sample_type <- paste0("Average of ", nrow(rows), " samples")
@@ -1676,7 +1678,8 @@ ORDER BY ag.result_id, ag.guideline_id;"
          s.z,
          s.datetime,
          s.target_datetime,
-         s.linked_with,
+         replicate_group.replicate_group_id,
+         replicate_group.replicate_group_count,
          s.collection_method AS collection_method_id,
          cm.collection_method,
          s.sample_type AS sample_type_id,
@@ -1712,6 +1715,17 @@ ORDER BY ag.result_id, ag.guideline_id;"
       "
        FROM discrete.results AS r
        INNER JOIN discrete.samples AS s ON r.sample_id = s.sample_id
+       LEFT JOIN LATERAL (
+         SELECT
+           min(sgm.sample_group_id) AS replicate_group_id,
+           count(*)::integer AS replicate_group_count
+         FROM discrete.sample_group_members AS sgm
+         INNER JOIN discrete.sample_groups AS sg
+           ON sg.sample_group_id = sgm.sample_group_id
+         WHERE sgm.sample_id = s.sample_id
+           AND sg.group_type = 'replicate_set'
+           AND sg.active
+       ) AS replicate_group ON TRUE
        INNER JOIN public.locations AS l ON s.location_id = l.location_id
        INNER JOIN public.parameters AS p ON r.parameter_id = p.parameter_id
        LEFT JOIN public.media_types AS mt ON s.media_id = mt.media_id
@@ -1769,6 +1783,18 @@ ORDER BY ag.result_id, ag.guideline_id;"
 
     samples <- DBI::dbGetQuery(AC, samp_query, params = query_params)
 
+    if (any(samples$replicate_group_count > 1L)) {
+      ambiguous_sample_ids <- unique(samples$sample_id[
+        samples$replicate_group_count > 1L
+      ])
+      stop(
+        "A sample belongs to more than one active replicate set: ",
+        paste(ambiguous_sample_ids, collapse = ", "),
+        ". Resolve the sample-group memberships before plotting."
+      )
+    }
+    samples$replicate_group_count <- NULL
+
     if (nrow(samples) == 0) {
       stop(
         "No results were found matching the requested locations, parameters, date range, and filters."
@@ -1824,7 +1850,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "result",
         "result_id",
         "sample_id",
-        "linked_with",
+        "replicate_group_id",
         "parameter_id",
         "target_datetime",
         "datetime",
@@ -1862,7 +1888,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "result",
         "result_id",
         "sample_id",
-        "linked_with",
+        "replicate_group_id",
         "parameter_id",
         "target_datetime",
         "datetime",
@@ -1901,7 +1927,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "result",
         "result_id",
         "sample_id",
-        "linked_with",
+        "replicate_group_id",
         "parameter_id",
         "target_datetime",
         "datetime",
@@ -1939,7 +1965,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "result",
         "result_id",
         "sample_id",
-        "linked_with",
+        "replicate_group_id",
         "parameter_id",
         "target_datetime",
         "datetime",

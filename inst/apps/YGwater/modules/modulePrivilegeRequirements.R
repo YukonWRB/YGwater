@@ -66,6 +66,11 @@ ygwater_module_privilege_requirements <- function() {
         "INSERT"
       )
     ),
+    addLocationDatum = req(
+      "public.datum_list",
+      "INSERT",
+      visibility = "any"
+    ),
     addSubLocation = req(
       c("public.sub_locations", "public.locations"),
       list(c("INSERT", "UPDATE"), "SELECT")

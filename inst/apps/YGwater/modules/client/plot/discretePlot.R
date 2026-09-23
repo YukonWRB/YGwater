@@ -122,6 +122,166 @@ disc_result_components <- function(con, result_ids, lang = "en") {
   )
 }
 
+#' Retrieve complete sample metadata for downloads
+#'
+#' Patch 61 metadata views flatten the normalized sample fields while
+#' retaining RLS. Their renamed source-identity columns are part of the query
+#' contract, so this module requires Patch 61 or later.
+#'
+#' @param con An open AquaCache DBI connection.
+#' @param sample_ids Sample IDs to retrieve.
+#' @param lang Language code used to select the bilingual metadata view.
+#'
+#' @return A data table with one row per visible sample.
+#'
+#' @keywords internal
+#' @noRd
+disc_sample_metadata <- function(con, sample_ids, lang = "en") {
+  sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
+  sample_ids <- sample_ids[!is.na(sample_ids)]
+  if (!length(sample_ids)) {
+    return(data.table::data.table())
+  }
+  suffix <- if (identical(lang, "fr")) "fr" else "en"
+  disc_plot_tabularize(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT * FROM discrete.samples_metadata_",
+      suffix,
+      " WHERE sample_id IN (",
+      paste(sample_ids, collapse = ","),
+      ") ORDER BY datetime, sample_id, source_adapter_function"
+    )
+  ))
+}
+
+#' Retrieve complete result metadata for downloads
+#'
+#' @inheritParams disc_sample_metadata
+#'
+#' @return A data table with one row per visible canonical result.
+#'
+#' @keywords internal
+#' @noRd
+disc_result_metadata <- function(con, sample_ids, lang = "en") {
+  sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
+  sample_ids <- sample_ids[!is.na(sample_ids)]
+  if (!length(sample_ids)) {
+    return(data.table::data.table())
+  }
+  suffix <- if (identical(lang, "fr")) "fr" else "en"
+  disc_plot_tabularize(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT * FROM discrete.results_metadata_",
+      suffix,
+      " WHERE sample_id IN (",
+      paste(sample_ids, collapse = ","),
+      ") ORDER BY datetime, sample_id, parameter_name, result_id, ",
+      "sample_source_adapter_function, sample_external_sample_id"
+    )
+  ))
+}
+
+#' Retrieve document metadata linked to samples
+#'
+#' Embedded document bytes are intentionally omitted; downloads include the
+#' relationship and document metadata needed to identify or retrieve each file.
+#'
+#' @inheritParams disc_sample_metadata
+#'
+#' @return A data table with one row per visible sample-document relationship.
+#'
+#' @keywords internal
+#' @noRd
+disc_sample_documents <- function(con, sample_ids) {
+  sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
+  sample_ids <- sample_ids[!is.na(sample_ids)]
+  if (!length(sample_ids)) {
+    return(data.table::data.table())
+  }
+  disc_plot_tabularize(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT
+         sd.sample_id,
+         sd.document_role,
+         sd.note AS relationship_note,
+         d.document_id,
+         d.name AS document_name,
+         d.type AS document_type_id,
+         d.authors,
+         d.url,
+         d.publish_date,
+         d.description,
+         d.format,
+         d.tags,
+         d.owner AS document_owner_id,
+         d.contributor AS document_contributor_id,
+         octet_length(d.document) AS embedded_size_bytes,
+         d.created,
+         d.created_by,
+         d.modified,
+         d.modified_by
+       FROM discrete.sample_documents AS sd
+       INNER JOIN files.documents AS d ON d.document_id = sd.document_id
+       WHERE sd.sample_id IN (",
+      paste(sample_ids, collapse = ","),
+      ") ORDER BY sd.sample_id, d.document_id"
+    )
+  ))
+}
+
+#' Retrieve group memberships for selected samples
+#'
+#' @inheritParams disc_sample_metadata
+#'
+#' @return A data table with group and membership metadata.
+#'
+#' @keywords internal
+#' @noRd
+disc_sample_group_memberships <- function(con, sample_ids, lang = "en") {
+  sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
+  sample_ids <- sample_ids[!is.na(sample_ids)]
+  if (!length(sample_ids)) {
+    return(data.table::data.table())
+  }
+  group_type_name <- if (identical(lang, "fr")) {
+    "COALESCE(sgt.group_type_name_fr, sgt.group_type_name)"
+  } else {
+    "sgt.group_type_name"
+  }
+  disc_plot_tabularize(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT
+         sgm.sample_id,
+         sg.sample_group_id,
+         sg.group_type,
+         ",
+      group_type_name,
+      " AS group_type_name,
+         sg.group_code,
+         sg.group_name,
+         sg.start_datetime,
+         sg.end_datetime,
+         sg.owner AS group_owner_id,
+         sg.contributor AS group_contributor_id,
+         sg.active AS group_active,
+         sg.note AS group_note,
+         sgm.sequence_in_group,
+         sgm.note AS membership_note
+       FROM discrete.sample_group_members AS sgm
+       INNER JOIN discrete.sample_groups AS sg USING (sample_group_id)
+       INNER JOIN discrete.sample_group_types AS sgt
+         ON sgt.group_type = sg.group_type
+       WHERE sgm.sample_id IN (",
+      paste(sample_ids, collapse = ","),
+      ") ORDER BY sgm.sample_id, sg.sample_group_id"
+    )
+  ))
+}
+
 #' Create an empty discrete QA/QC data bundle
 #'
 #' @return A named list of empty data tables matching the result of
@@ -250,64 +410,16 @@ disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
   }
 
   qaqc_sample_ids <- sort(unique(group_links$qaqc_sample_id))
-  qaqc_sample_id_sql <- paste(qaqc_sample_ids, collapse = ", ")
   metadata_suffix <- if (identical(lang, "fr")) "fr" else "en"
 
-  samples <- DBI::dbGetQuery(
-    con,
-    paste0(
-      "SELECT * FROM discrete.samples_metadata_",
-      metadata_suffix,
-      " WHERE sample_id IN (",
-      qaqc_sample_id_sql,
-      ") ORDER BY datetime, sample_id"
-    )
-  )
-  results <- DBI::dbGetQuery(
-    con,
-    paste0(
-      "SELECT * FROM discrete.results_metadata_",
-      metadata_suffix,
-      " WHERE sample_id IN (",
-      qaqc_sample_id_sql,
-      ") ORDER BY datetime, sample_id, parameter_name, result_id"
-    )
-  )
+  samples <- disc_sample_metadata(con, qaqc_sample_ids, metadata_suffix)
+  results <- disc_result_metadata(con, qaqc_sample_ids, metadata_suffix)
   result_components <- disc_result_components(
     con,
     results$result_id,
     lang = metadata_suffix
   )
-  documents <- DBI::dbGetQuery(
-    con,
-    paste0(
-      "SELECT
-         sd.sample_id,
-         sd.document_role,
-         sd.note AS relationship_note,
-         d.document_id,
-         d.name AS document_name,
-         d.type AS document_type_id,
-         d.authors,
-         d.url,
-         d.publish_date,
-         d.description,
-         d.format,
-         d.tags,
-         d.owner AS document_owner_id,
-         d.contributor AS document_contributor_id,
-         octet_length(d.document) AS embedded_size_bytes,
-         d.created,
-         d.created_by,
-         d.modified,
-         d.modified_by
-       FROM discrete.sample_documents AS sd
-       INNER JOIN files.documents AS d ON d.document_id = sd.document_id
-       WHERE sd.sample_id IN (",
-      qaqc_sample_id_sql,
-      ") ORDER BY sd.sample_id, d.document_id"
-    )
-  )
+  documents <- disc_sample_documents(con, qaqc_sample_ids)
 
   list(
     group_links = disc_plot_tabularize(group_links),

@@ -6050,8 +6050,9 @@ FROM vals",
                  location_id, sub_location_id, media_id, z, datetime,
                  target_datetime, collection_method, sample_type,
                  sample_volume_ml, sample_grade, sample_approval,
-                 owner, contributor, sampling_org, share_with, import_source,
-                 no_source_update, note, import_source_id
+                 owner, contributor, sampling_org, share_with,
+                 source_adapter_function, no_source_update, note,
+                 external_sample_id
                )
                VALUES (
                  $1, $2, $3, 0, $4::timestamptz, $4::timestamptz,
@@ -6221,8 +6222,9 @@ FROM vals",
            location_id, sub_location_id, media_id, z, datetime,
            target_datetime, collection_method, sample_type,
            sample_volume_ml, sample_grade, sample_approval,
-           owner, contributor, sampling_org, share_with, import_source,
-           no_source_update, note, import_source_id
+           owner, contributor, sampling_org, share_with,
+           source_adapter_function, no_source_update, note,
+           external_sample_id
          )
          VALUES (
            $1, $2, $3, 0, $4::timestamptz, $4::timestamptz,

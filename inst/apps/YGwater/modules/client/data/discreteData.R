@@ -58,18 +58,9 @@ discData <- function(id, language, inputs) {
       observeEvent(
         input[[inputId]],
         {
-          values <- input[[inputId]]
-          if (is.null(values) || length(values) == 0) {
-            updateSelectizeInput(session, inputId, selected = "all")
-            return()
-          }
-          values <- as.character(values)
-          if (length(values) > 1 && "all" %in% values) {
-            selected <- if (identical(values[[length(values)]], "all")) {
-              "all"
-            } else {
-              setdiff(values, "all")
-            }
+          values <- as.character(input[[inputId]])
+          selected <- data_filter_normalize_selection(values)
+          if (!identical(values, selected)) {
             updateSelectizeInput(session, inputId, selected = selected)
           }
         },
@@ -1421,6 +1412,15 @@ discData <- function(id, language, inputs) {
           return()
         }
 
+        media_selection <- data_filter_normalize_selection(input$media)
+        if (!identical(as.character(input$media), media_selection)) {
+          return()
+        }
+        if (identical(media_selection, "all")) {
+          input_values$media <- media_selection
+          return()
+        }
+
         # Filter the data based on the selected media types
         stash <- filteredData$samples
         filteredData$samples <- moduleData$samples[
@@ -1942,15 +1942,14 @@ discData <- function(id, language, inputs) {
     })
 
     # Select/deselect all rows in the table #
-    select_all <- reactiveVal(FALSE)
     observeEvent(input$select_all, {
-      if (select_all()) {
-        DT::selectRows(proxy, NULL)
-        select_all(FALSE)
-      } else {
-        DT::selectRows(proxy, seq_len(nrow(table_data())))
-        select_all(TRUE)
-      }
+      DT::selectRows(
+        proxy,
+        data_table_toggle_all_rows(
+          input$tbl_rows_selected,
+          nrow(table_data())
+        )
+      )
     })
 
     # Show a modal with the data when the view button is clicked ################
@@ -2280,58 +2279,15 @@ discData <- function(id, language, inputs) {
             ");"
           )
         ) # Get the location metadata
-        data$samples <- table_data()[input$tbl_rows_selected]
-        data$results <- dbGetQueryDT(
+        data$samples <- disc_sample_metadata(
           session$userData$AquaCache,
-          paste0(
-            "SELECT r.result_id, s.location_id, r.sample_id, s.datetime, s.target_datetime, r.result, p.param_name AS parameter, ",
-            parameter_unit_sql(
-              "units",
-              matrix_state_alias = "r",
-              media_alias = "s"
-            ),
-            ",
-          rs.result_speciation,
-          rt.result_type,
-          sf.sample_fraction,
-          rc.result_condition,
-          r.result_condition_value,
-          rvt.result_value_type,
-          pm.protocol_name,
-          l.lab_name AS laboratory,
-          r.analysis_datetime,
-          r.lab_report_no,
-          r.lab_sample_no,
-          r.grade_type_id AS result_grade_id,
-          rg.grade_type_code AS result_grade_code,
-          rg.grade_type_description AS result_grade_description,
-          rg.grade_type_description_fr AS result_grade_description_fr,
-          r.approval_type_id AS result_approval_id,
-          rap.approval_type_code AS result_approval_code,
-          rap.approval_type_description AS result_approval_description,
-          rap.approval_type_description_fr AS result_approval_description_fr,
-          rat.aggregation_type,
-          ra.calculation_version,
-          ra.calculation_arguments::text AS calculation_arguments,
-          ra.expected_count
-        FROM discrete.results r
-        JOIN discrete.samples s ON r.sample_id = s.sample_id
-        JOIN public.parameters p ON r.parameter_id = p.parameter_id
-        JOIN discrete.result_types rt ON r.result_type = rt.result_type_id
-        LEFT JOIN discrete.sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
-        LEFT JOIN discrete.result_conditions rc ON r.result_condition = rc.result_condition_id
-        LEFT JOIN discrete.result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
-        LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
-        LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
-        LEFT JOIN public.grade_types rg ON r.grade_type_id = rg.grade_type_id
-        LEFT JOIN public.approval_types rap ON r.approval_type_id = rap.approval_type_id
-        LEFT JOIN discrete.result_aggregations ra ON r.result_id = ra.result_id
-        LEFT JOIN discrete.result_aggregation_types rat USING (result_aggregation_type_id)
-        WHERE r.sample_id IN (",
-            paste(selected_sampleids, collapse = ","),
-            ");"
-          )
+          selected_sampleids,
+          language$abbrev
+        )
+        data$results <- disc_result_metadata(
+          session$userData$AquaCache,
+          selected_sampleids,
+          language$abbrev
         )
         data$result_components <- disc_result_components(
           session$userData$AquaCache,
@@ -2340,6 +2296,21 @@ discData <- function(id, language, inputs) {
         )
         if (!nrow(data$result_components)) {
           data$result_components <- NULL
+        }
+        data$sample_documents <- disc_sample_documents(
+          session$userData$AquaCache,
+          selected_sampleids
+        )
+        if (!nrow(data$sample_documents)) {
+          data$sample_documents <- NULL
+        }
+        data$sample_group_memberships <- disc_sample_group_memberships(
+          session$userData$AquaCache,
+          selected_sampleids,
+          language$abbrev
+        )
+        if (!nrow(data$sample_group_memberships)) {
+          data$sample_group_memberships <- NULL
         }
 
         qaqc_data <- selected_qaqc_data()
@@ -2355,13 +2326,13 @@ discData <- function(id, language, inputs) {
           }
         }
 
-        if ("sample_grade" %in% names(data$samples)) {
+        if ("sample_grade_id" %in% names(data$samples)) {
           data$grades <- dbGetQueryDT(
             session$userData$AquaCache,
             "SELECT * FROM public.grade_types;"
           )
         }
-        if ("sample_approval" %in% names(data$samples)) {
+        if ("sample_approval_id" %in% names(data$samples)) {
           data$approvals <- dbGetQueryDT(
             session$userData$AquaCache,
             "SELECT * FROM public.approval_types;"

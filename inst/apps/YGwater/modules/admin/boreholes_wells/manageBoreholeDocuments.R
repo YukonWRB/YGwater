@@ -35,7 +35,11 @@ manageBoreholeDocumentsUI <- function(id) {
           choices = NULL,
           multiple = FALSE
         ),
-        textAreaInput(ns("doc_description"), "Description", width = "100%"),
+        textAreaInput(
+          ns("doc_description"),
+          "Description (required; at least 5 characters)",
+          width = "100%"
+        ),
         textInput(ns("doc_authors"), "Authors (comma separated)"),
         textInput(ns("doc_tags"), "Tags (comma separated)"),
         dateInput(ns("doc_publish_date"), "Publish date", value = NULL),
@@ -576,13 +580,34 @@ manageBoreholeDocuments <- function(id, language) {
       bslib::bind_task_button("upload_and_associate")
 
     observeEvent(input$upload_and_associate, {
-      req(
-        input$borehole_id,
-        input$doc_file,
-        input$doc_name,
-        input$doc_type,
-        input$doc_description
-      )
+      if (is.null(input$borehole_id) || !length(input$borehole_id)) {
+        showNotification("Select a borehole/well first.", type = "error")
+        return()
+      }
+      if (is.null(input$doc_file) || !nrow(input$doc_file)) {
+        showNotification("Choose a document file to upload.", type = "error")
+        return()
+      }
+      if (is.null(input$doc_name) || !nzchar(trimws(input$doc_name))) {
+        showNotification("Enter a document name.", type = "error")
+        return()
+      }
+      if (is.null(input$doc_type) || !nzchar(trimws(input$doc_type))) {
+        showNotification("Select a document type.", type = "error")
+        return()
+      }
+      doc_description <- if (is.null(input$doc_description)) {
+        ""
+      } else {
+        trimws(input$doc_description)
+      }
+      if (nchar(doc_description) < 5L) {
+        showNotification(
+          "Enter a description of at least 5 characters.",
+          type = "error"
+        )
+        return()
+      }
 
       extension <- tools::file_ext(input$doc_file$name)
       staged_path <- tempfile(
@@ -616,7 +641,7 @@ manageBoreholeDocuments <- function(id, language) {
         borehole_id = as.integer(input$borehole_id),
         name = input$doc_name,
         type = input$doc_type,
-        description = input$doc_description,
+        description = doc_description,
         tags = if (length(tags)) tags else NULL,
         authors = if (length(authors)) authors else NULL,
         publish_date = if (
