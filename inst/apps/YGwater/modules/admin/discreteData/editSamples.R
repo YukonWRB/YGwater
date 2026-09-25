@@ -1985,6 +1985,8 @@ editSamples <- function(id, language) {
           ul.unit_name AS units_liquid,
           us.unit_name AS units_solid,
           ug.unit_name AS units_gas,
+          una.unit_name AS units_na,
+          una.unit_name AS units_not_applicable,
           public.get_parameter_unit_name(p.parameter_id, NULL) AS unit_default
         FROM public.parameters p
         LEFT JOIN public.units ul
@@ -1993,6 +1995,8 @@ editSamples <- function(id, language) {
           ON p.units_solid = us.unit_id
         LEFT JOIN public.units ug
           ON p.units_gas = ug.unit_id
+        LEFT JOIN public.units una
+          ON p.units_na = una.unit_id
         ORDER BY p.param_name ASC;
         "
       )

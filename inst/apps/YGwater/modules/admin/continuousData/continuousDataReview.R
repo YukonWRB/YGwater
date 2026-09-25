@@ -28,7 +28,7 @@ continuousDataReviewUI <- function(id) {
           title = "Timeseries selection",
           p(
             class = "text-muted",
-            "Select a timeseries to review raw and corrected values before applying grades, approvals, qualifiers, or corrections."
+            "Select a timeseries to review its raw and corrected values. The plot opens on the latest year of available data."
           ),
           DT::DTOutput(ns("ts_table"))
         )
@@ -52,7 +52,7 @@ continuousDataReviewUI <- function(id) {
               ),
               shinyWidgets::airDatepickerInput(
                 ns("start_dt"),
-                "Start datetime",
+                "Review start datetime",
                 value = NULL,
                 range = FALSE,
                 multiple = FALSE,
@@ -71,7 +71,7 @@ continuousDataReviewUI <- function(id) {
               ),
               shinyWidgets::airDatepickerInput(
                 ns("end_dt"),
-                "End datetime",
+                "Review end datetime",
                 value = NULL,
                 range = FALSE,
                 multiple = FALSE,
@@ -93,9 +93,18 @@ continuousDataReviewUI <- function(id) {
                 "Drag range on plot",
                 class = "btn-outline-primary btn-sm w-100 mb-2"
               ),
+              actionButton(
+                ns("clear_review_range"),
+                "Clear review range",
+                class = "btn-outline-secondary btn-sm w-100 mb-2"
+              ),
               div(
                 class = "text-muted small",
                 textOutput(ns("range_feedback"))
+              ),
+              p(
+                class = "text-muted small mt-2",
+                "The review range filters the overlapping-records list and shades the plot. It does not set the dates saved with a grade, approval, qualifier, or correction. Set saved dates in the record form below."
               ),
               div(
                 class = "text-muted small mt-2",
@@ -130,8 +139,8 @@ continuousDataReviewUI <- function(id) {
                 value = TRUE
               ),
               hr(),
-              actionButton(ns("last_year"), label = "Most Recent Year"),
-              actionButton(ns("entire_ts"), label = "Full Timeseries"),
+              actionButton(ns("last_year"), label = "Show latest year"),
+              actionButton(ns("entire_ts"), label = "Show full timeseries"),
               hr(),
               h5("Snap range"),
               DT::DTOutput(ns("snap_events")),
@@ -161,9 +170,44 @@ continuousDataReviewUI <- function(id) {
           fluidRow(
             column(
               width = 4,
+              h5("Dates saved with this record"),
+              uiOutput(ns("record_date_guidance")),
+              shinyWidgets::airDatepickerInput(
+                ns("record_start_dt"),
+                "Record start datetime",
+                value = NULL,
+                range = FALSE,
+                multiple = FALSE,
+                timepicker = TRUE,
+                update_on = "change",
+                tz = air_datetime_widget_timezone(default_input_timezone()),
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 15,
+                  timeFormat = "HH:mm"
+                )
+              ),
+              shinyWidgets::airDatepickerInput(
+                ns("record_end_dt"),
+                "Record end datetime",
+                value = NULL,
+                range = FALSE,
+                multiple = FALSE,
+                timepicker = TRUE,
+                update_on = "change",
+                tz = air_datetime_widget_timezone(default_input_timezone()),
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 15,
+                  timeFormat = "HH:mm"
+                )
+              ),
+              actionButton(
+                ns("copy_review_range"),
+                "Copy review range to record dates",
+                class = "btn-outline-primary btn-sm w-100 mb-3"
+              ),
               radioButtons(
                 ns("attribute_kind"),
-                "Attribute to modify",
+                "Record type to add or edit",
                 choices = c(
                   "Grades" = "grade",
                   "Approvals" = "approval",
@@ -177,7 +221,7 @@ continuousDataReviewUI <- function(id) {
                 condition = "input.attribute_kind != 'correction'",
                 selectizeInput(
                   ns("attribute_value"),
-                  "Attribute value",
+                  "Grade, approval, or qualifier",
                   choices = NULL,
                   multiple = FALSE,
                   options = list(placeholder = "Select a value")
@@ -215,28 +259,36 @@ continuousDataReviewUI <- function(id) {
                   ns("correction_equation"),
                   "Equation",
                   width = "100%"
+                ),
+                p(
+                  class = "text-muted small",
+                  "The fields shown depend on the correction type. Corrections can stack and are applied in priority order."
                 )
               ),
-              actionButton(ns("clear_selection"), "Clear selection"),
+              actionButton(ns("clear_selection"), "Clear selected record"),
               br(),
               br(),
               actionButton(
                 ns("apply_attribute"),
-                "Add attribute",
+                "Add grade",
                 class = "btn-primary w-100"
               ),
               actionButton(
                 ns("delete_attribute"),
-                "Delete selected",
+                "Delete selected record",
                 class = "btn-danger w-100 mt-2"
               )
             ),
             column(
               width = 8,
               h5(textOutput(ns("active_table_title"))),
+              p(
+                class = "text-muted small",
+                "Select a row here to load its saved values and dates into the form. Change only the fields you intend to update."
+              ),
               DT::DTOutput(ns("active_assignments")),
               br(),
-              h5("Records overlapping selected range"),
+              h5("Records overlapping the review range"),
               DT::DTOutput(ns("selected_range_records")),
               br(),
               accordion(
@@ -328,13 +380,47 @@ continuousDataReview <- function(id, language) {
       })
     }
 
+    most_recent_year_range <- function(row) {
+      end_dt <- if (!is.na(row$end_datetime[[1]])) {
+        as.POSIXct(row$end_datetime[[1]], tz = "UTC")
+      } else {
+        Sys.time()
+      }
+      start_dt <- end_dt - 365 * 24 * 3600
+      if (!is.na(row$start_datetime[[1]])) {
+        ts_start <- as.POSIXct(row$start_datetime[[1]], tz = "UTC")
+        if (!is.na(ts_start) && start_dt < ts_start) {
+          start_dt <- ts_start
+        }
+      }
+      if (
+        !is.finite(as.numeric(start_dt)) ||
+          !is.finite(as.numeric(end_dt))
+      ) {
+        end_dt <- Sys.time()
+        start_dt <- end_dt - 7 * 24 * 3600
+      }
+      if (start_dt >= end_dt) {
+        start_dt <- end_dt - 3600
+      }
+      list(start = start_dt, end = end_dt)
+    }
+
     shift_range_datetime_inputs <- function(tz_name) {
       shift_air_datetime_input_timezone(session, input, "start_dt", tz_name)
       shift_air_datetime_input_timezone(session, input, "end_dt", tz_name)
+      shift_air_datetime_input_timezone(session, input, "record_start_dt", tz_name)
+      shift_air_datetime_input_timezone(session, input, "record_end_dt", tz_name)
     }
 
     set_datetime_input <- function(input_id, value) {
-      if (is.null(value) || !length(value) || is.na(value)) {
+      if (is.null(value) || !length(value) || all(is.na(value))) {
+        shinyWidgets::updateAirDateInput(
+          session,
+          input_id,
+          clear = TRUE,
+          tz = air_datetime_widget_timezone(input$timezone)
+        )
         return(invisible(NULL))
       }
       shinyWidgets::updateAirDateInput(
@@ -353,6 +439,11 @@ continuousDataReview <- function(id, language) {
       plot_dragmode("zoom")
       loaded_plot_range(NULL)
       visible_plot_range(NULL)
+    }
+
+    set_record_range_inputs <- function(start_dt, end_dt) {
+      set_datetime_input("record_start_dt", start_dt)
+      set_datetime_input("record_end_dt", end_dt)
     }
 
     load_privileges <- function() {
@@ -494,6 +585,7 @@ continuousDataReview <- function(id, language) {
 
     selected_ts <- reactiveVal(NULL)
     selected_record <- reactiveVal(NULL)
+    default_plot_range <- reactiveVal(NULL)
     assignment_refresh <- reactiveVal(0)
     next_edge <- reactiveVal("start")
     pending_action <- reactiveVal(NULL)
@@ -530,33 +622,16 @@ continuousDataReview <- function(id, language) {
           selected_ts(tsid)
           assignment_refresh(assignment_refresh() + 1)
           selected_record(NULL)
+          set_record_range_inputs(NULL, NULL)
           next_edge("start")
-
-          default_end <- if (!is.na(row$end_datetime[[1]])) {
-            as.POSIXct(row$end_datetime[[1]], tz = "UTC")
-          } else {
-            Sys.time()
-          }
-          default_start <- default_end - 60 * 24 * 3600
-          if (!is.na(row$start_datetime[[1]])) {
-            min_dt <- as.POSIXct(row$start_datetime[[1]], tz = "UTC")
-            if (!is.na(min_dt) && default_start < min_dt) {
-              default_start <- min_dt
-            }
-          }
-          if (
-            !is.finite(as.numeric(default_start)) ||
-              !is.finite(as.numeric(default_end))
-          ) {
-            default_start <- Sys.time() - 7 * 24 * 3600
-            default_end <- Sys.time()
-          }
-          if (default_start >= default_end) {
-            default_start <- default_end - 1 * 3600
-          }
-          set_range_inputs(default_start, default_end)
+          default_plot_range(most_recent_year_range(row))
+          set_range_inputs(NULL, NULL)
         } else {
           selected_ts(NULL)
+          selected_record(NULL)
+          default_plot_range(NULL)
+          set_range_inputs(NULL, NULL)
+          set_record_range_inputs(NULL, NULL)
         }
       },
       ignoreNULL = FALSE
@@ -596,7 +671,11 @@ continuousDataReview <- function(id, language) {
       if (ts_start >= ts_end) {
         ts_start <- ts_end - 1 * 3600
       }
-      set_range_inputs(ts_start, ts_end)
+      full_range <- list(start = ts_start, end = ts_end)
+      visible_plot_range(full_range)
+      expand_loaded_plot_range(full_range)
+      plot_click_target(NULL)
+      set_plot_dragmode("zoom")
     })
 
     observeEvent(input$last_year, {
@@ -605,33 +684,21 @@ continuousDataReview <- function(id, language) {
       if (!nrow(row)) {
         return()
       }
-      ts_end <- if (!is.na(row$end_datetime[[1]])) {
-        as.POSIXct(row$end_datetime[[1]], tz = "UTC")
-      } else {
-        Sys.time()
-      }
-      year_start <- ts_end - 365 * 24 * 3600
+      latest_year <- most_recent_year_range(row)
       if (!is.na(row$start_datetime[[1]])) {
-        min_dt <- as.POSIXct(row$start_datetime[[1]], tz = "UTC")
-        if (!is.na(min_dt) && year_start < min_dt) {
-          year_start <- min_dt
+        ts_start <- as.POSIXct(row$start_datetime[[1]], tz = "UTC")
+        if (latest_year$start == ts_start) {
           showNotification(sprintf(
             "Earliest entry in time series displayed (%s)",
-            min_dt
+            ts_start
           ))
         }
       }
-      if (
-        !is.finite(as.numeric(year_start)) ||
-          !is.finite(as.numeric(ts_end))
-      ) {
-        year_start <- Sys.time() - 7 * 24 * 3600
-        ts_end <- Sys.time()
-      }
-      if (year_start >= ts_end) {
-        year_start <- ts_end - 1 * 3600
-      }
-      set_range_inputs(year_start, ts_end)
+      loaded_plot_range(NULL)
+      visible_plot_range(latest_year)
+      expand_loaded_plot_range(latest_year)
+      plot_click_target(NULL)
+      set_plot_dragmode("zoom")
     })
 
     range_error <- reactive({
@@ -639,15 +706,15 @@ continuousDataReview <- function(id, language) {
         return(NULL)
       }
       start_dt <- scalar_utc_datetime(input$start_dt)
-      if (is.na(start_dt)) {
-        return("Select a start datetime.")
-      }
       end_dt <- scalar_utc_datetime(input$end_dt)
-      if (is.na(end_dt)) {
-        return("Select an end datetime.")
+      if (is.na(start_dt) && is.na(end_dt)) {
+        return(NULL)
+      }
+      if (is.na(start_dt) || is.na(end_dt)) {
+        return("Choose both review dates, or clear the review range.")
       }
       if (start_dt >= end_dt) {
-        return("Start datetime must be before end datetime.")
+        return("Review start datetime must be before the end datetime.")
       }
       NULL
     })
@@ -657,16 +724,60 @@ continuousDataReview <- function(id, language) {
       if (!is.null(err)) {
         return(NULL)
       }
+      start_dt <- scalar_utc_datetime(input$start_dt)
+      end_dt <- scalar_utc_datetime(input$end_dt)
+      if (is.na(start_dt) && is.na(end_dt)) {
+        return(NULL)
+      }
       list(
-        start = scalar_utc_datetime(input$start_dt),
-        end = scalar_utc_datetime(input$end_dt)
+        start = start_dt,
+        end = end_dt
       )
+    })
+
+    record_range_error <- reactive({
+      start_dt <- scalar_utc_datetime(input$record_start_dt)
+      end_dt <- scalar_utc_datetime(input$record_end_dt)
+      if (is.na(start_dt) || is.na(end_dt)) {
+        return("Enter both record start and end datetimes.")
+      }
+      if (start_dt >= end_dt) {
+        return("Record start datetime must be before the end datetime.")
+      }
+      NULL
+    })
+
+    record_range <- reactive({
+      if (!is.null(record_range_error())) {
+        return(NULL)
+      }
+      list(
+        start = scalar_utc_datetime(input$record_start_dt),
+        end = scalar_utc_datetime(input$record_end_dt)
+      )
+    })
+
+    observeEvent(input$copy_review_range, {
+      rng <- selected_range()
+      if (is.null(rng)) {
+        message <- range_error()
+        if (is.null(message)) {
+          message <- "Choose a review start and end datetime first."
+        }
+        showNotification(message, type = "warning")
+        return()
+      }
+      set_record_range_inputs(rng$start, rng$end)
+    })
+
+    observeEvent(input$clear_review_range, {
+      set_range_inputs(NULL, NULL)
     })
 
     context_plot_range <- reactive({
       rng <- selected_range()
       if (is.null(rng)) {
-        return(NULL)
+        return(default_plot_range())
       }
       span <- as.numeric(difftime(rng$end, rng$start, units = "secs"))
       if (!is.finite(span) || span <= 0) {
@@ -731,7 +842,26 @@ continuousDataReview <- function(id, language) {
 
     output$range_feedback <- renderText({
       msg <- range_error()
-      if (is.null(msg)) "" else msg
+      if (!is.null(msg)) {
+        return(msg)
+      }
+      if (is.null(selected_range())) {
+        return("No review range selected. The plot shows the latest year of data.")
+      }
+      "The selected review interval filters the overlapping-records list."
+    })
+
+    output$record_date_guidance <- renderUI({
+      if (is.null(selected_record())) {
+        return(p(
+          class = "text-muted small",
+          "These dates are saved with a new record. Enter them here, or copy the review range above. The review range is only for finding and viewing records."
+        ))
+      }
+      p(
+        class = "text-muted small",
+        "These are the selected record's saved dates. Leave them as shown to keep its time interval; change either date here when needed."
+      )
     })
 
     output$click_feedback <- renderText({
@@ -743,15 +873,15 @@ continuousDataReview <- function(id, language) {
         return(paste0(
           "Click anywhere in the plot area to set the ",
           target,
-          " datetime."
+          " review datetime."
         ))
       }
       if (identical(plot_dragmode(), "select")) {
         return(
-          "Drag across the plot to set both start and end datetimes."
+          "Drag across the plot to set both review dates."
         )
       }
-      "Use Pick start, Pick end, or Drag range on plot to set datetimes from the plot. The shaded band is the selected range."
+      "Use the plot to set review dates and find matching records. Set record dates separately in the form below."
     })
 
     load_assignments <- function(kind, tsid) {
@@ -837,7 +967,7 @@ continuousDataReview <- function(id, language) {
     })
 
     plot_payload <- reactive({
-      if (is.null(selected_ts()) || !is.null(range_error())) {
+      if (is.null(selected_ts())) {
         return(NULL)
       }
       rng <- plot_range()
@@ -1222,6 +1352,14 @@ continuousDataReview <- function(id, language) {
       invisible(NULL)
     }
 
+    clear_correction_form <- function() {
+      updateSelectizeInput(session, "correction_type", selected = character(0))
+      updateNumericInput(session, "correction_value1", value = NA)
+      updateNumericInput(session, "correction_value2", value = NA)
+      updateNumericInput(session, "correction_window", value = NA)
+      updateTextInput(session, "correction_equation", value = "")
+    }
+
     observeEvent(
       input$correction_type,
       {
@@ -1233,7 +1371,13 @@ continuousDataReview <- function(id, language) {
     observeEvent(
       active_kind(),
       {
+        if (!is.null(selected_record())) {
+          set_record_range_inputs(NULL, NULL)
+        }
         selected_record(NULL)
+        if (!identical(active_kind(), "correction")) {
+          clear_correction_form()
+        }
         next_edge("start")
         proxy <- DT::dataTableProxy("active_assignments")
         DT::selectRows(proxy, NULL)
@@ -1244,10 +1388,10 @@ continuousDataReview <- function(id, language) {
     output$active_table_title <- renderText({
       switch(
         active_kind(),
-        grade = "Selected grade assignments",
-        approval = "Selected approval assignments",
-        qualifier = "Selected qualifier assignments",
-        correction = "Selected corrections"
+        grade = "Grade records for this timeseries",
+        approval = "Approval records for this timeseries",
+        qualifier = "Qualifier records for this timeseries",
+        correction = "Corrections for this timeseries"
       )
     })
 
@@ -1486,7 +1630,11 @@ continuousDataReview <- function(id, language) {
       req(selected_ts())
       rng <- selected_range()
       if (is.null(rng)) {
-        return(data.frame())
+        message <- range_error()
+        if (is.null(message)) {
+          message <- "Choose a review range above to list records that overlap it."
+        }
+        return(data.frame(Message = message, stringsAsFactors = FALSE))
       }
       data <- assignments()
       bind_rows <- list(
@@ -1515,9 +1663,16 @@ continuousDataReview <- function(id, language) {
 
     output$selected_range_records <- DT::renderDT({
       df <- selected_range_records_data()
+      if ("Message" %in% names(df)) {
+        return(DT::datatable(
+          df,
+          options = list(dom = 't'),
+          selection = 'none'
+        ))
+      }
       if (!nrow(df)) {
         return(DT::datatable(
-          data.frame(Message = "No records overlap the selected range."),
+          data.frame(Message = "No records overlap this review interval."),
           options = list(dom = 't'),
           selection = 'none'
         ))
@@ -1553,7 +1708,7 @@ continuousDataReview <- function(id, language) {
               selected = as.character(row$type_id)
             )
           }
-          set_range_inputs(row$start_dt, row$end_dt)
+          set_record_range_inputs(row$start_dt, row$end_dt)
         }
       },
       ignoreNULL = TRUE
@@ -1561,30 +1716,25 @@ continuousDataReview <- function(id, language) {
 
     observeEvent(input$clear_selection, {
       selected_record(NULL)
+      set_record_range_inputs(NULL, NULL)
       proxy <- DT::dataTableProxy("active_assignments")
       DT::selectRows(proxy, NULL)
       updateSelectizeInput(session, "attribute_value", selected = character(0))
-      updateSelectizeInput(session, "correction_type", selected = character(0))
-      updateNumericInput(session, "correction_value1", value = NA)
-      updateNumericInput(session, "correction_value2", value = NA)
-      updateNumericInput(session, "correction_window", value = NA)
-      updateTextInput(session, "correction_equation", value = "")
+      clear_correction_form()
     })
 
     observe({
-      label <- if (is.null(selected_record())) {
-        if (identical(active_kind(), "correction")) {
-          "Add correction"
-        } else {
-          "Add attribute"
-        }
-      } else {
-        if (identical(active_kind(), "correction")) {
-          "Update correction"
-        } else {
-          "Update attribute"
-        }
-      }
+      verb <- if (is.null(selected_record())) "Add" else "Update"
+      label <- paste(
+        verb,
+        switch(
+          active_kind(),
+          grade = "grade",
+          approval = "approval",
+          qualifier = "qualifier",
+          correction = "correction"
+        )
+      )
       shiny::updateActionButton(session, "apply_attribute", label = label)
     })
 
@@ -1691,7 +1841,7 @@ continuousDataReview <- function(id, language) {
       if (action$kind %in% c("grade", "approval") && nrow(overlaps)) {
         return(tagList(
           p(sprintf(
-            "The selected range overlaps existing %s records. Applying this change may overwrite records or adjust their bounds.",
+            "These record dates overlap existing %s records. Applying this change may replace records or adjust their bounds.",
             paste0(action$kind, "s")
           )),
           tags$ul(lapply(describe_overlaps(overlaps), tags$li))
@@ -1705,7 +1855,7 @@ continuousDataReview <- function(id, language) {
       ) {
         return(tagList(
           p(
-            "Qualifiers can overlap. This will add another qualifier over a range that already has qualifiers."
+            "Qualifiers can overlap. This will add another qualifier for record dates that already have a qualifier."
           ),
           tags$ul(lapply(describe_overlaps(overlaps), tags$li))
         ))
@@ -1717,9 +1867,11 @@ continuousDataReview <- function(id, language) {
         } else {
           p("No existing corrections overlap this range.")
         }
+        verb <- if (is.null(action$record)) "added" else "updated"
         return(tagList(
           p(sprintf(
-            "Corrections are additive and are evaluated by priority. This correction type has priority %s.",
+            "This correction will be %s for the record dates above. Corrections can stack and are evaluated in priority order; this type has priority %s.",
+            verb,
             action$correction$priority
           )),
           overlap_text
@@ -1866,6 +2018,15 @@ continuousDataReview <- function(id, language) {
       )
       assignment_refresh(assignment_refresh() + 1)
       selected_record(NULL)
+      if (identical(kind, "correction")) {
+        clear_correction_form()
+      } else {
+        updateSelectizeInput(
+          session,
+          "attribute_value",
+          selected = character(0)
+        )
+      }
       proxy <- DT::dataTableProxy(ns("active_assignments"), session = session)
       DT::selectRows(proxy, NULL)
       TRUE
@@ -1873,15 +2034,14 @@ continuousDataReview <- function(id, language) {
 
     observeEvent(input$apply_attribute, {
       req(selected_ts())
-      err <- range_error()
+      err <- record_range_error()
       if (!is.null(err)) {
         showNotification(err, type = "error")
         return()
       }
-      start_dt <- scalar_utc_datetime(input$start_dt)
-      end_dt <- scalar_utc_datetime(input$end_dt)
-      if (is.na(start_dt) || is.na(end_dt)) {
-        showNotification("Start or end datetime is invalid.", type = "error")
+      rng <- record_range()
+      if (is.null(rng)) {
+        showNotification("Enter valid record start and end datetimes.", type = "error")
         return()
       }
 
@@ -1890,8 +2050,8 @@ continuousDataReview <- function(id, language) {
       action <- list(
         kind = kind,
         record = record,
-        start_dt = start_dt,
-        end_dt = end_dt
+        start_dt = rng$start,
+        end_dt = rng$end
       )
 
       if (identical(kind, "correction")) {
@@ -1908,14 +2068,25 @@ continuousDataReview <- function(id, language) {
         action$correction <- correction
       } else {
         type_id <- input$attribute_value
-        if (!length(type_id)) {
+        type_ids <- switch(
+          kind,
+          grade = module_data$grade_types$grade_type_id,
+          approval = module_data$approval_types$approval_type_id,
+          qualifier = module_data$qualifier_types$qualifier_type_id
+        )
+        if (
+          is.null(type_id) ||
+            length(type_id) != 1L ||
+            is.na(type_id) ||
+            !as.character(type_id) %in% as.character(type_ids)
+        ) {
           showNotification(
             "Select an attribute value before applying.",
             type = "warning"
           )
           return()
         }
-        action$type_id <- type_id
+        action$type_id <- as.integer(type_id)
       }
 
       msg <- confirmation_message(action)
@@ -2513,10 +2684,9 @@ continuousDataReview <- function(id, language) {
 
     output$ts_plot <- plotly::renderPlotly({
       req(selected_ts())
-      err <- range_error()
-      validate(need(is.null(err), err))
       rng <- selected_range()
       view_rng <- plot_visible_range()
+      req(view_rng)
       df <- ts_data()
       plot_source <- ns("ts_plot")
 
@@ -2552,18 +2722,21 @@ continuousDataReview <- function(id, language) {
       }
       event_y <- y_range[1] + 0.04 * diff(y_range)
 
-      shapes <- list(list(
-        type = "rect",
-        x0 = rng$start,
-        x1 = rng$end,
-        y0 = 0,
-        y1 = 1,
-        xref = "x",
-        yref = "paper",
-        fillcolor = grDevices::adjustcolor("#FBE5B2", alpha.f = 0.35),
-        line = list(color = "#A66F00", width = 1, dash = "dot"),
-        layer = "below"
-      ))
+      shapes <- list()
+      if (!is.null(rng)) {
+        shapes[[1]] <- list(
+          type = "rect",
+          x0 = rng$start,
+          x1 = rng$end,
+          y0 = 0,
+          y1 = 1,
+          xref = "x",
+          yref = "paper",
+          fillcolor = grDevices::adjustcolor("#FBE5B2", alpha.f = 0.35),
+          line = list(color = "#A66F00", width = 1, dash = "dot"),
+          layer = "below"
+        )
+      }
 
       if (isTRUE(input$show_attribute_bands)) {
         shapes <- add_interval_shapes(

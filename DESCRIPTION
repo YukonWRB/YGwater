@@ -1,6 +1,6 @@
 Package: YGwater
 Title: R functions and applications for the Yukon Water Science and Stewardship Branch
-Version: 1.10.6
+Version: 1.10.7
 Authors@R: c(
     person("Ghislain", "de Laplante", email = "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -19,7 +19,7 @@ License: AGPL (>= 3) + file LICENSE
 URL: https://github.com/YukonWRB/YGwater
 BugReports: https://github.com/YukonWRB/YGWater/issues
 Depends:
-    R (>= 4.1)
+    R (>= 4.2.0)
 Imports:
     cli,
     cowplot,
@@ -51,7 +51,7 @@ Imports:
     xml2,
     zoo
 Suggests:
-    AquaCache (>= 2.8.6),
+    AquaCache (>= 2.8.7),
     base64enc,
     bslib,
     bsicons,

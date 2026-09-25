@@ -11,8 +11,7 @@
 #' @param dbUser Username for the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
 #' @param network_check Optional: a path to a network location to check if the app is run internally or externally. If the app can see the path, some additional functionality is enabled, such as log in by admin roles. Default is FALSE, which means no check is performed and the app assumes it's running internally without access to all features.
-#' @param accessPath1 to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.
-#' @param accessPath2 Path to the folder where EQWin databases are stored. Default is "//carver/infosys/EQWin". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options, combined with the files in accessPath1.
+#' @param accessPaths Paths to the folders where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.
 #' @param logout_timer_min Auto logout timer, in minutes.
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
 #' @param analytics FALSE (no analytics) or path to an HTML file containing analytics code to insert into the app, such as a matomo analytics script. If a file in the package's inst directory, point to it as `system.file("apps/YGwater/www/html/matomo.html", package = "YGwater")`. This file will be called within the main UI as `tags$head(includeHTML(file))`. Default is FALSE.
@@ -31,8 +30,10 @@ YGwater <- function(
   dbPort = Sys.getenv("aquacachePort", "5432"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
-  accessPath1 = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
-  accessPath2 = "//carver/infosys/EQWin",
+  accessPaths = c(
+    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
+    "//carver/infosys/EQWin"
+  ),
   network_check = FALSE,
   logout_timer_min = 10,
   server = FALSE,
@@ -258,11 +259,11 @@ YGwater <- function(
     con,
     "SELECT version FROM information.version_info WHERE item = 'Last patch number';"
   )[1, 1])
-  if (ver < 61) {
+  if (ver < 62) {
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
-      "The aquacache database version is too old. Please update to at least version 61. Current version is ",
+      "The aquacache database version is too old. Please update to at least version 62. Current version is ",
       ver,
       ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache::AquaConnect documentation for more details."
     )
@@ -306,8 +307,7 @@ YGwater <- function(
     dbPort = dbPort,
     dbUser = dbUser,
     dbPass = dbPass,
-    accessPath1 = accessPath1,
-    accessPath2 = accessPath2,
+    accessPaths = accessPaths,
     network_check = network_check,
     public = public,
     logout_timer_min = logout_timer_min,

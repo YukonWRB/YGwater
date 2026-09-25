@@ -545,6 +545,15 @@ reference_table_configs <- function() {
             "ORDER BY unit_name"
           )
         ),
+        reference_select_field(
+          "units_na",
+          "Not applicable unit",
+          choices_query = paste(
+            "SELECT unit_id AS value, unit_name AS label",
+            "FROM public.units",
+            "ORDER BY unit_name"
+          )
+        ),
         reference_text_field("cas_number", "CAS number"),
         reference_checkbox_field(
           "result_speciation",
@@ -2098,9 +2107,9 @@ fetch_parameter_relationship_choices <- function(con) {
 
 parameter_unit_fields <- function() {
   data.frame(
-    unit_column = c("units_liquid", "units_solid", "units_gas"),
-    unit_label = c("Liquid unit", "Solid unit", "Gas unit"),
-    matrix_state_code = c("liquid", "solid", "gas"),
+    unit_column = c("units_liquid", "units_solid", "units_gas", "units_na"),
+    unit_label = c("Liquid unit", "Solid unit", "Gas unit", "Not applicable unit"),
+    matrix_state_code = c("liquid", "solid", "gas", "not_applicable"),
     stringsAsFactors = FALSE
   )
 }
@@ -2117,7 +2126,7 @@ fetch_parameter_unit_values <- function(con, parameter_id) {
   DBI::dbGetQuery(
     con,
     paste(
-      "SELECT units_liquid, units_solid, units_gas",
+      "SELECT units_liquid, units_solid, units_gas, units_na",
       "FROM public.parameters",
       "WHERE parameter_id = $1"
     ),

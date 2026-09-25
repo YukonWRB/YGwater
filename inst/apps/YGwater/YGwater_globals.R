@@ -7,8 +7,7 @@ YGwater_globals <- function(
   RLS_user,
   RLS_pass,
   network_check,
-  accessPath1,
-  accessPath2,
+  accessPaths,
   logout_timer_min,
   analytics,
   public,
@@ -1163,47 +1162,28 @@ YGwater_globals <- function(
   # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
 
   ## Access database connections ###########
-  # Look for .mdb files in the AccessPath directories
+  # Look for .mdb files in the AccessPaths directories
   if (network_check) {
-    if (!is.null(accessPath1)) {
-      if (dir.exists(accessPath1) & !public) {
-        # List the *.mdb files in the directory
-        mdb_files1 <- list.files(
-          accessPath1,
+    mdb_files <- c()
+    for (accessPath in accessPaths) {
+      if (!is.null(accessPath) && dir.exists(accessPath) & !public) {
+        files <- list.files(
+          accessPath,
           pattern = "*.mdb",
           full.names = TRUE
         )
-        if (length(mdb_files1) == 0) {
-          mdb_files1 <- NULL
+        if (length(files) == 0) {
+          files <- NULL
         }
-      } else {
-        mdb_files1 <- NULL
+        mdb_files <- c(mdb_files, files)
       }
-    } else {
-      mdb_files1 <- NULL
     }
-    if (!is.null(accessPath2)) {
-      if (dir.exists(accessPath2) & !public) {
-        # List the *.mdb files in the directory
-        mdb_files2 <- list.files(
-          accessPath2,
-          pattern = "*.mdb",
-          full.names = TRUE
-        )
-        if (length(mdb_files2) == 0) {
-          mdb_files2 <- NULL
-        }
-      } else {
-        mdb_files2 <- NULL
-      }
-    } else {
-      mdb_files2 <- NULL
+    if (length(mdb_files) == 0) {
+      mdb_files <- NULL
     }
-
-    mdb_files <- c(mdb_files1, mdb_files2)
 
     if (is.null(mdb_files) & !public) {
-      print("No .mdb files found in the accessPath directories.")
+      print("No .mdb files found in the accessPaths directories.")
     }
   } else {
     mdb_files <- NULL

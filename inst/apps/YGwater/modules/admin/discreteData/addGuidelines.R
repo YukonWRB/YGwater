@@ -1276,6 +1276,7 @@ addGuidelines <- function(id, language) {
         liquid = "units_liquid",
         solid = "units_solid",
         gas = "units_gas",
+        not_applicable = "units_na",
         NA_character_
       )
     }
@@ -1700,11 +1701,13 @@ addGuidelines <- function(id, language) {
                 p.units_liquid, ul.unit_name AS unit_liquid_name,
                 p.units_solid, us.unit_name AS unit_solid_name,
                 p.units_gas, ug.unit_name AS unit_gas_name,
+                p.units_na, una.unit_name AS unit_na_name,
                 p.result_speciation, p.sample_fraction
          FROM public.parameters p
          LEFT JOIN public.units ul ON ul.unit_id = p.units_liquid
          LEFT JOIN public.units us ON us.unit_id = p.units_solid
          LEFT JOIN public.units ug ON ug.unit_id = p.units_gas
+         LEFT JOIN public.units una ON una.unit_id = p.units_na
          ORDER BY p.param_name"
       )
       moduleData$units <- DBI::dbGetQuery(
