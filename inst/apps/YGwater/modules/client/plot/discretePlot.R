@@ -2773,7 +2773,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 )
                 on.exit(DBI::dbDisconnect(con))
               } else {
-                con = NULL
+                con <- NULL
               }
 
               ensure_discrete_plot_function()
