@@ -44,7 +44,7 @@ continuousDataReviewUI <- function(id) {
               width = 4,
               selectizeInput(
                 ns("timezone"),
-                "Input timezone",
+                "Display and input timezone",
                 choices = input_timezone_choices(),
                 selected = default_input_timezone(),
                 multiple = FALSE,
@@ -229,6 +229,22 @@ continuousDataReviewUI <- function(id) {
               ),
               conditionalPanel(
                 ns = ns,
+                condition = "input.attribute_kind == 'grade' || input.attribute_kind == 'approval'",
+                p(
+                  class = "text-muted small",
+                  "A new or edited grade/approval replaces overlapping dates. Existing ranges are trimmed or split to keep any dates outside the new range; a fully covered record is removed."
+                )
+              ),
+              conditionalPanel(
+                ns = ns,
+                condition = "input.attribute_kind == 'qualifier'",
+                p(
+                  class = "text-muted small",
+                  "Different qualifiers may overlap in time. Applying the same qualifier to an overlapping or directly adjoining range merges those ranges into one."
+                )
+              ),
+              conditionalPanel(
+                ns = ns,
                 condition = "input.attribute_kind == 'correction'",
                 selectizeInput(
                   ns("correction_type"),
@@ -342,7 +358,11 @@ continuousDataReview <- function(id, language) {
         return("")
       }
       value <- as.POSIXct(value, tz = "UTC")
-      format(value, "%Y-%m-%d %H:%M:%S", tz = "UTC")
+      format(
+        value,
+        "%Y-%m-%d %H:%M:%S",
+        tz = air_datetime_widget_timezone(input$timezone)
+      )
     }
 
     format_number <- function(value) {
@@ -1618,7 +1638,9 @@ continuousDataReview <- function(id, language) {
       if (is.null(df) || !nrow(df)) {
         return(df)
       }
-      keep <- df$start_dt <= end_dt & df$end_dt >= start_dt
+      # These records use the database's half-open [start, end) interval
+      # semantics, so ranges that only touch at one endpoint do not overlap.
+      keep <- df$start_dt < end_dt & df$end_dt > start_dt
       keep[is.na(keep)] <- FALSE
       if (!is.null(exclude_id) && "record_id" %in% names(df)) {
         keep <- keep & df$record_id != exclude_id
@@ -1817,6 +1839,92 @@ continuousDataReview <- function(id, language) {
       lines
     }
 
+    describe_replacement_effects <- function(df, start_dt, end_dt) {
+      if (is.null(df) || !nrow(df)) {
+        return(character())
+      }
+      start_num <- as.numeric(start_dt)
+      end_num <- as.numeric(end_dt)
+      vapply(seq_len(nrow(df)), function(i) {
+        old_start <- df$start_dt[i]
+        old_end <- df$end_dt[i]
+        keeps_left <- as.numeric(old_start) < start_num
+        keeps_right <- as.numeric(old_end) > end_num
+        effect <- if (keeps_left && keeps_right) {
+          sprintf(
+            "will split into [%s, %s) and [%s, %s)",
+            format_datetime(old_start),
+            format_datetime(start_dt),
+            format_datetime(end_dt),
+            format_datetime(old_end)
+          )
+        } else if (keeps_left) {
+          sprintf("will end at %s", format_datetime(start_dt))
+        } else if (keeps_right) {
+          sprintf("will start at %s", format_datetime(end_dt))
+        } else {
+          "will be removed because the new range covers it"
+        }
+        sprintf(
+          "%s (%s to %s): %s",
+          df$description[i],
+          format_datetime(old_start),
+          format_datetime(old_end),
+          effect
+        )
+      }, character(1))
+    }
+
+    qualifier_merge_component <- function(
+      df,
+      type_id,
+      start_dt,
+      end_dt,
+      exclude_id = NULL
+    ) {
+      empty <- if (is.null(df)) data.frame() else df[0, , drop = FALSE]
+      start_num <- as.numeric(start_dt)
+      end_num <- as.numeric(end_dt)
+      if (is.null(df) || !nrow(df)) {
+        return(list(rows = empty, start = start_dt, end = end_dt))
+      }
+
+      keep <- !is.na(df$type_id) &
+        as.character(df$type_id) == as.character(type_id) &
+        !is.na(df$start_dt) &
+        !is.na(df$end_dt)
+      if (!is.null(exclude_id) && "record_id" %in% names(df)) {
+        keep <- keep & as.character(df$record_id) != as.character(exclude_id)
+      }
+      candidates <- df[which(keep), , drop = FALSE]
+      if (!nrow(candidates)) {
+        return(list(rows = empty, start = start_dt, end = end_dt))
+      }
+
+      candidate_start <- as.numeric(candidates$start_dt)
+      candidate_end <- as.numeric(candidates$end_dt)
+      selected <- rep(FALSE, nrow(candidates))
+      repeat {
+        idx <- which(
+          !selected &
+            candidate_start <= end_num &
+            candidate_end >= start_num
+        )
+        if (!length(idx)) {
+          break
+        }
+        selected[idx] <- TRUE
+        start_num <- min(start_num, candidate_start[idx])
+        end_num <- max(end_num, candidate_end[idx])
+      }
+
+      list(
+        rows = candidates[selected, , drop = FALSE],
+        start = as.POSIXct(start_num, origin = "1970-01-01", tz = "UTC"),
+        end = as.POSIXct(end_num, origin = "1970-01-01", tz = "UTC")
+      )
+    }
+
     confirmation_message <- function(action) {
       data <- assignments()
       current <- switch(
@@ -1841,23 +1949,41 @@ continuousDataReview <- function(id, language) {
       if (action$kind %in% c("grade", "approval") && nrow(overlaps)) {
         return(tagList(
           p(sprintf(
-            "These record dates overlap existing %s records. Applying this change may replace records or adjust their bounds.",
-            paste0(action$kind, "s")
+            "The new %s range [%s, %s) replaces the overlapping portion of these records. Dates outside the new range are kept by trimming or splitting existing ranges; a fully covered record is removed.",
+            action$kind,
+            format_datetime(action$start_dt),
+            format_datetime(action$end_dt)
           )),
-          tags$ul(lapply(describe_overlaps(overlaps), tags$li))
+          tags$ul(lapply(
+            describe_replacement_effects(
+              overlaps,
+              action$start_dt,
+              action$end_dt
+            ),
+            tags$li
+          ))
         ))
       }
 
-      if (
-        identical(action$kind, "qualifier") &&
-          is.null(action$record) &&
-          nrow(overlaps)
-      ) {
+      if (identical(action$kind, "qualifier")) {
+        merge <- qualifier_merge_component(
+          current,
+          action$type_id,
+          action$start_dt,
+          action$end_dt,
+          exclude_id = exclude_id
+        )
+        if (!nrow(merge$rows)) {
+          return(NULL)
+        }
         return(tagList(
-          p(
-            "Qualifiers can overlap. This will add another qualifier for record dates that already have a qualifier."
-          ),
-          tags$ul(lapply(describe_overlaps(overlaps), tags$li))
+          p(sprintf(
+            "This %s qualifier will merge with the listed range(s) for the same qualifier into one range: [%s, %s). Different qualifier types may still overlap.",
+            if (is.null(action$record)) "new" else "edited",
+            format_datetime(merge$start),
+            format_datetime(merge$end)
+          )),
+          tags$ul(lapply(describe_overlaps(merge$rows), tags$li))
         ))
       }
 
@@ -1879,6 +2005,244 @@ continuousDataReview <- function(id, language) {
       }
 
       NULL
+    }
+
+    write_range_assignment <- function(action) {
+      spec <- switch(
+        action$kind,
+        grade = list(
+          table = "continuous.grades",
+          id = "grade_id",
+          type = "grade_type_id"
+        ),
+        approval = list(
+          table = "continuous.approvals",
+          id = "approval_id",
+          type = "approval_type_id"
+        ),
+        qualifier = list(
+          table = "continuous.qualifiers",
+          id = "qualifier_id",
+          type = "qualifier_type_id"
+        )
+      )
+      con <- session$userData$AquaCache
+      ts_id <- selected_ts()
+
+      DBI::dbWithTransaction(con, {
+        # Serialize these edits per timeseries so a second admin cannot insert
+        # an overlapping range between the check and its bound adjustments.
+        DBI::dbGetQuery(
+          con,
+          "WITH range_lock AS MATERIALIZED (
+             SELECT pg_advisory_xact_lock(
+               hashtext($1)::integer,
+               hashtext($2)::integer
+             )
+           )
+           SELECT 1 AS locked FROM range_lock",
+          params = list(paste0("YGwater range ", spec$table), as.character(ts_id))
+        )
+        existing <- DBI::dbGetQuery(
+          con,
+          sprintf(
+            "SELECT %s AS record_id, %s AS type_id, start_dt, end_dt
+             FROM %s WHERE timeseries_id = $1",
+            spec$id,
+            spec$type,
+            spec$table
+          ),
+          params = list(ts_id)
+        )
+
+        record <- action$record
+        record_id <- if (is.null(record)) NULL else record$record_id
+        if (action$kind %in% c("grade", "approval")) {
+          not_current <- if (is.null(record_id)) {
+            rep(TRUE, nrow(existing))
+          } else {
+            as.character(existing$record_id) != as.character(record_id)
+          }
+          conflict_idx <- which(
+            not_current &
+              !is.na(existing$start_dt) &
+              !is.na(existing$end_dt) &
+              as.numeric(existing$start_dt) < as.numeric(action$end_dt) &
+              as.numeric(existing$end_dt) > as.numeric(action$start_dt)
+          )
+
+          for (i in conflict_idx) {
+            old_start <- existing$start_dt[i]
+            old_end <- existing$end_dt[i]
+            keeps_left <- as.numeric(old_start) < as.numeric(action$start_dt)
+            keeps_right <- as.numeric(old_end) > as.numeric(action$end_dt)
+            if (keeps_left && keeps_right) {
+              DBI::dbExecute(
+                con,
+                sprintf(
+                  "UPDATE %s SET end_dt = $1 WHERE %s = $2",
+                  spec$table,
+                  spec$id
+                ),
+                params = list(action$start_dt, existing$record_id[i])
+              )
+              DBI::dbExecute(
+                con,
+                sprintf(
+                  "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt)
+                   VALUES ($1, $2, $3, $4)",
+                  spec$table,
+                  spec$type
+                ),
+                params = list(
+                  ts_id,
+                  existing$type_id[i],
+                  action$end_dt,
+                  old_end
+                )
+              )
+            } else if (keeps_left) {
+              DBI::dbExecute(
+                con,
+                sprintf(
+                  "UPDATE %s SET end_dt = $1 WHERE %s = $2",
+                  spec$table,
+                  spec$id
+                ),
+                params = list(action$start_dt, existing$record_id[i])
+              )
+            } else if (keeps_right) {
+              DBI::dbExecute(
+                con,
+                sprintf(
+                  "UPDATE %s SET start_dt = $1 WHERE %s = $2",
+                  spec$table,
+                  spec$id
+                ),
+                params = list(action$end_dt, existing$record_id[i])
+              )
+            } else {
+              DBI::dbExecute(
+                con,
+                sprintf(
+                  "DELETE FROM %s WHERE %s = $1",
+                  spec$table,
+                  spec$id
+                ),
+                params = list(existing$record_id[i])
+              )
+            }
+          }
+
+          if (is.null(record_id)) {
+            DBI::dbExecute(
+              con,
+              sprintf(
+                "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt)
+                 VALUES ($1, $2, $3, $4)",
+                spec$table,
+                spec$type
+              ),
+              params = list(
+                ts_id,
+                as.integer(action$type_id),
+                action$start_dt,
+                action$end_dt
+              )
+            )
+          } else {
+            DBI::dbExecute(
+              con,
+              sprintf(
+                "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3
+                 WHERE %s = $4",
+                spec$table,
+                spec$type,
+                spec$id
+              ),
+              params = list(
+                as.integer(action$type_id),
+                action$start_dt,
+                action$end_dt,
+                record_id
+              )
+            )
+          }
+          list(merged = 0L)
+        } else {
+          merge <- qualifier_merge_component(
+            existing,
+            action$type_id,
+            action$start_dt,
+            action$end_dt,
+            exclude_id = record_id
+          )
+          merged_ids <- merge$rows$record_id
+          if (!is.null(record_id)) {
+            keeper_id <- record_id
+          } else if (length(merged_ids)) {
+            order_idx <- order(
+              as.numeric(merge$rows$start_dt),
+              as.character(merged_ids)
+            )
+            keeper_id <- merged_ids[order_idx[1]]
+          } else {
+            keeper_id <- NULL
+          }
+
+          if (!is.null(keeper_id)) {
+            if (length(merged_ids)) {
+              delete_ids <- merged_ids[
+                as.character(merged_ids) != as.character(keeper_id)
+              ]
+              for (id in delete_ids) {
+                DBI::dbExecute(
+                  con,
+                  sprintf(
+                    "DELETE FROM %s WHERE %s = $1",
+                    spec$table,
+                    spec$id
+                  ),
+                  params = list(id)
+                )
+              }
+            }
+            DBI::dbExecute(
+              con,
+              sprintf(
+                "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3
+                 WHERE %s = $4",
+                spec$table,
+                spec$type,
+                spec$id
+              ),
+              params = list(
+                as.integer(action$type_id),
+                merge$start,
+                merge$end,
+                keeper_id
+              )
+            )
+          } else {
+            DBI::dbExecute(
+              con,
+              sprintf(
+                "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt)
+                 VALUES ($1, $2, $3, $4)",
+                spec$table,
+                spec$type
+              ),
+              params = list(
+                ts_id,
+                as.integer(action$type_id),
+                action$start_dt,
+                action$end_dt
+              )
+            )
+          }
+          list(merged = as.integer(length(merged_ids)))
+        }
+      })
     }
 
     commit_action <- function(action) {
@@ -1946,70 +2310,34 @@ continuousDataReview <- function(id, language) {
             record$record_id
           )
         }
+        res <- tryCatch(
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            query,
+            params = params
+          ),
+          error = function(e) {
+            showNotification(conditionMessage(e), type = "error")
+            NULL
+          }
+        )
       } else {
-        table_name <- switch(
-          kind,
-          grade = "continuous.grades",
-          approval = "continuous.approvals",
-          qualifier = "continuous.qualifiers"
+        res <- tryCatch(
+          write_range_assignment(action),
+          error = function(e) {
+            showNotification(conditionMessage(e), type = "error")
+            NULL
+          }
         )
-        id_col <- switch(
-          kind,
-          grade = "grade_id",
-          approval = "approval_id",
-          qualifier = "qualifier_id"
-        )
-        type_col <- switch(
-          kind,
-          grade = "grade_type_id",
-          approval = "approval_type_id",
-          qualifier = "qualifier_type_id"
-        )
-        if (is.null(record)) {
-          query <- sprintf(
-            "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt) VALUES ($1, $2, $3, $4)",
-            table_name,
-            type_col
-          )
-          params <- list(
-            selected_ts(),
-            as.integer(action$type_id),
-            action$start_dt,
-            action$end_dt
-          )
-        } else {
-          query <- sprintf(
-            "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3 WHERE %s = $4",
-            table_name,
-            type_col,
-            id_col
-          )
-          params <- list(
-            as.integer(action$type_id),
-            action$start_dt,
-            action$end_dt,
-            record$record_id
-          )
-        }
       }
-
-      res <- tryCatch(
-        DBI::dbExecute(
-          session$userData$AquaCache,
-          query,
-          params = params
-        ),
-        error = function(e) {
-          showNotification(conditionMessage(e), type = "error")
-          NULL
-        }
-      )
       if (is.null(res)) {
         return(FALSE)
       }
 
       showNotification(
-        if (is.null(record)) {
+        if (identical(kind, "qualifier") && res$merged > 0L) {
+          "Qualifier ranges merged successfully."
+        } else if (is.null(record)) {
           "Record added successfully."
         } else {
           "Record updated successfully."
