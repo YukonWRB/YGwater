@@ -99,6 +99,9 @@ app_ui <- function(request) {
             document.querySelectorAll('.navbar-toggle, .navbar-toggler')
           );
           var collapsedView = toggles.some(isVisible);
+          var header = document.querySelector('.app-navbar-header');
+          var brand = document.querySelector('.app-navbar-brand');
+          var topBar = document.querySelector('.top-bar-container');
 
           if (!document.body) {
             return;
@@ -106,6 +109,16 @@ app_ui <- function(request) {
 
           document.body.classList.toggle('navbar-collapsed-view', collapsedView);
           document.body.classList.toggle('navbar-expanded-view', !collapsedView);
+
+          if (header) {
+            header.style.display = collapsedView ? 'flex' : 'none';
+          }
+          if (brand) {
+            brand.style.display = collapsedView ? 'flex' : 'none';
+          }
+          if (topBar) {
+            topBar.style.display = collapsedView ? 'none' : '';
+          }
         }
 
         window.addEventListener('resize', syncHeaderMode);
@@ -137,13 +150,11 @@ app_ui <- function(request) {
       tags$script(HTML(
         "
       $(document).on('shiny:connected', function() {
-        $('#loginBtn').prop('disabled', false);
-        $('#logoutBtn').prop('disabled', false);
+        $('#loginBtn, #logoutBtn, #loginBtnMobile, #logoutBtnMobile').prop('disabled', false);
       });
 
       $(document).on('shiny:disconnected', function() {
-        $('#loginBtn').prop('disabled', true);
-        $('#logoutBtn').prop('disabled', true);
+        $('#loginBtn, #logoutBtn, #loginBtnMobile, #logoutBtnMobile').prop('disabled', true);
       });
       "
       )),
@@ -268,18 +279,41 @@ app_ui <- function(request) {
       ),
       # And now the navbar itself
       page_navbar(
-        title = tags$a(
-          class = "app-navbar-brand",
-          href = "#",
-          tags$img(
-            src = "imgs/Yukon_logo_white-min.png",
-            alt = "Yukon Government logo"
+        title = tags$div(
+          class = "app-navbar-header",
+          style = "align-items: center; display: none; flex: 1 1 auto; gap: 8px; min-width: 0;",
+          tags$a(
+            class = "app-navbar-brand",
+            href = "#",
+            style = "align-items: center; display: none; flex: 1 1 auto; gap: 8px; max-width: calc(100vw - 168px); min-width: 0; padding: 0; text-decoration: none;",
+            tags$img(
+              src = "imgs/Yukon_logo_white-min.png",
+              alt = "Yukon Government logo"
+            ),
+            tags$span(
+              id = "app-mobile-title",
+              class = "app-navbar-title",
+              default_app_title
+            )
           ),
-          tags$span(
-            id = "app-mobile-title",
-            class = "app-navbar-title",
-            default_app_title
-          )
+          if (!config$public) {
+            div(
+              class = "mobile-auth-container",
+              style = "display: flex; flex: 0 0 auto;",
+              actionButton(
+                "loginBtnMobile",
+                "Login",
+                class = "mobile-auth-button",
+                style = "background-color: #F2A900; border: 0; border-radius: 6px; color: #244C5A; font-weight: 600; min-height: 40px; min-width: 68px; padding: 0.4rem 0.8rem; white-space: nowrap;"
+              ),
+              actionButton(
+                "logoutBtnMobile",
+                "Logout",
+                class = "mobile-auth-button",
+                style = "background-color: #F2A900; border: 0; border-radius: 6px; color: #244C5A; display: none; font-weight: 600; min-height: 40px; min-width: 68px; padding: 0.4rem 0.8rem; white-space: nowrap;"
+              )
+            )
+          }
         ),
         id = "navbar",
         window_title = default_app_title,

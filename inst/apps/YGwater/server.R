@@ -2118,7 +2118,17 @@ app_server <- function(input, output, session) {
       )
       updateActionButton(
         session,
+        "loginBtnMobile",
+        label = tr("login", languageSelection$language)
+      )
+      updateActionButton(
+        session,
         "logoutBtn",
+        label = tr("logout", languageSelection$language)
+      )
+      updateActionButton(
+        session,
+        "logoutBtnMobile",
         label = tr("logout", languageSelection$language)
       )
     }
@@ -2377,6 +2387,8 @@ app_server <- function(input, output, session) {
     # change the 'Logout' button back to 'Login'
     shinyjs::hide("logoutBtn")
     shinyjs::show("loginBtn")
+    shinyjs::hide("logoutBtnMobile")
+    shinyjs::show("loginBtnMobile")
 
     # Remove the 'admin' button upon logout
     if (isTRUE(session$userData$admin_button_inserted)) {
@@ -2472,7 +2484,7 @@ app_server <- function(input, output, session) {
 
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
-  observeEvent(input$loginBtn, {
+  observeEvent(input$loginBtn + input$loginBtnMobile, {
     req(languageSelection$language) # Ensure language is set before proceeding (might not be yet if the app is still loading)
     clear_modals() # Remove any existing modals
     # Check if the user has exceeded the maximum number of login attempts
@@ -2545,7 +2557,7 @@ app_server <- function(input, output, session) {
       # loginBtn button was disabled on click by 'onclick = "$(this).prop('disabled', true);"'; re-enable it so it's available after the modal is closed.
       shinyjs::runjs("$('#loginBtn').prop('disabled', false);")
     }
-  })
+  }, ignoreInit = TRUE)
 
   # Log in attempt if the button is clicked
   observeEvent(input$confirmLogin, {
@@ -2744,6 +2756,8 @@ WHERE rolname = current_user;"
           # change the 'Login' button to 'Logout'
           shinyjs::hide("loginBtn")
           shinyjs::show("logoutBtn")
+          shinyjs::hide("loginBtnMobile")
+          shinyjs::show("logoutBtnMobile")
 
           # Initialize a fresh cache environment for the session
           session$userData$app_cache <- new.env(parent = emptyenv())
@@ -2826,9 +2840,9 @@ WHERE rolname = current_user;"
   })
 
   ## Log out #####################################################
-  observeEvent(input$logoutBtn, {
+  observeEvent(input$logoutBtn + input$logoutBtnMobile, {
     perform_logout(show_idle_modal = FALSE)
-  })
+  }, ignoreInit = TRUE)
 
   # Load modules based on input$navbar ################################
   # Store information to pass between modules

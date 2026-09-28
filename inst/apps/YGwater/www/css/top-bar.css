@@ -68,11 +68,20 @@
   white-space: nowrap;
 }
 
+.app-navbar-header {
+  align-items: center;
+  display: none !important;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
 .app-navbar-brand {
   align-items: center;
   display: none;
+  flex: 1 1 auto;
   gap: 10px;
-  max-width: calc(100vw - 90px);
+  max-width: calc(100vw - 168px);
   min-width: 0;
   padding: 0;
   text-decoration: none;
@@ -102,16 +111,50 @@ body.navbar-collapsed-view .top-bar-container {
 }
 
 body.navbar-collapsed-view .app-navbar-brand {
-  display: flex;
+  display: flex !important;
+}
+
+body.navbar-collapsed-view .app-navbar-header {
+  display: flex !important;
 }
 
 body.navbar-expanded-view .app-navbar-brand {
-  display: none;
+  display: none !important;
 }
 
-body.navbar-collapsed-view .app-navbar-title {
-  position: relative;
-  top: 5px;
+body.navbar-expanded-view .app-navbar-header {
+  display: none !important;
+}
+
+.mobile-auth-container {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+button.mobile-auth-button {
+  align-items: center;
+  background-color: #F2A900 !important;
+  border: 0 !important;
+  border-radius: 6px;
+  color: #244C5A !important;
+  display: inline-flex;
+  font-size: 1rem;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 68px;
+  padding: 0.4rem 0.8rem;
+  white-space: nowrap;
+}
+
+button.mobile-auth-button:hover,
+button.mobile-auth-button:focus-visible {
+  background-color: #E09B00 !important;
+  color: #173741 !important;
+}
+
+button.mobile-auth-button:focus-visible {
+  box-shadow: 0 0 0 0.2rem rgba(242, 169, 0, 0.35);
 }
 
 /* Styling for the aurora image */
@@ -195,7 +238,7 @@ body.navbar-collapsed-view .app-navbar-title {
 
   .app-navbar-brand {
     gap: 8px;
-    max-width: calc(100vw - 72px);
+    max-width: calc(100vw - 168px);
   }
 
   .app-navbar-brand img {
