@@ -3360,10 +3360,6 @@ addGuidelines <- function(id, language) {
         NA_integer_
       }
     }
-    first_id_from_csv <- function(x) {
-      vals <- parse_id_csv(x)
-      if (length(vals)) vals[[1]] else NA_integer_
-    }
     first_result_type_preference <- function(x) {
       vals <- parse_id_csv(x)
       if (length(vals)) vals[[1]] else NA_integer_
@@ -3383,21 +3379,6 @@ addGuidelines <- function(id, language) {
         }
       }
       moduleData$result_types$result_type_id[[1]]
-    }
-    result_value_actual_id <- function() {
-      value_type <- DBI::dbGetQuery(
-        con,
-        "SELECT result_value_type_id
-         FROM discrete.result_value_types
-         WHERE lower(result_value_type) = 'actual'
-         ORDER BY result_value_type_id
-         LIMIT 1"
-      )
-      if (nrow(value_type)) {
-        value_type$result_value_type_id[[1]]
-      } else {
-        NA_integer_
-      }
     }
     test_value_label <- function(parameter_id, matrix_state_id, suffix) {
       name <- text_default(parameter_name_for_id(parameter_id), "Parameter")
@@ -5326,275 +5307,6 @@ FROM vals",
       )
     })
 
-    guideline_test_query <- function(result_id, guideline_id) {
-      DBI::dbGetQuery(
-        con,
-        "SELECT guideline_code, guideline_name, result_value,
-                lower_guideline_value, upper_guideline_value,
-                output_status, comparison_status, derivation_inputs, message
-         FROM criteria.applicable_guidelines_for_result($1, CURRENT_DATE, TRUE, TRUE)
-         WHERE guideline_id = $2",
-        params = list(result_id, guideline_id)
-      )
-    }
-    guideline_input_values_for_sample <- function(sample_id, rule_id) {
-      sample_id <- integer_or_na(sample_id)
-      rule_id <- integer_or_na(rule_id)
-      if (is.na(sample_id) || is.na(rule_id)) {
-        return(data.frame())
-      }
-      DBI::dbGetQuery(
-        con,
-        "SELECT gri.input_code, gri.input_name,
-                v.input_value, v.source_result_id, v.status, v.message
-         FROM criteria.guideline_rule_inputs gri
-         CROSS JOIN LATERAL criteria.guideline_get_input_value(
-           $1, gri.input_id
-         ) v
-         WHERE gri.rule_id = $2
-         ORDER BY gri.input_code",
-        params = list(sample_id, rule_id)
-      )
-    }
-    format_input_value_summary <- function(values) {
-      if (is.null(values) || !nrow(values)) {
-        return("")
-      }
-      parts <- vapply(
-        seq_len(nrow(values)),
-        function(i) {
-          label <- text_default(values$input_name[[i]], values$input_code[[i]])
-          if (identical(values$status[[i]], "value")) {
-            paste0(label, " = ", values$input_value[[i]])
-          } else {
-            paste0(label, " = ", values$status[[i]])
-          }
-        },
-        character(1)
-      )
-      paste(parts, collapse = "; ")
-    }
-    target_result_for_sample <- function(sample_id, guideline_row) {
-      sample_id <- integer_or_na(sample_id)
-      if (is.na(sample_id) || is.null(guideline_row) || !nrow(guideline_row)) {
-        return(data.frame())
-      }
-      params <- list(
-        sample_id,
-        as.integer(guideline_row$parameter_id[[1]]),
-        as.integer(guideline_row$matrix_state_id[[1]])
-      )
-      conditions <- c(
-        "r.sample_id = $1",
-        "r.parameter_id = $2",
-        "r.matrix_state_id = $3"
-      )
-      result_speciation_id <- integer_or_na(
-        guideline_row$result_speciation_id[[1]]
-      )
-      if (!is.na(result_speciation_id)) {
-        params <- c(params, list(result_speciation_id))
-        conditions <- c(
-          conditions,
-          paste0(
-            "r.result_speciation_id IS NOT DISTINCT FROM $",
-            length(params)
-          )
-        )
-      }
-      fraction_ids <- parse_id_csv(guideline_row$fraction_ids[[1]])
-      if (length(fraction_ids)) {
-        conditions <- c(
-          conditions,
-          paste0(
-            "r.sample_fraction_id IN (",
-            paste(fraction_ids, collapse = ","),
-            ")"
-          )
-        )
-      }
-      DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT r.result_id, r.result AS guideline_parameter_result
-           FROM discrete.results r
-           WHERE ",
-          paste(conditions, collapse = "\n             AND "),
-          "
-           ORDER BY r.result_id DESC
-           LIMIT 1"
-        ),
-        params = params
-      )
-    }
-    existing_sample_choices_for_guideline <- function(
-      guideline_id = NA_integer_,
-      guideline_row = NULL,
-      primary_rule_id = NULL,
-      connection = con,
-      candidate_limit = 50L,
-      choice_limit = 10L
-    ) {
-      if (is.null(guideline_row)) {
-        guideline_row <- moduleData$guidelines[
-          moduleData$guidelines$guideline_id == guideline_id,
-          ,
-          drop = FALSE
-        ]
-      }
-      if (!nrow(guideline_row)) {
-        return(character(0))
-      }
-      if (is.null(primary_rule_id)) {
-        rules <- load_rules(guideline_id)
-        primary_rule_id <- if (nrow(rules)) {
-          integer_or_na(rules$rule_id[[1]])
-        } else {
-          NA_integer_
-        }
-      }
-      params <- list(
-        as.integer(guideline_row$parameter_id[[1]]),
-        as.integer(guideline_row$matrix_state_id[[1]])
-      )
-      target_conditions <- c(
-        "r.parameter_id = $1",
-        "r.matrix_state_id = $2"
-      )
-      sample_conditions <- character(0)
-      result_speciation_id <- integer_or_na(
-        guideline_row$result_speciation_id[[1]]
-      )
-      if (!is.na(result_speciation_id)) {
-        params <- c(params, list(result_speciation_id))
-        target_conditions <- c(
-          target_conditions,
-          paste0(
-            "r.result_speciation_id IS NOT DISTINCT FROM $",
-            length(params)
-          )
-        )
-      }
-      fraction_ids <- parse_id_csv(guideline_row$fraction_ids[[1]])
-      if (length(fraction_ids)) {
-        target_conditions <- c(
-          target_conditions,
-          paste0(
-            "r.sample_fraction_id IN (",
-            paste(fraction_ids, collapse = ","),
-            ")"
-          )
-        )
-      }
-      if (!is.na(primary_rule_id)) {
-        params <- c(params, list(primary_rule_id))
-        sample_conditions <- c(
-          sample_conditions,
-          paste0(
-            "NOT EXISTS (
-               SELECT 1
-               FROM criteria.guideline_rule_inputs gri
-               CROSS JOIN LATERAL criteria.guideline_get_input_value(
-                 s.sample_id, gri.input_id
-               ) v
-               WHERE gri.rule_id = $",
-            length(params),
-            "
-                 AND COALESCE(gri.required, TRUE)
-                 AND v.status <> 'value'
-             )"
-          )
-        )
-      }
-      candidate_limit <- max(10L, as.integer(candidate_limit))
-      choice_limit <- max(1L, as.integer(choice_limit))
-      sample_where <- if (length(sample_conditions)) {
-        paste0(
-          "WHERE ",
-          paste(sample_conditions, collapse = "\n             AND ")
-        )
-      } else {
-        ""
-      }
-      choices <- DBI::dbGetQuery(
-        connection,
-        paste0(
-          "WITH target_candidates AS (
-             SELECT DISTINCT ON (s.sample_id)
-                    s.sample_id, s.datetime, s.location_id
-             FROM discrete.samples s
-             JOIN discrete.results r ON r.sample_id = s.sample_id
-             WHERE ",
-          paste(target_conditions, collapse = "\n               AND "),
-          "
-             ORDER BY s.sample_id, s.datetime DESC NULLS LAST
-             LIMIT ",
-          candidate_limit,
-          "
-           )
-           SELECT s.sample_id,
-                  concat_ws(
-                    ' | ',
-                    'Sample ' || s.sample_id::text,
-                    to_char(s.datetime AT TIME ZONE 'UTC',
-                            'YYYY-MM-DD HH24:MI UTC'),
-                    concat_ws(' - ', l.location_code, l.name)
-                  ) AS sample_label
-           FROM target_candidates s
-           LEFT JOIN public.locations l ON l.location_id = s.location_id
-           ",
-          sample_where,
-          "
-           GROUP BY s.sample_id, s.datetime, l.location_code, l.name
-           ORDER BY s.datetime DESC NULLS LAST, s.sample_id DESC
-           LIMIT ",
-          choice_limit
-        ),
-        params = params
-      )
-      if (!nrow(choices)) {
-        return(character(0))
-      }
-      stats::setNames(as.character(choices$sample_id), choices$sample_label)
-    }
-    run_existing_sample_guideline_test <- function(guideline_id, sample_id) {
-      guideline_row <- moduleData$guidelines[
-        moduleData$guidelines$guideline_id == guideline_id,
-        ,
-        drop = FALSE
-      ]
-      rules <- load_rules(guideline_id)
-      primary_rule_id <- if (nrow(rules)) {
-        integer_or_na(rules$rule_id[[1]])
-      } else {
-        NA_integer_
-      }
-      target <- target_result_for_sample(sample_id, guideline_row)
-      if (!nrow(target)) {
-        return(data.frame(
-          error = "No matching result for the guideline parameter was found on the selected sample.",
-          stringsAsFactors = FALSE
-        ))
-      }
-      result <- guideline_test_query(target$result_id[[1]], guideline_id)
-      if (!nrow(result)) {
-        result <- data.frame(
-          message = "No applicable row returned for the selected sample.",
-          stringsAsFactors = FALSE
-        )
-      }
-      input_values <- guideline_input_values_for_sample(
-        sample_id,
-        primary_rule_id
-      )
-      result$selected_sample_id <- sample_id
-      result$selected_result_id <- target$result_id[[1]]
-      result$guideline_parameter_result <- target$guideline_parameter_result[[
-        1
-      ]]
-      result$input_values <- format_input_value_summary(input_values)
-      result
-    }
     existing_sample_choices_state <- reactiveVal(NULL)
     output$existing_sample_picker <- renderUI({
       state <- existing_sample_choices_state()
@@ -5611,7 +5323,7 @@ FROM vals",
       tagList(
         selectizeInput(
           ns("test_sample_id"),
-          "Sample with guideline parameter and required inputs",
+          "Sample with guideline parameter result",
           choices = choices,
           selected = if (length(choices)) {
             unname(choices[[1]])
@@ -5625,7 +5337,7 @@ FROM vals",
           tags$div(
             class = "alert alert-info",
             style = "padding:8px; margin-top:8px;",
-            "No existing samples were found with both the guideline parameter result and all required rule inputs."
+            "No existing samples were found with a result matching this guideline's parameter and matrix state."
           )
         }
       )
@@ -5682,41 +5394,11 @@ FROM vals",
                 )
               )
             }
-            sample_conditions <- character(0)
-            primary_rule_id <- suppressWarnings(as.integer(req$primary_rule_id))
-            if (!is.na(primary_rule_id)) {
-              params <- c(params, list(primary_rule_id))
-              sample_conditions <- c(
-                sample_conditions,
-                paste0(
-                  "NOT EXISTS (
-                     SELECT 1
-                     FROM criteria.guideline_rule_inputs gri
-                     CROSS JOIN LATERAL criteria.guideline_get_input_value(
-                       s.sample_id, gri.input_id
-                     ) v
-                     WHERE gri.rule_id = $",
-                  length(params),
-                  "
-                       AND COALESCE(gri.required, TRUE)
-                       AND v.status <> 'value'
-                   )"
-                )
-              )
-            }
-            sample_where <- if (length(sample_conditions)) {
-              paste0(
-                "WHERE ",
-                paste(sample_conditions, collapse = "\n             AND ")
-              )
-            } else {
-              ""
-            }
             choices <- DBI::dbGetQuery(
               con,
               paste0(
                 "WITH target_candidates AS (
-                   SELECT s.sample_id, s.datetime, s.location_id
+                   SELECT s.sample_id, s.datetime, s.location_id, s.media_id
                    FROM discrete.samples s
                    JOIN discrete.results r ON r.sample_id = s.sample_id
                    WHERE ",
@@ -5725,23 +5407,22 @@ FROM vals",
                   collapse = "\n                     AND "
                 ),
                 "
-                   GROUP BY s.sample_id, s.datetime, s.location_id
+                   GROUP BY s.sample_id, s.datetime, s.location_id, s.media_id
                    ORDER BY s.datetime DESC NULLS LAST, s.sample_id DESC
                    LIMIT 50
                  )
                  SELECT s.sample_id,
-                        concat_ws(
-                          ' | ',
-                          'Sample ' || s.sample_id::text,
-                          to_char(s.datetime AT TIME ZONE 'UTC',
-                                  'YYYY-MM-DD HH24:MI UTC'),
-                          concat_ws(' - ', l.location_code, l.name)
-                        ) AS sample_label
+                  concat_ws(
+                    ' | ',
+                    'Sample ' || s.sample_id::text,
+                    to_char(s.datetime AT TIME ZONE 'UTC',
+                            'YYYY-MM-DD HH24:MI UTC'),
+                    mt.media_type,
+                    concat_ws(' - ', l.location_code, l.name)
+                  ) AS sample_label
                  FROM target_candidates s
                  LEFT JOIN public.locations l ON l.location_id = s.location_id
-                 ",
-                sample_where,
-                "
+                 LEFT JOIN public.media_types mt ON mt.media_id = s.media_id
                  ORDER BY s.datetime DESC NULLS LAST, s.sample_id DESC
                  LIMIT 10"
               ),
@@ -5823,7 +5504,7 @@ FROM vals",
               )
               if (nrow(out)) out$result_value_type_id[[1]] else NA_integer_
             }
-            guideline_query <- function(result_id) {
+            guideline_application <- function(result_id) {
               DBI::dbGetQuery(
                 con,
                 "SELECT guideline_code, guideline_name, result_value,
@@ -5837,23 +5518,31 @@ FROM vals",
                 params = list(result_id, req$guideline_id)
               )
             }
-            input_values <- function(sample_id) {
-              rule_id <- int_or_na(req$primary_rule_id)
-              if (is.na(rule_id)) {
-                return(data.frame())
-              }
+            guideline_calculation <- function(sample_id) {
               DBI::dbGetQuery(
                 con,
-                "SELECT gri.input_code, gri.input_name,
+                "SELECT rule_id, bound_code, guideline_value,
+                        output_status, derivation_inputs, message
+                 FROM criteria.evaluate_guideline($1, $2)
+                 ORDER BY rule_id, bound_code",
+                params = list(req$guideline_id, sample_id)
+              )
+            }
+            input_values <- function(sample_id) {
+              DBI::dbGetQuery(
+                con,
+                "SELECT gvr.bound_code, gri.input_code, gri.input_name,
                         v.input_value, v.source_result_id,
                         v.status, v.message
-                 FROM criteria.guideline_rule_inputs gri
+                 FROM criteria.guideline_value_rules gvr
+                 JOIN criteria.guideline_rule_inputs gri
+                   ON gri.rule_id = gvr.rule_id
                  CROSS JOIN LATERAL criteria.guideline_get_input_value(
                    $1, gri.input_id
                  ) v
-                 WHERE gri.rule_id = $2
-                 ORDER BY gri.input_code",
-                params = list(sample_id, rule_id)
+                 WHERE gvr.guideline_id = $2
+                 ORDER BY gvr.rule_priority, gri.input_code",
+                params = list(sample_id, req$guideline_id)
               )
             }
             input_summary <- function(values) {
@@ -5867,6 +5556,10 @@ FROM vals",
                     label <- values$input_name[[i]]
                     if (is.na(label) || !nzchar(label)) {
                       label <- values$input_code[[i]]
+                    }
+                    if (!is.na(values$bound_code[[i]]) &&
+                        nzchar(values$bound_code[[i]])) {
+                      label <- paste(values$bound_code[[i]], label)
                     }
                     if (identical(values$status[[i]], "value")) {
                       paste0(label, " = ", values$input_value[[i]])
@@ -5924,7 +5617,7 @@ FROM vals",
                    WHERE ",
                   paste(conditions, collapse = "\n                     AND "),
                   "
-                   ORDER BY r.result_id DESC
+                   ORDER BY r.analysis_datetime DESC NULLS LAST, r.result_id DESC
                    LIMIT 1"
                 ),
                 params = params
@@ -5974,31 +5667,92 @@ FROM vals",
               DBI::dbGetQuery(con, query)$result_id[[1]]
             }
 
-            if (identical(req$mode, "existing")) {
-              target <- target_result_for_sample(req$sample_id)
-              if (!nrow(target)) {
-                return(list(
-                  ok = TRUE,
-                  result = data.frame(
-                    error = "No matching result for the guideline parameter was found on the selected sample.",
-                    stringsAsFactors = FALSE
-                  )
-                ))
-              }
-              result <- guideline_query(target$result_id[[1]])
-              if (!nrow(result)) {
-                result <- data.frame(
-                  message = "No applicable row returned for the selected sample.",
+            make_test_result <- function(
+              sample_id,
+              target,
+              temporary = FALSE,
+              temporary_input_count = 0L
+            ) {
+              calculation <- guideline_calculation(sample_id)
+              if (!nrow(calculation)) {
+                calculation <- data.frame(
+                  rule_id = NA_integer_,
+                  bound_code = NA_character_,
+                  guideline_value = NA_real_,
+                  output_status = "no_rule_result",
+                  derivation_inputs = NA_character_,
+                  message = "The saved guideline returned no rule values.",
                   stringsAsFactors = FALSE
                 )
               }
-              values <- input_values(req$sample_id)
-              result$selected_sample_id <- req$sample_id
-              result$selected_result_id <- target$result_id[[1]]
-              result$guideline_parameter_result <-
+              has_target <- !is.null(target) && nrow(target) > 0L
+              application <- if (has_target) {
+                guideline_application(target$result_id[[1]])
+              } else {
+                data.frame()
+              }
+              values <- input_values(sample_id)
+              calculation$guideline_code <- req$guideline_row$guideline_code[[1]]
+              calculation$guideline_name <- req$guideline_row$guideline_name[[1]]
+              calculation$lower_guideline_value <- ifelse(
+                calculation$bound_code == "lower",
+                calculation$guideline_value,
+                NA_real_
+              )
+              calculation$upper_guideline_value <- ifelse(
+                calculation$bound_code == "upper",
+                calculation$guideline_value,
+                NA_real_
+              )
+              calculation$result_value <- if (has_target) {
                 target$guideline_parameter_result[[1]]
-              result$input_values <- input_summary(values)
-              return(list(ok = TRUE, result = result))
+              } else {
+                NA_real_
+              }
+              calculation$guideline_parameter_result <- calculation$result_value
+              calculation$comparison_status <- if (nrow(application)) {
+                application$comparison_status[[1]]
+              } else {
+                NA_character_
+              }
+              calculation$applicability_status <- if (nrow(application)) {
+                "applicable"
+              } else if (has_target) {
+                "not_applicable"
+              } else {
+                "no_target_result"
+              }
+              calculation$applicability_message <- if (nrow(application)) {
+                application$message[[1]] %||% ""
+              } else if (has_target) {
+                paste(
+                  "No applicable guideline result was returned for this sample;",
+                  "the saved rule values above were calculated separately."
+                )
+              } else {
+                "No matching result for the guideline parameter was found on the selected sample."
+              }
+              calculation$selected_sample_id <- sample_id
+              calculation$selected_result_id <- if (has_target) {
+                target$result_id[[1]]
+              } else {
+                NA_integer_
+              }
+              calculation$input_values <- input_summary(values)
+              if (isTRUE(temporary)) {
+                calculation$temporary_sample_id <- sample_id
+                calculation$temporary_result_id <- target$result_id[[1]]
+                calculation$temporary_input_results <- temporary_input_count
+              }
+              calculation
+            }
+
+            if (identical(req$mode, "existing")) {
+              target <- target_result_for_sample(req$sample_id)
+              return(list(
+                ok = TRUE,
+                result = make_test_result(req$sample_id, target)
+              ))
             }
 
             guideline_row <- req$guideline_row
@@ -6013,16 +5767,28 @@ FROM vals",
               },
               add = TRUE
             )
+            # Reuse sample metadata when the configured medium has no
+            # samples yet, while keeping the temporary sample on that medium.
             template <- DBI::dbGetQuery(
               con,
               "SELECT COALESCE($1::integer, s.media_id) AS media_id,
                       COALESCE($2::integer, s.location_id) AS location_id,
-                      s.sub_location_id, s.collection_method, s.sample_type,
+                      CASE
+                        WHEN $2::integer IS NULL
+                          OR s.location_id = $2::integer
+                          THEN s.sub_location_id
+                        ELSE NULL::integer
+                      END AS sub_location_id,
+                      s.collection_method, s.sample_type,
                       s.sample_grade, s.sample_approval, s.owner,
                       s.contributor, s.sampling_org
                FROM discrete.samples s
-               WHERE ($1::integer IS NULL OR s.media_id = $1)
                ORDER BY
+                 CASE
+                   WHEN $1::integer IS NOT NULL
+                     AND s.media_id = $1 THEN 0
+                   ELSE 1
+                 END,
                  CASE
                    WHEN $2::integer IS NOT NULL
                      AND s.location_id = $2 THEN 0
@@ -6037,7 +5803,7 @@ FROM vals",
             )
             if (!nrow(template)) {
               stop(
-                "No existing sample was available to use as metadata for a temporary test sample.",
+                "No existing sample metadata is available to create a temporary test sample.",
                 call. = FALSE
               )
             }
@@ -6093,6 +5859,7 @@ FROM vals",
               result_type_id = NA_integer_,
               analysis_datetime = sample_datetime
             )
+            inserted_input_count <- 0L
             input_results <- req$input_results
             if (!is.null(input_results) && nrow(input_results)) {
               input_results <- input_results[
@@ -6113,21 +5880,19 @@ FROM vals",
                   result_type_id = input_results$result_type_id[[i]],
                   analysis_datetime = sample_datetime
                 )
+                inserted_input_count <- inserted_input_count + 1L
               }
             }
-            result <- guideline_query(target_result_id)
-            if (!nrow(result)) {
-              result <- data.frame(
-                message = "No applicable row returned for the temporary test result.",
-                stringsAsFactors = FALSE
-              )
-            }
-            values <- input_values(sample_id)
-            result$temporary_sample_id <- sample_id
-            result$temporary_result_id <- target_result_id
-            result$guideline_parameter_result <- req$target_value
-            result$temporary_input_results <- nrow(req$input_results)
-            result$input_values <- input_summary(values)
+            target <- data.frame(
+              result_id = target_result_id,
+              guideline_parameter_result = req$target_value
+            )
+            result <- make_test_result(
+              sample_id,
+              target,
+              temporary = TRUE,
+              temporary_input_count = inserted_input_count
+            )
             DBI::dbRollback(con)
             active <- FALSE
             list(ok = TRUE, result = result)
@@ -6151,260 +5916,6 @@ FROM vals",
       })
     }) |>
       bslib::bind_task_button("test_guideline")
-    test_sample_template <- function(guideline_id) {
-      g <- moduleData$guidelines[
-        moduleData$guidelines$guideline_id == guideline_id,
-        ,
-        drop = FALSE
-      ]
-      media_id <- if (nrow(g)) {
-        first_id_from_csv(g$media_ids[[1]])
-      } else {
-        NA_integer_
-      }
-      location_id <- if (nrow(g)) {
-        first_id_from_csv(g$location_ids[[1]])
-      } else {
-        NA_integer_
-      }
-      template <- DBI::dbGetQuery(
-        con,
-        "SELECT COALESCE($1::integer, s.media_id) AS media_id,
-                COALESCE($2::integer, s.location_id) AS location_id,
-                s.sub_location_id, s.collection_method, s.sample_type,
-                s.sample_grade, s.sample_approval, s.owner, s.contributor,
-                s.sampling_org
-         FROM discrete.samples s
-         WHERE ($1::integer IS NULL OR s.media_id = $1)
-         ORDER BY
-           CASE
-             WHEN $2::integer IS NOT NULL AND s.location_id = $2 THEN 0
-             ELSE 1
-           END,
-           s.sample_id
-         LIMIT 1",
-        params = list(media_id, location_id)
-      )
-      if (!nrow(template)) {
-        template <- DBI::dbGetQuery(
-          con,
-          "SELECT s.media_id, COALESCE($1::integer, s.location_id) AS location_id,
-                  s.sub_location_id, s.collection_method, s.sample_type,
-                  s.sample_grade, s.sample_approval, s.owner, s.contributor,
-                  s.sampling_org
-           FROM discrete.samples s
-           ORDER BY
-             CASE
-               WHEN $1::integer IS NOT NULL AND s.location_id = $1 THEN 0
-               ELSE 1
-             END,
-             s.sample_id
-           LIMIT 1",
-          params = list(location_id)
-        )
-      }
-      if (!nrow(template)) {
-        stop(
-          "No existing sample was available to use as metadata for a temporary test sample.",
-          call. = FALSE
-        )
-      }
-      template
-    }
-    insert_temp_sample <- function(guideline_id, sample_datetime) {
-      template <- test_sample_template(guideline_id)
-      source_id <- paste0(
-        "guideline_test_",
-        format(Sys.time(), "%Y%m%d%H%M%S"),
-        "_",
-        sample.int(999999L, 1L)
-      )
-      DBI::dbGetQuery(
-        con,
-        "INSERT INTO discrete.samples (
-           location_id, sub_location_id, media_id, z, datetime,
-           target_datetime, collection_method, sample_type,
-           sample_volume_ml, sample_grade, sample_approval,
-           owner, contributor, sampling_org, share_with,
-           source_adapter_function, no_source_update, note,
-           external_sample_id
-         )
-         VALUES (
-           $1, $2, $3, 0, $4::timestamptz, $4::timestamptz,
-           $5, $6, 1000, $7, $8, $9, $10, $11,
-           ARRAY['public_reader'], 'ygwater_guideline_test',
-           false, 'Temporary guideline test sample; transaction rolled back.', $12
-         )
-         RETURNING sample_id",
-        params = list(
-          template$location_id[[1]],
-          template$sub_location_id[[1]],
-          template$media_id[[1]],
-          sample_datetime,
-          template$collection_method[[1]],
-          template$sample_type[[1]],
-          template$sample_grade[[1]],
-          template$sample_approval[[1]],
-          template$owner[[1]],
-          template$contributor[[1]],
-          template$sampling_org[[1]],
-          source_id
-        )
-      )$sample_id[[1]]
-    }
-    insert_temp_result <- function(
-      sample_id,
-      parameter_id,
-      matrix_state_id,
-      sample_fraction_id,
-      result_speciation_id,
-      result_value,
-      result_type_id = NA_integer_,
-      analysis_datetime = Sys.time()
-    ) {
-      if (
-        is.na(parameter_id) || is.na(matrix_state_id) || is.na(result_value)
-      ) {
-        stop(
-          "Temporary results require parameter_id, matrix_state_id, and value.",
-          call. = FALSE
-        )
-      }
-      result_type_id <- if (is.na(result_type_id)) {
-        default_result_type_id()
-      } else {
-        result_type_id
-      }
-      result_value_type <- result_value_actual_id()
-      if (is.na(result_type_id) || is.na(result_value_type)) {
-        stop(
-          "Could not resolve result type or result value type for temporary results.",
-          call. = FALSE
-        )
-      }
-      DBI::dbGetQuery(
-        con,
-        "INSERT INTO discrete.results (
-           sample_id, result_type, parameter_id, sample_fraction_id,
-           result, result_condition, result_condition_value,
-           result_value_type, result_speciation_id, analysis_datetime,
-           share_with, no_source_update, matrix_state_id
-         )
-         VALUES (
-           $1, $2, $3, $4, $5, NULL, NULL, $6, $7, $8::timestamptz,
-           ARRAY['public_reader'], false, $9
-         )
-         RETURNING result_id",
-        params = list(
-          sample_id,
-          result_type_id,
-          parameter_id,
-          sample_fraction_id,
-          result_value,
-          result_value_type,
-          result_speciation_id,
-          analysis_datetime,
-          matrix_state_id
-        )
-      )$result_id[[1]]
-    }
-    run_fake_guideline_test <- function(guideline_id) {
-      g <- moduleData$guidelines[
-        moduleData$guidelines$guideline_id == guideline_id,
-        ,
-        drop = FALSE
-      ]
-      if (!nrow(g)) {
-        stop("No selected guideline was found.", call. = FALSE)
-      }
-      sample_datetime <- Sys.time()
-      target_value <- numeric_or_na(input$test_target_value)
-      if (is.na(target_value)) {
-        stop(
-          "Enter the value against which to test the guideline.",
-          call. = FALSE
-        )
-      }
-      rules <- load_rules(guideline_id)
-      primary_inputs <- if (nrow(rules)) {
-        load_inputs(rules$rule_id[[1]])
-      } else {
-        data.frame()
-      }
-      input_results <- collect_temporary_input_results(primary_inputs)
-      input_results <- input_results[
-        !is.na(input_results$value),
-        ,
-        drop = FALSE
-      ]
-      active <- FALSE
-      tryCatch(
-        {
-          DBI::dbBegin(con)
-          active <- TRUE
-          sample_id <- insert_temp_sample(guideline_id, sample_datetime)
-          target_result_id <- insert_temp_result(
-            sample_id = sample_id,
-            parameter_id = as.integer(g$parameter_id[[1]]),
-            matrix_state_id = as.integer(g$matrix_state_id[[1]]),
-            sample_fraction_id = first_id_from_csv(g$fraction_ids[[1]]),
-            result_speciation_id = if (is.na(g$result_speciation_id[[1]])) {
-              NA_integer_
-            } else {
-              as.integer(g$result_speciation_id[[1]])
-            },
-            result_value = target_value,
-            result_type_id = default_result_type_id(c("^lab$", "^field$")),
-            analysis_datetime = sample_datetime
-          )
-          if (nrow(input_results)) {
-            for (i in seq_len(nrow(input_results))) {
-              insert_temp_result(
-                sample_id = sample_id,
-                parameter_id = input_results$parameter_id[[i]],
-                matrix_state_id = input_results$matrix_state_id[[i]],
-                sample_fraction_id = input_results$sample_fraction_id[[i]],
-                result_speciation_id = input_results$result_speciation_id[[i]],
-                result_value = input_results$value[[i]],
-                result_type_id = input_results$result_type_id[[i]],
-                analysis_datetime = sample_datetime
-              )
-            }
-          }
-          result <- guideline_test_query(target_result_id, guideline_id)
-          if (!nrow(result)) {
-            result <- data.frame(
-              message = "No applicable row returned for the temporary test result.",
-              stringsAsFactors = FALSE
-            )
-          }
-          primary_rule_id <- if (nrow(rules)) {
-            integer_or_na(rules$rule_id[[1]])
-          } else {
-            NA_integer_
-          }
-          input_values <- guideline_input_values_for_sample(
-            sample_id,
-            primary_rule_id
-          )
-          result$temporary_sample_id <- sample_id
-          result$temporary_result_id <- target_result_id
-          result$guideline_parameter_result <- target_value
-          result$temporary_input_results <- nrow(input_results)
-          result$input_values <- format_input_value_summary(input_values)
-          DBI::dbRollback(con)
-          active <- FALSE
-          result
-        },
-        error = function(e) {
-          if (active) {
-            try(DBI::dbRollback(con), silent = TRUE)
-          }
-          data.frame(error = conditionMessage(e), stringsAsFactors = FALSE)
-        }
-      )
-    }
-
     observeEvent(input$test_guideline, {
       guideline_id <- selected_guideline_id()
       if (is.na(guideline_id)) {
@@ -6452,6 +5963,9 @@ FROM vals",
           ),
           selected = "fake",
           inline = TRUE
+        ),
+        helpText(
+          "Calculated rule outputs are shown in guideline_value and the lower/upper guideline columns. guideline_parameter_result is the measured value from the selected sample. Applicability and comparison status are reported separately."
         ),
         conditionalPanel(
           condition = "input.test_mode == 'fake'",
@@ -6507,7 +6021,6 @@ FROM vals",
         if (is.na(guideline_id)) {
           return()
         }
-        rules <- load_rules(guideline_id)
         guideline_row <- moduleData$guidelines[
           moduleData$guidelines$guideline_id == guideline_id,
           ,
@@ -6516,8 +6029,7 @@ FROM vals",
         existing_sample_choices_state(list(loading = TRUE))
         load_existing_samples_task$invoke(list(
           config = session$userData$config,
-          guideline_row = guideline_row,
-          primary_rule_id = if (nrow(rules)) rules$rule_id[[1]] else NA_integer_
+          guideline_row = guideline_row
         ))
       },
       ignoreInit = TRUE
@@ -6571,11 +6083,6 @@ FROM vals",
           mode = "existing",
           guideline_id = guideline_id,
           guideline_row = guideline_row,
-          primary_rule_id = if (nrow(rules)) {
-            rules$rule_id[[1]]
-          } else {
-            NA_integer_
-          },
           sample_id = sample_id
         )
       } else {
@@ -6593,11 +6100,6 @@ FROM vals",
           mode = "fake",
           guideline_id = guideline_id,
           guideline_row = guideline_row,
-          primary_rule_id = if (nrow(rules)) {
-            rules$rule_id[[1]]
-          } else {
-            NA_integer_
-          },
           target_value = target_value,
           input_results = collect_temporary_input_results(primary_inputs)
         )
