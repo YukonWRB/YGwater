@@ -396,14 +396,11 @@ app_ui <- function(request) {
               value = "waterInfo",
               uiOutput("waterInfo_ui")
             ),
-            # WQ report depends on EQWin database access, so only show if on YG internal network
-            if (config$network_check) {
-              nav_panel(
-                title = uiOutput("reportsNavWQTitle"),
-                value = "WQReport",
-                uiOutput("WQReport_ui")
-              )
-            },
+            nav_panel(
+              title = uiOutput("reportsNavWQTitle"),
+              value = "WQReport",
+              uiOutput("WQReport_ui")
+            ),
             # Don't show the snow bulletin menu if not deployed on YG internal network
             if (config$network_check && config$brand$brand == 'yukon') {
               nav_panel(
@@ -419,6 +416,13 @@ app_ui <- function(request) {
             )
           ) # End reports nav_menu
         }, # End if !config$public for reports nav_menu
+        if (config$public) {
+          nav_panel(
+            title = uiOutput("reportsNavWQTitle"),
+            value = "WQReport",
+            uiOutput("WQReport_ui")
+          )
+        },
 
         # Dashboards nav menu
         if (!config$public) {

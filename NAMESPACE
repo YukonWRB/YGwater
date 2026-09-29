@@ -2,6 +2,7 @@
 
 export("%>%")
 export(AccessConnect)
+export(AquaCacheReport)
 export(AquaConnect)
 export(EQWinData)
 export(EQWinReport)

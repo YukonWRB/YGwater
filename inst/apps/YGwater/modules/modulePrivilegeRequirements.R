@@ -536,8 +536,28 @@ ygwater_module_privilege_requirements <- function() {
       c(list(c("SELECT", "INSERT", "UPDATE")), rep(list("SELECT"), 9))
     ),
     visit = req(
-      c("field.field_visits", "field.field_visit_instruments"),
-      list(c("INSERT", "UPDATE"), c("DELETE", "INSERT"))
+      c(
+        "field.field_visits",
+        "field.field_visit_instruments",
+        "field.field_visit_images",
+        "discrete.samples",
+        "discrete.results",
+        "files.images",
+        "files.image_types",
+        "public.locations",
+        "public.datum_conversions"
+      ),
+      list(
+        c("INSERT", "UPDATE"),
+        c("DELETE", "INSERT"),
+        c("SELECT", "INSERT"),
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT", "INSERT"),
+        c("SELECT", "INSERT", "UPDATE"),
+        "SELECT",
+        "SELECT",
+        "SELECT"
+      )
     ),
     manageNewsContent = req(
       c(

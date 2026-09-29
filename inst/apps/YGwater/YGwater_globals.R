@@ -134,14 +134,14 @@ YGwater_globals <- function(
     # Report modules
     if (network_check) {
       source(system.file(
-        "apps/YGwater/modules/client/reports/WQReport.R",
-        package = "YGwater"
-      ))
-      source(system.file(
         "apps/YGwater/modules/client/reports/snowBulletin.R",
         package = "YGwater"
       ))
     }
+    source(system.file(
+      "apps/YGwater/modules/client/reports/WQReport.R",
+      package = "YGwater"
+    ))
     source(system.file(
       "apps/YGwater/modules/client/reports/snowInfo.R",
       package = "YGwater"

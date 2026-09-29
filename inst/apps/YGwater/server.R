@@ -2484,34 +2484,36 @@ app_server <- function(input, output, session) {
 
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
-  observeEvent(input$loginBtn + input$loginBtnMobile, {
-    req(languageSelection$language) # Ensure language is set before proceeding (might not be yet if the app is still loading)
-    clear_modals() # Remove any existing modals
-    # Check if the user has exceeded the maximum number of login attempts
-    if (log_attempts() > 5) {
-      showModal(modalDialog(
-        title = tr("login_fail", languageSelection$language),
-        tr("login_fail_attempts", languageSelection$language),
-        easyClose = TRUE,
-        footer = modalButton(tr("close", languageSelection$language))
-      ))
-      return()
-      # button was disabled on click by 'onclick = "$(this).prop('disabled', true);"'; not re-enabled here since we want to prevent further login attempts after too many failed tries
-    } else {
-      showModal(modalDialog(
-        # html below allows the user to press 'Enter' to submit the login form
-        tags$script(HTML(
-          "
+  observeEvent(
+    input$loginBtn + input$loginBtnMobile,
+    {
+      req(languageSelection$language) # Ensure language is set before proceeding (might not be yet if the app is still loading)
+      clear_modals() # Remove any existing modals
+      # Check if the user has exceeded the maximum number of login attempts
+      if (log_attempts() > 5) {
+        showModal(modalDialog(
+          title = tr("login_fail", languageSelection$language),
+          tr("login_fail_attempts", languageSelection$language),
+          easyClose = TRUE,
+          footer = modalButton(tr("close", languageSelection$language))
+        ))
+        return()
+        # button was disabled on click by 'onclick = "$(this).prop('disabled', true);"'; not re-enabled here since we want to prevent further login attempts after too many failed tries
+      } else {
+        showModal(modalDialog(
+          # html below allows the user to press 'Enter' to submit the login form
+          tags$script(HTML(
+            "
           $(document).off('keyup.login').on('keyup.login', function(event) {
             if ($('#password').is(':focus') && (event.keyCode == 13)) {
               $('#confirmLogin').click();
             }
           });
           "
-        )),
+          )),
 
-        tags$style(HTML(
-          "
+          tags$style(HTML(
+            "
           .login-test-contact {
             background-color: rgba(242, 169, 0, 0.10);  /* YG yellow, softened */
             border: 1px solid rgba(242, 169, 0, 0.35);
@@ -2525,39 +2527,41 @@ app_server <- function(input, output, session) {
             margin-bottom: 0;
           }
           "
-        )),
+          )),
 
-        title = tr("login", languageSelection$language),
+          title = tr("login", languageSelection$language),
 
-        tags$div(
-          class = "login-test-contact",
-          role = "note",
-          tr("login_test_contact", languageSelection$language)
-        ),
-
-        br(),
-
-        textInput("username", tr("un", languageSelection$language)),
-        passwordInput("password", tr("pwd", languageSelection$language)),
-        footer = tagList(
-          checkboxInput(
-            "test_login",
-            tr("login_test_checkbox", languageSelection$language),
-            value = FALSE
+          tags$div(
+            class = "login-test-contact",
+            role = "note",
+            tr("login_test_contact", languageSelection$language)
           ),
-          modalButton(tr("close", languageSelection$language)),
-          actionButton(
-            "confirmLogin",
-            tr("login_confirm", languageSelection$language),
-            class = "btn-primary",
-            onclick = "$(this).prop('disabled', true);"
+
+          br(),
+
+          textInput("username", tr("un", languageSelection$language)),
+          passwordInput("password", tr("pwd", languageSelection$language)),
+          footer = tagList(
+            checkboxInput(
+              "test_login",
+              tr("login_test_checkbox", languageSelection$language),
+              value = FALSE
+            ),
+            modalButton(tr("close", languageSelection$language)),
+            actionButton(
+              "confirmLogin",
+              tr("login_confirm", languageSelection$language),
+              class = "btn-primary",
+              onclick = "$(this).prop('disabled', true);"
+            )
           )
-        )
-      ))
-      # loginBtn button was disabled on click by 'onclick = "$(this).prop('disabled', true);"'; re-enable it so it's available after the modal is closed.
-      shinyjs::runjs("$('#loginBtn').prop('disabled', false);")
-    }
-  }, ignoreInit = TRUE)
+        ))
+        # loginBtn button was disabled on click by 'onclick = "$(this).prop('disabled', true);"'; re-enable it so it's available after the modal is closed.
+        shinyjs::runjs("$('#loginBtn').prop('disabled', false);")
+      }
+    },
+    ignoreInit = TRUE
+  )
 
   # Log in attempt if the button is clicked
   observeEvent(input$confirmLogin, {
@@ -2840,9 +2844,13 @@ WHERE rolname = current_user;"
   })
 
   ## Log out #####################################################
-  observeEvent(input$logoutBtn + input$logoutBtnMobile, {
-    perform_logout(show_idle_modal = FALSE)
-  }, ignoreInit = TRUE)
+  observeEvent(
+    input$logoutBtn + input$logoutBtnMobile,
+    {
+      perform_logout(show_idle_modal = FALSE)
+    },
+    ignoreInit = TRUE
+  )
 
   # Load modules based on input$navbar ################################
   # Store information to pass between modules
@@ -3160,20 +3168,18 @@ WHERE rolname = current_user;"
         )
       }
     }
-    if (
-      input$navbar == "WQReport" &&
-        !isTRUE(config$public) &&
-        isTRUE(config$network_check) &&
-        isTRUE(session$userData$user_logged_in)
-    ) {
+    if (input$navbar == "WQReport") {
       if (!ui_loaded$WQReport) {
-        output$WQReport_ui <- renderUI(WQReportUI("WQReport"))
+        output$WQReport_ui <- renderUI(
+          WQReportUI("WQReport")
+        )
         ui_loaded$WQReport <- TRUE
+        # Call the server
         WQReport(
           "WQReport",
           mdb_files = config$mdb_files,
           language = languageSelection
-        ) # Call the server
+        )
       }
     }
     if (input$navbar == "snowBulletin") {
@@ -3356,7 +3362,11 @@ WHERE rolname = current_user;"
           "addContData",
           language = languageSelection
         ) # Call the server
-        observe_module_tab_change(moduleOutputs$addContData, session, nav_select)
+        observe_module_tab_change(
+          moduleOutputs$addContData,
+          session,
+          nav_select
+        )
       }
     }
     if (input$navbar == "imputeMissing") {
@@ -3386,7 +3396,11 @@ WHERE rolname = current_user;"
           "addDiscData",
           language = languageSelection
         ) # Call the server
-        observe_module_tab_change(moduleOutputs$addDiscData, session, nav_select)
+        observe_module_tab_change(
+          moduleOutputs$addDiscData,
+          session,
+          nav_select
+        )
       }
     }
     if (input$navbar == "editSamples") {
