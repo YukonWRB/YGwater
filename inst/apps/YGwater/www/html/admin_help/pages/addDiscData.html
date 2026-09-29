@@ -8,6 +8,14 @@
     body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; margin: 2rem auto; padding: 0 1rem; color: #222; }
     h1, h2 { color: #244c5a; }
     code { background: #f3f4f5; padding: 0.1rem 0.25rem; border-radius: 3px; }
+    .layout-example { margin: 1.25rem 0 2rem; }
+    .snapshot { overflow-x: auto; border: 1px solid #b8c7cc; border-radius: 0.35rem; background: #fff; }
+    .snapshot table { border-collapse: collapse; min-width: 42rem; width: 100%; font-size: 0.92rem; }
+    .snapshot caption { padding: 0.65rem; text-align: left; font-weight: 600; background: #eaf1f3; color: #244c5a; }
+    .snapshot th, .snapshot td { border: 1px solid #d4dde0; padding: 0.45rem 0.6rem; text-align: left; white-space: nowrap; }
+    .snapshot th { background: #f3f6f7; }
+    .snapshot .row-label { background: #f8fafb; font-weight: 600; }
+    .layout-note { color: #444; margin-top: 0.5rem; }
   </style>
 </head>
 <body>
@@ -19,6 +27,73 @@
 
   <h2>Input methods</h2>
   <p>Use file upload when you have a spreadsheet or tabular export. Use manual entry for a small number of results. Uploaded files can be mapped from wide or long formats, depending on how parameters, units, dates, and values are arranged.</p>
+
+  <h2 id="workbook-layouts">Workbook layout examples</h2>
+  <p>Choose a layout by looking at how the worksheet stores results. These spreadsheet-style examples show the shapes expected by each parser. The examples are illustrative; your column or row labels can differ and are configured in the workbook format.</p>
+
+  <section class="layout-example" aria-labelledby="long-layout">
+    <h3 id="long-layout">Long table: one result per row</h3>
+    <p>Each row contains one analyte result. Sample details repeat on every result row for that sample. Choose this when the workbook has columns for station, date, sample ID, parameter, unit, and result.</p>
+    <div class="snapshot">
+      <table>
+        <caption>Example worksheet: each row is a result</caption>
+        <thead>
+          <tr><th>Station Code</th><th>Sample Date</th><th>Lab Sample ID</th><th>Parameter Code</th><th>Parameter Name</th><th>Units</th><th>Result</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>YT-01</td><td>2026-07-15</td><td>260715-01</td><td>104</td><td>Nitrate</td><td>mg/L</td><td>0.21</td></tr>
+          <tr><td>YT-01</td><td>2026-07-15</td><td>260715-01</td><td>112</td><td>Chloride</td><td>mg/L</td><td>2.6</td></tr>
+          <tr><td>YT-02</td><td>2026-07-16</td><td>260716-01</td><td>104</td><td>Nitrate</td><td>mg/L</td><td>0.34</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="layout-note">In the format editor, map the source columns for sample location, date, lab sample ID, parameter, unit, and result.</p>
+  </section>
+
+  <section class="layout-example" aria-labelledby="transposed-layout">
+    <h3 id="transposed-layout">Transposed table: one sample per column</h3>
+    <p>Sample details are in rows near the top, with one sample in each column. Analytes are listed down the worksheet; each cell under a sample column is that sample's result for the analyte on the same row.</p>
+    <div class="snapshot">
+      <table>
+        <caption>Example worksheet: sample columns with analyte rows</caption>
+        <tbody>
+          <tr><th class="row-label">Lab Sample #</th><td></td><td></td><td>260715-01</td><td>260715-02</td></tr>
+          <tr><th class="row-label">Station Code</th><td></td><td></td><td>YT-01</td><td>YT-02</td></tr>
+          <tr><th class="row-label">Sample Date</th><td></td><td></td><td>2026-07-15</td><td>2026-07-16</td></tr>
+          <tr><th>Parameter Name</th><th>Parameter Code</th><th>Units</th><th>260715-01</th><th>260715-02</th></tr>
+          <tr><td>Nitrate</td><td>104</td><td>mg/L</td><td>0.21</td><td>0.34</td></tr>
+          <tr><td>Chloride</td><td>112</td><td>mg/L</td><td>2.6</td><td>3.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="layout-note">The first sample column is where sample results begin. The format editor also asks for the rows containing sample IDs, station codes, dates, and the parameter code and unit columns.</p>
+  </section>
+
+  <section class="layout-example" aria-labelledby="xlr-layout">
+    <h3 id="xlr-layout">XLR Detailed Report: lab report export</h3>
+    <p>Choose this for the XLR Detailed Report export. The parser looks for the report header beginning with <code>Analyte</code> and <code>ALS Sample ID</code>; result records then appear one per row.</p>
+    <div class="snapshot">
+      <table>
+        <caption>Example worksheet: XLR Detailed Report</caption>
+        <thead>
+          <tr><th>Analyte</th><th>ALS Sample ID</th><th>Station Code</th><th>Sample Date</th><th>Units</th><th>Result</th><th>Qualifier</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Nitrate</td><td>260715-01</td><td>YT-01</td><td>2026-07-15</td><td>mg/L</td><td>0.21</td><td></td></tr>
+          <tr><td>Chloride</td><td>260715-01</td><td>YT-01</td><td>2026-07-15</td><td>mg/L</td><td>2.6</td><td></td></tr>
+          <tr><td>Nitrate</td><td>260715-02</td><td>YT-02</td><td>2026-07-16</td><td>mg/L</td><td>&lt;0.05</td><td>U</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="layout-note">Map the report's sample ID, station, date, analyte, unit, and result columns. Optional columns can supply flags, detection limits, comments, and analysis date.</p>
+  </section>
+
+  <h3>Quick choice</h3>
+  <ul>
+    <li>Use <strong>Long table</strong> when each worksheet row is one result.</li>
+    <li>Use <strong>Transposed table</strong> when each sample is a column and each analyte is a row.</li>
+    <li>Use <strong>XLR Detailed Report</strong> for the lab's Detailed Report export with its standard report header.</li>
+  </ul>
 
   <h2>Mappings</h2>
   <p>Mappings tell the app where to find parameters, units, dates, values, and samples in the uploaded file. Save reusable mappings for common lab exports or repeated field templates. Before saving a mapping, verify that parameter columns resolve to the intended AquaCache parameters.</p>
