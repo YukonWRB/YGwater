@@ -4865,7 +4865,7 @@ addDiscData <- function(id, language) {
           "Choose the layout from the worksheet's shape, not from the lab name. ",
           tags$a(
             "Open the visual workbook layout guide",
-            href = "discrete-workbook-layouts.html",
+            href = "html/discrete-workbook-layouts.html",
             target = "_blank",
             rel = "noopener noreferrer"
           )
