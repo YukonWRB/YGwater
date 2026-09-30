@@ -1535,6 +1535,709 @@ addDiscData_upsert_mapping <- function(
   )
 }
 
+addDiscData_run_mapping_save <- function(request) {
+  config <- request$config
+  con <- YGwater::AquaConnect(
+    name = config$dbName,
+    host = config$dbHost,
+    port = config$dbPort,
+    username = config$dbUser,
+    password = config$dbPass,
+    silent = TRUE
+  )
+  if (is.null(con)) {
+    stop("Could not connect to the dev AquaCache database.")
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  saved <- FALSE
+  tryCatch(
+    {
+      DBI::dbWithTransaction(con, {
+        if (identical(request$kind, "parameter")) {
+          addDiscData_upsert_mapping(
+            con = con,
+            source_code = request$row$source_code[[1]],
+            source_name = request$row$source_code[[1]],
+            parameter_code = request$row$source_parameter_code[[1]],
+            unit = request$row$source_unit[[1]],
+            parameter_id = request$parameter_id,
+            result_type = request$result_type,
+            sample_fraction_id = request$sample_fraction_id,
+            result_value_type = request$result_value_type,
+            result_speciation_id = request$result_speciation_id,
+            matrix_state_id = request$matrix_state_id,
+            conversion = request$conversion,
+            result_offset = request$result_offset,
+            note = "Saved from YGwater add discrete data mapping editor.",
+            profile_code = request$profile$profile_code[[1]]
+          )
+        } else {
+          AquaCache::upsertImportLocationMappings(
+            con = con,
+            source_code = request$profile$source_code[[1]],
+            source_name = request$profile$source_code[[1]],
+            profile_code = request$profile$profile_code[[1]],
+            mappings = data.frame(
+              source_location_code = request$row$source_location_name[[1]],
+              source_location_name = request$row$source_location_name[[1]],
+              location_id = request$location_id,
+              sub_location_id = request$sub_location_id,
+              priority = 50L,
+              active = TRUE,
+              note = "Saved from YGwater add discrete data location mapping editor."
+            ),
+            publish = FALSE
+          )
+        }
+      })
+      saved <- TRUE
+      parsed <- NULL
+      if (isTRUE(request$refresh_preview)) {
+        parsed <- addDiscData_parse_upload(request$path, request$profile)
+        location_mappings <- AquaCache::getImportLocationMappings(
+          con = con,
+          source_code = request$profile$source_code[[1]],
+          profile_code = request$profile$profile_code[[1]],
+          active = TRUE,
+          include_draft = TRUE
+        )
+        parsed <- addDiscData_location_match(
+          parsed,
+          request$locations,
+          location_mappings
+        )
+        parsed <- addDiscData_apply_blank_sample_types(
+          parsed,
+          request$sample_types
+        )
+        parsed <- addDiscData_apply_mappings(
+          parsed,
+          con,
+          profile_code = request$profile$profile_code[[1]]
+        )
+        parsed <- parsed[names(addDiscData_empty_table())]
+      }
+      list(
+        ok = TRUE,
+        saved = TRUE,
+        request = request,
+        parsed = parsed
+      )
+    },
+    error = function(e) {
+      list(
+        ok = FALSE,
+        saved = saved,
+        request = request,
+        message = conditionMessage(e)
+      )
+    }
+  )
+}
+
+addDiscData_run_upload <- function(request) {
+  config <- request$config
+  con <- YGwater::AquaConnect(
+    name = config$dbName,
+    host = config$dbHost,
+    port = config$dbPort,
+    username = config$dbUser,
+    password = config$dbPass,
+    silent = TRUE
+  )
+  if (is.null(con)) {
+    stop("Could not connect to the dev AquaCache database.")
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  active <- FALSE
+  tryCatch(
+    {
+      DBI::dbExecute(con, "BEGIN")
+      active <- TRUE
+
+      default_document_type <- function() {
+        type <- DBI::dbGetQuery(
+          con,
+          "SELECT document_type_en
+           FROM files.document_types
+           ORDER BY
+             CASE WHEN document_type_id = 1 THEN 0 ELSE 1 END,
+             document_type_en
+           LIMIT 1;"
+        )
+        if (!nrow(type)) {
+          stop("No document types are available for uploaded documents.")
+        }
+        type$document_type_en[[1]]
+      }
+
+      insert_document <- function(file) {
+        document <- readBin(
+          file$datapath,
+          "raw",
+          as.integer(file.info(file$datapath)$size)
+        )
+        existing <- DBI::dbGetQuery(
+          con,
+          "SELECT document_id, name
+           FROM files.documents
+           WHERE file_hash = md5(encode($1::bytea, 'hex'))
+           LIMIT 1;",
+          params = list(list(document))
+        )
+        if (nrow(existing)) {
+          return(as.integer(existing$document_id[[1]]))
+        }
+        result <- AquaCache::insertACDocument(
+          path = file$datapath,
+          name = file$name,
+          type = default_document_type(),
+          description = sprintf(
+            "Uploaded %s from the discrete data upload workflow.",
+            file$name
+          ),
+          tags = c("discrete sample", "discrete upload"),
+          share_with = "public_reader",
+          geoms = NULL,
+          con = con
+        )
+        as.integer(result$new_document_id)
+      }
+
+      sample_document_fields <- DBI::dbListFields(
+        con,
+        DBI::Id(schema = "discrete", table = "sample_documents")
+      )
+      sample_document_has_link_source <-
+        "link_source" %in% sample_document_fields
+
+      link_sample_documents <- function(sample_id, document_ids) {
+        document_ids <- unique(as.integer(document_ids))
+        document_ids <- document_ids[!is.na(document_ids)]
+        for (document_id in document_ids) {
+          if (sample_document_has_link_source) {
+            DBI::dbExecute(
+              con,
+              "INSERT INTO discrete.sample_documents (
+                 sample_id,
+                 document_id,
+                 document_role,
+                 link_source
+               ) VALUES ($1, $2, 'supporting', 'addDiscData')
+               ON CONFLICT (sample_id, document_id) DO NOTHING;",
+              params = list(as.integer(sample_id), document_id)
+            )
+          } else {
+            DBI::dbExecute(
+              con,
+              "INSERT INTO discrete.sample_documents (
+                 sample_id,
+                 document_id,
+                 document_role
+               ) VALUES ($1, $2, 'supporting')
+               ON CONFLICT (sample_id, document_id) DO NOTHING;",
+              params = list(as.integer(sample_id), document_id)
+            )
+          }
+        }
+        invisible(NULL)
+      }
+
+      doc_ids <- integer()
+      if (!is.null(request$file)) {
+        doc_ids <- c(doc_ids, insert_document(request$file))
+      }
+      if (length(request$attachments)) {
+        for (file in request$attachments) {
+          doc_ids <- c(doc_ids, insert_document(file))
+        }
+      }
+
+      df <- request$df
+      inserted_samples <- 0L
+      inserted_results <- 0L
+      sample_lookup <- list()
+      samples <- unique(df[, c(
+        "sample_key",
+        "location_id",
+        "sub_location_id",
+        "datetime",
+        "target_datetime",
+        "z",
+        "media_id",
+        "collection_method",
+        "sample_type",
+        "sample_group_id",
+        "linked_with",
+        "sample_volume_ml",
+        "purge_volume_l",
+        "purge_time_min",
+        "flow_rate_l_min",
+        "wave_hgt_m",
+        "sample_grade",
+        "sample_approval",
+        "commissioning_org",
+        "sampling_org",
+        "sample_note",
+        "owner",
+        "contributor",
+        "sample_no_source_update",
+        "source_sample_id",
+        "source_code"
+      )])
+      field_visit_id <- addDiscData_int(request$field_visit_id)
+      samples$field_visit_id <- rep(NA_integer_, nrow(samples))
+      if (!is.na(field_visit_id)) {
+        visits <- DBI::dbGetQuery(
+          con,
+          "SELECT field_visit_id, location_id, sub_location_id
+           FROM field.field_visits"
+        )
+        visit_index <- match(field_visit_id, visits$field_visit_id)
+        if (is.na(visit_index)) {
+          stop(
+            "The selected field visit is no longer available. Refresh the visit list and choose it again.",
+            call. = FALSE
+          )
+        }
+        visit <- visits[visit_index, , drop = FALSE]
+        invalid_location <- is.na(samples$location_id) |
+          samples$location_id != visit$location_id[[1]]
+        if (any(invalid_location)) {
+          stop(
+            "Every sample linked to a field visit must use the visit's location.",
+            call. = FALSE
+          )
+        }
+        if (!is.na(visit$sub_location_id[[1]])) {
+          invalid_sub_location <- is.na(samples$sub_location_id) |
+            samples$sub_location_id != visit$sub_location_id[[1]]
+          if (any(invalid_sub_location)) {
+            stop(
+              "Every sample linked to this field visit must use the visit's sub-location.",
+              call. = FALSE
+            )
+          }
+        }
+        samples$field_visit_id[] <- field_visit_id
+      }
+      df$field_visit_id <- samples$field_visit_id[
+        match(df$sample_key, samples$sample_key)
+      ]
+      sample_table_fields <- DBI::dbListFields(
+        con,
+        DBI::Id(schema = "discrete", table = "samples")
+      )
+      sample_has_linked_with <- "linked_with" %in% sample_table_fields
+      sample_has_field_visit_id <- "field_visit_id" %in% sample_table_fields
+      if (!is.na(field_visit_id) && !sample_has_field_visit_id) {
+        stop(
+          "The discrete.samples table does not support field visit links. Apply the AquaCache field visit schema patch before linking samples.",
+          call. = FALSE
+        )
+      }
+      sample_insert_fields <- c(
+        "location_id",
+        "sub_location_id",
+        "media_id",
+        "z",
+        "datetime",
+        "target_datetime",
+        "collection_method",
+        "sample_type",
+        if (sample_has_linked_with) "linked_with",
+        "sample_volume_ml",
+        "purge_volume_l",
+        "purge_time_min",
+        "flow_rate_l_min",
+        "wave_hgt_m",
+        "sample_grade",
+        "sample_approval",
+        "owner",
+        "contributor",
+        "comissioning_org",
+        "sampling_org",
+        "source_adapter_function",
+        "external_sample_id",
+        "import_source_id",
+        "no_source_update",
+        "note",
+        if (sample_has_field_visit_id) "field_visit_id"
+      )
+      sample_insert_sql <- paste0(
+        "INSERT INTO discrete.samples (",
+        paste(sample_insert_fields, collapse = ", "),
+        ") VALUES (",
+        paste(sprintf("$%d", seq_along(sample_insert_fields)), collapse = ", "),
+        ") RETURNING sample_id"
+      )
+      import_sources <- DBI::dbGetQuery(
+        con,
+        "SELECT import_source_id, source_code
+         FROM discrete.import_sources"
+      )
+      samples$import_source_id <- import_sources$import_source_id[
+        match(samples$source_code, import_sources$source_code)
+      ]
+      file_sample <- samples$source_code != "YGwater-manual"
+      if (any(file_sample & is.na(samples$import_source_id))) {
+        stop(
+          "Every uploaded sample must resolve to a database import source.",
+          call. = FALSE
+        )
+      }
+      import_run_id <- NULL
+      profile <- request$profile
+      if (any(file_sample)) {
+        if (is.null(profile) || !nrow(profile)) {
+          stop("Choose a workbook format before uploading file samples.")
+        }
+        run_source_ids <- unique(samples$import_source_id[file_sample])
+        if (length(run_source_ids) != 1L) {
+          stop(
+            "A file upload must resolve to exactly one import source.",
+            call. = FALSE
+          )
+        }
+        run_source_code <- import_sources$source_code[
+          match(run_source_ids[[1]], import_sources$import_source_id)
+        ]
+        AquaCache::publishImportMappings(
+          con = con,
+          source_code = run_source_code
+        )
+        AquaCache::publishImportMappings(
+          con = con,
+          source_code = run_source_code,
+          profile_code = profile$profile_code[[1]]
+        )
+        import_run_id <- AquaCache::createImportRun(
+          con = con,
+          import_source_id = run_source_ids[[1]],
+          import_profile_id = profile$import_profile_id[[1]],
+          source_adapter_function = "addDiscData",
+          adapter_version = as.character(utils::packageVersion("YGwater")),
+          source_file_name = request$file$name,
+          source_file_size = request$file$size,
+          summary = list(
+            source_rows = length(unique(df$source_row_number)),
+            result_rows = nrow(df)
+          ),
+          note = "Created by the YGwater discrete-data import workflow."
+        )
+      }
+
+      for (i in seq_len(nrow(samples))) {
+        sid <- DBI::dbGetQuery(
+          con,
+          sample_insert_sql,
+          params = c(
+            list(
+              as.integer(samples$location_id[[i]]),
+              addDiscData_int(samples$sub_location_id[[i]]),
+              as.integer(samples$media_id[[i]]),
+              addDiscData_num(samples$z[[i]]),
+              as.POSIXct(samples$datetime[[i]], tz = "UTC"),
+              as.POSIXct(samples$target_datetime[[i]], tz = "UTC"),
+              as.integer(samples$collection_method[[i]]),
+              as.integer(samples$sample_type[[i]])
+            ),
+            if (sample_has_linked_with) {
+              list(addDiscData_int(samples$linked_with[[i]]))
+            },
+            list(
+              addDiscData_num(samples$sample_volume_ml[[i]]),
+              addDiscData_num(samples$purge_volume_l[[i]]),
+              addDiscData_num(samples$purge_time_min[[i]]),
+              addDiscData_num(samples$flow_rate_l_min[[i]]),
+              addDiscData_num(samples$wave_hgt_m[[i]]),
+              addDiscData_int(samples$sample_grade[[i]]),
+              addDiscData_int(samples$sample_approval[[i]]),
+              as.integer(samples$owner[[i]]),
+              addDiscData_int(samples$contributor[[i]]),
+              addDiscData_int(samples$commissioning_org[[i]]),
+              addDiscData_int(samples$sampling_org[[i]]),
+              if (file_sample[[i]]) "addDiscData" else NA_character_,
+              if (file_sample[[i]]) {
+                samples$source_sample_id[[i]]
+              } else {
+                NA_character_
+              },
+              addDiscData_int(samples$import_source_id[[i]]),
+              isTRUE(samples$sample_no_source_update[[i]]),
+              if (addDiscData_present(samples$sample_note[[i]])) {
+                samples$sample_note[[i]]
+              } else if (file_sample[[i]]) {
+                paste("Imported source sample:", samples$source_sample_id[[i]])
+              } else {
+                NA_character_
+              }
+            ),
+            if (sample_has_field_visit_id) {
+              list(addDiscData_int(samples$field_visit_id[[i]]))
+            }
+          )
+        )$sample_id[[1]]
+        link_sample_documents(sid, doc_ids)
+        if (!is.na(samples$sample_group_id[[i]])) {
+          DBI::dbExecute(
+            con,
+            "INSERT INTO discrete.sample_group_members (
+               sample_group_id, sample_id, sequence_in_group
+             ) VALUES ($1, $2, $3)",
+            params = list(
+              as.integer(samples$sample_group_id[[i]]),
+              as.integer(sid),
+              as.integer(i)
+            )
+          )
+        }
+        qualifier_ids <- request$sample_qualifiers[[samples$sample_key[[i]]]]
+        qualifier_ids <- unique(as.integer(qualifier_ids))
+        qualifier_ids <- qualifier_ids[!is.na(qualifier_ids)]
+        for (qualifier_id in qualifier_ids) {
+          DBI::dbExecute(
+            con,
+            "INSERT INTO discrete.sample_qualifiers (sample_id, qualifier_type_id)
+             VALUES ($1, $2)
+             ON CONFLICT (sample_id, qualifier_type_id) DO NOTHING",
+            params = list(as.integer(sid), qualifier_id)
+          )
+        }
+        sample_lookup[[samples$sample_key[[i]]]] <- sid
+        inserted_samples <- inserted_samples + 1L
+      }
+
+      result_ids <- integer(nrow(df))
+      for (j in seq_len(nrow(df))) {
+        sid <- sample_lookup[[df$sample_key[[j]]]]
+        result_ids[[j]] <- DBI::dbGetQuery(
+          con,
+          "INSERT INTO discrete.results (
+             sample_id,
+             result_type,
+             parameter_id,
+             protocol_method,
+             sample_fraction_id,
+             result,
+             result_condition,
+             result_condition_value,
+             result_value_type,
+             result_speciation_id,
+             laboratory,
+             analysis_datetime,
+             lab_report_no,
+             lab_sample_no,
+             grade_type_id,
+             approval_type_id,
+             matrix_state_id,
+             no_source_update,
+             note
+           ) VALUES (
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+             $14, $15, $16, $17, $18, $19
+           ) RETURNING result_id",
+          params = list(
+            sid,
+            as.integer(df$result_type[[j]]),
+            as.integer(df$parameter_id[[j]]),
+            addDiscData_int(df$protocol_method[[j]]),
+            addDiscData_int(df$sample_fraction_id[[j]]),
+            addDiscData_num(df$result[[j]]),
+            addDiscData_int(df$result_condition[[j]]),
+            addDiscData_num(df$result_condition_value[[j]]),
+            addDiscData_int(df$result_value_type[[j]]),
+            addDiscData_int(df$result_speciation_id[[j]]),
+            addDiscData_int(df$laboratory[[j]]),
+            if (is.na(df$analysis_datetime[[j]])) {
+              as.POSIXct(NA)
+            } else {
+              as.POSIXct(df$analysis_datetime[[j]], tz = "UTC")
+            },
+            if (addDiscData_present(df$lab_report_no[[j]])) {
+              as.character(df$lab_report_no[[j]])
+            } else {
+              NA_character_
+            },
+            if (addDiscData_present(df$lab_sample_no[[j]])) {
+              as.character(df$lab_sample_no[[j]])
+            } else {
+              NA_character_
+            },
+            addDiscData_int(df$grade_type_id[[j]]),
+            addDiscData_int(df$approval_type_id[[j]]),
+            as.integer(df$matrix_state_id[[j]]),
+            isTRUE(df$result_no_source_update[[j]]),
+            df$note[[j]]
+          )
+        )$result_id[[1]]
+        inserted_results <- inserted_results + 1L
+      }
+
+      if (!is.null(import_run_id)) {
+        source_columns <- c(
+          "source_location_name",
+          "source_sample_id",
+          "source_parameter_code",
+          "source_parameter_name",
+          "source_unit",
+          "source_result_text",
+          "lab_report_no",
+          "lab_sample_no",
+          "analysis_datetime"
+        )
+        sample_columns <- c(
+          "sample_key",
+          "location_id",
+          "sub_location_id",
+          "datetime",
+          "target_datetime",
+          "z",
+          "media_id",
+          "collection_method",
+          "sample_type",
+          "sample_group_id",
+          "linked_with",
+          "sample_volume_ml",
+          "purge_volume_l",
+          "purge_time_min",
+          "flow_rate_l_min",
+          "wave_hgt_m",
+          "sample_grade",
+          "sample_approval",
+          "commissioning_org",
+          "sampling_org",
+          "sample_note",
+          "owner",
+          "contributor",
+          "sample_no_source_update",
+          "field_visit_id"
+        )
+        result_columns <- c(
+          "parameter_id",
+          "result_type",
+          "protocol_method",
+          "matrix_state_id",
+          "sample_fraction_id",
+          "result_value_type",
+          "result_speciation_id",
+          "result",
+          "result_condition",
+          "result_condition_value",
+          "conversion",
+          "result_offset",
+          "laboratory",
+          "result_no_source_update",
+          "grade_type_id",
+          "approval_type_id"
+        )
+        source_group <- interaction(
+          df$source_row_number,
+          drop = TRUE,
+          lex.order = TRUE
+        )
+        run_rows <- data.frame(
+          sheet_name = rep(
+            addDiscData_first(profile$sheet_name, NA_character_),
+            nrow(df)
+          ),
+          source_row_number = as.integer(df$source_row_number),
+          result_index = as.integer(ave(
+            seq_len(nrow(df)),
+            source_group,
+            FUN = seq_along
+          )),
+          validation_status = rep("committed", nrow(df)),
+          sample_id = as.integer(unlist(sample_lookup[df$sample_key])),
+          result_id = result_ids,
+          stringsAsFactors = FALSE
+        )
+        run_rows$source_record <- lapply(
+          seq_len(nrow(df)),
+          function(i) as.list(df[i, source_columns, drop = FALSE])
+        )
+        run_rows$normalized_sample <- lapply(
+          seq_len(nrow(df)),
+          function(i) as.list(df[i, sample_columns, drop = FALSE])
+        )
+        run_rows$normalized_result <- lapply(
+          seq_len(nrow(df)),
+          function(i) as.list(df[i, result_columns, drop = FALSE])
+        )
+        run_rows$validation_messages <- replicate(
+          nrow(df),
+          list(),
+          simplify = FALSE
+        )
+        AquaCache::appendImportRunRows(con, import_run_id, run_rows)
+        AquaCache::completeImportRun(
+          con = con,
+          import_run_id = import_run_id,
+          status = "committed",
+          summary = list(
+            samples = inserted_samples,
+            results = inserted_results
+          ),
+          validation_summary = list(committed = inserted_results, errors = 0L)
+        )
+      }
+
+      location_labels <- addDiscData_location_labels(request$locations)
+      location_index <- match(
+        samples$location_id,
+        request$locations$location_id
+      )
+      destination <- location_labels[location_index]
+      destination[is.na(samples$location_id)] <-
+        "No location (locationless sample)"
+      sub_location_index <- match(
+        samples$sub_location_id,
+        request$sub_locations$sub_location_id
+      )
+      sub_location <- request$sub_locations$sub_location_name[
+        sub_location_index
+      ]
+      sample_ids <- as.integer(vapply(
+        samples$sample_key,
+        function(key) sample_lookup[[key]],
+        numeric(1)
+      ))
+      summary <- data.frame(
+        sample_id = sample_ids,
+        source_code = as.character(samples$source_code),
+        source_sample_id = as.character(samples$source_sample_id),
+        sample_datetime = format(
+          as.POSIXct(samples$datetime, tz = "UTC"),
+          "%Y-%m-%d %H:%M:%S UTC",
+          tz = "UTC"
+        ),
+        AquaCache_location = as.character(destination),
+        AquaCache_sub_location = as.character(sub_location),
+        stringsAsFactors = FALSE
+      )
+      summary$AquaCache_sub_location[is.na(
+        summary$AquaCache_sub_location
+      )] <- ""
+      DBI::dbExecute(con, "COMMIT")
+      active <- FALSE
+      list(
+        ok = TRUE,
+        inserted_samples = inserted_samples,
+        inserted_results = inserted_results,
+        summary = summary
+      )
+    },
+    error = function(e) {
+      if (isTRUE(active)) {
+        try(DBI::dbExecute(con, "ROLLBACK"), silent = TRUE)
+      }
+      list(ok = FALSE, message = conditionMessage(e))
+    }
+  )
+}
+
 addDiscData_target_unit <- function(
   parameters,
   parameter_id,
@@ -1670,6 +2373,10 @@ addDiscData_result_display <- function(
   out <- data.frame(
     `Source sample` = rows$source_sample_id,
     `Source location` = rows$source_location_name,
+    `Source parameter` = rows$source_parameter_code,
+    `Source unit` = rows$source_unit,
+    `Source result` = source_result,
+    `Source result flag` = rows$source_result_flag,
     `AquaCache location` = addDiscData_location_labels(locations)[
       location_index
     ],
@@ -1685,10 +2392,6 @@ addDiscData_result_display <- function(
       tz = "UTC"
     ),
     Parameter = parameter_name,
-    `Source parameter` = rows$source_parameter_code,
-    `Source unit` = rows$source_unit,
-    `Source result` = source_result,
-    `Source result flag` = rows$source_result_flag,
     `Result value` = rows$result,
     `Result condition` = addDiscData_lookup_label(
       rows$result_condition,
@@ -1813,10 +2516,100 @@ addDiscData_result_edit_columns <- function() {
   )
 }
 
+addDiscData_style_origin_columns <- function(
+  table,
+  source_columns,
+  target_columns
+) {
+  column_defs <- table$x$options$columnDefs
+  if (is.null(column_defs)) {
+    column_defs <- list()
+  }
+  table_columns <- names(table$x$data)
+  source_targets <- match(source_columns, table_columns) - 1L
+  source_targets <- source_targets[!is.na(source_targets)]
+  target_targets <- match(target_columns, table_columns) - 1L
+  target_targets <- target_targets[!is.na(target_targets)]
+  neutral_targets <- setdiff(
+    seq_along(table_columns) - 1L,
+    c(source_targets, target_targets)
+  )
+
+  if (length(source_targets)) {
+    column_defs[[length(column_defs) + 1L]] <- list(
+      className = "addDiscData-source-column",
+      targets = as.integer(source_targets)
+    )
+  }
+  if (length(target_targets)) {
+    column_defs[[length(column_defs) + 1L]] <- list(
+      className = "addDiscData-target-column",
+      targets = as.integer(target_targets)
+    )
+  }
+  if (length(neutral_targets)) {
+    column_defs[[length(column_defs) + 1L]] <- list(
+      className = "addDiscData-neutral-column",
+      targets = as.integer(neutral_targets)
+    )
+  }
+  table$x$options$columnDefs <- column_defs
+  table
+}
+
 addDiscDataUI <- function(id) {
   ns <- NS(id)
   tagList(
     page_fluid(
+      tags$head(tags$style(HTML(
+        "html body table.dataTable.dataTable.dataTable tbody tr:not(.selected) > td.addDiscData-source-column,
+        table.dataTable thead tr > th.addDiscData-source-column {
+          --bs-table-bg: #e8f1fb !important;
+          --bs-table-bg-type: #e8f1fb !important;
+          --bs-table-bg-state: #e8f1fb !important;
+          --bs-table-accent-bg: #e8f1fb !important;
+          background-color: #e8f1fb !important;
+          box-shadow: inset 0 0 0 9999px #e8f1fb !important;
+          color: #212529 !important;
+        }
+        html body table.dataTable.dataTable.dataTable tbody tr:not(.selected) > td.addDiscData-target-column,
+        table.dataTable thead tr > th.addDiscData-target-column {
+          --bs-table-bg: #e9f5ec !important;
+          --bs-table-bg-type: #e9f5ec !important;
+          --bs-table-bg-state: #e9f5ec !important;
+          --bs-table-accent-bg: #e9f5ec !important;
+          background-color: #e9f5ec !important;
+          box-shadow: inset 0 0 0 9999px #e9f5ec !important;
+          color: #212529 !important;
+        }
+        html body table.dataTable.dataTable tbody tr.selected > td.addDiscData-source-column {
+          --bs-table-bg: #c6dbee !important;
+          --bs-table-bg-type: #c6dbee !important;
+          --bs-table-bg-state: #c6dbee !important;
+          --bs-table-accent-bg: #c6dbee !important;
+          background-color: #c6dbee !important;
+          box-shadow: inset 0 0 0 9999px #c6dbee !important;
+          color: #212529 !important;
+        }
+        html body table.dataTable.dataTable tbody tr.selected > td.addDiscData-target-column {
+          --bs-table-bg: #cce3d1 !important;
+          --bs-table-bg-type: #cce3d1 !important;
+          --bs-table-bg-state: #cce3d1 !important;
+          --bs-table-accent-bg: #cce3d1 !important;
+          background-color: #cce3d1 !important;
+          box-shadow: inset 0 0 0 9999px #cce3d1 !important;
+          color: #212529 !important;
+        }
+        html body table.dataTable.dataTable tbody tr.selected > td.addDiscData-neutral-column {
+          --bs-table-bg: #e2e5e8 !important;
+          --bs-table-bg-type: #e2e5e8 !important;
+          --bs-table-bg-state: #e2e5e8 !important;
+          --bs-table-accent-bg: #e2e5e8 !important;
+          background-color: #e2e5e8 !important;
+          box-shadow: inset 0 0 0 9999px #e2e5e8 !important;
+          color: #212529 !important;
+        }"
+      ))),
       uiOutput(ns("banner")),
       tabsetPanel(
         id = ns("workflow_tabs"),
@@ -1870,7 +2663,7 @@ addDiscDataUI <- function(id) {
                 uiOutput(ns("import_profile_status")),
                 bslib::input_task_button(
                   ns("preview_file"),
-                  "Preview file"
+                  "Parse file"
                 ),
                 br(),
                 conditionalPanel(
@@ -1889,7 +2682,8 @@ addDiscDataUI <- function(id) {
                   uiOutput(ns("mapping_editor")),
                   bslib::input_task_button(
                     ns("save_parameter_mappings"),
-                    "Save selected parameter mapping"
+                    "Save selected parameter mapping",
+                    label_busy = "Saving parameter mapping..."
                   ),
                   tags$hr(),
                   tags$h5("Map source locations to AquaCache locations"),
@@ -1898,9 +2692,10 @@ addDiscDataUI <- function(id) {
                   ),
                   DT::DTOutput(ns("location_mapping_summary")),
                   uiOutput(ns("location_mapping_editor")),
-                  actionButton(
+                  bslib::input_task_button(
                     ns("save_location_mapping"),
-                    "Save selected location mapping"
+                    "Save selected location mapping",
+                    label_busy = "Saving location mapping..."
                   ),
                   actionButton(
                     ns("open_create_locations"),
@@ -2211,13 +3006,17 @@ addDiscDataUI <- function(id) {
             "Additional documents to attach (optional)",
             multiple = TRUE
           ),
-          actionButton(ns("upload"), "Upload to AquaCache")
+          bslib::input_task_button(
+            ns("upload"),
+            "Upload to AquaCache",
+            label_busy = "Uploading to AquaCache..."
+          )
         ),
         tabPanel(
           "Create missing locations",
           value = "create_locations",
           helpText(
-            "Create one AquaCache location for each unmapped source location in the current file preview. The English name, location type, latitude, and longitude are required. Alias, network, project, and note are optional. Location codes are generated automatically; elevations are fetched from web services. If no service returns a usable elevation, it is saved as 0 m using the assumed datum and called out in the summary. New locations are shared with your current internal access group, and their source mappings are saved for this workbook format. You can adjust location details and sharing under Locations -> Add/modify locations."
+            "Create one AquaCache location for each unmapped source location in the current file preview. The English name, location type, latitude, and longitude are required. Alias and note are optional. Select any number of networks and projects; leave either field empty for none. Location codes are generated automatically; elevations are fetched from web services. If no service returns a usable elevation, it is saved as 0 m using the assumed datum and called out in the summary. New locations are shared with your current internal access group, and their source mappings are saved for this workbook format. You can adjust location details and sharing under Locations -> Add/modify locations."
           ),
           fluidRow(
             column(
@@ -3502,6 +4301,53 @@ addDiscData <- function(id, language) {
     }) |>
       bslib::bind_task_button("preview_file")
 
+    parameter_mapping_save_task <- ExtendedTask$new(function(request) {
+      promises::future_promise(seed = TRUE, expr = {
+        tryCatch(
+          addDiscData_run_mapping_save(request),
+          error = function(e) {
+            list(
+              ok = FALSE,
+              saved = FALSE,
+              request = request,
+              message = conditionMessage(e)
+            )
+          }
+        )
+      })
+    }) |>
+      bslib::bind_task_button("save_parameter_mappings")
+
+    location_mapping_save_task <- ExtendedTask$new(function(request) {
+      promises::future_promise(seed = TRUE, expr = {
+        tryCatch(
+          addDiscData_run_mapping_save(request),
+          error = function(e) {
+            list(
+              ok = FALSE,
+              saved = FALSE,
+              request = request,
+              message = conditionMessage(e)
+            )
+          }
+        )
+      })
+    }) |>
+      bslib::bind_task_button("save_location_mapping")
+
+    upload_task <- ExtendedTask$new(function(request) {
+      promises::future_promise(seed = TRUE, expr = {
+        tryCatch(
+          addDiscData_run_upload(request),
+          error = function(e) {
+            list(ok = FALSE, message = conditionMessage(e))
+          }
+        )
+      })
+    }) |>
+      bslib::bind_task_button("upload")
+    upload_summary <- reactiveVal(data.frame())
+
     refresh_current_preview <- function(
       profile,
       preserve_edits = TRUE,
@@ -3562,6 +4408,91 @@ addDiscData <- function(id, language) {
         !identical(input$file$datapath, path)
       invisible(TRUE)
     }
+
+    apply_mapping_save_result <- function(result) {
+      request <- result$request
+      label <- if (identical(request$kind, "parameter")) {
+        "parameter mapping"
+      } else {
+        "location mapping"
+      }
+      if (isTRUE(result$saved)) {
+        mapping_revision(mapping_revision() + 1L)
+      }
+      if (!isTRUE(result$ok)) {
+        if (isTRUE(result$saved) && isTRUE(request$refresh_preview)) {
+          data$preview_is_stale <- TRUE
+        }
+        showNotification(
+          if (isTRUE(result$saved)) {
+            paste("Saved", label, "but preview refresh failed:", result$message)
+          } else {
+            paste("Saving", label, "failed:", result$message)
+          },
+          type = if (isTRUE(result$saved)) "warning" else "error"
+        )
+        return(invisible(NULL))
+      }
+
+      refreshed <- FALSE
+      if (!is.null(result$parsed)) {
+        current_path <- if (is.null(input$file)) {
+          NULL
+        } else {
+          input$file$datapath
+        }
+        still_current <- identical(current_path, request$path) &&
+          identical(data$raw_file_path, request$path) &&
+          identical(data$preview_profile_key, request$profile_key)
+        if (still_current) {
+          data$df <- addDiscData_merge_preview_edits(
+            result$parsed,
+            data$df,
+            data$preview_base
+          )
+          data$preview_base <- result$parsed
+          data$preview_profile_key <- request$profile_key
+          data$preview_is_stale <- FALSE
+          refreshed <- TRUE
+        } else if (!is.null(data$preview_profile_key)) {
+          data$preview_is_stale <- TRUE
+        }
+      }
+
+      message <- if (!isTRUE(request$refresh_preview)) {
+        paste("Saved", label, ". Preview a workbook to apply it.")
+      } else if (refreshed) {
+        paste(
+          "Saved",
+          label,
+          "and refreshed the preview while retaining your sample edits."
+        )
+      } else {
+        paste(
+          "Saved",
+          label,
+          "but the selected workbook changed before refresh completed."
+        )
+      }
+      showNotification(
+        message,
+        type = if (refreshed || !request$refresh_preview) {
+          "message"
+        } else {
+          "warning"
+        }
+      )
+      invisible(NULL)
+    }
+
+    observeEvent(parameter_mapping_save_task$result(), {
+      apply_mapping_save_result(parameter_mapping_save_task$result())
+    })
+
+    observeEvent(location_mapping_save_task$result(), {
+      apply_mapping_save_result(location_mapping_save_task$result())
+    })
+
     observeEvent(
       input$file,
       {
@@ -3931,7 +4862,13 @@ addDiscData <- function(id, language) {
           )
         ),
         helpText(
-          "Choose the layout from the worksheet's shape, not from the lab name. See the visual examples in this page's Help."
+          "Choose the layout from the worksheet's shape, not from the lab name. ",
+          tags$a(
+            "Open the visual workbook layout guide",
+            href = "discrete-workbook-layouts.html",
+            target = "_blank",
+            rel = "noopener noreferrer"
+          )
         ),
         uiOutput(ns("new_profile_mapping_fields")),
         uiOutput(ns("new_profile_default_fields")),
@@ -4506,7 +5443,9 @@ addDiscData <- function(id, language) {
             data.frame(Message = message),
             rownames = FALSE,
             selection = "none",
-            options = list(dom = "t")
+            options = list(
+              dom = "t"
+            )
           ))
         }
 
@@ -4590,11 +5529,44 @@ addDiscData <- function(id, language) {
           )
         }
         summary[is.na(summary)] <- ""
-        DT::datatable(
-          summary,
-          rownames = FALSE,
-          selection = "single",
-          options = list(pageLength = 10, scrollX = TRUE)
+        addDiscData_style_origin_columns(
+          DT::datatable(
+            summary,
+            rownames = FALSE,
+            selection = "single",
+            options = list(
+              pageLength = 10,
+              scrollX = TRUE,
+              initComplete = htmlwidgets::JS(
+                "function(settings, json) {",
+                "$(this.api().table().header()).css({'font-size': '90%'});",
+                "$(this.api().table().body()).css({'font-size': '80%'});",
+                "}"
+              )
+            )
+          ),
+          source_columns = if (
+            identical(input$manage_mapping_type, "parameter")
+          ) {
+            c("Source parameter code", "Source unit")
+          } else if (identical(input$manage_mapping_type, "location")) {
+            c("Source location code", "Source location name")
+          } else {
+            c("Source flag column", "Source flag value")
+          },
+          target_columns = if (
+            identical(input$manage_mapping_type, "parameter")
+          ) {
+            c(
+              "AquaCache parameter",
+              "Conversion",
+              "Offset"
+            )
+          } else if (identical(input$manage_mapping_type, "location")) {
+            c("AquaCache location", "Sub-location")
+          } else {
+            c("Result condition", "Handling")
+          }
         )
       },
       server = FALSE
@@ -5156,8 +6128,8 @@ addDiscData <- function(id, language) {
       ) {
         showNotification(
           paste(
-            "The selected file or workbook format changed while the preview was being parsed. ",
-            "Click Preview file to preview the current selection."
+            "The selected file or workbook format changed while the file was being parsed. ",
+            "Click 'Parse file' to parse the current selection again."
           ),
           type = "warning"
         )
@@ -5176,12 +6148,14 @@ addDiscData <- function(id, language) {
               "Parsed %s result rows from %s sample(s).",
               nrow(data$df),
               length(unique(data$df$sample_key))
-            ),
-            type = "message"
+            )
           )
         },
         error = function(e) {
-          showNotification(paste("Preview failed:", e$message), type = "error")
+          showNotification(
+            paste("Preview failed:", e$message),
+            type = "error"
+          )
         }
       )
     })
@@ -5776,11 +6750,32 @@ addDiscData <- function(id, language) {
           check.names = FALSE
         )
         summary[is.na(summary)] <- ""
-        DT::datatable(
-          summary,
-          rownames = FALSE,
-          selection = "single",
-          options = list(scrollX = TRUE, pageLength = 10)
+        addDiscData_style_origin_columns(
+          DT::datatable(
+            summary,
+            rownames = FALSE,
+            selection = "single",
+            options = list(
+              scrollX = TRUE,
+              pageLength = 10,
+              initComplete = htmlwidgets::JS(
+                "function(settings, json) {",
+                "$(this.api().table().header()).css({'font-size': '90%'});",
+                "$(this.api().table().body()).css({'font-size': '80%'});",
+                "}"
+              )
+            )
+          ),
+          source_columns = c("Source sample", "Source location"),
+          target_columns = c(
+            "Sample datetime",
+            "AquaCache location",
+            "Media",
+            "Sample group",
+            "Collection method",
+            "Sample type",
+            "Sub-location"
+          )
         )
       },
       server = FALSE
@@ -6377,11 +7372,34 @@ addDiscData <- function(id, language) {
           check.names = FALSE
         )
         summary[is.na(summary)] <- ""
-        DT::datatable(
-          summary,
-          rownames = FALSE,
-          selection = "single",
-          options = list(scrollX = TRUE, pageLength = 15)
+        addDiscData_style_origin_columns(
+          DT::datatable(
+            summary,
+            rownames = FALSE,
+            selection = "single",
+            options = list(
+              scrollX = TRUE,
+              pageLength = 10,
+              initComplete = htmlwidgets::JS(
+                "function(settings, json) {",
+                "$(this.api().table().header()).css({'font-size': '90%'});",
+                "$(this.api().table().body()).css({'font-size': '80%'});",
+                "}"
+              )
+            )
+          ),
+          source_columns = c("Source parameter", "Source unit"),
+          target_columns = c(
+            "AquaCache parameter",
+            "Target unit",
+            "Sample fraction",
+            "Conversion",
+            "Offset",
+            "Result type",
+            "Value type",
+            "Speciation",
+            "Matrix"
+          )
         )
       },
       server = FALSE
@@ -6548,11 +7566,7 @@ addDiscData <- function(id, language) {
       paste("Target unit:", unit[[1]])
     })
 
-    parameter_mapping_save_busy <- reactiveVal(FALSE)
     observeEvent(input$save_parameter_mappings, {
-      if (isTRUE(parameter_mapping_save_busy())) {
-        return()
-      }
       row <- selected_mapping_row()
       if (is.null(row)) {
         showNotification(
@@ -6576,8 +7590,10 @@ addDiscData <- function(id, language) {
             stop("Enter a finite result offset.")
           }
           list(
+            kind = "parameter",
             row = row,
             profile = selected_profile(),
+            config = session$userData$config,
             parameter_id = parameter_id,
             result_type = addDiscData_int(input$mapping_result_type, 2L),
             sample_fraction_id = addDiscData_int(
@@ -6605,86 +7621,38 @@ addDiscData <- function(id, language) {
         return()
       }
 
-      parameter_mapping_save_busy(TRUE)
-      bslib::update_task_button("save_parameter_mappings", state = "busy")
-      session$onFlushed(
-        function() {
-          shiny::withReactiveDomain(session, {
-            shiny::isolate({
-              on.exit(
-                {
-                  parameter_mapping_save_busy(FALSE)
-                  try(
-                    bslib::update_task_button(
-                      "save_parameter_mappings",
-                      state = "ready"
-                    ),
-                    silent = TRUE
-                  )
-                },
-                add = TRUE
-              )
-
-              tryCatch(
-                {
-                  DBI::dbWithTransaction(con, {
-                    addDiscData_upsert_mapping(
-                      con = con,
-                      source_code = request$row$source_code[[1]],
-                      source_name = request$row$source_code[[1]],
-                      parameter_code = request$row$source_parameter_code[[1]],
-                      unit = request$row$source_unit[[1]],
-                      parameter_id = request$parameter_id,
-                      result_type = request$result_type,
-                      sample_fraction_id = request$sample_fraction_id,
-                      result_value_type = request$result_value_type,
-                      result_speciation_id = request$result_speciation_id,
-                      matrix_state_id = request$matrix_state_id,
-                      conversion = request$conversion,
-                      result_offset = request$result_offset,
-                      note = "Saved from YGwater add discrete data mapping editor.",
-                      profile_code = request$profile$profile_code[[1]]
-                    )
-                  })
-                  mapping_revision(mapping_revision() + 1L)
-                  preview_error <- tryCatch(
-                    {
-                      refreshed <- refresh_current_preview(
-                        request$profile,
-                        preserve_edits = TRUE
-                      )
-                      if (isTRUE(refreshed)) {
-                        NULL
-                      } else {
-                        "The earlier upload is no longer available. Select it again and preview it."
-                      }
-                    },
-                    error = function(e) e$message
-                  )
-                  showNotification(
-                    if (is.null(preview_error)) {
-                      "Saved mapping and refreshed the current preview."
-                    } else {
-                      paste(
-                        "Mapping saved, but the current preview could not be refreshed:",
-                        preview_error
-                      )
-                    },
-                    type = if (is.null(preview_error)) "message" else "warning"
-                  )
-                },
-                error = function(e) {
-                  showNotification(
-                    paste("Saving mappings failed:", e$message),
-                    type = "error"
-                  )
-                }
-              )
-            })
-          })
-        },
-        once = TRUE
+      profile_key <- addDiscData_profile_key(
+        request$profile$source_code[[1]],
+        request$profile$profile_code[[1]]
       )
+      path <- data$raw_file_path
+      has_current_preview <- length(path) == 1L &&
+        !is.na(path) &&
+        nzchar(path) &&
+        file.exists(path) &&
+        !is.null(input$file) &&
+        identical(input$file$datapath, path) &&
+        identical(data$preview_profile_key, profile_key)
+      request$profile_key <- profile_key
+      request$refresh_preview <- has_current_preview
+      request$path <- if (has_current_preview) path else NULL
+      request$locations <- locations()
+      request$sample_types <- sample_types
+      data$preview_is_stale <- has_current_preview
+      invoke_error <- tryCatch(
+        {
+          parameter_mapping_save_task$invoke(request)
+          NULL
+        },
+        error = function(e) e
+      )
+      if (inherits(invoke_error, "error")) {
+        data$preview_is_stale <- FALSE
+        showNotification(
+          paste("Could not start saving the mapping:", invoke_error$message),
+          type = "error"
+        )
+      }
     })
 
     location_mapping_rows <- reactive({
@@ -6729,11 +7697,24 @@ addDiscData <- function(id, language) {
           check.names = FALSE
         )
         summary[is.na(summary)] <- ""
-        DT::datatable(
-          summary,
-          rownames = FALSE,
-          selection = "single",
-          options = list(pageLength = 10, scrollX = TRUE)
+        addDiscData_style_origin_columns(
+          DT::datatable(
+            summary,
+            rownames = FALSE,
+            selection = "single",
+            options = list(
+              pageLength = 10,
+              scrollX = TRUE,
+              initComplete = htmlwidgets::JS(
+                "function(settings, json) {",
+                "$(this.api().table().header()).css({'font-size': '90%'});",
+                "$(this.api().table().body()).css({'font-size': '80%'});",
+                "}"
+              )
+            )
+          ),
+          source_columns = c("Source location name"),
+          target_columns = c("Current AquaCache location")
         )
       },
       server = FALSE
@@ -6881,65 +7862,68 @@ addDiscData <- function(id, language) {
         showNotification("Select a source location first.", type = "warning")
         return()
       }
-      tryCatch(
+      request <- tryCatch(
         {
           location_id <- addDiscData_int(input$location_mapping_target)
           if (is.na(location_id)) {
             stop("Choose an AquaCache location.")
           }
           profile <- selected_profile()
-          AquaCache::upsertImportLocationMappings(
-            con = con,
-            source_code = profile$source_code[[1]],
-            source_name = profile$source_code[[1]],
-            profile_code = profile$profile_code[[1]],
-            mappings = data.frame(
-              source_location_code = row$source_location_name[[1]],
-              source_location_name = row$source_location_name[[1]],
-              location_id = location_id,
-              sub_location_id = addDiscData_int(
-                input$location_mapping_sublocation
-              ),
-              priority = 50L,
-              active = TRUE,
-              note = "Saved from YGwater add discrete data location mapping editor."
+          profile_key <- addDiscData_profile_key(
+            profile$source_code[[1]],
+            profile$profile_code[[1]]
+          )
+          path <- data$raw_file_path
+          has_current_preview <- length(path) == 1L &&
+            !is.na(path) &&
+            nzchar(path) &&
+            file.exists(path) &&
+            !is.null(input$file) &&
+            identical(input$file$datapath, path) &&
+            identical(data$preview_profile_key, profile_key)
+          list(
+            kind = "location",
+            row = row,
+            profile = profile,
+            config = session$userData$config,
+            location_id = location_id,
+            sub_location_id = addDiscData_int(
+              input$location_mapping_sublocation
             ),
-            publish = FALSE
-          )
-          mapping_revision(mapping_revision() + 1L)
-          preview_error <- tryCatch(
-            {
-              refreshed <- refresh_current_preview(
-                profile,
-                preserve_edits = TRUE
-              )
-              if (isTRUE(refreshed)) {
-                NULL
-              } else {
-                "The earlier upload is no longer available. Select it again and preview it."
-              }
-            },
-            error = function(e) e$message
-          )
-          showNotification(
-            if (is.null(preview_error)) {
-              "Saved location mapping and refreshed the preview while retaining your sample edits."
-            } else {
-              paste(
-                "Location mapping saved, but the current preview could not be refreshed:",
-                preview_error
-              )
-            },
-            type = if (is.null(preview_error)) "message" else "warning"
+            profile_key = profile_key,
+            refresh_preview = has_current_preview,
+            path = if (has_current_preview) path else NULL,
+            locations = locations(),
+            sample_types = sample_types
           )
         },
-        error = function(e) {
-          showNotification(
-            paste("Saving location mapping failed:", e$message),
-            type = "error"
-          )
-        }
+        error = function(e) e
       )
+      if (inherits(request, "error")) {
+        showNotification(
+          paste("Saving location mapping failed:", conditionMessage(request)),
+          type = "error"
+        )
+        return()
+      }
+      data$preview_is_stale <- request$refresh_preview
+      invoke_error <- tryCatch(
+        {
+          location_mapping_save_task$invoke(request)
+          NULL
+        },
+        error = function(e) e
+      )
+      if (inherits(invoke_error, "error")) {
+        data$preview_is_stale <- FALSE
+        showNotification(
+          paste(
+            "Could not start saving the location mapping:",
+            conditionMessage(invoke_error)
+          ),
+          type = "error"
+        )
+      }
     })
 
     result_flag_mapping_rows <- reactive({
@@ -6999,11 +7983,24 @@ addDiscData <- function(id, language) {
           check.names = FALSE
         )
         summary[is.na(summary)] <- ""
-        DT::datatable(
-          summary,
-          rownames = FALSE,
-          selection = "single",
-          options = list(pageLength = 10, scrollX = TRUE)
+        addDiscData_style_origin_columns(
+          DT::datatable(
+            summary,
+            rownames = FALSE,
+            selection = "single",
+            options = list(
+              pageLength = 10,
+              scrollX = TRUE,
+              initComplete = htmlwidgets::JS(
+                "function(settings, json) {",
+                "$(this.api().table().header()).css({'font-size': '90%'});",
+                "$(this.api().table().body()).css({'font-size': '80%'});",
+                "}"
+              )
+            ),
+          ),
+          source_columns = c("Source flag column", "Source flag value"),
+          target_columns = c("Current handling")
         )
       },
       server = FALSE
@@ -7227,39 +8224,36 @@ addDiscData <- function(id, language) {
           location_types$type
         )
       )
-      network_choices <- c(
-        "None" = "",
-        stats::setNames(
-          as.character(location_networks$network_id),
-          location_networks$name
-        )
+      network_choices <- stats::setNames(
+        as.character(location_networks$network_id),
+        location_networks$name
       )
-      project_choices <- c(
-        "None" = "",
-        stats::setNames(
-          as.character(location_projects$project_id),
-          location_projects$name
-        )
+      project_choices <- stats::setNames(
+        as.character(location_projects$project_id),
+        location_projects$name
       )
 
       tags$div(
-        class = "table-responsive",
+        class = "table-responsive new-location-table",
         tags$table(
           class = "table table-sm table-striped align-middle",
           tags$thead(tags$tr(
-            lapply(
-              c(
-                "Unmapped source location",
-                "English name *",
-                "Alias",
-                "Location type *",
-                "Latitude *",
-                "Longitude *",
-                "Network",
-                "Project",
-                "Note"
-              ),
-              tags$th
+            tags$th("Unmapped source location"),
+            tags$th("English name *"),
+            tags$th(
+              "Alias",
+              title = "An alternate location name. Import matching can use this value when a source location name differs from the English name.",
+              tabindex = "0"
+            ),
+            tags$th("Location type *"),
+            tags$th("Latitude *"),
+            tags$th("Longitude *"),
+            tags$th("Network(s)"),
+            tags$th("Project(s)"),
+            tags$th(
+              "Note",
+              title = "Optional location-level context, such as access or site details. Use a sample or result note for observations about collected data.",
+              tabindex = "0"
             )
           )),
           tags$tbody(lapply(seq_along(sources), function(i) {
@@ -7277,11 +8271,12 @@ addDiscData <- function(id, language) {
                 value = "",
                 width = "140px"
               )),
-              tags$td(selectInput(
+              tags$td(selectizeInput(
                 input_id("type", i),
                 NULL,
                 choices = type_choices,
                 selected = "",
+                options = list(dropdownParent = "body"),
                 width = "175px"
               )),
               tags$td(numericInput(
@@ -7302,18 +8297,28 @@ addDiscData <- function(id, language) {
                 step = 0.000001,
                 width = "125px"
               )),
-              tags$td(selectInput(
+              tags$td(selectizeInput(
                 input_id("network", i),
                 NULL,
                 choices = network_choices,
-                selected = "",
+                selected = NULL,
+                multiple = TRUE,
+                options = list(
+                  dropdownParent = "body",
+                  placeholder = "Optional; select any"
+                ),
                 width = "180px"
               )),
-              tags$td(selectInput(
+              tags$td(selectizeInput(
                 input_id("project", i),
                 NULL,
                 choices = project_choices,
-                selected = "",
+                selected = NULL,
+                multiple = TRUE,
+                options = list(
+                  dropdownParent = "body",
+                  placeholder = "Optional; select any"
+                ),
                 width = "180px"
               )),
               tags$td(textAreaInput(
@@ -7330,29 +8335,161 @@ addDiscData <- function(id, language) {
     })
 
     new_location_map_row <- reactiveVal(NA_integer_)
+    new_location_map_center <- reactiveVal(
+      list(lat = 64, lon = -135, zoom = 4)
+    )
+    new_location_map_selection <- reactiveVal(NULL)
+    new_location_map_zoom <- reactiveVal(NA_real_)
+
+    existing_location_map_data <- function() {
+      locs <- locations()
+      if (is.null(locs) || nrow(locs) == 0) {
+        return(data.frame())
+      }
+      locs$latitude <- suppressWarnings(as.numeric(locs$latitude))
+      locs$longitude <- suppressWarnings(as.numeric(locs$longitude))
+      locs <- locs[
+        is.finite(locs$latitude) &
+          is.finite(locs$longitude) &
+          locs$latitude >= -90 &
+          locs$latitude <= 90 &
+          locs$longitude >= -180 &
+          locs$longitude <= 180,
+        ,
+        drop = FALSE
+      ]
+      if (!nrow(locs)) {
+        return(locs)
+      }
+
+      clean_text <- function(x) {
+        x <- as.character(x)
+        x[is.na(x)] <- ""
+        x
+      }
+      name <- clean_text(locs$name)
+      code <- clean_text(locs$location_code)
+      alias <- clean_text(locs$alias)
+      locs$map_label <- sprintf("%s (%s)", name, code)
+      locs$map_popup <- sprintf(
+        "<strong>%s</strong><br/>Code: %s<br/>Alias: %s",
+        htmltools::htmlEscape(name),
+        htmltools::htmlEscape(code),
+        htmltools::htmlEscape(alias)
+      )
+      locs
+    }
+
     output$new_location_picker_map <- leaflet::renderLeaflet({
-      row <- new_location_map_row()
-      latitude <- if (!is.na(row)) {
-        addDiscData_num(input[[paste0("new_location_latitude_", row)]])
-      } else {
-        NA_real_
-      }
-      longitude <- if (!is.na(row)) {
-        addDiscData_num(input[[paste0("new_location_longitude_", row)]])
-      } else {
-        NA_real_
-      }
-      map <- leaflet::leaflet() |>
-        leaflet::addTiles() |>
+      center <- new_location_map_center()
+      selection <- isolate(new_location_map_selection())
+      existing_locs <- existing_location_map_data()
+      map <- leaflet::leaflet(
+        options = leaflet::leafletOptions(maxZoom = 19)
+      ) %>%
+        leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap) %>%
+        leaflet::addProviderTiles(
+          leaflet::providers$Esri.WorldImagery,
+          group = "Satellite"
+        ) %>%
+        leaflet::addLayersControl(
+          baseGroups = c("Esri.WorldTopoMap", "Satellite"),
+          overlayGroups = "Existing locations",
+          options = leaflet::layersControlOptions(collapsed = FALSE)
+        ) %>%
+        leaflet::addScaleBar(
+          options = leaflet::scaleBarOptions(imperial = FALSE)
+        ) %>%
         leaflet::setView(
-          lng = if (is.finite(longitude)) longitude else -135,
-          lat = if (is.finite(latitude)) latitude else 63.5,
-          zoom = if (is.finite(latitude) && is.finite(longitude)) 12 else 5
+          lng = center$lon,
+          lat = center$lat,
+          zoom = center$zoom
         )
-      if (is.finite(latitude) && is.finite(longitude)) {
-        map <- leaflet::addMarkers(map, lng = longitude, lat = latitude)
+
+      if (nrow(existing_locs)) {
+        map <- map %>%
+          leaflet::addCircleMarkers(
+            data = existing_locs,
+            lng = ~longitude,
+            lat = ~latitude,
+            radius = 5,
+            color = "#DC4405",
+            weight = 2,
+            opacity = 0.9,
+            fillColor = "#F2A900",
+            fillOpacity = 0.65,
+            group = "Existing locations",
+            label = ~map_label,
+            popup = ~map_popup,
+            layerId = ~ paste0("existing_location_", location_id),
+            labelOptions = leaflet::labelOptions(direction = "auto")
+          )
       }
-      map
+      if (!is.null(selection)) {
+        map <- map %>%
+          leaflet::addCircleMarkers(
+            lng = selection$lon,
+            lat = selection$lat,
+            radius = 6,
+            color = "#007B8A",
+            fillOpacity = 0.9,
+            group = "selected_point"
+          )
+      }
+      map %>%
+        leaflet::addLegend(
+          position = "bottomright",
+          colors = c("#DC4405", "#007B8A"),
+          labels = c("Existing locations", "Selected location"),
+          opacity = 1
+        )
+    }) %>%
+      bindEvent(input$open_new_location_map)
+
+    draw_new_location_selected_point <- function() {
+      selection <- isolate(new_location_map_selection())
+      if (is.null(selection)) {
+        return(invisible(NULL))
+      }
+      leaflet::leafletProxy(
+        ns("new_location_picker_map"),
+        session = session
+      ) %>%
+        leaflet::clearGroup("selected_point") %>%
+        leaflet::addCircleMarkers(
+          lng = selection$lon,
+          lat = selection$lat,
+          radius = 6,
+          color = "#007B8A",
+          fillOpacity = 0.9,
+          group = "selected_point"
+        )
+    }
+
+    output$new_location_map_zoom_note <- renderUI({
+      zoom <- new_location_map_zoom()
+      if (is.null(zoom) || !is.finite(zoom) || zoom < 14) {
+        return(div(
+          style = "color: #b42318; font-size: 14px; margin-top: 8px;",
+          "Zoom in to level 14 or higher before using the selected coordinates."
+        ))
+      }
+      div(
+        style = "color: #027a48; font-size: 14px; margin-top: 8px;",
+        "Zoom level is sufficient. Select a point, then choose Use selected location."
+      )
+    })
+
+    output$new_location_map_selection_note <- renderUI({
+      selection <- new_location_map_selection()
+      if (is.null(selection)) {
+        return(tags$p("Click the map to place the selected-location marker."))
+      }
+      tags$p(sprintf(
+        "Selected coordinates: %.8f, %.8f",
+        selection$lat,
+        selection$lon
+      ))
     })
 
     observeEvent(
@@ -7368,20 +8505,51 @@ addDiscData <- function(id, language) {
           )
           return()
         }
+
+        latitude <- addDiscData_num(
+          input[[paste0("new_location_latitude_", row)]]
+        )
+        longitude <- addDiscData_num(
+          input[[paste0("new_location_longitude_", row)]]
+        )
+        has_coordinates <- is.finite(latitude) && is.finite(longitude)
+        center <- if (has_coordinates) {
+          list(lat = latitude, lon = longitude, zoom = 12)
+        } else {
+          list(lat = 64, lon = -135, zoom = 4)
+        }
         new_location_map_row(row)
+        new_location_map_center(center)
+        new_location_map_zoom(center$zoom)
+        new_location_map_selection(
+          if (has_coordinates) {
+            list(lat = latitude, lon = longitude)
+          } else {
+            NULL
+          }
+        )
         showModal(modalDialog(
           title = paste("Choose coordinates for", source),
           tags$p(
-            "Click the map to set this location's latitude and longitude."
+            "Click to place or move the selected-location marker. Existing AquaCache locations appear in orange."
           ),
           leaflet::leafletOutput(
             ns("new_location_picker_map"),
             height = "60vh"
           ),
+          uiOutput(ns("new_location_map_zoom_note")),
+          uiOutput(ns("new_location_map_selection_note")),
           easyClose = TRUE,
-          footer = modalButton("Close"),
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(
+              ns("new_location_use_selected"),
+              "Use selected location"
+            )
+          ),
           size = "l"
         ))
+        shinyjs::disable("new_location_use_selected")
       },
       ignoreInit = TRUE
     )
@@ -7390,29 +8558,78 @@ addDiscData <- function(id, language) {
       input$new_location_picker_map_click,
       {
         click <- input$new_location_picker_map_click
-        row <- new_location_map_row()
         if (
-          is.na(row) ||
-            is.null(click$lat) ||
+          is.null(click$lat) ||
             is.null(click$lng) ||
             !is.finite(click$lat) ||
             !is.finite(click$lng)
         ) {
           return()
         }
+        new_location_map_selection(list(lat = click$lat, lon = click$lng))
+        draw_new_location_selected_point()
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$new_location_picker_map_zoom,
+      {
+        zoom <- suppressWarnings(as.numeric(input$new_location_picker_map_zoom))
+        if (!length(zoom) || !is.finite(zoom[[1]])) {
+          return()
+        }
+        new_location_map_zoom(zoom[[1]])
+        if (zoom[[1]] < 14) {
+          shinyjs::disable("new_location_use_selected")
+        } else {
+          shinyjs::enable("new_location_use_selected")
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$new_location_use_selected,
+      {
+        zoom <- new_location_map_zoom()
+        if (is.null(zoom) || !is.finite(zoom) || zoom < 14) {
+          showNotification(
+            "Zoom in to level 14 or higher before using the selected coordinates.",
+            type = "warning"
+          )
+          return()
+        }
+        selection <- new_location_map_selection()
+        if (is.null(selection)) {
+          showNotification("Click a point on the map to select coordinates.")
+          return()
+        }
+        row <- new_location_map_row()
+        if (is.na(row)) {
+          showNotification(
+            "Choose an unmapped source location before opening the map.",
+            type = "warning"
+          )
+          return()
+        }
         updateNumericInput(
           session,
           paste0("new_location_latitude_", row),
-          value = round(click$lat, 6)
+          value = selection$lat
         )
         updateNumericInput(
           session,
           paste0("new_location_longitude_", row),
-          value = round(click$lng, 6)
+          value = selection$lon
         )
         removeModal()
         showNotification(
-          sprintf("Coordinates set to %.6f, %.6f.", click$lat, click$lng),
+          sprintf(
+            "Coordinates set to %.8f, %.8f.",
+            selection$lat,
+            selection$lon
+          ),
           type = "message"
         )
       },
@@ -7452,6 +8669,19 @@ addDiscData <- function(id, language) {
           }
           trimws(as.character(value[[1]]))
         }
+        read_ids <- function(field, row) {
+          value <- input[[paste0("new_location_", field, "_", row)]]
+          if (is.null(value) || !length(value)) {
+            return(integer())
+          }
+          value <- trimws(as.character(value))
+          value <- value[!is.na(value) & nzchar(value)]
+          ids <- suppressWarnings(as.integer(value))
+          if (anyNA(ids)) {
+            stop("A selected network or project has an invalid ID.")
+          }
+          unique(ids)
+        }
         names <- vapply(
           seq_along(sources),
           function(i) {
@@ -7488,18 +8718,26 @@ addDiscData <- function(id, language) {
           },
           numeric(1)
         )
-        networks <- vapply(
+        networks <- lapply(
           seq_along(sources),
           function(i) {
-            addDiscData_int(read_text("network", i))
-          },
+            read_ids("network", i)
+          }
+        )
+        projects <- lapply(
+          seq_along(sources),
+          function(i) {
+            read_ids("project", i)
+          }
+        )
+        primary_networks <- vapply(
+          networks,
+          function(ids) if (length(ids)) ids[[1]] else NA_integer_,
           integer(1)
         )
-        projects <- vapply(
-          seq_along(sources),
-          function(i) {
-            addDiscData_int(read_text("project", i))
-          },
+        primary_projects <- vapply(
+          projects,
+          function(ids) if (length(ids)) ids[[1]] else NA_integer_,
           integer(1)
         )
         notes <- vapply(
@@ -7574,8 +8812,8 @@ addDiscData <- function(id, language) {
           location_type = types,
           note = notes,
           contact = rep(NA_character_, length(sources)),
-          network = networks,
-          project = projects,
+          network = primary_networks,
+          project = primary_projects,
           stringsAsFactors = FALSE
         )
 
@@ -7624,6 +8862,32 @@ addDiscData <- function(id, language) {
                   con = con,
                   df = location_rows
                 )
+                for (i in seq_along(sources)) {
+                  if (length(networks[[i]]) > 1L) {
+                    for (network_id in networks[[i]][-1L]) {
+                      DBI::dbExecute(
+                        con,
+                        "INSERT INTO public.locations_networks (location_id, network_id) VALUES ($1, $2)",
+                        params = list(
+                          result$location_id[[i]],
+                          network_id
+                        )
+                      )
+                    }
+                  }
+                  if (length(projects[[i]]) > 1L) {
+                    for (project_id in projects[[i]][-1L]) {
+                      DBI::dbExecute(
+                        con,
+                        "INSERT INTO public.locations_projects (location_id, project_id) VALUES ($1, $2)",
+                        params = list(
+                          result$location_id[[i]],
+                          project_id
+                        )
+                      )
+                    }
+                  }
+                }
                 mapping_rows <- data.frame(
                   source_location_code = sources,
                   source_location_name = sources,
@@ -7873,15 +9137,60 @@ addDiscData <- function(id, language) {
           seq_len(ncol(display)) - 1L,
           editable_columns
         )
-        DT::datatable(
-          display,
-          editable = list(
-            target = "cell",
-            disable = list(columns = disabled_columns)
+        addDiscData_style_origin_columns(
+          DT::datatable(
+            display,
+            editable = list(
+              target = "cell",
+              disable = list(columns = disabled_columns)
+            ),
+            selection = "single",
+            rownames = FALSE,
+            options = list(
+              scrollX = TRUE,
+              pageLength = 10,
+              initComplete = htmlwidgets::JS(
+                "function(settings, json) {",
+                "$(this.api().table().header()).css({'font-size': '90%'});",
+                "$(this.api().table().body()).css({'font-size': '80%'});",
+                "}"
+              )
+            )
           ),
-          selection = "single",
-          rownames = FALSE,
-          options = list(scrollX = TRUE, pageLength = 15)
+          source_columns = c(
+            "Source sample",
+            "Source location",
+            "Source parameter",
+            "Source unit",
+            "Source result",
+            "Source result flag"
+          ),
+          target_columns = c(
+            "AquaCache location",
+            "Sub-location",
+            "Parameter",
+            "Result value",
+            "Result condition",
+            "Condition value",
+            "Target unit",
+            "Sample fraction",
+            "Result type",
+            "Value type",
+            "Speciation",
+            "Matrix",
+            "Laboratory",
+            "Protocol",
+            "Grade",
+            "Approval",
+            "Media",
+            "Collection method",
+            "Sample type",
+            "Sample datetime (UTC)",
+            "Analysis datetime",
+            "Lab report",
+            "Lab sample",
+            "Note"
+          )
         )
       },
       server = FALSE
@@ -8057,80 +9366,6 @@ addDiscData <- function(id, language) {
       data$df[[source_column]][[target_row]] <- new_value
     })
 
-    default_document_type <- function() {
-      type <- DBI::dbGetQuery(
-        con,
-        "SELECT document_type_en
-         FROM files.document_types
-         ORDER BY
-           CASE WHEN document_type_id = 1 THEN 0 ELSE 1 END,
-           document_type_en
-         LIMIT 1;"
-      )
-      if (!nrow(type)) {
-        stop("No document types are available for uploaded documents.")
-      }
-      type$document_type_en[[1]]
-    }
-
-    find_existing_document <- function(file) {
-      document <- readBin(file$datapath, "raw", file.info(file$datapath)$size)
-      DBI::dbGetQuery(
-        con,
-        "SELECT document_id, name
-         FROM files.documents
-         WHERE file_hash = md5(encode($1::bytea, 'hex'))
-         LIMIT 1;",
-        params = list(list(document))
-      )
-    }
-
-    insertDoc <- function(file) {
-      existing <- find_existing_document(file)
-      if (nrow(existing)) {
-        return(as.integer(existing$document_id[[1]]))
-      }
-
-      result <- AquaCache::insertACDocument(
-        path = file$datapath,
-        name = file$name,
-        type = default_document_type(),
-        description = sprintf(
-          "Uploaded %s from the discrete data upload workflow.",
-          file$name
-        ),
-        tags = c("discrete sample", "discrete upload"),
-        share_with = "public_reader",
-        geoms = NULL,
-        con = con
-      )
-      as.integer(result$new_document_id)
-    }
-
-    link_sample_documents <- function(sample_id, document_ids) {
-      document_ids <- unique(as.integer(document_ids))
-      document_ids <- document_ids[!is.na(document_ids)]
-      if (!length(document_ids)) {
-        return(invisible(NULL))
-      }
-
-      for (document_id in document_ids) {
-        DBI::dbExecute(
-          con,
-          "INSERT INTO discrete.sample_documents (
-             sample_id,
-             document_id,
-             document_role,
-             link_source
-           ) VALUES ($1, $2, 'supporting', 'addDiscData')
-           ON CONFLICT (sample_id, document_id) DO NOTHING;",
-          params = list(as.integer(sample_id), as.integer(document_id))
-        )
-      }
-
-      invisible(NULL)
-    }
-
     validate_upload_rows <- function(df) {
       if (!nrow(df)) {
         stop("Empty data table.", call. = FALSE)
@@ -8268,17 +9503,16 @@ addDiscData <- function(id, language) {
     }
 
     observeEvent(input$upload, {
-      df <- data$df
-      manual_sample_shells <- df$source_code == "YGwater-manual" &
-        is.na(df$parameter_id)
-      df <- df[!manual_sample_shells, , drop = FALSE]
-      skipped <- which(df$result_flag_action == "skip_result")
-      if (length(skipped)) {
-        df <- df[-skipped, , drop = FALSE]
-      }
-      active <- FALSE
-      tryCatch(
+      request <- tryCatch(
         {
+          df <- data$df
+          manual_sample_shells <- df$source_code == "YGwater-manual" &
+            is.na(df$parameter_id)
+          df <- df[!manual_sample_shells, , drop = FALSE]
+          skipped <- which(df$result_flag_action == "skip_result")
+          if (length(skipped)) {
+            df <- df[-skipped, , drop = FALSE]
+          }
           if (
             identical(input$entry_mode, "file") &&
               isTRUE(data$preview_is_stale)
@@ -8296,480 +9530,171 @@ addDiscData <- function(id, language) {
               call. = FALSE
             )
           }
-
-          DBI::dbExecute(con, "BEGIN")
-          active <- TRUE
-
-          doc_ids <- integer()
-          if (!is.null(input$file)) {
-            doc_ids <- c(doc_ids, insertDoc(input$file))
+          file <- if (is.null(input$file)) {
+            NULL
+          } else {
+            list(
+              name = input$file$name[[1]],
+              datapath = input$file$datapath[[1]],
+              size = input$file$size[[1]]
+            )
           }
-          if (!is.null(input$attach_docs)) {
-            for (ii in seq_len(nrow(input$attach_docs))) {
-              doc_ids <- c(
-                doc_ids,
-                insertDoc(list(
-                  name = input$attach_docs$name[ii],
-                  datapath = input$attach_docs$datapath[ii]
-                ))
+          attachments <- if (is.null(input$attach_docs)) {
+            list()
+          } else {
+            lapply(seq_len(nrow(input$attach_docs)), function(i) {
+              list(
+                name = input$attach_docs$name[[i]],
+                datapath = input$attach_docs$datapath[[i]]
               )
-            }
+            })
           }
-          inserted_samples <- 0L
-          inserted_results <- 0L
-          sample_lookup <- list()
-          samples <- unique(df[, c(
-            "sample_key",
-            "location_id",
-            "sub_location_id",
-            "datetime",
-            "target_datetime",
-            "z",
-            "media_id",
-            "collection_method",
-            "sample_type",
-            "sample_group_id",
-            "linked_with",
-            "sample_volume_ml",
-            "purge_volume_l",
-            "purge_time_min",
-            "flow_rate_l_min",
-            "wave_hgt_m",
-            "sample_grade",
-            "sample_approval",
-            "commissioning_org",
-            "sampling_org",
-            "sample_note",
-            "owner",
-            "contributor",
-            "sample_no_source_update",
-            "source_sample_id",
-            "source_code"
-          )])
-          field_visit_id <- addDiscData_int(input$field_visit_id)
-          samples$field_visit_id <- rep(NA_integer_, nrow(samples))
-          if (!is.na(field_visit_id)) {
-            visits <- read_field_visits()
-            visit_index <- match(field_visit_id, visits$field_visit_id)
-            if (is.na(visit_index)) {
-              stop(
-                "The selected field visit is no longer available. Refresh the visit list and choose it again.",
-                call. = FALSE
-              )
-            }
-            visit <- visits[visit_index, , drop = FALSE]
-            invalid_location <- is.na(samples$location_id) |
-              samples$location_id != visit$location_id[[1]]
-            if (any(invalid_location)) {
-              stop(
-                "Every sample linked to a field visit must use the visit's location.",
-                call. = FALSE
-              )
-            }
-            if (!is.na(visit$sub_location_id[[1]])) {
-              invalid_sub_location <- is.na(samples$sub_location_id) |
-                samples$sub_location_id != visit$sub_location_id[[1]]
-              if (any(invalid_sub_location)) {
-                stop(
-                  "Every sample linked to this field visit must use the visit's sub-location.",
-                  call. = FALSE
-                )
-              }
-            }
-            samples$field_visit_id[] <- field_visit_id
+          profile <- if (
+            any(df$source_code != "YGwater-manual", na.rm = TRUE)
+          ) {
+            selected_profile()
+          } else {
+            NULL
           }
-          df$field_visit_id <- samples$field_visit_id[
-            match(df$sample_key, samples$sample_key)
-          ]
-          sample_table_fields <- DBI::dbListFields(
-            con,
-            DBI::Id(schema = "discrete", table = "samples")
+          list(
+            df = df,
+            config = session$userData$config,
+            file = file,
+            attachments = attachments,
+            profile = profile,
+            field_visit_id = addDiscData_int(input$field_visit_id),
+            sample_qualifiers = sample_qualifier_map(),
+            locations = locations(),
+            sub_locations = sub_locations
           )
-          sample_has_linked_with <- "linked_with" %in% sample_table_fields
-          sample_has_field_visit_id <- "field_visit_id" %in% sample_table_fields
-          if (!is.na(field_visit_id) && !sample_has_field_visit_id) {
-            stop(
-              "The discrete.samples table does not support field visit links. Apply the AquaCache field visit schema patch before linking samples.",
-              call. = FALSE
-            )
-          }
-          sample_insert_fields <- c(
-            "location_id",
-            "sub_location_id",
-            "media_id",
-            "z",
-            "datetime",
-            "target_datetime",
-            "collection_method",
-            "sample_type",
-            if (sample_has_linked_with) "linked_with",
-            "sample_volume_ml",
-            "purge_volume_l",
-            "purge_time_min",
-            "flow_rate_l_min",
-            "wave_hgt_m",
-            "sample_grade",
-            "sample_approval",
-            "owner",
-            "contributor",
-            "comissioning_org",
-            "sampling_org",
-            "source_adapter_function",
-            "external_sample_id",
-            "import_source_id",
-            "no_source_update",
-            "note",
-            if (sample_has_field_visit_id) "field_visit_id"
-          )
-          sample_insert_sql <- paste0(
-            "INSERT INTO discrete.samples (",
-            paste(sample_insert_fields, collapse = ", "),
-            ") VALUES (",
-            paste(
-              sprintf("$%d", seq_along(sample_insert_fields)),
-              collapse = ", "
-            ),
-            ") RETURNING sample_id"
-          )
-          import_sources <- DBI::dbGetQuery(
-            con,
-            "SELECT import_source_id, source_code
-             FROM discrete.import_sources"
-          )
-          samples$import_source_id <- import_sources$import_source_id[
-            match(samples$source_code, import_sources$source_code)
-          ]
-          file_sample <- samples$source_code != "YGwater-manual"
-          if (any(file_sample & is.na(samples$import_source_id))) {
-            stop(
-              "Every uploaded sample must resolve to a database import source.",
-              call. = FALSE
-            )
-          }
-          import_run_id <- NULL
-          if (any(file_sample)) {
-            run_source_ids <- unique(samples$import_source_id[file_sample])
-            if (length(run_source_ids) != 1L) {
-              stop(
-                "A file upload must resolve to exactly one import source.",
-                call. = FALSE
-              )
-            }
-            profile <- selected_profile()
-            run_source_code <- import_sources$source_code[
-              match(run_source_ids[[1]], import_sources$import_source_id)
-            ]
-            AquaCache::publishImportMappings(
-              con = con,
-              source_code = run_source_code
-            )
-            AquaCache::publishImportMappings(
-              con = con,
-              source_code = run_source_code,
-              profile_code = profile$profile_code[[1]]
-            )
-            import_run_id <- AquaCache::createImportRun(
-              con = con,
-              import_source_id = run_source_ids[[1]],
-              import_profile_id = profile$import_profile_id[[1]],
-              source_adapter_function = "addDiscData",
-              adapter_version = as.character(utils::packageVersion("YGwater")),
-              source_file_name = input$file$name,
-              source_file_size = input$file$size,
-              summary = list(
-                source_rows = length(unique(df$source_row_number)),
-                result_rows = nrow(df)
-              ),
-              note = "Created by the YGwater discrete-data import workflow."
-            )
-          }
-
-          for (i in seq_len(nrow(samples))) {
-            sid <- DBI::dbGetQuery(
-              con,
-              sample_insert_sql,
-              params = c(
-                list(
-                  as.integer(samples$location_id[[i]]),
-                  addDiscData_int(samples$sub_location_id[[i]]),
-                  as.integer(samples$media_id[[i]]),
-                  addDiscData_num(samples$z[[i]]),
-                  as.POSIXct(samples$datetime[[i]], tz = "UTC"),
-                  as.POSIXct(samples$target_datetime[[i]], tz = "UTC"),
-                  as.integer(samples$collection_method[[i]]),
-                  as.integer(samples$sample_type[[i]])
-                ),
-                if (sample_has_linked_with) {
-                  list(addDiscData_int(samples$linked_with[[i]]))
-                },
-                list(
-                  addDiscData_num(samples$sample_volume_ml[[i]]),
-                  addDiscData_num(samples$purge_volume_l[[i]]),
-                  addDiscData_num(samples$purge_time_min[[i]]),
-                  addDiscData_num(samples$flow_rate_l_min[[i]]),
-                  addDiscData_num(samples$wave_hgt_m[[i]]),
-                  addDiscData_int(samples$sample_grade[[i]]),
-                  addDiscData_int(samples$sample_approval[[i]]),
-                  as.integer(samples$owner[[i]]),
-                  addDiscData_int(samples$contributor[[i]]),
-                  addDiscData_int(samples$commissioning_org[[i]]),
-                  addDiscData_int(samples$sampling_org[[i]]),
-                  if (file_sample[[i]]) "addDiscData" else NA_character_,
-                  if (file_sample[[i]]) {
-                    samples$source_sample_id[[i]]
-                  } else {
-                    NA_character_
-                  },
-                  addDiscData_int(samples$import_source_id[[i]]),
-                  isTRUE(samples$sample_no_source_update[[i]]),
-                  if (addDiscData_present(samples$sample_note[[i]])) {
-                    samples$sample_note[[i]]
-                  } else if (file_sample[[i]]) {
-                    paste(
-                      "Imported source sample:",
-                      samples$source_sample_id[[i]]
-                    )
-                  } else {
-                    NA_character_
-                  }
-                ),
-                if (sample_has_field_visit_id) {
-                  list(addDiscData_int(samples$field_visit_id[[i]]))
-                }
-              )
-            )$sample_id[[1]]
-            link_sample_documents(sid, doc_ids)
-            if (!is.na(samples$sample_group_id[[i]])) {
-              DBI::dbExecute(
-                con,
-                "INSERT INTO discrete.sample_group_members (
-                   sample_group_id, sample_id, sequence_in_group
-                 ) VALUES ($1, $2, $3)",
-                params = list(
-                  as.integer(samples$sample_group_id[[i]]),
-                  as.integer(sid),
-                  as.integer(i)
-                )
-              )
-            }
-            qualifier_ids <- sample_qualifier_map()[[samples$sample_key[[i]]]]
-            qualifier_ids <- unique(as.integer(qualifier_ids))
-            qualifier_ids <- qualifier_ids[!is.na(qualifier_ids)]
-            for (qualifier_id in qualifier_ids) {
-              DBI::dbExecute(
-                con,
-                "INSERT INTO discrete.sample_qualifiers (sample_id, qualifier_type_id)
-                 VALUES ($1, $2)
-                 ON CONFLICT (sample_id, qualifier_type_id) DO NOTHING",
-                params = list(as.integer(sid), qualifier_id)
-              )
-            }
-            sample_lookup[[samples$sample_key[[i]]]] <- sid
-            inserted_samples <- inserted_samples + 1L
-          }
-
-          result_ids <- integer(nrow(df))
-          for (j in seq_len(nrow(df))) {
-            sid <- sample_lookup[[df$sample_key[[j]]]]
-            result_ids[[j]] <- DBI::dbGetQuery(
-              con,
-              "INSERT INTO discrete.results (
-                 sample_id,
-                 result_type,
-                 parameter_id,
-                 protocol_method,
-                 sample_fraction_id,
-                 result,
-                 result_condition,
-                 result_condition_value,
-                 result_value_type,
-                 result_speciation_id,
-                 laboratory,
-                 analysis_datetime,
-                 lab_report_no,
-                 lab_sample_no,
-                  grade_type_id,
-                  approval_type_id,
-                  matrix_state_id,
-                  no_source_update,
-                  note
-                ) VALUES (
-                  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                  $14, $15, $16, $17, $18, $19
-               )
-               RETURNING result_id",
-              params = list(
-                sid,
-                as.integer(df$result_type[[j]]),
-                as.integer(df$parameter_id[[j]]),
-                addDiscData_int(df$protocol_method[[j]]),
-                addDiscData_int(df$sample_fraction_id[[j]]),
-                addDiscData_num(df$result[[j]]),
-                addDiscData_int(df$result_condition[[j]]),
-                addDiscData_num(df$result_condition_value[[j]]),
-                addDiscData_int(df$result_value_type[[j]]),
-                addDiscData_int(df$result_speciation_id[[j]]),
-                addDiscData_int(df$laboratory[[j]]),
-                if (is.na(df$analysis_datetime[[j]])) {
-                  as.POSIXct(NA)
-                } else {
-                  as.POSIXct(df$analysis_datetime[[j]], tz = "UTC")
-                },
-                if (addDiscData_present(df$lab_report_no[[j]])) {
-                  as.character(df$lab_report_no[[j]])
-                } else {
-                  NA_character_
-                },
-                if (addDiscData_present(df$lab_sample_no[[j]])) {
-                  as.character(df$lab_sample_no[[j]])
-                } else {
-                  NA_character_
-                },
-                addDiscData_int(df$grade_type_id[[j]]),
-                addDiscData_int(df$approval_type_id[[j]]),
-                as.integer(df$matrix_state_id[[j]]),
-                isTRUE(df$result_no_source_update[[j]]),
-                df$note[[j]]
-              )
-            )$result_id[[1]]
-            inserted_results <- inserted_results + 1L
-          }
-
-          if (!is.null(import_run_id)) {
-            source_columns <- c(
-              "source_location_name",
-              "source_sample_id",
-              "source_parameter_code",
-              "source_parameter_name",
-              "source_unit",
-              "source_result_text",
-              "lab_report_no",
-              "lab_sample_no",
-              "analysis_datetime"
-            )
-            sample_columns <- c(
-              "sample_key",
-              "location_id",
-              "sub_location_id",
-              "datetime",
-              "target_datetime",
-              "z",
-              "media_id",
-              "collection_method",
-              "sample_type",
-              "sample_group_id",
-              "linked_with",
-              "sample_volume_ml",
-              "purge_volume_l",
-              "purge_time_min",
-              "flow_rate_l_min",
-              "wave_hgt_m",
-              "sample_grade",
-              "sample_approval",
-              "commissioning_org",
-              "sampling_org",
-              "sample_note",
-              "owner",
-              "contributor",
-              "sample_no_source_update",
-              "field_visit_id"
-            )
-            result_columns <- c(
-              "parameter_id",
-              "result_type",
-              "protocol_method",
-              "matrix_state_id",
-              "sample_fraction_id",
-              "result_value_type",
-              "result_speciation_id",
-              "result",
-              "result_condition",
-              "result_condition_value",
-              "conversion",
-              "result_offset",
-              "laboratory",
-              "result_no_source_update",
-              "grade_type_id",
-              "approval_type_id"
-            )
-            source_group <- interaction(
-              df$source_row_number,
-              drop = TRUE,
-              lex.order = TRUE
-            )
-            run_rows <- data.frame(
-              sheet_name = rep(
-                addDiscData_first(profile$sheet_name, NA_character_),
-                nrow(df)
-              ),
-              source_row_number = as.integer(df$source_row_number),
-              result_index = as.integer(ave(
-                seq_len(nrow(df)),
-                source_group,
-                FUN = seq_along
-              )),
-              validation_status = rep("committed", nrow(df)),
-              sample_id = as.integer(unlist(sample_lookup[df$sample_key])),
-              result_id = result_ids,
-              stringsAsFactors = FALSE
-            )
-            run_rows$source_record <- lapply(
-              seq_len(nrow(df)),
-              function(i) as.list(df[i, source_columns, drop = FALSE])
-            )
-            run_rows$normalized_sample <- lapply(
-              seq_len(nrow(df)),
-              function(i) as.list(df[i, sample_columns, drop = FALSE])
-            )
-            run_rows$normalized_result <- lapply(
-              seq_len(nrow(df)),
-              function(i) as.list(df[i, result_columns, drop = FALSE])
-            )
-            run_rows$validation_messages <- replicate(
-              nrow(df),
-              list(),
-              simplify = FALSE
-            )
-            AquaCache::appendImportRunRows(con, import_run_id, run_rows)
-            AquaCache::completeImportRun(
-              con = con,
-              import_run_id = import_run_id,
-              status = "committed",
-              summary = list(
-                samples = inserted_samples,
-                results = inserted_results
-              ),
-              validation_summary = list(
-                committed = inserted_results,
-                errors = 0L
-              )
-            )
-          }
-
-          DBI::dbExecute(con, "COMMIT")
-          active <- FALSE
-          showNotification(
-            sprintf(
-              "Added %s sample(s) and %s result(s).",
-              inserted_samples,
-              inserted_results
-            ),
-            type = "message"
-          )
-          data$df <- addDiscData_empty_table()
-          data$preview_base <- addDiscData_empty_table()
-          data$raw_file_path <- NULL
-          data$preview_profile_key <- NULL
-          data$preview_is_stale <- FALSE
         },
-        error = function(e) {
-          if (isTRUE(active)) {
-            try(DBI::dbExecute(con, "ROLLBACK"), silent = TRUE)
-          }
-          showNotification(paste("Upload failed:", e$message), type = "error")
-        }
+        error = function(e) e
+      )
+      if (inherits(request, "error")) {
+        showNotification(
+          paste("Upload could not start:", conditionMessage(request)),
+          type = "error"
+        )
+        return()
+      }
+
+      invoke_error <- tryCatch(
+        {
+          upload_task$invoke(request)
+          NULL
+        },
+        error = function(e) e
+      )
+      if (inherits(invoke_error, "error")) {
+        showNotification(
+          paste("Upload could not start:", conditionMessage(invoke_error)),
+          type = "error"
+        )
+      }
+    })
+
+    observeEvent(upload_task$result(), {
+      result <- upload_task$result()
+      if (!isTRUE(result$ok)) {
+        showNotification(
+          paste("Upload failed:", result$message),
+          type = "error"
+        )
+        return()
+      }
+
+      summary <- result$summary
+      names(summary) <- c(
+        "New sample ID",
+        "Source",
+        "Source sample ID",
+        "Sample date/time (UTC)",
+        "AquaCache location",
+        "AquaCache sub-location"
+      )
+      upload_summary(summary)
+      data$df <- addDiscData_empty_table()
+      data$preview_base <- addDiscData_empty_table()
+      data$raw_file_path <- NULL
+      data$preview_profile_key <- NULL
+      data$preview_is_stale <- FALSE
+      showModal(
+        modalDialog(
+          title = "Upload complete",
+          size = "l",
+          easyClose = TRUE,
+          tags$p(
+            sprintf(
+              "Added %s sample(s) and %s result(s). New sample IDs and destination locations are listed below.",
+              result$inserted_samples,
+              result$inserted_results
+            )
+          ),
+          fluidRow(
+            column(
+              6,
+              downloadButton(ns("download_upload_summary_txt"), "Download .txt")
+            ),
+            column(
+              6,
+              downloadButton(
+                ns("download_upload_summary_xlsx"),
+                "Download .xlsx"
+              )
+            )
+          ),
+          DT::DTOutput(ns("upload_summary_table")),
+          footer = modalButton("Close")
+        )
       )
     })
+
+    output$upload_summary_table <- DT::renderDT({
+      DT::datatable(
+        upload_summary(),
+        rownames = FALSE,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {",
+            "$(this.api().table().header()).css({'font-size': '90%'});",
+            "$(this.api().table().body()).css({'font-size': '80%'});",
+            "}"
+          )
+        )
+      )
+    })
+
+    output$download_upload_summary_txt <- downloadHandler(
+      filename = function() {
+        paste0("discrete-upload-summary-", Sys.Date(), ".txt")
+      },
+      content = function(file) {
+        write.table(
+          upload_summary(),
+          file = file,
+          sep = "\t",
+          row.names = FALSE,
+          quote = TRUE,
+          na = ""
+        )
+      }
+    )
+
+    output$download_upload_summary_xlsx <- downloadHandler(
+      filename = function() {
+        paste0("discrete-upload-summary-", Sys.Date(), ".xlsx")
+      },
+      content = function(file) {
+        openxlsx::write.xlsx(
+          upload_summary(),
+          file = file,
+          asTable = TRUE,
+          overwrite = TRUE
+        )
+      }
+    )
 
     return(outputs)
   })
