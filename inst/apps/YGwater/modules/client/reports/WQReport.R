@@ -207,13 +207,26 @@ WQReport <- function(id, mdb_files, language) {
         conditionalPanel(
           ns = ns,
           condition = "input.data_source == 'AC' || input.data_source == null",
+          tags$div(
+            style = paste(
+              "display: flex; flex-wrap: wrap; align-items: baseline;",
+              "column-gap: 0.5rem;"
+            ),
+            tags$label(
+              tooltip_label(
+                tr("report_date", lang),
+                "wq_tooltip_report_date_ac",
+                lang
+              ),
+              `for` = ns("date_to_add_AC"),
+              class = "form-label",
+              style = "margin-bottom: 0;"
+            ),
+            uiOutput(ns("ac_date_add_warning_ui"))
+          ),
           dateInput(
             ns("date_to_add_AC"),
-            tooltip_label(
-              tr("report_date", lang),
-              "wq_tooltip_report_date_ac",
-              lang
-            ),
+            NULL,
             value = saved_input("date_to_add_AC", Sys.Date() - 30),
             format = "yyyy-mm-dd",
             language = language$abbrev
@@ -589,6 +602,22 @@ WQReport <- function(id, mdb_files, language) {
       ignoreInit = TRUE
     )
 
+    output$ac_date_add_warning_ui <- renderUI({
+      candidate_date <- suppressWarnings(as.Date(input$date_to_add_AC))
+      if (length(candidate_date) != 1L || is.na(candidate_date)) {
+        return(NULL)
+      }
+      report_dates <- as.character(input$dates_AC)
+      if (format(candidate_date, "%Y-%m-%d") %in% report_dates) {
+        return(NULL)
+      }
+      tags$span(
+        tr("wq_date_not_added_warning", language$language),
+        class = "text-danger",
+        style = "font-weight: 600;"
+      )
+    })
+
     ac_selector_choices <- reactive({
       empty <- list(
         parameters = integer(),
@@ -808,17 +837,21 @@ WQReport <- function(id, mdb_files, language) {
       )
     })
 
-    ac_guideline_choices <- reactive({
-      empty <- data.frame(
-        guideline_id = integer(),
-        guideline_code = character(),
-        guideline_name = character(),
-        param_name = character(),
-        publisher_name = character(),
-        stringsAsFactors = FALSE
-      )
+    empty_ac_guidelines <- data.frame(
+      guideline_id = integer(),
+      guideline_code = character(),
+      guideline_name = character(),
+      param_name = character(),
+      publisher_name = character(),
+      stringsAsFactors = FALSE
+    )
+    ac_guideline_results <- reactiveVal(empty_ac_guidelines)
+    latest_ac_guideline_key <- reactiveVal(NULL)
+    pending_ac_guideline_request <- reactiveVal(NULL)
+
+    ac_guideline_request <- reactive({
       if (!identical(selected_data_source(), "AC") || !ac_metadata_loaded()) {
-        return(empty)
+        return(NULL)
       }
       dates <- suppressWarnings(as.Date(input$dates_AC))
       locations <- suppressWarnings(as.integer(input$locations_AC))
@@ -832,7 +865,7 @@ WQReport <- function(id, mdb_files, language) {
           !length(parameters) ||
           anyNA(parameters)
       ) {
-        return(empty)
+        return(NULL)
       }
       if (identical(input$date_approx_mode_AC, "per_date")) {
         date_ids <- format(dates, "%Y%m%d")
@@ -854,8 +887,12 @@ WQReport <- function(id, mdb_files, language) {
           length(dates)
         )
       }
-      if (anyNA(tolerances) || any(tolerances < 0L)) {
-        return(empty)
+      if (
+        anyNA(tolerances) ||
+          any(tolerances < 0L) ||
+          any(tolerances > .Machine$integer.max)
+      ) {
+        return(NULL)
       }
       matrix_states <- suppressWarnings(as.integer(input$matrix_states_AC))
       sample_fractions <- suppressWarnings(as.integer(
@@ -930,20 +967,111 @@ WQReport <- function(id, mdb_files, language) {
         " AND (g.valid_to IS NULL OR sr.sample_date <= g.valid_to)",
         " ORDER BY p.param_name, g.guideline_code, g.guideline_name"
       )
-      tryCatch(
-        DBI::dbGetQuery(
-          session$userData$AquaCache,
-          sql,
-          params = list(
-            date_json,
-            to_json(locations),
-            to_json(parameters),
-            to_json(matrix_states),
-            to_json(sample_fractions)
-          )
-        ),
-        error = function(e) empty
+      params <- list(
+        date_json,
+        to_json(locations),
+        to_json(parameters),
+        to_json(matrix_states),
+        to_json(sample_fractions)
       )
+      list(
+        key = paste(params, collapse = "\034"),
+        sql = sql,
+        params = params
+      )
+    })
+
+    ac_guideline_request_debounced <- shiny::debounce(
+      ac_guideline_request,
+      millis = 750
+    )
+
+    ac_guideline_task <- ExtendedTask$new(function(request, db_config) {
+      promises::future_promise({
+        tryCatch(
+          {
+            con <- AquaConnect(
+              name = db_config$dbName,
+              host = db_config$dbHost,
+              port = db_config$dbPort,
+              username = db_config$dbUser,
+              password = db_config$dbPass,
+              silent = TRUE
+            )
+            on.exit(DBI::dbDisconnect(con), add = TRUE)
+            DBI::dbExecute(
+              con,
+              "SET application_name TO 'YGwater_shiny'"
+            )
+            list(
+              key = request$key,
+              guidelines = DBI::dbGetQuery(
+                con,
+                request$sql,
+                params = request$params
+              )
+            )
+          },
+          error = function(e) {
+            list(key = request$key, guidelines = empty_ac_guidelines)
+          }
+        )
+      })
+    })
+
+    observeEvent(
+      ac_guideline_request_debounced(),
+      {
+        request <- ac_guideline_request_debounced()
+        latest_ac_guideline_key(if (is.null(request)) NULL else request$key)
+        ac_guideline_results(empty_ac_guidelines)
+        if (is.null(request)) {
+          pending_ac_guideline_request(NULL)
+          return()
+        }
+
+        current_config <- session$userData$config
+        db_config <- list(
+          dbName = current_config$dbName,
+          dbHost = current_config$dbHost,
+          dbPort = current_config$dbPort,
+          dbUser = current_config$dbUser,
+          dbPass = current_config$dbPass
+        )
+        task_request <- list(request = request, db_config = db_config)
+        if (identical(ac_guideline_task$status(), "running")) {
+          # Keep only the latest selection while a query is in progress.
+          pending_ac_guideline_request(task_request)
+        } else {
+          ac_guideline_task$invoke(
+            request = request,
+            db_config = db_config
+          )
+        }
+      },
+      ignoreNULL = FALSE
+    )
+
+    observeEvent(ac_guideline_task$status(), {
+      status <- ac_guideline_task$status()
+      if (!status %in% c("success", "error")) {
+        return()
+      }
+      if (identical(status, "success")) {
+        result <- ac_guideline_task$result()
+        if (identical(result$key, isolate(latest_ac_guideline_key()))) {
+          ac_guideline_results(result$guidelines)
+        }
+      }
+
+      next_request <- isolate(pending_ac_guideline_request())
+      if (!is.null(next_request)) {
+        pending_ac_guideline_request(NULL)
+        ac_guideline_task$invoke(
+          request = next_request$request,
+          db_config = next_request$db_config
+        )
+      }
     })
 
     output$AC_guidelines_ui <- renderUI({
@@ -954,7 +1082,13 @@ WQReport <- function(id, mdb_files, language) {
       if (!ac_metadata_loaded()) {
         return(tags$p(tr("wq_loading_guidelines", language$language)))
       }
-      guidelines <- ac_guideline_choices()
+      if (
+        identical(ac_guideline_task$status(), "running") ||
+          !is.null(pending_ac_guideline_request())
+      ) {
+        return(tags$p(tr("wq_loading_guidelines", language$language)))
+      }
+      guidelines <- ac_guideline_results()
       code <- ifelse(
         is.na(guidelines$guideline_code) | !nzchar(guidelines$guideline_code),
         "",
