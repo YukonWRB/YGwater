@@ -618,11 +618,18 @@ WQReport <- function(id, mdb_files, language) {
       )
     })
 
-    ac_selector_choices <- reactive({
-      empty <- list(
-        parameters = integer(),
-        matrix_states = integer(),
-        sample_fractions = integer()
+    # Load distinct result combinations once per date/location window. The
+    # report's selected-filter date matching is then mirrored in memory, so
+    # selector changes never trigger another database query.
+    ac_selector_results <- reactive({
+      empty <- data.frame(
+        requested_date = as.Date(character()),
+        location_id = integer(),
+        sample_date = as.Date(character()),
+        parameter_id = integer(),
+        matrix_state_id = integer(),
+        sample_fraction_id = integer(),
+        stringsAsFactors = FALSE
       )
       if (!identical(selected_data_source(), "AC") || !ac_metadata_loaded()) {
         return(NULL)
@@ -653,7 +660,8 @@ WQReport <- function(id, mdb_files, language) {
         rep(suppressWarnings(as.numeric(input$date_approx_ac)), length(dates))
       }
       if (
-        anyNA(tolerances) ||
+        length(tolerances) != length(dates) ||
+          anyNA(tolerances) ||
           any(!is.finite(tolerances)) ||
           any(tolerances < 0) ||
           any(tolerances > .Machine$integer.max) ||
@@ -679,43 +687,24 @@ WQReport <- function(id, mdb_files, language) {
         " SELECT requested_date, date_approx",
         " FROM jsonb_to_recordset($1::jsonb)",
         " AS d(requested_date date, date_approx integer)",
-        "), matching_results AS (",
-        " SELECT DISTINCT r.parameter_id, r.matrix_state_id,",
-        " r.sample_fraction_id",
+        ") SELECT DISTINCT d.requested_date, s.location_id,",
+        " s.datetime::date AS sample_date, r.parameter_id,",
+        " r.matrix_state_id, r.sample_fraction_id",
         " FROM date_requests d",
         " JOIN discrete.samples s ON s.datetime::date BETWEEN",
         " d.requested_date - d.date_approx AND d.requested_date + d.date_approx",
-        " JOIN discrete.results r ON r.sample_id = s.sample_id",
         " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+        " JOIN discrete.results r ON r.sample_id = s.sample_id",
         " WHERE s.location_id IN (SELECT value::integer FROM",
         " jsonb_array_elements_text($2::jsonb))",
-        " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
-        ") SELECT DISTINCT parameter_id, matrix_state_id, sample_fraction_id",
-        " FROM matching_results"
+        " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')"
       )
       tryCatch(
-        {
-          available <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            sql,
-            params = list(date_json, location_json)
-          )
-          if (!nrow(available)) {
-            empty
-          } else {
-            list(
-              parameters = unique(as.integer(
-                available$parameter_id[!is.na(available$parameter_id)]
-              )),
-              matrix_states = unique(as.integer(
-                available$matrix_state_id[!is.na(available$matrix_state_id)]
-              )),
-              sample_fractions = unique(as.integer(
-                available$sample_fraction_id[!is.na(available$sample_fraction_id)]
-              ))
-            )
-          }
-        },
+        DBI::dbGetQuery(
+          session$userData$AquaCache,
+          sql,
+          params = list(date_json, location_json)
+        ),
         error = function(e) {
           showNotification(
             paste(
@@ -731,34 +720,229 @@ WQReport <- function(id, mdb_files, language) {
       )
     })
 
-    output$AC_selectors_ui <- renderUI({
-      req(language$language)
-      choices <- ac_selector_choices()
-      if (is.null(choices)) {
-        return(NULL)
+    ac_selector_choices <- reactive({
+      empty <- list(
+        parameters = integer(),
+        matrix_states = integer(),
+        sample_fractions = integer()
+      )
+      available <- ac_selector_results()
+      if (is.null(available) || !nrow(available)) {
+        if (is.null(available)) {
+          return(NULL)
+        }
+        return(empty)
       }
 
-      choices_from_metadata <- function(
-        ids,
-        metadata,
-        id_column,
-        label_column,
-        fallback_column = NULL
-      ) {
-        if (!length(ids) || is.null(metadata) || !nrow(metadata)) {
-          return(character())
+      selected_ids <- function(id) {
+        value <- suppressWarnings(as.integer(input[[id]]))
+        unique(value[!is.na(value)])
+      }
+      selected_parameters <- selected_ids("parameters_AC")
+      selected_matrix_states <- selected_ids("matrix_states_AC")
+      selected_fractions <- selected_ids("sample_fractions_AC")
+      filter_by_selection <- function(results, column, selected) {
+        if (!length(selected)) {
+          return(results)
         }
-        keep <- as.character(metadata[[id_column]]) %in% as.character(ids)
-        metadata <- metadata[keep, , drop = FALSE]
-        labels <- as.character(metadata[[label_column]])
-        if (!is.null(fallback_column)) {
-          fallback <- as.character(metadata[[fallback_column]])
-          missing <- is.na(labels) | !nzchar(labels)
-          labels[missing] <- fallback[missing]
-        }
+        results[
+          !is.na(results[[column]]) & results[[column]] %in% selected,
+          ,
+          drop = FALSE
+        ]
+      }
+
+      available$requested_date <- as.Date(available$requested_date)
+      available$sample_date <- as.Date(available$sample_date)
+      candidate_results <- filter_by_selection(
+        filter_by_selection(
+          filter_by_selection(
+            available,
+            "parameter_id",
+            selected_parameters
+          ),
+          "matrix_state_id",
+          selected_matrix_states
+        ),
+        "sample_fraction_id",
+        selected_fractions
+      )
+      if (!nrow(candidate_results)) {
+        return(empty)
+      }
+
+      candidate_dates <- unique(candidate_results[
+        c("requested_date", "location_id", "sample_date")
+      ])
+      date_distance <- as.integer(
+        candidate_dates$sample_date - candidate_dates$requested_date
+      )
+      candidate_dates <- candidate_dates[order(
+        candidate_dates$requested_date,
+        candidate_dates$location_id,
+        abs(date_distance),
+        -as.integer(date_distance >= 0),
+        candidate_dates$sample_date
+      ), , drop = FALSE]
+      candidate_dates <- candidate_dates[
+        !duplicated(candidate_dates[c("requested_date", "location_id")]),
+        ,
+        drop = FALSE
+      ]
+      winning_results <- merge(
+        available,
+        candidate_dates,
+        by = c("requested_date", "location_id", "sample_date"),
+        all = FALSE,
+        sort = FALSE
+      )
+      parameter_results <- filter_by_selection(
+        filter_by_selection(
+          winning_results,
+          "matrix_state_id",
+          selected_matrix_states
+        ),
+        "sample_fraction_id",
+        selected_fractions
+      )
+      matrix_results <- filter_by_selection(
+        filter_by_selection(
+          winning_results,
+          "parameter_id",
+          selected_parameters
+        ),
+        "sample_fraction_id",
+        selected_fractions
+      )
+      fraction_results <- filter_by_selection(
+        filter_by_selection(
+          winning_results,
+          "parameter_id",
+          selected_parameters
+        ),
+        "matrix_state_id",
+        selected_matrix_states
+      )
+
+      list(
+        parameters = unique(as.integer(
+          parameter_results$parameter_id[
+            !is.na(parameter_results$parameter_id)
+          ]
+        )),
+        matrix_states = unique(as.integer(
+          matrix_results$matrix_state_id[
+            !is.na(matrix_results$matrix_state_id)
+          ]
+        )),
+        sample_fractions = unique(as.integer(
+          fraction_results$sample_fraction_id[
+            !is.na(fraction_results$sample_fraction_id)
+          ]
+        ))
+      )
+    })
+
+    choices_from_metadata <- function(
+      ids,
+      metadata,
+      id_column,
+      label_column,
+      fallback_column = NULL
+    ) {
+      if (!length(ids) || is.null(metadata) || !nrow(metadata)) {
+        return(character())
+      }
+      keep <- as.character(metadata[[id_column]]) %in% as.character(ids)
+      metadata <- metadata[keep, , drop = FALSE]
+      labels <- as.character(metadata[[label_column]])
+      if (!is.null(fallback_column)) {
+        fallback <- as.character(metadata[[fallback_column]])
         missing <- is.na(labels) | !nzchar(labels)
-        labels[missing] <- as.character(metadata[[id_column]][missing])
-        stats::setNames(as.character(metadata[[id_column]]), labels)
+        labels[missing] <- fallback[missing]
+      }
+      missing <- is.na(labels) | !nzchar(labels)
+      labels[missing] <- as.character(metadata[[id_column]][missing])
+      stats::setNames(as.character(metadata[[id_column]]), labels)
+    }
+
+    ac_selector_choice_cache <- reactiveValues(
+      parameters_AC = NULL,
+      matrix_states_AC = NULL,
+      sample_fractions_AC = NULL
+    )
+
+    ac_selector_choices_debounced <- shiny::debounce(
+      ac_selector_choices,
+      millis = 200
+    )
+
+    observeEvent(ac_selector_choices_debounced(), {
+      choices <- ac_selector_choices_debounced()
+      if (is.null(choices) || is.null(language$language)) {
+        return()
+      }
+      param_label_column <- if (identical(language$language, "Français")) {
+        "param_name_fr"
+      } else {
+        "param_name"
+      }
+      parameter_choices <- choices_from_metadata(
+        choices$parameters,
+        moduleData$AC_params,
+        "parameter_id",
+        param_label_column,
+        "param_name"
+      )
+      matrix_choices <- choices_from_metadata(
+        choices$matrix_states,
+        moduleData$AC_matrix_states,
+        "matrix_state_id",
+        "matrix_state_name"
+      )
+      fraction_choices <- choices_from_metadata(
+        choices$sample_fractions,
+        moduleData$AC_sample_fractions,
+        "sample_fraction_id",
+        "sample_fraction"
+      )
+
+      choice_sets <- list(
+        parameters_AC = parameter_choices,
+        matrix_states_AC = matrix_choices,
+        sample_fractions_AC = fraction_choices
+      )
+      for (id in names(choice_sets)) {
+        new_choices <- choice_sets[[id]]
+        if (identical(isolate(ac_selector_choice_cache[[id]]), new_choices)) {
+          next
+        }
+        selected <- isolate(input[[id]])
+        if (is.null(selected)) {
+          selected <- saved_input(id, character())
+        }
+        ac_selector_choice_cache[[id]] <- new_choices
+        updateSelectizeInput(
+          session,
+          id,
+          choices = new_choices,
+          selected = intersect(as.character(selected), unname(new_choices)),
+          server = FALSE
+        )
+      }
+    }, ignoreNULL = FALSE)
+
+    output$AC_selectors_ui <- renderUI({
+      req(language$language)
+      if (
+        !identical(selected_data_source(), "AC") ||
+          !ac_metadata_loaded()
+      ) {
+        return(NULL)
+      }
+      choices <- isolate(ac_selector_choices())
+      if (is.null(choices)) {
+        return(NULL)
       }
       param_label_column <- if (identical(language$language, "Français")) {
         "param_name_fr"
@@ -835,7 +1019,14 @@ WQReport <- function(id, mdb_files, language) {
           width = "100%"
         )
       )
-    })
+    }) %>%
+      bindEvent(
+        language$language,
+        ac_metadata_loaded(),
+        selected_data_source(),
+        ac_selector_results(),
+        ignoreNULL = FALSE
+      )
 
     empty_ac_guidelines <- data.frame(
       guideline_id = integer(),
@@ -847,6 +1038,7 @@ WQReport <- function(id, mdb_files, language) {
     )
     ac_guideline_results <- reactiveVal(empty_ac_guidelines)
     latest_ac_guideline_key <- reactiveVal(NULL)
+    loaded_ac_guideline_key <- reactiveVal(NULL)
     pending_ac_guideline_request <- reactiveVal(NULL)
 
     ac_guideline_request <- reactive({
@@ -945,9 +1137,11 @@ WQReport <- function(id, mdb_files, language) {
         " SELECT DISTINCT r.result_id, s.datetime::date AS sample_date",
         " FROM best_dates b JOIN discrete.samples s",
         " ON s.location_id = b.location_id AND s.datetime::date = b.sample_date",
+        " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
         " JOIN discrete.results r ON r.sample_id = s.sample_id",
         " WHERE r.parameter_id IN (SELECT value::integer FROM",
         " jsonb_array_elements_text($3::jsonb))",
+        " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
         " AND (jsonb_array_length($4::jsonb) = 0 OR r.matrix_state_id IN (",
         " SELECT value::integer FROM jsonb_array_elements_text($4::jsonb)))",
         " AND (jsonb_array_length($5::jsonb) = 0 OR r.sample_fraction_id IN (",
@@ -1024,6 +1218,7 @@ WQReport <- function(id, mdb_files, language) {
       {
         request <- ac_guideline_request_debounced()
         latest_ac_guideline_key(if (is.null(request)) NULL else request$key)
+        loaded_ac_guideline_key(NULL)
         ac_guideline_results(empty_ac_guidelines)
         if (is.null(request)) {
           pending_ac_guideline_request(NULL)
@@ -1061,6 +1256,7 @@ WQReport <- function(id, mdb_files, language) {
         result <- ac_guideline_task$result()
         if (identical(result$key, isolate(latest_ac_guideline_key()))) {
           ac_guideline_results(result$guidelines)
+          loaded_ac_guideline_key(result$key)
         }
       }
 
@@ -1074,6 +1270,14 @@ WQReport <- function(id, mdb_files, language) {
       }
     })
 
+    ac_guideline_results_current <- reactive({
+      request <- ac_guideline_request()
+      !is.null(request) &&
+        identical(latest_ac_guideline_key(), request$key) &&
+        identical(loaded_ac_guideline_key(), request$key) &&
+        is.null(pending_ac_guideline_request())
+    })
+
     output$AC_guidelines_ui <- renderUI({
       req(language$language)
       if (!identical(selected_data_source(), "AC")) {
@@ -1082,10 +1286,7 @@ WQReport <- function(id, mdb_files, language) {
       if (!ac_metadata_loaded()) {
         return(tags$p(tr("wq_loading_guidelines", language$language)))
       }
-      if (
-        identical(ac_guideline_task$status(), "running") ||
-          !is.null(pending_ac_guideline_request())
-      ) {
+      if (!isTRUE(ac_guideline_results_current())) {
         return(tags$p(tr("wq_loading_guidelines", language$language)))
       }
       guidelines <- ac_guideline_results()
@@ -1546,17 +1747,23 @@ WQReport <- function(id, mdb_files, language) {
               tr("wq_err_sample_fraction_invalid", language$language)
             )
           }
-          if (
-            length(input$guidelines_AC) &&
+          if (length(input$guidelines_AC)) {
+            if (!isTRUE(isolate(ac_guideline_results_current()))) {
+              issues <- c(
+                issues,
+                tr("wq_loading_guidelines", language$language)
+              )
+            } else if (
               length(setdiff(
                 input$guidelines_AC,
-                as.character(ac_guideline_choices()$guideline_id)
+                as.character(isolate(ac_guideline_results())$guideline_id)
               ))
-          ) {
-            issues <- c(
-              issues,
-              tr("wq_err_aquacache_guideline_invalid", language$language)
-            )
+            ) {
+              issues <- c(
+                issues,
+                tr("wq_err_aquacache_guideline_invalid", language$language)
+              )
+            }
           }
         }
       } else {
