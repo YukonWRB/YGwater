@@ -160,6 +160,7 @@ addDiscData_merge_preview_edits <- function(recalculated, current, previous) {
     c(
       "location_id",
       "sub_location_id",
+      "location_mapping_status",
       "datetime",
       "target_datetime",
       "z",
@@ -267,6 +268,23 @@ addDiscData_sample_group_labels <- function(sample_groups) {
     group_name
   )
   paste(sample_groups$group_type, identifier, sep = ": ")
+}
+
+addDiscData_observer_labels <- function(observers) {
+  if (!nrow(observers)) {
+    return(character())
+  }
+  first <- trimws(as.character(observers$observer_first))
+  last <- trimws(as.character(observers$observer_last))
+  organization <- trimws(as.character(observers$organization))
+  first[is.na(first)] <- ""
+  last[is.na(last)] <- ""
+  organization[is.na(organization)] <- ""
+  ifelse(
+    nzchar(organization),
+    paste0(first, " ", last, " (", organization, ")"),
+    paste(first, last)
+  )
 }
 
 addDiscData_read_profiles <- function(con) {
@@ -471,6 +489,57 @@ addDiscData_cell <- function(x, row, col, default = NA_character_) {
 
 addDiscData_present <- function(x) {
   !is.na(x) & nzchar(trimws(as.character(x)))
+}
+
+addDiscData_share_choices <- function(con, relation) {
+  groups <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT shareable.role_name
+         FROM public.get_shareable_principals_for($1::regclass) AS shareable
+         JOIN pg_catalog.pg_roles AS role_catalog
+           ON role_catalog.rolname = shareable.role_name
+        WHERE shareable.role_name <> 'public_reader'
+          AND NOT role_catalog.rolcanlogin
+          AND role_catalog.rolname <> 'public'
+          AND role_catalog.rolname !~ '^pg_'
+          AND pg_has_role(current_user, shareable.role_name, 'member')
+        ORDER BY shareable.role_name",
+      params = list(relation)
+    )$role_name,
+    error = function(e) character()
+  )
+  groups <- unique(as.character(groups))
+  groups <- groups[!is.na(groups) & nzchar(groups)]
+  stats::setNames(
+    c("public_reader", groups),
+    c("All users", groups)
+  )
+}
+
+addDiscData_share_selection <- function(selected, choices) {
+  if (is.null(selected) || !length(selected)) {
+    return("public_reader")
+  }
+  selected <- unique(as.character(selected))
+  selected <- selected[!is.na(selected) & nzchar(selected)]
+  if (!length(selected)) {
+    return("public_reader")
+  }
+  invalid <- setdiff(selected, unname(choices))
+  if (length(invalid)) {
+    stop("Choose only an available access group.", call. = FALSE)
+  }
+  if ("public_reader" %in% selected && length(selected) > 1L) {
+    stop(
+      "Remove All users before selecting access groups.",
+      call. = FALSE
+    )
+  }
+  if ("public_reader" %in% selected) {
+    return("public_reader")
+  }
+  selected
 }
 
 addDiscData_int <- function(x, default = NA_integer_) {
@@ -1832,6 +1901,13 @@ addDiscData_run_upload <- function(request) {
       )
       sample_has_linked_with <- "linked_with" %in% sample_table_fields
       sample_has_field_visit_id <- "field_visit_id" %in% sample_table_fields
+      sample_has_share_with <- "share_with" %in% sample_table_fields
+      if (!sample_has_share_with) {
+        stop(
+          "The discrete.samples table does not support sharing. Apply the current AquaCache schema before uploading samples.",
+          call. = FALSE
+        )
+      }
       if (!is.na(field_visit_id) && !sample_has_field_visit_id) {
         stop(
           "The discrete.samples table does not support field visit links. Apply the AquaCache field visit schema patch before linking samples.",
@@ -1864,13 +1940,25 @@ addDiscData_run_upload <- function(request) {
         "import_source_id",
         "no_source_update",
         "note",
+        if (sample_has_share_with) "share_with",
         if (sample_has_field_visit_id) "field_visit_id"
       )
+      sample_insert_values <- sprintf(
+        "$%d",
+        seq_along(sample_insert_fields)
+      )
+      share_with_index <- match("share_with", sample_insert_fields)
+      if (!is.na(share_with_index)) {
+        sample_insert_values[[share_with_index]] <- paste0(
+          sample_insert_values[[share_with_index]],
+          "::text[]"
+        )
+      }
       sample_insert_sql <- paste0(
         "INSERT INTO discrete.samples (",
         paste(sample_insert_fields, collapse = ", "),
         ") VALUES (",
-        paste(sprintf("$%d", seq_along(sample_insert_fields)), collapse = ", "),
+        paste(sample_insert_values, collapse = ", "),
         ") RETURNING sample_id"
       )
       import_sources <- DBI::dbGetQuery(
@@ -1975,6 +2063,15 @@ addDiscData_run_upload <- function(request) {
                 NA_character_
               }
             ),
+            if (sample_has_share_with) {
+              share_with <- request$sample_share_with[[
+                as.character(samples$sample_key[[i]])
+              ]]
+              if (is.null(share_with) || !length(share_with)) {
+                share_with <- "public_reader"
+              }
+              list(share_with_to_array(share_with))
+            },
             if (sample_has_field_visit_id) {
               list(addDiscData_int(samples$field_visit_id[[i]]))
             }
@@ -2004,6 +2101,20 @@ addDiscData_run_upload <- function(request) {
              VALUES ($1, $2)
              ON CONFLICT (sample_id, qualifier_type_id) DO NOTHING",
             params = list(as.integer(sid), qualifier_id)
+          )
+        }
+        observer_ids <- unique(as.integer(
+          request$sample_observers[[samples$sample_key[[i]]]]
+        ))
+        observer_ids <- observer_ids[!is.na(observer_ids)]
+        for (observer_id in observer_ids) {
+          DBI::dbExecute(
+            con,
+            "INSERT INTO discrete.sample_observers (
+               sample_id, observer_id, observer_role
+             ) VALUES ($1, $2, 'sampler')
+             ON CONFLICT (sample_id, observer_id, observer_role) DO NOTHING",
+            params = list(as.integer(sid), observer_id)
           )
         }
         sample_lookup[[samples$sample_key[[i]]]] <- sid
@@ -2747,8 +2858,9 @@ addDiscDataUI <- function(id) {
                 "The selected visit will be linked to every sample created by this upload. To use more than one visit, upload each visit's samples separately."
               ),
               helpText(
-                "Select a sample in the table below to edit it. Deselect all rows to create a new sample. Field and trip blanks are assigned a matching QC sample type and must be assigned to a trip or QC group, but they will not be assigned a location."
+                "Select a sample in the table below to edit it. Use New sample to add a sample alongside file samples or start another manual sample. Field and trip blanks are assigned a matching QC sample type and must be assigned to a trip or QC group, but they will not be assigned a location."
               ),
+              actionButton(ns("new_sample"), "New sample"),
               uiOutput(ns("sample_editor"))
             )
           ),
@@ -3016,7 +3128,7 @@ addDiscDataUI <- function(id) {
           "Create missing locations",
           value = "create_locations",
           helpText(
-            "Create one AquaCache location for each unmapped source location in the current file preview. The English name, location type, latitude, and longitude are required. Alias and note are optional. Select any number of networks and projects; leave either field empty for none. Location codes are generated automatically; elevations are fetched from web services. If no service returns a usable elevation, it is saved as 0 m using the assumed datum and called out in the summary. New locations are shared with your current internal access group, and their source mappings are saved for this workbook format. You can adjust location details and sharing under Locations -> Add/modify locations."
+            "Create one AquaCache location for each unmapped source location in the current file preview. The English name, location type, latitude, and longitude are required. Alias and note are optional. Select any number of networks and projects; leave either field empty for none. Location codes are generated automatically; elevations are fetched from web services. If no service returns a usable elevation, it is saved as 0 m using the assumed datum and called out in the summary. New locations are visible to all users by default; remove All users before selecting access groups to restrict visibility. Creating locations also saves source mappings for this workbook format."
           ),
           fluidRow(
             column(
@@ -3220,6 +3332,9 @@ addDiscDataUI <- function(id) {
                     step = 1
                   )
                 )
+              ),
+              helpText(
+                "A sample fraction or speciation is required when the selected AquaCache parameter requires it."
               ),
               fluidRow(
                 column(
@@ -3467,6 +3582,8 @@ addDiscData <- function(id, language) {
       preview_is_stale = FALSE
     )
     sample_qualifier_map <- reactiveVal(list())
+    sample_observer_map <- reactiveVal(list())
+    sample_share_map <- reactiveVal(list())
     current_manual_sample <- reactiveVal(0L)
     manual_upload_id <- paste0(
       format(Sys.time(), "%Y%m%dT%H%M%OS6", tz = "UTC"),
@@ -3482,6 +3599,31 @@ addDiscData <- function(id, language) {
     manage_mapping_error <- reactiveVal(NULL)
 
     con <- session$userData$AquaCache
+    read_observers <- function() {
+      tryCatch(
+        DBI::dbGetQuery(
+          con,
+          "SELECT observer_id, observer_first, observer_last, organization
+             FROM instruments.observers
+            ORDER BY observer_first, observer_last, organization"
+        ),
+        error = function(e) {
+          data.frame(
+            observer_id = integer(),
+            observer_first = character(),
+            observer_last = character(),
+            organization = character()
+          )
+        }
+      )
+    }
+    observers <- reactiveVal(read_observers())
+    observer_choices <- function(rows = observers()) {
+      stats::setNames(
+        as.character(rows$observer_id),
+        addDiscData_observer_labels(rows)
+      )
+    }
     read_field_visits <- function() {
       tryCatch(
         DBI::dbGetQuery(
@@ -3663,6 +3805,28 @@ addDiscData <- function(id, language) {
            'INSERT'
          ) AS can_assign_group"
     )
+    observer_permissions <- tryCatch(
+      DBI::dbGetQuery(
+        con,
+        "SELECT
+           has_table_privilege(
+             current_user,
+             'instruments.observers',
+             'INSERT'
+           ) AS can_create_observer,
+           has_table_privilege(
+             current_user,
+             'discrete.sample_observers',
+             'INSERT'
+           ) AS can_assign_observers"
+      ),
+      error = function(e) {
+        data.frame(
+          can_create_observer = FALSE,
+          can_assign_observers = FALSE
+        )
+      }
+    )
     if (!check_results$can_insert || !check_samples$can_insert) {
       showModal(modalDialog(
         title = "Insufficient Privileges",
@@ -3807,36 +3971,36 @@ addDiscData <- function(id, language) {
          FROM public.location_types
         ORDER BY type"
     )
-    location_write_share_role <- tryCatch(
-      DBI::dbGetQuery(
-        con,
-        "SELECT shareable.role_name
-           FROM public.get_shareable_principals_for('public.locations') AS shareable
-           JOIN pg_catalog.pg_roles AS role_catalog
-             ON role_catalog.rolname = shareable.role_name
-          WHERE shareable.role_name <> 'public_reader'
-            AND NOT role_catalog.rolcanlogin
-            AND pg_has_role(current_user, shareable.role_name, 'member')
-          ORDER BY CASE WHEN lower(shareable.role_name) LIKE '%admin%' THEN 0 ELSE 1 END,
-                   shareable.role_name
-          LIMIT 1"
-      )$role_name,
-      error = function(e) character()
+    location_share_choices <- addDiscData_share_choices(
+      con,
+      "public.locations"
     )
-    location_write_share_role <- if (length(location_write_share_role)) {
-      location_write_share_role[[1]]
-    } else {
-      ""
+    sample_group_share_choices <- addDiscData_share_choices(
+      con,
+      "discrete.sample_groups"
+    )
+    sample_share_choices <- addDiscData_share_choices(
+      con,
+      "discrete.samples"
+    )
+    observe_share_selection <- function(input_id) {
+      observeEvent(
+        input[[input_id]],
+        {
+          selected <- as.character(input[[input_id]])
+          if (length(selected) > 1L && "public_reader" %in% selected) {
+            updateSelectizeInput(
+              session,
+              input_id,
+              selected = "public_reader"
+            )
+          }
+        },
+        ignoreInit = TRUE
+      )
     }
-    shareable_location_roles <- tryCatch(
-      DBI::dbGetQuery(
-        con,
-        "SELECT role_name
-           FROM public.get_shareable_principals_for('public.locations')
-          ORDER BY role_name"
-      )$role_name,
-      error = function(e) "public_reader"
-    )
+    observe_share_selection("new_sample_group_share_with")
+    observe_share_selection("edit_sample_share_with")
     quick_elevation_datum <- DBI::dbGetQuery(
       con,
       "SELECT datum_id
@@ -3863,24 +4027,6 @@ addDiscData <- function(id, language) {
        WHERE active
        ORDER BY sort_order"
     )
-    sample_group_share_roles <- tryCatch(
-      DBI::dbGetQuery(
-        con,
-        "SELECT role_name
-         FROM public.get_shareable_principals_for('discrete.sample_groups')
-         WHERE role_name <> 'public_reader'
-           AND pg_has_role(current_user, role_name, 'member')
-         ORDER BY CASE WHEN lower(role_name) LIKE '%admin%' THEN 0 ELSE 1 END,
-                  role_name
-         LIMIT 1"
-      )$role_name,
-      error = function(e) character()
-    )
-    sample_group_share_role <- if (length(sample_group_share_roles)) {
-      sample_group_share_roles[[1]]
-    } else {
-      NA_character_
-    }
     pending_sample_group <- reactiveVal(NULL)
 
     pending_location_selection <- reactiveVal(character(0))
@@ -3980,6 +4126,38 @@ addDiscData <- function(id, language) {
         return(FALSE)
       }
       isTRUE(as.logical(parameter_rows[[requirement]][[parameter_index]]))
+    }
+    validate_parameter_mapping_descriptors <- function(
+      parameter_id,
+      sample_fraction_id,
+      result_speciation_id
+    ) {
+      parameter_id <- addDiscData_int(parameter_id)
+      if (
+        is.na(parameter_id) ||
+          !parameter_id %in% params()$parameter_id
+      ) {
+        stop("Choose a valid AquaCache parameter.", call. = FALSE)
+      }
+      if (
+        parameter_requirement(parameter_id, "sample_fraction") &&
+          is.na(addDiscData_int(sample_fraction_id))
+      ) {
+        stop(
+          "Sample fraction is required for the selected parameter.",
+          call. = FALSE
+        )
+      }
+      if (
+        parameter_requirement(parameter_id, "result_speciation") &&
+          is.na(addDiscData_int(result_speciation_id))
+      ) {
+        stop(
+          "Speciation is required for the selected parameter.",
+          call. = FALSE
+        )
+      }
+      invisible(TRUE)
     }
     observeEvent(
       input$manual_parameter,
@@ -5838,6 +6016,13 @@ addDiscData <- function(id, language) {
         if (is.na(parameter_id)) {
           stop("Choose an AquaCache parameter.")
         }
+        sample_fraction_id <- addDiscData_int(input$manage_sample_fraction)
+        result_speciation_id <- addDiscData_int(input$manage_speciation)
+        validate_parameter_mapping_descriptors(
+          parameter_id,
+          sample_fraction_id,
+          result_speciation_id
+        )
         conversion <- addDiscData_num(input$manage_conversion, 1)
         result_offset <- addDiscData_num(input$manage_result_offset, 0)
         if (!is.finite(conversion) || !is.finite(result_offset)) {
@@ -5853,9 +6038,9 @@ addDiscData <- function(id, language) {
             unit = unit,
             parameter_id = parameter_id,
             result_type = addDiscData_int(input$manage_result_type, 2L),
-            sample_fraction_id = addDiscData_int(input$manage_sample_fraction),
+            sample_fraction_id = sample_fraction_id,
             result_value_type = addDiscData_int(input$manage_value_type, 1L),
-            result_speciation_id = addDiscData_int(input$manage_speciation),
+            result_speciation_id = result_speciation_id,
             matrix_state_id = addDiscData_int(input$manage_matrix_state, 1L),
             conversion = conversion,
             result_offset = result_offset,
@@ -6077,20 +6262,27 @@ addDiscData <- function(id, language) {
       req(input$file)
       profile <- selected_profile()
       path <- input$file$datapath
-      same_file <- identical(data$raw_file_path, path)
+      profile_key <- addDiscData_profile_key(
+        profile$source_code[[1]],
+        profile$profile_code[[1]]
+      )
+      same_file <- identical(data$raw_file_path, path) &&
+        identical(data$preview_profile_key, profile_key)
       data$raw_file_path <- path
       data$preview_is_stale <- TRUE
       if (!same_file) {
         data$df <- addDiscData_empty_table()
         data$preview_base <- addDiscData_empty_table()
+        sample_qualifier_map(list())
+        sample_observer_map(list())
+        sample_share_map(list())
+        selected_sample_key(NULL)
+        pending_sample_group(NULL)
       }
       preview_parse_task$invoke(list(
         path = path,
         profile = profile,
-        profile_key = addDiscData_profile_key(
-          profile$source_code[[1]],
-          profile$profile_code[[1]]
-        ),
+        profile_key = profile_key,
         same_file = same_file
       ))
     })
@@ -6191,6 +6383,110 @@ addDiscData <- function(id, language) {
       rows[index[[1]], , drop = FALSE]
     })
 
+    observeEvent(
+      input$new_sample,
+      {
+        selected_sample_key(NULL)
+        pending_sample_group(NULL)
+        DT::selectRows(
+          DT::dataTableProxy("sample_location_summary", session = session),
+          NULL
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(input$open_create_observer, {
+      showModal(modalDialog(
+        title = "Add new observer",
+        textInput(ns("new_observer_first"), "First name"),
+        textInput(ns("new_observer_last"), "Last name"),
+        textInput(ns("new_observer_org"), "Organization"),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("save_new_observer"), "Add observer")
+        ),
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(
+      input$save_new_observer,
+      {
+        if (!isTRUE(observer_permissions$can_create_observer[[1]])) {
+          showNotification(
+            "Your database role cannot create observers.",
+            type = "error"
+          )
+          return()
+        }
+        first <- trimws(addDiscData_first(input$new_observer_first, ""))
+        last <- trimws(addDiscData_first(input$new_observer_last, ""))
+        organization <- trimws(addDiscData_first(input$new_observer_org, ""))
+        if (!nzchar(first) || !nzchar(last) || !nzchar(organization)) {
+          showNotification(
+            "Observer first name, last name, and organization are required.",
+            type = "error"
+          )
+          return()
+        }
+        current_observers <- observers()
+        label <- paste0(first, " ", last, " (", organization, ")")
+        existing <- which(
+          addDiscData_observer_labels(current_observers) == label
+        )
+        if (length(existing)) {
+          observer_id <- current_observers$observer_id[[existing[[1]]]]
+          message <- "Existing observer selected."
+        } else {
+          observer_id <- tryCatch(
+            DBI::dbGetQuery(
+              con,
+              "INSERT INTO instruments.observers (
+                 observer_first, observer_last, organization
+               ) VALUES ($1, $2, $3)
+               RETURNING observer_id",
+              params = list(first, last, organization)
+            )$observer_id[[1]],
+            error = function(e) e
+          )
+          if (inherits(observer_id, "error")) {
+            showNotification(
+              paste("Creating observer failed:", conditionMessage(observer_id)),
+              type = "error"
+            )
+            return()
+          }
+          current_observers <- rbind(
+            current_observers,
+            data.frame(
+              observer_id = as.integer(observer_id),
+              observer_first = first,
+              observer_last = last,
+              organization = organization,
+              stringsAsFactors = FALSE
+            )
+          )
+          observers(current_observers)
+          message <- "Observer created."
+        }
+        selected_ids <- unique(c(
+          as.character(input$edit_sample_observers),
+          as.character(observer_id)
+        ))
+        updateSelectizeInput(
+          session,
+          "edit_sample_observers",
+          choices = observer_choices(current_observers),
+          selected = selected_ids,
+          server = TRUE
+        )
+        removeModal()
+        showNotification(message, type = "message")
+      },
+      ignoreInit = TRUE
+    )
+
     output$manual_result_sample_label <- renderUI({
       row <- selected_sample_row()
       if (is.null(row)) {
@@ -6219,14 +6515,6 @@ addDiscData <- function(id, language) {
           showNotification(
             "No active sample-group types are available.",
             type = "error"
-          )
-          return()
-        }
-        if (!addDiscData_present(sample_group_share_role)) {
-          showNotification(
-            "Your account has no private access group for a new sample group. Ask a database administrator to configure access.",
-            type = "error",
-            duration = 10
           )
           return()
         }
@@ -6290,9 +6578,20 @@ addDiscData <- function(id, language) {
             placeholder = "Add context that will help identify this group later",
             width = "100%"
           ),
-          tags$p(
-            class = "text-muted",
-            paste("Visible to your access group:", sample_group_share_role)
+          selectizeInput(
+            ns("new_sample_group_share_with"),
+            "Visible to",
+            choices = sample_group_share_choices,
+            selected = "public_reader",
+            multiple = TRUE,
+            options = list(
+              placeholder = "All users",
+              plugins = list("remove_button"),
+              dropdownParent = "body"
+            )
+          ),
+          helpText(
+            "New sample groups are visible to all users by default. To restrict visibility, remove All users and then select one or more access groups."
           ),
           footer = tagList(
             actionButton(ns("cancel_new_sample_group"), "Cancel"),
@@ -6335,6 +6634,20 @@ addDiscData <- function(id, language) {
           input$new_sample_group_note,
           ""
         ))
+        group_share_with <- tryCatch(
+          addDiscData_share_selection(
+            input$new_sample_group_share_with,
+            sample_group_share_choices
+          ),
+          error = function(e) e
+        )
+        if (inherits(group_share_with, "error")) {
+          showNotification(
+            paste("Invalid sample-group sharing selection:", group_share_with$message),
+            type = "error"
+          )
+          return()
+        }
         if (!group_type %in% sample_group_types$group_type) {
           showNotification("Choose a group type.", type = "error")
           return()
@@ -6350,13 +6663,6 @@ addDiscData <- function(id, language) {
           showNotification("Choose an owner for this group.", type = "error")
           return()
         }
-        if (!addDiscData_present(sample_group_share_role)) {
-          showNotification(
-            "Your account has no private access group for a new sample group.",
-            type = "error"
-          )
-          return()
-        }
         tryCatch(
           {
             inserted <- DBI::dbGetQuery(
@@ -6366,7 +6672,7 @@ addDiscData <- function(id, language) {
            ) VALUES (
              $1, NULLIF($2::TEXT, ''), NULLIF($3::TEXT, ''), $4,
              NULLIF($5::TEXT, ''),
-             ARRAY[$6]::TEXT[]
+             $6::TEXT[]
            )
            RETURNING sample_group_id",
               params = list(
@@ -6375,7 +6681,7 @@ addDiscData <- function(id, language) {
                 group_name,
                 group_owner,
                 group_note,
-                sample_group_share_role
+                share_with_to_array(group_share_with)
               )
             )
             group_id <- as.integer(inserted$sample_group_id[[1]])
@@ -6469,6 +6775,20 @@ addDiscData <- function(id, language) {
         showNotification("Enter a sample datetime.", type = "error")
         return()
       }
+      share_values <- tryCatch(
+        addDiscData_share_selection(
+          input$edit_sample_share_with,
+          sample_share_choices
+        ),
+        error = function(e) e
+      )
+      if (inherits(share_values, "error")) {
+        showNotification(
+          paste("Invalid sample sharing selection:", share_values$message),
+          type = "error"
+        )
+        return()
+      }
       sample_values <- list(
         location_id = location_id,
         sub_location_id = sub_location_id,
@@ -6504,6 +6824,10 @@ addDiscData <- function(id, language) {
         input$edit_sample_qualifiers
       ))
       qualifier_values <- unique(qualifier_values[!is.na(qualifier_values)])
+      observer_values <- suppressWarnings(as.integer(
+        input$edit_sample_observers
+      ))
+      observer_values <- unique(observer_values[!is.na(observer_values)])
       if (is.null(existing)) {
         current_manual_sample(current_manual_sample() + 1L)
         row <- addDiscData_empty_table()
@@ -6545,18 +6869,72 @@ addDiscData <- function(id, language) {
         for (nm in names(sample_values)) {
           data$df[[nm]][ix] <- sample_values[[nm]]
         }
+        location_changed <- !identical(
+          location_id,
+          addDiscData_int(existing$location_id[[1]])
+        ) || !identical(
+          sub_location_id,
+          addDiscData_int(existing$sub_location_id[[1]])
+        )
         data$df$location_mapping_status[ix] <- if (is_blank_sample) {
           "blank sample; location not required"
+        } else if (location_changed) {
+          "sample location override"
         } else {
-          "edited in preview"
+          as.character(existing$location_mapping_status[[1]])
         }
         showNotification("Sample metadata updated.", type = "message")
       }
       qualifier_state <- sample_qualifier_map()
       qualifier_state[[key]] <- qualifier_values
       sample_qualifier_map(qualifier_state)
+      observer_state <- sample_observer_map()
+      observer_state[[key]] <- observer_values
+      sample_observer_map(observer_state)
+      share_state <- sample_share_map()
+      share_state[[key]] <- share_values
+      sample_share_map(share_state)
       pending_sample_group(NULL)
     })
+
+    observeEvent(
+      input$apply_sample_share_with,
+      {
+        share_values <- tryCatch(
+          addDiscData_share_selection(
+            input$edit_sample_share_with,
+            sample_share_choices
+          ),
+          error = function(e) e
+        )
+        if (inherits(share_values, "error")) {
+          showNotification(
+            paste("Invalid sample sharing selection:", share_values$message),
+            type = "error"
+          )
+          return()
+        }
+        sample_keys <- unique(as.character(data$df$sample_key))
+        sample_keys <- sample_keys[!is.na(sample_keys) & nzchar(sample_keys)]
+        if (!length(sample_keys)) {
+          showNotification(
+            "There are no samples in the current upload to update.",
+            type = "warning"
+          )
+          return()
+        }
+        share_state <- sample_share_map()
+        for (key in sample_keys) {
+          share_state[[key]] <- share_values
+        }
+        sample_share_map(share_state)
+        showNotification(
+          sprintf("Applied sharing to %s sample(s).", length(sample_keys)),
+          type = "message"
+        )
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$add_manual_result, {
       req(input$manual_parameter)
@@ -6713,6 +7091,24 @@ addDiscData <- function(id, language) {
           df$sub_location_id,
           sub_locations$sub_location_id
         )
+        observer_state <- sample_observer_map()
+        observer_rows <- observers()
+        observer_labels <- addDiscData_observer_labels(observer_rows)
+        observer_summary <- vapply(
+          df$sample_key,
+          function(key) {
+            if (is.na(key) || !nzchar(as.character(key))) {
+              return("")
+            }
+            ids <- observer_state[[as.character(key)]]
+            if (!length(ids)) {
+              return("")
+            }
+            index <- match(as.integer(ids), observer_rows$observer_id)
+            paste(observer_labels[index[!is.na(index)]], collapse = ", ")
+          },
+          character(1)
+        )
         summary <- data.frame(
           `Source sample` = df$source_sample_id,
           `Source location` = df$source_location_name,
@@ -6733,6 +7129,7 @@ addDiscData <- function(id, language) {
           `Sample group` = addDiscData_sample_group_labels(group_rows)[
             group_index
           ],
+          `Sampler(s)` = observer_summary,
           `Collection method` = addDiscData_lookup_label(
             df$collection_method,
             collection_methods,
@@ -6792,6 +7189,28 @@ addDiscData <- function(id, language) {
         row$collection_method <- 27L
         row$sample_type <- 34L
         row$owner <- 1L
+      }
+      current_sample_key <- as.character(row$sample_key[[1]])
+      sample_key_present <- length(current_sample_key) == 1L &&
+        !is.na(current_sample_key) &&
+        nzchar(current_sample_key)
+      selected_qualifiers <- if (sample_key_present) {
+        sample_qualifier_map()[[current_sample_key]]
+      } else {
+        integer()
+      }
+      selected_observers <- if (sample_key_present) {
+        sample_observer_map()[[current_sample_key]]
+      } else {
+        integer()
+      }
+      selected_share <- if (sample_key_present) {
+        sample_share_map()[[current_sample_key]]
+      } else {
+        "public_reader"
+      }
+      if (is.null(selected_share) || !length(selected_share)) {
+        selected_share <- "public_reader"
       }
       location_choices <- addDiscData_location_choices(
         locations(),
@@ -6895,6 +7314,9 @@ addDiscData <- function(id, language) {
               )
             )
           )
+        ),
+        helpText(
+          "Changing this location updates this sample only. To reuse a source label mapping, save it deliberately in the Location mappings editor."
         ),
         fluidRow(
           column(
@@ -7139,7 +7561,54 @@ addDiscData <- function(id, language) {
             sample_qualifiers$qualifier_type_id,
             sample_qualifiers$qualifier_type_description
           ),
-          selected = as.character(sample_qualifier_map()[[row$sample_key[[1]]]])
+          selected = as.character(selected_qualifiers)
+        ),
+        selectizeInput(
+          ns("edit_sample_observers"),
+          "Sampler(s)",
+          multiple = TRUE,
+          choices = observer_choices(shiny::isolate(observers())),
+          selected = as.character(selected_observers),
+          options = list(
+            placeholder = "Select one or more samplers",
+            plugins = list("remove_button"),
+            dropdownParent = "body"
+          )
+        ),
+        actionButton(
+          ns("open_create_observer"),
+          "Create new observer"
+        ),
+        fluidRow(
+          column(
+            8,
+            selectizeInput(
+              ns("edit_sample_share_with"),
+              "Visible to",
+              choices = sample_share_choices,
+              selected = selected_share,
+              multiple = TRUE,
+              options = list(
+                placeholder = "All users",
+                plugins = list("remove_button"),
+                dropdownParent = "body"
+              )
+            )
+          ),
+          column(
+            4,
+            tags$div(
+              style = "padding-top: 25px;",
+              actionButton(
+                ns("apply_sample_share_with"),
+                "Apply to all samples",
+                title = "Use this sharing selection for every sample in the current upload"
+              )
+            )
+          )
+        ),
+        helpText(
+          "New samples are visible to all users by default. To restrict visibility, remove All users and select access groups, then save this sample. Use Apply to all samples to set the same sharing for the current upload."
         ),
         actionButton(
           ns("save_sample"),
@@ -7524,6 +7993,9 @@ addDiscData <- function(id, language) {
             )
           )
         ),
+        helpText(
+          "A sample fraction or speciation is required when the selected AquaCache parameter requires it."
+        ),
         fluidRow(
           column(
             4,
@@ -7561,9 +8033,13 @@ addDiscData <- function(id, language) {
         matrix_states
       )
       if (!length(unit) || !addDiscData_present(unit[[1]])) {
-        return("Target unit: not configured")
+        return("AquaCache target unit: not configured")
       }
-      paste("Target unit:", unit[[1]])
+      paste(
+        "AquaCache target unit:",
+        unit[[1]],
+        ". MAKE SURE THIS MATCHES THE SOURCE UNIT!"
+      )
     })
 
     observeEvent(input$save_parameter_mappings, {
@@ -7581,6 +8057,17 @@ addDiscData <- function(id, language) {
           if (is.na(parameter_id)) {
             stop("Select an AquaCache parameter before saving.")
           }
+          sample_fraction_id <- addDiscData_int(
+            input$mapping_sample_fraction
+          )
+          result_speciation_id <- addDiscData_int(
+            input$mapping_result_speciation
+          )
+          validate_parameter_mapping_descriptors(
+            parameter_id,
+            sample_fraction_id,
+            result_speciation_id
+          )
           conversion <- addDiscData_num(input$mapping_conversion)
           result_offset <- addDiscData_num(input$mapping_result_offset)
           if (is.na(conversion) || !is.finite(conversion)) {
@@ -7596,16 +8083,12 @@ addDiscData <- function(id, language) {
             config = session$userData$config,
             parameter_id = parameter_id,
             result_type = addDiscData_int(input$mapping_result_type, 2L),
-            sample_fraction_id = addDiscData_int(
-              input$mapping_sample_fraction
-            ),
+            sample_fraction_id = sample_fraction_id,
             result_value_type = addDiscData_int(
               input$mapping_result_value_type,
               1L
             ),
-            result_speciation_id = addDiscData_int(
-              input$mapping_result_speciation
-            ),
+            result_speciation_id = result_speciation_id,
             matrix_state_id = addDiscData_int(input$mapping_matrix_state, 1L),
             conversion = conversion,
             result_offset = result_offset
@@ -8250,6 +8733,7 @@ addDiscData <- function(id, language) {
             tags$th("Longitude *"),
             tags$th("Network(s)"),
             tags$th("Project(s)"),
+            tags$th("Visible to"),
             tags$th(
               "Note",
               title = "Optional location-level context, such as access or site details. Use a sample or result note for observations about collected data.",
@@ -8318,6 +8802,19 @@ addDiscData <- function(id, language) {
                 options = list(
                   dropdownParent = "body",
                   placeholder = "Optional; select any"
+                ),
+                width = "180px"
+              )),
+              tags$td(selectizeInput(
+                input_id("share_with", i),
+                NULL,
+                choices = location_share_choices,
+                selected = "public_reader",
+                multiple = TRUE,
+                options = list(
+                  dropdownParent = "body",
+                  placeholder = "All users",
+                  plugins = list("remove_button")
                 ),
                 width = "180px"
               )),
@@ -8654,14 +9151,6 @@ addDiscData <- function(id, language) {
           )
           return()
         }
-        if (!nzchar(location_write_share_role)) {
-          showNotification(
-            "No internal location access group is available for this account. Create the location under Locations -> Add/modify locations so its sharing can be set explicitly.",
-            type = "error"
-          )
-          return()
-        }
-
         read_text <- function(field, row, default = "") {
           value <- input[[paste0("new_location_", field, "_", row)]]
           if (is.null(value) || !length(value) || is.na(value[[1]])) {
@@ -8681,6 +9170,12 @@ addDiscData <- function(id, language) {
             stop("A selected network or project has an invalid ID.")
           }
           unique(ids)
+        }
+        read_share <- function(row) {
+          addDiscData_share_selection(
+            input[[paste0("new_location_share_with_", row)]],
+            location_share_choices
+          )
         }
         names <- vapply(
           seq_along(sources),
@@ -8730,6 +9225,17 @@ addDiscData <- function(id, language) {
             read_ids("project", i)
           }
         )
+        shares <- tryCatch(
+          lapply(seq_along(sources), read_share),
+          error = function(e) e
+        )
+        if (inherits(shares, "error")) {
+          showNotification(
+            paste("Invalid location sharing selection:", shares$message),
+            type = "error"
+          )
+          return()
+        }
         primary_networks <- vapply(
           networks,
           function(ids) if (length(ids)) ids[[1]] else NA_integer_,
@@ -8808,7 +9314,11 @@ addDiscData <- function(id, language) {
           location_code = rep(NA_character_, length(sources)),
           latitude = latitude,
           longitude = longitude,
-          share_with = rep(location_write_share_role, length(sources)),
+          share_with = vapply(
+            shares,
+            function(groups) paste(groups, collapse = ","),
+            character(1)
+          ),
           location_type = types,
           note = notes,
           contact = rep(NA_character_, length(sources)),
@@ -9530,6 +10040,32 @@ addDiscData <- function(id, language) {
               call. = FALSE
             )
           }
+          observer_state <- sample_observer_map()
+          sample_keys <- unique(as.character(df$sample_key))
+          has_observers <- any(vapply(
+            sample_keys,
+            function(key) length(observer_state[[key]]) > 0L,
+            logical(1)
+          ))
+          if (
+            has_observers &&
+              !isTRUE(observer_permissions$can_assign_observers[[1]])
+          ) {
+            stop(
+              "Your database role cannot assign sample observers.",
+              call. = FALSE
+            )
+          }
+          sample_share_state <- sample_share_map()
+          sample_keys <- unique(as.character(df$sample_key))
+          sample_keys <- sample_keys[!is.na(sample_keys) & nzchar(sample_keys)]
+          sample_share_with <- lapply(sample_keys, function(key) {
+            addDiscData_share_selection(
+              sample_share_state[[key]],
+              sample_share_choices
+            )
+          })
+          names(sample_share_with) <- sample_keys
           file <- if (is.null(input$file)) {
             NULL
           } else {
@@ -9564,6 +10100,8 @@ addDiscData <- function(id, language) {
             profile = profile,
             field_visit_id = addDiscData_int(input$field_visit_id),
             sample_qualifiers = sample_qualifier_map(),
+            sample_observers = sample_observer_map(),
+            sample_share_with = sample_share_with,
             locations = locations(),
             sub_locations = sub_locations
           )
@@ -9618,6 +10156,10 @@ addDiscData <- function(id, language) {
       data$raw_file_path <- NULL
       data$preview_profile_key <- NULL
       data$preview_is_stale <- FALSE
+      sample_qualifier_map(list())
+      sample_observer_map(list())
+      sample_share_map(list())
+      selected_sample_key(NULL)
       showModal(
         modalDialog(
           title = "Upload complete",
