@@ -20,11 +20,16 @@ AquaCacheReport(
   include_map = FALSE,
   map_path = NULL,
   lang = c("en", "fr"),
-  con = NULL
+  con = NULL,
+  format = c("by_date", "by_location", "by_parameter"),
+  matrix_state_ids = NULL,
+  sample_fraction_ids = NULL
 )
 }
 \arguments{
-\item{date}{One sample date, supplied as a \code{Date} or \code{YYYY-MM-DD} string.}
+\item{date}{One or more target sample dates, supplied as \code{Date} values or
+\code{YYYY-MM-DD} strings. The report layout controls whether dates are written
+to separate worksheets or to columns.}
 
 \item{location_ids}{AquaCache location IDs to include.}
 
@@ -36,9 +41,10 @@ are created when needed.}
 \item{guideline_ids}{Optional AquaCache guideline IDs to evaluate. Only
 active, approved guideline versions valid on each sample date are applied.}
 
-\item{date_approx}{Maximum days before or after \code{date} to search when a
-location has no eligible sample on the requested date. The closest sample
-date is selected for that location; ties prefer the later date.}
+\item{date_approx}{Maximum days before or after each target date to search
+when a location has no eligible sample on that date. Supply one value to
+use it for all dates, or one value per \code{date}. The closest sample date is
+selected for each location and target date; ties prefer the later date.}
 
 \item{include_blanks}{Include samples whose sample type contains "blank".}
 
@@ -66,16 +72,39 @@ file named from \code{output_path}.}
 
 \item{con}{Optional AquaCache DBI connection. A connection created by this
 function is closed on exit; a caller-supplied connection remains open.}
+
+\item{format}{Workbook layout. One of \code{"by_date"} (locations as columns,
+parameters as rows, one worksheet per date), \code{"by_location"} (parameters
+as rows, dates as columns, one worksheet per location), or
+\code{"by_parameter"} (locations as rows, dates as columns, one worksheet per
+parameter).}
+
+\item{matrix_state_ids}{Optional matrix-state IDs to include. \code{NULL} or an
+empty vector includes every matrix state.}
+
+\item{sample_fraction_ids}{Optional sample-fraction IDs to include. \code{NULL} or
+an empty vector includes every sample fraction.}
 }
 \value{
 An invisible list with \code{xlsx_path}, \code{map_path}, \code{map_assets_path}
-(when a non-self-contained map is written), and the number of result rows.
+(when a non-self-contained map is written), the number of included result
+rows, and \code{reused_sample_count} for samples selected for multiple target
+dates.
 }
 \description{
-Creates an Excel report from AquaCache discrete results. The first sheet
-follows the parameter-by-sample layout used by \code{\link[=EQWinReport]{EQWinReport()}}, followed by
-filterable result details and a guideline audit sheet. When requested, a
-separate HTML map is written for locations represented in the report.
+Creates an Excel report from AquaCache discrete results. The report
+worksheet layout can place dates, locations, or parameters on separate tabs;
+filterable result details and a guideline audit sheet follow the report
+tabs. When requested, a separate HTML map is written for report locations.
+}
+\details{
+Approximate sample selection is performed separately for each target date
+and location. If this selects one sample for multiple dates, the function
+warns and reports the reuse count; each result detail row includes both its
+requested and actual sample dates. Optional matrix-state and sample-fraction
+filters are applied when finding the closest eligible sample, then retained
+in the report matrix and result details. Result speciation is shown in the
+report whenever it is recorded for a measurement.
 }
 \examples{
 \dontrun{

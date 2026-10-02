@@ -1,21 +1,33 @@
 #' Create an AquaCache water quality report
 #'
 #' @description
-#' Creates an Excel report from AquaCache discrete results. The first sheet
-#' follows the parameter-by-sample layout used by [EQWinReport()], followed by
-#' filterable result details and a guideline audit sheet. When requested, a
-#' separate HTML map is written for locations represented in the report.
+#' Creates an Excel report from AquaCache discrete results. The report
+#' worksheet layout can place dates, locations, or parameters on separate tabs;
+#' filterable result details and a guideline audit sheet follow the report
+#' tabs. When requested, a separate HTML map is written for report locations.
 #'
-#' @param date One sample date, supplied as a `Date` or `YYYY-MM-DD` string.
+#' @details
+#' Approximate sample selection is performed separately for each target date
+#' and location. If this selects one sample for multiple dates, the function
+#' warns and reports the reuse count; each result detail row includes both its
+#' requested and actual sample dates. Optional matrix-state and sample-fraction
+#' filters are applied when finding the closest eligible sample, then retained
+#' in the report matrix and result details. Result speciation is shown in the
+#' report whenever it is recorded for a measurement.
+#'
+#' @param date One or more target sample dates, supplied as `Date` values or
+#'   `YYYY-MM-DD` strings. The report layout controls whether dates are written
+#'   to separate worksheets or to columns.
 #' @param location_ids AquaCache location IDs to include.
 #' @param parameter_ids AquaCache parameter IDs to include.
 #' @param output_path Full path for the `.xlsx` output file. Parent directories
 #'   are created when needed.
 #' @param guideline_ids Optional AquaCache guideline IDs to evaluate. Only
 #'   active, approved guideline versions valid on each sample date are applied.
-#' @param date_approx Maximum days before or after `date` to search when a
-#'   location has no eligible sample on the requested date. The closest sample
-#'   date is selected for that location; ties prefer the later date.
+#' @param date_approx Maximum days before or after each target date to search
+#'   when a location has no eligible sample on that date. Supply one value to
+#'   use it for all dates, or one value per `date`. The closest sample date is
+#'   selected for each location and target date; ties prefer the later date.
 #' @param include_blanks Include samples whose sample type contains "blank".
 #' @param include_duplicates Include samples whose sample type contains
 #'   "duplicate" or "replicate".
@@ -28,14 +40,25 @@
 #' @param sd_day_of_year Optional day-of-year values included in the SD
 #'   calculation, from 1 to 366.
 #' @param include_map Write an HTML map of locations with report results.
+#' @param format Workbook layout. One of `"by_date"` (locations as columns,
+#'   parameters as rows, one worksheet per date), `"by_location"` (parameters
+#'   as rows, dates as columns, one worksheet per location), or
+#'   `"by_parameter"` (locations as rows, dates as columns, one worksheet per
+#'   parameter).
 #' @param map_path Optional full path for the map HTML. Defaults to a sibling
 #'   file named from `output_path`.
 #' @param lang Language for location and parameter labels (`"en"` or `"fr"`).
 #' @param con Optional AquaCache DBI connection. A connection created by this
 #'   function is closed on exit; a caller-supplied connection remains open.
+#' @param matrix_state_ids Optional matrix-state IDs to include. `NULL` or an
+#'   empty vector includes every matrix state.
+#' @param sample_fraction_ids Optional sample-fraction IDs to include. `NULL` or
+#'   an empty vector includes every sample fraction.
 #'
 #' @return An invisible list with `xlsx_path`, `map_path`, `map_assets_path`
-#'   (when a non-self-contained map is written), and the number of result rows.
+#'   (when a non-self-contained map is written), the number of included result
+#'   rows, and `reused_sample_count` for samples selected for multiple target
+#'   dates.
 #' @export
 #'
 #' @examples
@@ -65,17 +88,25 @@ AquaCacheReport <- function(
   include_map = FALSE,
   map_path = NULL,
   lang = c("en", "fr"),
-  con = NULL
+  con = NULL,
+  format = c("by_date", "by_location", "by_parameter"),
+  matrix_state_ids = NULL,
+  sample_fraction_ids = NULL
 ) {
   lang <- match.arg(lang)
-  if (!inherits(date, "Date")) {
-    if (!is.character(date) || length(date) != 1L) {
-      stop("'date' must be one Date value or YYYY-MM-DD string.", call. = FALSE)
-    }
-    date <- tryCatch(as.Date(date), error = function(e) as.Date(NA))
+  report_format <- match.arg(format)
+  if (inherits(date, "Date")) {
+    date <- as.Date(date)
+  } else if (is.character(date) && length(date) && !anyNA(date)) {
+    date <- tryCatch(as.Date(date), error = function(e) as.Date(rep(NA, length(date))))
+  } else {
+    stop("'date' must contain Date values or YYYY-MM-DD strings.", call. = FALSE)
   }
-  if (length(date) != 1L || is.na(date)) {
-    stop("'date' must be one valid date.", call. = FALSE)
+  if (!length(date) || anyNA(date)) {
+    stop("'date' must contain one or more valid dates.", call. = FALSE)
+  }
+  if (anyDuplicated(date)) {
+    stop("'date' must not contain duplicate dates.", call. = FALSE)
   }
   validate_ids <- function(x, name, optional = FALSE) {
     if (optional && (is.null(x) || length(x) == 0L)) return(integer())
@@ -91,13 +122,21 @@ AquaCacheReport <- function(
   }
   location_ids <- validate_ids(location_ids, "location_ids")
   parameter_ids <- validate_ids(parameter_ids, "parameter_ids")
+  matrix_state_ids <- validate_ids(
+    matrix_state_ids, "matrix_state_ids", optional = TRUE
+  )
+  sample_fraction_ids <- validate_ids(
+    sample_fraction_ids, "sample_fraction_ids", optional = TRUE
+  )
   guideline_ids <- validate_ids(guideline_ids, "guideline_ids", optional = TRUE)
-  if (!is.numeric(date_approx) || length(date_approx) != 1L ||
-      is.na(date_approx) || !is.finite(date_approx) || date_approx < 0 ||
-      date_approx != trunc(date_approx)) {
-    stop("'date_approx' must be one non-negative integer.", call. = FALSE)
+  if (!is.numeric(date_approx) || !length(date_approx) ||
+      anyNA(date_approx) || any(!is.finite(date_approx)) ||
+      any(date_approx < 0) || any(date_approx > .Machine$integer.max) ||
+      any(date_approx != trunc(date_approx)) ||
+      !(length(date_approx) %in% c(1L, length(date)))) {
+    stop("'date_approx' must be one non-negative integer or one per date.", call. = FALSE)
   }
-  date_approx <- as.integer(date_approx)
+  date_approx <- rep(as.integer(date_approx), length.out = length(date))
   for (flag in c("include_blanks", "include_duplicates", "include_map")) {
     value <- get(flag)
     if (!is.logical(value) || length(value) != 1L || is.na(value)) {
@@ -164,7 +203,16 @@ AquaCacheReport <- function(
   ))
   location_json <- id_json(location_ids)
   parameter_json <- id_json(parameter_ids)
-  requested_date <- format(date, "%Y-%m-%d")
+  matrix_state_json <- id_json(matrix_state_ids)
+  sample_fraction_json <- id_json(sample_fraction_ids)
+  date_request_json <- as.character(jsonlite::toJSON(
+    data.frame(
+      requested_date = format(date, "%Y-%m-%d"),
+      date_approx = date_approx
+    ),
+    dataframe = "rows",
+    auto_unbox = TRUE
+  ))
   requested_locations <- DBI::dbGetQuery(
     con,
     paste0(
@@ -187,7 +235,7 @@ AquaCacheReport <- function(
   requested_parameters <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT parameter_id FROM public.parameters ",
+      "SELECT parameter_id, param_name, param_name_fr FROM public.parameters ",
       "WHERE parameter_id IN (SELECT value::integer ",
       "FROM jsonb_array_elements_text($1::jsonb))"
     ),
@@ -211,31 +259,46 @@ AquaCacheReport <- function(
     matrix_state_alias = "r"
   )
   result_sql <- paste0(
-    "WITH candidates AS (\n",
-    "  SELECT s.location_id, s.datetime::date AS sample_date\n",
-    "  FROM discrete.samples s\n",
+    "WITH date_requests AS (\n",
+    "  SELECT requested_date, date_approx\n",
+    "  FROM jsonb_to_recordset($3::jsonb) AS d(requested_date date, date_approx integer)\n",
+    "), candidates AS (\n",
+    "  SELECT d.requested_date, d.date_approx, s.location_id,\n",
+    "    s.datetime::date AS sample_date\n",
+    "  FROM date_requests d\n",
+    "  JOIN discrete.samples s ON s.datetime::date BETWEEN\n",
+    "    d.requested_date - d.date_approx AND d.requested_date + d.date_approx\n",
     "  LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
     "  WHERE s.location_id IN (SELECT value::integer FROM jsonb_array_elements_text($1::jsonb))\n",
-    "    AND s.datetime::date BETWEEN $3::date - $4::integer AND $3::date + $4::integer\n",
-    "    AND ($5::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')\n",
-    "    AND ($6::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')\n",
+    "    AND ($4::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')\n",
+    "    AND ($5::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')\n",
+    "    AND EXISTS (SELECT 1 FROM discrete.results er\n",
+    "      WHERE er.sample_id = s.sample_id\n",
+    "        AND er.parameter_id IN (SELECT value::integer FROM jsonb_array_elements_text($2::jsonb))\n",
+    "        AND (jsonb_array_length($6::jsonb) = 0 OR er.matrix_state_id IN\n",
+    "          (SELECT value::integer FROM jsonb_array_elements_text($6::jsonb)))\n",
+    "        AND (jsonb_array_length($7::jsonb) = 0 OR er.sample_fraction_id IN\n",
+    "          (SELECT value::integer FROM jsonb_array_elements_text($7::jsonb))))\n",
     "), best_dates AS (\n",
-    "  SELECT DISTINCT ON (location_id) location_id, sample_date\n",
+    "  SELECT DISTINCT ON (requested_date, location_id)\n",
+    "    requested_date, date_approx, location_id, sample_date\n",
     "  FROM candidates\n",
-    "  ORDER BY location_id, abs(sample_date - $3::date),\n",
-    "    (sample_date >= $3::date) DESC, sample_date\n",
+    "  ORDER BY requested_date, location_id,\n",
+    "    abs(sample_date - requested_date),\n",
+    "    (sample_date >= requested_date) DESC, sample_date\n",
     "), selected_samples AS (\n",
-    "  SELECT s.* FROM discrete.samples s\n",
+    "  SELECT s.*, b.requested_date, b.date_approx FROM discrete.samples s\n",
     "  JOIN best_dates b ON b.location_id = s.location_id\n",
     "    AND b.sample_date = s.datetime::date\n",
     "  LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
-    "  WHERE ($5::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')\n",
-    "    AND ($6::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')\n",
+    "  WHERE ($4::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')\n",
+    "    AND ($5::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')\n",
     ")\n",
     "SELECT r.result_id, s.sample_id, s.location_id, l.location_code AS location,\n",
     "  l.alias, l.name AS location_name, l.name_fr AS location_name_fr,\n",
     "  l.latitude, l.longitude, s.sub_location_id, sl.sub_location_name,\n",
-    "  sl.sub_location_name_fr, s.datetime::date AS sample_date, s.datetime,\n",
+    "  sl.sub_location_name_fr, s.requested_date, s.date_approx,\n",
+    "  s.datetime::date AS sample_date, s.datetime,\n",
     "  s.target_datetime, s.media_id, mt.media_type, mt.media_type_fr,\n",
     "  s.sample_type AS sample_type_id, st.sample_type, s.collection_method AS collection_method_id,\n",
     "  cm.collection_method, r.parameter_id, p.param_name, p.param_name_fr,\n",
@@ -266,18 +329,35 @@ AquaCacheReport <- function(
     "LEFT JOIN public.grade_types gt ON gt.grade_type_id = r.grade_type_id\n",
     "LEFT JOIN public.approval_types at ON at.approval_type_id = r.approval_type_id\n",
     "WHERE r.parameter_id IN (SELECT value::integer FROM jsonb_array_elements_text($2::jsonb))\n",
-    "ORDER BY l.location_code, s.datetime, s.sample_id, p.param_name, r.result_id;"
+    "  AND (jsonb_array_length($6::jsonb) = 0 OR r.matrix_state_id IN\n",
+    "    (SELECT value::integer FROM jsonb_array_elements_text($6::jsonb)))\n",
+    "  AND (jsonb_array_length($7::jsonb) = 0 OR r.sample_fraction_id IN\n",
+    "    (SELECT value::integer FROM jsonb_array_elements_text($7::jsonb)))\n",
+    "ORDER BY s.requested_date, l.location_code, s.datetime, s.sample_id, p.param_name, r.result_id;"
   )
   results <- DBI::dbGetQuery(
     con,
     result_sql,
     params = list(
-      location_json, parameter_json, requested_date, date_approx,
-      include_blanks, include_duplicates
+      location_json, parameter_json, date_request_json,
+      include_blanks, include_duplicates, matrix_state_json,
+      sample_fraction_json
     )
   )
   if (nrow(results) == 0L) {
-    stop("No results matched the selected locations, parameters, and sample date.", call. = FALSE)
+    stop("No results matched the selected locations, parameters, and target dates.", call. = FALSE)
+  }
+  results$requested_date <- as.Date(results$requested_date)
+  selected_date_pairs <- unique(results[c("sample_id", "requested_date")])
+  repeated_samples <- unique(
+    selected_date_pairs$sample_id[duplicated(selected_date_pairs$sample_id)]
+  )
+  if (length(repeated_samples)) {
+    warning(
+      "Closest-date matching selected the same sample for multiple requested dates; it will appear in ",
+      if (report_format == "by_date") "multiple date worksheets." else "multiple date columns.",
+      call. = FALSE
+    )
   }
   results$location_label <- if (lang == "fr") {
     ifelse(is.na(results$location_name_fr), results$location_name, results$location_name_fr)
@@ -398,7 +478,7 @@ AquaCacheReport <- function(
       data.frame(
         result_id = as.integer(results$result_id),
         sample_date = format(as.Date(results$sample_date), "%Y-%m-%d")
-      ),
+      ) |> unique(),
       dataframe = "rows",
       auto_unbox = TRUE,
       na = "null"
@@ -669,100 +749,89 @@ AquaCacheReport <- function(
     results$guideline_assessments <- ""
   }
 
-  # Assemble the matrix sheet, with one row per parameter and result context.
+  # Assemble the matrix sheets, with one row per parameter/result context or
+  # location/result context, depending on the selected layout.
   param_key_columns <- c(
     "parameter_id", "matrix_state_id", "sample_fraction_id",
     "result_speciation_id", "units"
   )
-  param_groups <- unique(results[c(
-    param_key_columns, "parameter_label", "matrix_label",
-    "sample_fraction", "result_speciation"
-  )])
-  param_groups <- param_groups[order(
-    match(param_groups$parameter_id, parameter_ids),
-    param_groups$matrix_state_id,
-    param_groups$sample_fraction_id,
-    param_groups$result_speciation_id,
-    na.last = TRUE
-  ), , drop = FALSE]
-  matrix_key <- function(x) do.call(paste, c(
-    lapply(x[param_key_columns], function(value) {
+  make_matrix_key <- function(x, columns) do.call(paste, c(
+    lapply(x[columns], function(value) {
       value <- as.character(value)
       value[is.na(value)] <- "<NA>"
       value
     }),
     sep = "\034"
   ))
-  param_groups$row_key <- matrix_key(param_groups)
-  sample_meta <- unique(results[c(
-    "sample_id", "location", "sub_location_label", "sample_date", "datetime"
+  all_param_groups <- unique(results[c(
+    param_key_columns, "parameter_label", "matrix_label",
+    "sample_fraction", "result_speciation"
   )])
-  sample_meta <- sample_meta[order(sample_meta$location, sample_meta$datetime), , drop = FALSE]
-  sample_headers <- paste0(
-    sample_meta$location,
-    ifelse(
-      is.na(sample_meta$sub_location_label) | !nzchar(sample_meta$sub_location_label),
-      "", paste0(" - ", sample_meta$sub_location_label)
-    ),
-    " (",
-    format(sample_meta$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"), " UTC)"
-  )
-  sample_headers <- make.unique(sample_headers, sep = " #")
+  all_param_groups <- all_param_groups[order(
+    match(all_param_groups$parameter_id, parameter_ids),
+    all_param_groups$matrix_state_id,
+    all_param_groups$sample_fraction_id,
+    all_param_groups$result_speciation_id,
+    na.last = TRUE
+  ), , drop = FALSE]
+  all_param_groups$row_key <- make_matrix_key(all_param_groups, param_key_columns)
+  results$result_row_key <- make_matrix_key(results, param_key_columns)
 
-  matrix_report <- data.frame(
-    Parameter = param_groups$parameter_label,
-    check.names = FALSE,
-    stringsAsFactors = FALSE
+  report_tabs <- if (report_format == "by_date") {
+    lapply(seq_along(date), function(i) list(
+      id = date[[i]],
+      base_name = if (length(date) == 1L) "Report" else format(date[[i]], "%Y-%m-%d"),
+      result_rows = which(results$requested_date == date[[i]])
+    ))
+  } else if (report_format == "by_location") {
+    lapply(location_ids, function(id) {
+      meta <- requested_locations[requested_locations$location_id == id, , drop = FALSE]
+      location <- if (nrow(meta)) as.character(meta$location_code[[1]]) else paste0("Location ", id)
+      list(
+        id = id,
+        base_name = if (length(location_ids) == 1L) "Report" else location,
+        result_rows = which(results$location_id == id)
+      )
+    })
+  } else {
+    lapply(parameter_ids, function(id) {
+      meta <- requested_parameters[requested_parameters$parameter_id == id, , drop = FALSE]
+      parameter <- if (nrow(meta)) as.character(meta$param_name[[1]]) else paste0("Parameter ", id)
+      if (nrow(meta) && lang == "fr" && !is.na(meta$param_name_fr[[1]]) &&
+          nzchar(meta$param_name_fr[[1]])) {
+        parameter <- as.character(meta$param_name_fr[[1]])
+      }
+      list(
+        id = id,
+        base_name = if (length(parameter_ids) == 1L) "Report" else parameter,
+        result_rows = which(results$parameter_id == id)
+      )
+    })
+  }
+  make_sheet_names <- function(values, reserved = character()) {
+    for (invalid in c("/", "\\", "?", "*", "[", "]", ":")) {
+      values <- gsub(invalid, " ", values, fixed = TRUE)
+    }
+    values <- trimws(substr(values, 1L, 31L))
+    values[!nzchar(values)] <- "Report"
+    used <- reserved
+    for (i in seq_along(values)) {
+      candidate <- values[[i]]
+      suffix <- 1L
+      while (tolower(candidate) %in% tolower(used)) {
+        suffix <- suffix + 1L
+        ending <- paste0(" (", suffix, ")")
+        candidate <- paste0(substr(values[[i]], 1L, 31L - nchar(ending)), ending)
+      }
+      values[[i]] <- candidate
+      used <- c(used, candidate)
+    }
+    values
+  }
+  report_sheet_names <- make_sheet_names(
+    vapply(report_tabs, `[[`, character(1), "base_name"),
+    reserved = c("Result details", "Guideline details")
   )
-  guideline_column_names <- character()
-  if (length(guideline_ids)) {
-    for (i in seq_len(nrow(guideline_catalog))) {
-      meta <- guideline_catalog[i, , drop = FALSE]
-      label <- paste0(
-        if (is.na(meta$guideline_code) || !nzchar(meta$guideline_code)) {
-          paste0("Guideline ", meta$guideline_id)
-        } else meta$guideline_code,
-        " - ", meta$guideline_name
-      )
-      col_name <- paste0(label, " (limit)")
-      guideline_column_names <- c(guideline_column_names, col_name)
-      values <- rep("No applicable result", nrow(param_groups))
-      if (nrow(guideline_summary)) {
-        guide_rows <- guideline_summary[
-          guideline_summary$guideline_id == meta$guideline_id,
-          , drop = FALSE
-        ]
-        if (nrow(guide_rows)) {
-          for (j in seq_len(nrow(param_groups))) {
-            limits <- unique(guide_rows$limit_display[guide_rows$row_key == param_groups$row_key[[j]]])
-            limits <- limits[!is.na(limits) & nzchar(limits)]
-            if (length(limits) == 1L) values[[j]] <- limits
-            if (length(limits) > 1L) values[[j]] <- "Varies by sample; see Guideline details"
-          }
-        }
-      }
-      matrix_report[[col_name]] <- values
-    }
-  }
-  matrix_report$Unit <- param_groups$units
-  matrix_report$Matrix <- param_groups$matrix_label
-  matrix_report$`Sample fraction` <- param_groups$sample_fraction
-  matrix_report$Speciation <- param_groups$result_speciation
-  matrix_report$`Parameter ID` <- param_groups$parameter_id
-  sample_column_names <- sample_headers
-  for (i in seq_along(sample_meta$sample_id)) {
-    values <- rep("", nrow(param_groups))
-    for (j in seq_len(nrow(param_groups))) {
-      cell_rows <- which(
-        results$sample_id == sample_meta$sample_id[[i]] &
-          results$result_row_key == param_groups$row_key[[j]]
-      )
-      if (length(cell_rows)) {
-        values[[j]] <- paste(unique(results$result_display[cell_rows]), collapse = "; ")
-      }
-    }
-    matrix_report[[sample_column_names[[i]]]] <- values
-  }
 
   # Format the two filterable detail tables with user-facing labels.
   result_details <- data.frame(
@@ -772,6 +841,8 @@ AquaCacheReport <- function(
     `Location code` = results$location,
     `Location name` = results$location_label,
     `Sub-location` = results$sub_location_label,
+    `Requested date` = results$requested_date,
+    `Date tolerance (days)` = results$date_approx,
     `Sample date (UTC)` = results$sample_date,
     `Sample datetime (UTC)` = results$datetime,
     `Target datetime (UTC)` = results$target_datetime,
@@ -808,98 +879,9 @@ AquaCacheReport <- function(
     result_details$`SD exceedance` <- results$sd_exceedance
   }
 
-  # Prepare the workbook in the same compact matrix style as the EQWin report.
+  # Prepare the report worksheets in the EQWin-style matrix layout.
   wb <- openxlsx::createWorkbook(title = "Water Quality Report")
   generated <- format(Sys.time(), "%Y-%m-%d %H:%M %Z")
-  report_title <- paste0(
-    "WQ report for AquaCache locations  ",
-    paste(unique(results$location), collapse = ", ")
-  )
-  date_note <- paste0("For ", requested_date)
-  if (date_approx > 0L) {
-    date_note <- paste0(
-      date_note, ". Locations without samples on this date may show the closest eligible sample within ",
-      date_approx, " day(s)."
-    )
-  }
-  flag_note <- if (length(guideline_ids)) {
-    paste0(
-      "Run with guideline IDs: ", paste(guideline_ids, collapse = ", "),
-      ". Guideline applicability is evaluated separately for each result."
-    )
-  } else {
-    "Run with no guideline flags."
-  }
-  if (!is.null(sd_multiplier)) {
-    sd_note <- paste0(
-      " SD exceedances above/below ", sd_multiplier,
-      " SD from mean (from ",
-      if (is.null(sd_start)) "start of records" else format(sd_start, "%Y-%m-%d"),
-      " to ",
-      if (is.null(sd_end)) "end of records" else format(sd_end, "%Y-%m-%d"),
-      if (is.null(sd_day_of_year)) " for all days of year" else paste0(
-        " on days of year ", paste(sd_day_of_year, collapse = ", ")
-      ),
-      "). Numeric results only; red outline marks a guideline failure or SD exceedance."
-    )
-    flag_note <- paste0(flag_note, sd_note)
-  } else {
-    flag_note <- paste0(flag_note, " Red outline marks a guideline failure.")
-  }
-
-  openxlsx::addWorksheet(wb, "Report", gridLines = FALSE)
-  report_last_col <- ncol(matrix_report)
-  openxlsx::writeData(wb, "Report", report_title, startRow = 1, colNames = FALSE)
-  openxlsx::writeData(
-    wb, "Report", paste0("Issued at ", generated),
-    startCol = report_last_col, startRow = 1, colNames = FALSE
-  )
-  openxlsx::writeData(wb, "Report", date_note, startRow = 2, colNames = FALSE)
-  openxlsx::writeData(
-    wb, "Report",
-    paste0("Created with R package YGwater ", utils::packageVersion("YGwater")),
-    startCol = report_last_col, startRow = 2, colNames = FALSE
-  )
-  openxlsx::writeData(wb, "Report", flag_note, startRow = 3, colNames = FALSE)
-  context_start <- 2L + length(guideline_column_names)
-  sample_start <- 7L + length(guideline_column_names)
-  context_end <- sample_start - 1L
-  if (length(guideline_ids)) {
-    guideline_start <- 2L
-    guideline_end <- 1L + nrow(guideline_catalog)
-    if (guideline_end >= guideline_start) {
-      openxlsx::writeData(wb, "Report", "Guidelines", startCol = guideline_start, startRow = 4, colNames = FALSE)
-    }
-  } else {
-    guideline_start <- 2L
-    guideline_end <- 1L
-  }
-  sample_end <- sample_start + length(sample_column_names) - 1L
-  openxlsx::writeData(
-    wb, "Report", "Parameter details",
-    startCol = context_start, startRow = 4, colNames = FALSE
-  )
-  openxlsx::writeData(wb, "Report", "Samples (date-time UTC)", startCol = sample_start, startRow = 4, colNames = FALSE)
-  openxlsx::writeData(
-    wb, "Report", matrix_report,
-    startRow = 5, withFilter = TRUE, keepNA = FALSE
-  )
-  for (row in 1:3) {
-    if (row < 3) {
-      openxlsx::mergeCells(wb, "Report", cols = 1:context_end, rows = row)
-    } else {
-      openxlsx::mergeCells(wb, "Report", cols = seq_len(report_last_col), rows = row)
-    }
-  }
-  if (length(guideline_column_names)) {
-    openxlsx::mergeCells(wb, "Report", cols = guideline_start:guideline_end, rows = 4)
-  }
-  if (context_end > context_start) {
-    openxlsx::mergeCells(wb, "Report", cols = context_start:context_end, rows = 4)
-  }
-  if (sample_end > sample_start) {
-    openxlsx::mergeCells(wb, "Report", cols = sample_start:sample_end, rows = 4)
-  }
   title_style <- openxlsx::createStyle(
     fgFill = "turquoise2", textDecoration = "bold", fontSize = 12,
     valign = "center"
@@ -919,80 +901,372 @@ AquaCacheReport <- function(
     fontColour = "black", border = "TopBottomLeftRight",
     borderColour = "red2", borderStyle = "medium"
   )
-  openxlsx::addStyle(wb, "Report", title_style, rows = 1:2, cols = seq_len(report_last_col), gridExpand = TRUE)
-  openxlsx::addStyle(wb, "Report", note_style, rows = 3, cols = seq_len(report_last_col), gridExpand = TRUE)
-  openxlsx::addStyle(wb, "Report", parameter_style, rows = 4:5, cols = 1, gridExpand = TRUE)
-  openxlsx::addStyle(wb, "Report", parameter_style, rows = 6:(5 + nrow(matrix_report)), cols = 1)
-  if (length(guideline_column_names)) {
-    openxlsx::addStyle(
-      wb, "Report", group_style, rows = 4:5,
-      cols = guideline_start:guideline_end, gridExpand = TRUE
+  format_note <- switch(
+    report_format,
+    by_date = "Each requested date has a separate worksheet; locations are columns.",
+    by_location = "Each location has a separate worksheet; target dates are columns.",
+    by_parameter = "Each parameter has a separate worksheet; locations are rows and target dates are columns."
+  )
+  flag_note <- if (length(guideline_ids)) {
+    paste0(
+      "Run with guideline IDs: ", paste(guideline_ids, collapse = ", "),
+      ". Guideline applicability is evaluated separately for each result."
     )
-    openxlsx::addStyle(
-      wb, "Report", limit_style, rows = 6:(5 + nrow(matrix_report)),
-      cols = guideline_start:guideline_end, gridExpand = TRUE
-    )
-  }
-  openxlsx::addStyle(
-    wb, "Report", group_style, rows = 4:5,
-    cols = context_start:context_end, gridExpand = TRUE
-  )
-  openxlsx::addStyle(
-    wb, "Report", limit_style, rows = 6:(5 + nrow(matrix_report)),
-    cols = context_start:context_end, gridExpand = TRUE
-  )
-  openxlsx::addStyle(
-    wb, "Report", sample_style, rows = 4:5,
-    cols = sample_start:sample_end, gridExpand = TRUE
-  )
-  openxlsx::addStyle(
-    wb, "Report", sample_data_style, rows = 6:(5 + nrow(matrix_report)),
-    cols = sample_start:sample_end, gridExpand = TRUE
-  )
-  openxlsx::setColWidths(wb, "Report", cols = 1, widths = 28)
-  if (length(guideline_column_names)) {
-    openxlsx::setColWidths(wb, "Report", cols = guideline_start:guideline_end, widths = 24)
-  }
-  openxlsx::setColWidths(wb, "Report", cols = context_start:context_end, widths = 15)
-  openxlsx::setColWidths(wb, "Report", cols = sample_start:sample_end, widths = 23)
-  openxlsx::setRowHeights(wb, "Report", rows = 1, heights = 24)
-  openxlsx::setRowHeights(wb, "Report", rows = 3, heights = 34)
-  openxlsx::setRowHeights(wb, "Report", rows = 4:5, heights = 32)
-  openxlsx::freezePane(wb, "Report", firstActiveRow = 6, firstActiveCol = sample_start)
-
-  if (nrow(guideline_summary)) {
-    summary_by_result <- split(seq_len(nrow(guideline_summary)), guideline_summary$result_id)
   } else {
-    summary_by_result <- list()
+    "Run with no guideline flags."
   }
-  exceed_rows <- integer()
-  exceed_cols <- integer()
-  for (i in seq_len(nrow(sample_meta))) {
-    for (j in seq_len(nrow(param_groups))) {
-      idx <- which(
-        results$sample_id == sample_meta$sample_id[[i]] &
-          results$result_row_key == param_groups$row_key[[j]]
+  if (!is.null(sd_multiplier)) {
+    flag_note <- paste0(
+      flag_note, " SD exceedances above/below ", sd_multiplier,
+      " SD from mean (from ",
+      if (is.null(sd_start)) "start of records" else format(sd_start, "%Y-%m-%d"),
+      " to ",
+      if (is.null(sd_end)) "end of records" else format(sd_end, "%Y-%m-%d"),
+      if (is.null(sd_day_of_year)) " for all days of year" else paste0(
+        " on days of year ", paste(sd_day_of_year, collapse = ", ")
+      ),
+      "). Numeric results only; red outline marks an SD exceedance or guideline failure."
+    )
+  } else if (length(guideline_ids)) {
+    flag_note <- paste0(flag_note, " Red outline marks a guideline failure.")
+  }
+  if (length(repeated_samples)) {
+    flag_note <- paste0(flag_note, " A sample may appear for more than one target date.")
+  }
+  failed_result_ids <- if (nrow(guideline_summary)) {
+    unique(guideline_summary$result_id[guideline_summary$has_failure])
+  } else integer()
+
+  for (tab_index in seq_along(report_tabs)) {
+    tab <- report_tabs[[tab_index]]
+    sheet_name <- report_sheet_names[[tab_index]]
+    sheet_results <- results[tab$result_rows, , drop = FALSE]
+    if (report_format == "by_parameter") {
+      row_results <- results[results$parameter_id == tab$id, , drop = FALSE]
+      row_groups <- unique(row_results[c(
+        "location_id", "location", "location_label", "parameter_id",
+        "matrix_state_id", "sample_fraction_id", "result_speciation_id",
+        "units", "matrix_label", "sample_fraction", "result_speciation"
+      )])
+      row_groups <- row_groups[order(
+        match(row_groups$location_id, location_ids),
+        row_groups$matrix_state_id, row_groups$sample_fraction_id,
+        row_groups$result_speciation_id, na.last = TRUE
+      ), , drop = FALSE]
+      row_groups$row_key <- make_matrix_key(row_groups, param_key_columns)
+    } else {
+      row_results <- sheet_results
+      row_groups <- all_param_groups
+    }
+    row_groups$cell_row_key <- if (report_format == "by_parameter") {
+      paste(row_groups$location_id, row_groups$row_key, sep = "\034")
+    } else row_groups$row_key
+    row_results$cell_row_key <- if (report_format == "by_parameter") {
+      paste(row_results$location_id, row_results$result_row_key, sep = "\034")
+    } else row_results$result_row_key
+    guide_limit_map <- list()
+    if (nrow(guideline_summary) && nrow(row_results) && nrow(row_groups)) {
+      result_groups <- unique(row_results[c("result_id", "cell_row_key")])
+      result_groups$row_index <- match(result_groups$cell_row_key, row_groups$cell_row_key)
+      result_groups <- result_groups[!is.na(result_groups$row_index), , drop = FALSE]
+      guide_values <- merge(
+        result_groups,
+        guideline_summary[c("result_id", "guideline_id", "limit_display")],
+        by = "result_id",
+        all = FALSE,
+        sort = FALSE
       )
-      if (!length(idx)) next
-      flagged <- any(results$sd_exceedance[idx])
-      for (result_id in results$result_id[idx]) {
-        guide_idx <- summary_by_result[[as.character(result_id)]]
-        if (!is.null(guide_idx) && any(guideline_summary$has_failure[guide_idx])) {
-          flagged <- TRUE
-        }
-      }
-      if (flagged) {
-        exceed_rows <- c(exceed_rows, 5L + j)
-        exceed_cols <- c(exceed_cols, sample_start + i - 1L)
+      if (nrow(guide_values)) {
+        guide_limit_map <- split(
+          guide_values$limit_display,
+          paste(guide_values$row_index, guide_values$guideline_id, sep = "\034")
+        )
+        guide_limit_map <- lapply(guide_limit_map, function(value) {
+          unique(value[!is.na(value) & nzchar(value)])
+        })
       }
     }
-  }
-  if (length(exceed_rows)) {
-    openxlsx::addStyle(
-      wb, "Report", exceed_style,
-      rows = exceed_rows, cols = exceed_cols,
-      gridExpand = FALSE, stack = TRUE
+
+    guideline_column_names <- if (length(guideline_ids)) vapply(
+      seq_len(nrow(guideline_catalog)), function(i) {
+        meta <- guideline_catalog[i, , drop = FALSE]
+        code <- if (is.na(meta$guideline_code) || !nzchar(meta$guideline_code)) {
+          paste0("Guideline ", meta$guideline_id)
+        } else as.character(meta$guideline_code)
+        paste0(code, " - ", meta$guideline_name, " (limit)")
+      }, character(1)
+    ) else character()
+
+    if (report_format == "by_date") {
+      sample_meta <- unique(sheet_results[c(
+        "sample_id", "location", "sub_location_label", "sample_date", "datetime"
+      )])
+      sample_meta <- sample_meta[order(sample_meta$location, sample_meta$datetime), , drop = FALSE]
+      if (!nrow(sample_meta)) {
+        date_headers <- "No eligible samples"
+      } else {
+        date_headers <- paste0(
+          sample_meta$location,
+          ifelse(
+            is.na(sample_meta$sub_location_label) | !nzchar(sample_meta$sub_location_label),
+            "", paste0(" - ", sample_meta$sub_location_label)
+          ),
+          " (", format(sample_meta$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"), " UTC)"
+        )
+        date_headers <- make.unique(date_headers, sep = " #")
+      }
+    } else {
+      sample_meta <- data.frame()
+      date_headers <- base::format(date, "%Y-%m-%d")
+    }
+
+    if (report_format == "by_parameter") {
+      matrix_report <- data.frame(
+        Location = row_groups$location,
+        `Location name` = row_groups$location_label,
+        Unit = row_groups$units,
+        Matrix = row_groups$matrix_label,
+        `Sample fraction` = row_groups$sample_fraction,
+        Speciation = row_groups$result_speciation,
+        `Parameter ID` = row_groups$parameter_id,
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
+    } else {
+      matrix_report <- data.frame(
+        Parameter = row_groups$parameter_label,
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
+    }
+    if (length(guideline_column_names)) {
+      for (g in seq_along(guideline_column_names)) {
+        meta <- guideline_catalog[g, , drop = FALSE]
+        values <- rep("No applicable result", nrow(row_groups))
+        if (length(guide_limit_map) && nrow(row_groups)) {
+          for (j in seq_len(nrow(row_groups))) {
+            limits <- guide_limit_map[[paste(j, meta$guideline_id, sep = "\034")]]
+            if (is.null(limits)) next
+            if (length(limits) == 1L) values[[j]] <- limits
+            if (length(limits) > 1L) values[[j]] <- "Varies by sample; see Guideline details"
+          }
+        }
+        matrix_report[[guideline_column_names[[g]]]] <- values
+      }
+    }
+    if (report_format != "by_parameter") {
+      matrix_report$Unit <- row_groups$units
+      matrix_report$Matrix <- row_groups$matrix_label
+      matrix_report$`Sample fraction` <- row_groups$sample_fraction
+      matrix_report$Speciation <- row_groups$result_speciation
+      matrix_report$`Parameter ID` <- row_groups$parameter_id
+    }
+    for (header in date_headers) {
+      matrix_report[[header]] <- rep("", nrow(row_groups))
+    }
+    flagged_row_index <- flagged_column_index <- integer()
+    if (nrow(row_results) && nrow(row_groups)) {
+      cell_table <- data.table::as.data.table(row_results[c(
+        "result_id", "sample_id", "requested_date", "result_display",
+        "sd_exceedance", "cell_row_key"
+      )])
+      cell_table[, cell_column_index := if (report_format == "by_date") {
+        match(sample_id, sample_meta$sample_id)
+      } else match(requested_date, date)]
+      cell_table[, cell_flagged := (!is.na(sd_exceedance) & sd_exceedance) |
+        result_id %in% failed_result_ids]
+      cell_values <- cell_table[, .(
+        display_value = paste(unique(result_display), collapse = "; "),
+        flagged = any(cell_flagged)
+      ), by = .(cell_row_key, cell_column_index)]
+      cell_values[, row_index := match(cell_row_key, row_groups$cell_row_key)]
+      cell_values <- cell_values[
+        !is.na(row_index) & !is.na(cell_column_index)
+      ]
+      for (i in seq_along(date_headers)) {
+        cell_idx <- which(cell_values$cell_column_index == i)
+        if (length(cell_idx)) {
+          matrix_report[[date_headers[[i]]]][cell_values$row_index[cell_idx]] <-
+            cell_values$display_value[cell_idx]
+        }
+      }
+      flagged_cells <- cell_values[cell_values$flagged == TRUE]
+      flagged_row_index <- flagged_cells$row_index
+      flagged_column_index <- flagged_cells$cell_column_index
+    }
+    if (!nrow(matrix_report)) {
+      empty_row <- stats::setNames(rep(list(NA), ncol(matrix_report)), names(matrix_report))
+      empty_row[[1]] <- "No eligible results"
+      matrix_report <- as.data.frame(empty_row, check.names = FALSE, stringsAsFactors = FALSE)
+    }
+
+    report_last_col <- ncol(matrix_report)
+    guide_count <- length(guideline_column_names)
+    if (report_format == "by_parameter") {
+      location_end <- 7L
+      guideline_start <- 8L
+      guideline_end <- 7L + guide_count
+      date_start <- 8L + guide_count
+      date_end <- date_start + length(date_headers) - 1L
+      context_start <- 1L
+      context_end <- location_end
+    } else {
+      guideline_start <- 2L
+      guideline_end <- 1L + guide_count
+      context_start <- 2L + guide_count
+      context_end <- 6L + guide_count
+      date_start <- 7L + guide_count
+      date_end <- date_start + length(date_headers) - 1L
+    }
+    openxlsx::addWorksheet(wb, sheet_name, gridLines = FALSE)
+    report_title <- if (report_format == "by_parameter") {
+      param_name <- requested_parameters$param_name[
+        match(tab$id, requested_parameters$parameter_id)
+      ]
+      if (!length(param_name) || is.na(param_name) || !nzchar(param_name)) {
+        param_name <- paste0("Parameter ", tab$id)
+      }
+      if (lang == "fr") {
+        french_name <- requested_parameters$param_name_fr[
+          match(tab$id, requested_parameters$parameter_id)
+        ]
+        if (length(french_name) && !is.na(french_name) && nzchar(french_name)) {
+          param_name <- french_name
+        }
+      }
+      paste0("WQ report for AquaCache parameter ", param_name)
+    } else if (report_format == "by_location") {
+      location <- requested_locations$location_code[
+        match(tab$id, requested_locations$location_id)
+      ]
+      if (is.na(location)) location <- paste0("Location ", tab$id)
+      paste0("WQ report for AquaCache location ", location)
+    } else {
+      paste0("WQ report for AquaCache locations  ", paste(unique(results$location), collapse = ", "))
+    }
+    if (report_format == "by_date") {
+      target_date <- tab$id
+      target_tolerance <- date_approx[match(target_date, date)]
+      date_note <- paste0("Target date: ", format(target_date, "%Y-%m-%d"))
+      if (target_tolerance > 0L) {
+        date_note <- paste0(date_note, ". Closest eligible samples may be within ", target_tolerance, " day(s).")
+      }
+    } else {
+      date_note <- paste0(
+        "Target dates: ", format(min(date), "%Y-%m-%d"), " to ",
+        format(max(date), "%Y-%m-%d"), " (", length(date), " selected)."
+      )
+      if (length(unique(date_approx)) == 1L && date_approx[[1]] > 0L) {
+        date_note <- paste0(date_note, " Closest eligible samples may be within ", date_approx[[1]], " day(s).")
+      } else if (length(unique(date_approx)) > 1L) {
+        date_note <- paste0(date_note, " The tolerance varies by target date; see Result details.")
+      }
+    }
+    openxlsx::writeData(wb, sheet_name, report_title, startRow = 1, colNames = FALSE)
+    openxlsx::writeData(
+      wb, sheet_name, paste0("Issued at ", generated),
+      startCol = report_last_col, startRow = 1, colNames = FALSE
     )
+    openxlsx::writeData(wb, sheet_name, date_note, startRow = 2, colNames = FALSE)
+    openxlsx::writeData(
+      wb, sheet_name,
+      paste0("Created with R package YGwater ", utils::packageVersion("YGwater")),
+      startCol = report_last_col, startRow = 2, colNames = FALSE
+    )
+    openxlsx::writeData(
+      wb, sheet_name, paste(flag_note, format_note, sep = " "),
+      startRow = 3, colNames = FALSE
+    )
+    if (guide_count) {
+      openxlsx::writeData(wb, sheet_name, "Guidelines", startCol = guideline_start, startRow = 4, colNames = FALSE)
+    }
+    context_title <- if (report_format == "by_parameter") "Location and result details" else "Parameter details"
+    date_title <- if (report_format == "by_date") "Samples (date-time UTC)" else "Target dates"
+    openxlsx::writeData(
+      wb, sheet_name, context_title,
+      startCol = context_start, startRow = 4, colNames = FALSE
+    )
+    openxlsx::writeData(
+      wb, sheet_name, date_title,
+      startCol = date_start, startRow = 4, colNames = FALSE
+    )
+    openxlsx::writeData(
+      wb, sheet_name, matrix_report,
+      startRow = 5, withFilter = TRUE, keepNA = FALSE
+    )
+    for (row in 1:3) {
+      if (row < 3L) {
+        openxlsx::mergeCells(wb, sheet_name, cols = 1:context_end, rows = row)
+      } else {
+        openxlsx::mergeCells(wb, sheet_name, cols = seq_len(report_last_col), rows = row)
+      }
+    }
+    if (guide_count > 1L) {
+      openxlsx::mergeCells(wb, sheet_name, cols = guideline_start:guideline_end, rows = 4)
+    }
+    if (context_end > context_start) {
+      openxlsx::mergeCells(wb, sheet_name, cols = context_start:context_end, rows = 4)
+    }
+    if (date_end > date_start) {
+      openxlsx::mergeCells(wb, sheet_name, cols = date_start:date_end, rows = 4)
+    }
+    openxlsx::addStyle(wb, sheet_name, title_style, rows = 1:2, cols = seq_len(report_last_col), gridExpand = TRUE)
+    openxlsx::addStyle(wb, sheet_name, note_style, rows = 3, cols = seq_len(report_last_col), gridExpand = TRUE)
+    data_rows <- 6:(5L + nrow(matrix_report))
+    openxlsx::addStyle(wb, sheet_name, parameter_style, rows = 4:5, cols = 1, gridExpand = TRUE)
+    openxlsx::addStyle(wb, sheet_name, parameter_style, rows = data_rows, cols = 1)
+    if (guide_count) {
+      openxlsx::addStyle(
+        wb, sheet_name, group_style, rows = 4:5,
+        cols = guideline_start:guideline_end, gridExpand = TRUE
+      )
+      openxlsx::addStyle(
+        wb, sheet_name, limit_style, rows = data_rows,
+        cols = guideline_start:guideline_end, gridExpand = TRUE
+      )
+    }
+    openxlsx::addStyle(
+      wb, sheet_name, group_style, rows = 4:5,
+      cols = context_start:context_end, gridExpand = TRUE
+    )
+    openxlsx::addStyle(
+      wb, sheet_name, limit_style, rows = data_rows,
+      cols = context_start:context_end, gridExpand = TRUE
+    )
+    openxlsx::addStyle(
+      wb, sheet_name, sample_style, rows = 4:5,
+      cols = date_start:date_end, gridExpand = TRUE
+    )
+    openxlsx::addStyle(
+      wb, sheet_name, sample_data_style, rows = data_rows,
+      cols = date_start:date_end, gridExpand = TRUE
+    )
+    if (report_format == "by_parameter") {
+      openxlsx::setColWidths(wb, sheet_name, cols = 1, widths = 16)
+      openxlsx::setColWidths(wb, sheet_name, cols = 2, widths = 26)
+      openxlsx::setColWidths(wb, sheet_name, cols = 3:7, widths = 16)
+    } else {
+      openxlsx::setColWidths(wb, sheet_name, cols = 1, widths = 28)
+      openxlsx::setColWidths(wb, sheet_name, cols = context_start:context_end, widths = 15)
+    }
+    if (guide_count) {
+      openxlsx::setColWidths(wb, sheet_name, cols = guideline_start:guideline_end, widths = 24)
+    }
+    openxlsx::setColWidths(wb, sheet_name, cols = date_start:date_end, widths = if (report_format == "by_date") 23 else 16)
+    openxlsx::setRowHeights(wb, sheet_name, rows = 1, heights = 24)
+    openxlsx::setRowHeights(wb, sheet_name, rows = 3, heights = 34)
+    openxlsx::setRowHeights(wb, sheet_name, rows = 4:5, heights = 32)
+    openxlsx::freezePane(wb, sheet_name, firstActiveRow = 6, firstActiveCol = date_start)
+
+    exceed_rows <- 5L + flagged_row_index
+    exceed_cols <- date_start + flagged_column_index - 1L
+    if (length(exceed_rows)) {
+      openxlsx::addStyle(
+        wb, sheet_name, exceed_style,
+        rows = exceed_rows, cols = exceed_cols,
+        gridExpand = FALSE, stack = TRUE
+      )
+    }
   }
 
   openxlsx::addWorksheet(wb, "Result details", gridLines = FALSE)
@@ -1136,6 +1410,7 @@ AquaCacheReport <- function(
     } else {
       normalizePath(map_assets_path, winslash = "/", mustWork = TRUE)
     },
-    result_count = nrow(results)
+    result_count = nrow(results),
+    reused_sample_count = length(repeated_samples)
   ))
 }

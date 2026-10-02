@@ -8,131 +8,11 @@ WQReportUI <- function(id) {
       type = "text/css",
       href = "css/card_background.css"
     )),
+    uiOutput(ns("info")), # Information about this module, rendered in the same manner as 'banner'
     card(
       card_body(
         class = "custom-card",
-        uiOutput(ns("data_source_ui")),
-        dateInput(ns("date"), "Report Date", value = Sys.Date() - 30),
-        div(
-          style = "display: flex; align-items: center;",
-          tags$label(
-            "Look for data within this many days of the report date",
-            class = "form-label",
-            style = "margin-right: 5px;"
-          ),
-          span(
-            id = ns("date_approx_info"),
-            `data-bs-toggle` = "tooltip",
-            `data-bs-placement` = "right",
-            `data-bs-trigger` = "click hover",
-            title = "Use this to include data up to a certain number of days of the report date. For example, you may want a single report with data from multiple locations sampled within 2-3 days. If multiple samples for a location fall within the date range, the one closest to the report date will be used.",
-            icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
-          )
-        ),
-        numericInput(ns("date_approx"), NULL, value = 1),
-        conditionalPanel(
-          ns = ns,
-          condition = "input.data_source == 'EQ'",
-          uiOutput(ns("EQWin_source_ui")),
-          # Toggle button for locations or location groups (only show if data source  == EQWin)
-          radioButtons(
-            ns("locs_groups"),
-            NULL,
-            choices = c("Locations", "Location Groups"),
-            selected = "Locations"
-          ),
-          # Selectize input for locations, populated once connection is established
-          selectizeInput(
-            ns("locations_EQ"),
-            "Select locations",
-            choices = "Placeholder",
-            multiple = TRUE
-          ),
-          # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
-          selectizeInput(
-            ns("location_groups"),
-            "Select a location group",
-            choices = "Placeholder",
-            multiple = FALSE,
-            width = "100%"
-          ),
-
-          # Toggle button for parameters or parameter groups (only show if data source == EQWin)
-          radioButtons(
-            ns("params_groups"),
-            NULL,
-            choices = c("Parameters", "Parameter Groups"),
-            selected = "Parameters"
-          ),
-          # Selectize input for parameters, populated once connection is established
-          selectizeInput(
-            ns("parameters_EQ"),
-            "Select parameters",
-            choices = "Placeholder",
-            multiple = TRUE,
-            width = "100%"
-          ),
-          # Selectize input for parameter groups, populated once connection is established. only shown if data source is EQWin
-          selectizeInput(
-            ns("parameter_groups"),
-            "Select a parameter group",
-            choices = "Placeholder",
-            multiple = FALSE,
-            width = "100%"
-          ),
-
-          # Add a bit of space between the mandatory inputs and the optional ones
-          tags$br(),
-
-          # Selectize input for standards, populated once connection is established
-          htmlOutput(ns("standard_note")),
-          selectizeInput(
-            ns("stds"),
-            "Select one or more standards to apply (optional)",
-            choices = "Placeholder",
-            multiple = TRUE,
-            width = "100%"
-          ),
-          # TRUE/FALSE selection for station-specific standards
-          checkboxInput(
-            ns("stnStds"),
-            "Apply station-specific standards?",
-            value = FALSE
-          )
-        ),
-
-        conditionalPanel(
-          ns = ns,
-          condition = "input.data_source == 'AC' || input.data_source == null",
-          # Selectize input for locations, populated once connection is established
-          selectizeInput(
-            ns("locations_AC"),
-            "Select locations",
-            choices = character(),
-            multiple = TRUE,
-            width = "100%"
-          ),
-          # Selectize input for parameters, populated once connection is established
-          selectizeInput(
-            ns("parameters_AC"),
-            "Select parameters",
-            choices = character(),
-            multiple = TRUE,
-            width = "100%"
-          ),
-          uiOutput(ns("AC_guidelines_ui"))
-        ),
-        uiOutput(ns("SD_inputs_ui")),
-        bslib::input_task_button(
-          ns("go"),
-          "Create report",
-          label_busy = "Working..."
-        ),
-        downloadButton(
-          ns("download"),
-          "download",
-          style = "visibility: hidden;"
-        ) # Hidden; triggered automatically if 'go' is successful
+        uiOutput(ns("main"))
       ) # End card_body
     ) # End card
   ) # End tagList
@@ -161,6 +41,72 @@ WQReport <- function(id, mdb_files, language) {
       value
     })
 
+    saved_inputs <- reactiveValues()
+    preserved_input_ids <- c(
+      "data_source",
+      "date",
+      "date_to_add_AC",
+      "dates_AC",
+      "format_AC",
+      "date_approx_ac",
+      "date_approx_eq",
+      "date_approx_mode_AC",
+      "matrix_states_AC",
+      "sample_fractions_AC",
+      "EQWin_source",
+      "locs_groups",
+      "locations_EQ",
+      "location_groups",
+      "params_groups",
+      "parameters_EQ",
+      "parameter_groups",
+      "stds",
+      "stnStds",
+      "locations_AC",
+      "parameters_AC",
+      "guidelines_AC",
+      "SD_SD",
+      "SD_start",
+      "SD_end",
+      "SD_date_range"
+    )
+    for (input_id in preserved_input_ids) {
+      local({
+        id <- input_id
+        observeEvent(
+          input[[id]],
+          {
+            saved_inputs[[id]] <- input[[id]]
+          },
+          ignoreInit = TRUE
+        )
+      })
+    }
+    saved_input <- function(id, default = NULL) {
+      value <- isolate(saved_inputs[[id]])
+      if (is.null(value)) default else value
+    }
+
+    tooltip_label <- function(label, key, lang) {
+      help_text <- tr(key, lang)
+      tags$span(
+        label,
+        tags$span(
+          class = "wq-report-tooltip",
+          `data-bs-toggle` = "tooltip",
+          `data-bs-placement` = "right",
+          `data-bs-trigger` = "hover focus",
+          title = help_text,
+          `aria-label` = help_text,
+          tabindex = "0",
+          icon(
+            "info-circle",
+            style = "font-size: 100%; margin-left: 5px; cursor: help;"
+          )
+        )
+      )
+    }
+
     resolve_eqwin_source <- function(value) {
       if (
         length(value) != 1L ||
@@ -168,7 +114,10 @@ WQReport <- function(id, mdb_files, language) {
           !nzchar(value) ||
           !value %in% configured_mdb_files
       ) {
-        stop("Select a configured EQWin database.", call. = FALSE)
+        stop(
+          tr("wq_err_select_configured_eqwin", language$language),
+          call. = FALSE
+        )
       }
       normalizePath(
         configured_mdb_files[match(value, configured_mdb_files)],
@@ -176,6 +125,9 @@ WQReport <- function(id, mdb_files, language) {
         mustWork = TRUE
       )
     }
+
+    moduleData <- reactiveValues()
+    ac_metadata_loaded <- reactiveVal(FALSE)
 
     output$banner <- renderUI({
       req(language$language)
@@ -187,79 +139,357 @@ WQReport <- function(id, mdb_files, language) {
       )
     })
 
+    output$info <- renderUI({
+      req(language$language)
+      text <- HTML(tr("gen_wqReport_info", language$language))
+      dismissible_banner_ui(
+        ns = ns,
+        msg_text = text,
+        banner_id = "wqReport_info",
+        banner_key_prefix = "wqReport_info"
+      )
+    })
+
+    output$main <- renderUI({
+      req(language$language)
+      lang <- language$language
+      locations <- if (isTRUE(ac_metadata_loaded())) {
+        moduleData$AC_locs
+      } else {
+        NULL
+      }
+      location_choices <- if (!is.null(locations) && nrow(locations)) {
+        location_names <- if (identical(lang, "Français")) {
+          locations$name_fr
+        } else {
+          locations$name
+        }
+        missing_names <- is.na(location_names) | !nzchar(location_names)
+        location_names[missing_names] <- locations$location_code[missing_names]
+        stats::setNames(
+          as.character(locations$location_id),
+          paste0(locations$location_code, " (", location_names, ")")
+        )
+      } else {
+        character()
+      }
+      selected_dates <- saved_input(
+        "dates_AC",
+        format(Sys.Date() - 30, "%Y-%m-%d")
+      )
+      tagList(
+        uiOutput(ns("data_source_ui")),
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'EQ'",
+          dateInput(
+            ns("date"),
+            tooltip_label(
+              tr("report_date", lang),
+              "wq_tooltip_report_date_eq",
+              lang
+            ),
+            value = saved_input("date", Sys.Date() - 30),
+            language = language$abbrev
+          ),
+          numericInput(
+            ns("date_approx_eq"),
+            tooltip_label(
+              tr("wq_date_match_window", lang),
+              "wq_tooltip_date_match_window",
+              lang
+            ),
+            value = saved_input("date_approx_eq", 1),
+            min = 0,
+            step = 1
+          )
+        ),
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'AC' || input.data_source == null",
+          dateInput(
+            ns("date_to_add_AC"),
+            tooltip_label(
+              tr("report_date", lang),
+              "wq_tooltip_report_date_ac",
+              lang
+            ),
+            value = saved_input("date_to_add_AC", Sys.Date() - 30),
+            format = "yyyy-mm-dd",
+            language = language$abbrev
+          ),
+          actionButton(
+            ns("add_date_AC"),
+            tooltip_label(
+              tr("wq_add_report_date", lang),
+              "wq_tooltip_add_report_date",
+              lang
+            ),
+            icon = icon("plus")
+          ),
+          selectizeInput(
+            ns("dates_AC"),
+            tooltip_label(
+              tr("wq_report_dates", lang),
+              "wq_tooltip_report_dates",
+              lang
+            ),
+            choices = stats::setNames(selected_dates, selected_dates),
+            selected = selected_dates,
+            multiple = TRUE,
+            width = "100%"
+          ),
+          selectInput(
+            ns("date_approx_mode_AC"),
+            tooltip_label(
+              tr("wq_date_approx_mode", lang),
+              "wq_tooltip_date_approx_mode",
+              lang
+            ),
+            choices = stats::setNames(
+              c("shared", "per_date"),
+              c(
+                tr("wq_date_approx_shared", lang),
+                tr("wq_date_approx_per_date", lang)
+              )
+            ),
+            selected = saved_input("date_approx_mode_AC", "shared"),
+            width = "100%"
+          ),
+          uiOutput(ns("date_approx_ac_ui")),
+          selectizeInput(
+            ns("format_AC"),
+            tooltip_label(
+              tr("workbook_layout", lang),
+              "wq_tooltip_workbook_layout",
+              lang
+            ),
+            choices = stats::setNames(
+              c("by_date", "by_location", "by_parameter"),
+              c(
+                tr("wq_workbook_by_date", lang),
+                tr("wq_workbook_by_location", lang),
+                tr("wq_workbook_by_parameter", lang)
+              )
+            ),
+            selected = saved_input("format_AC", "by_date"),
+            multiple = FALSE,
+            width = "100%"
+          )
+        ),
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'EQ'",
+          uiOutput(ns("EQWin_source_ui")),
+          radioButtons(
+            ns("locs_groups"),
+            NULL,
+            choices = stats::setNames(
+              c("Locations", "Location Groups"),
+              c(tr("locs", lang), tr("location_groups", lang))
+            ),
+            selected = saved_input("locs_groups", "Locations")
+          ),
+          selectizeInput(
+            ns("locations_EQ"),
+            tooltip_label(
+              tr("select_locs", lang),
+              "wq_tooltip_locations",
+              lang
+            ),
+            choices = character(),
+            selected = saved_input("locations_EQ", character()),
+            multiple = TRUE,
+            width = "100%"
+          ),
+          selectizeInput(
+            ns("location_groups"),
+            tr("select_loc_group", lang),
+            choices = character(),
+            selected = saved_input("location_groups"),
+            multiple = FALSE,
+            width = "100%"
+          ),
+          radioButtons(
+            ns("params_groups"),
+            NULL,
+            choices = stats::setNames(
+              c("Parameters", "Parameter Groups"),
+              c(tr("parameters", lang), tr("parameter_groups", lang))
+            ),
+            selected = saved_input("params_groups", "Parameters")
+          ),
+          selectizeInput(
+            ns("parameters_EQ"),
+            tooltip_label(
+              tr("select_params", lang),
+              "wq_tooltip_parameters",
+              lang
+            ),
+            choices = character(),
+            selected = saved_input("parameters_EQ", character()),
+            multiple = TRUE,
+            width = "100%"
+          ),
+          selectizeInput(
+            ns("parameter_groups"),
+            tr("select_param_group", lang),
+            choices = character(),
+            selected = saved_input("parameter_groups"),
+            multiple = FALSE,
+            width = "100%"
+          ),
+          tags$br(),
+          htmlOutput(ns("standard_note")),
+          selectizeInput(
+            ns("stds"),
+            tr("select_standard_opt", lang),
+            choices = character(),
+            selected = saved_input("stds", character()),
+            multiple = TRUE,
+            width = "100%"
+          ),
+          checkboxInput(
+            ns("stnStds"),
+            tr("wq_station_standards", lang),
+            value = saved_input("stnStds", FALSE)
+          )
+        ),
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'AC' || input.data_source == null",
+          selectizeInput(
+            ns("locations_AC"),
+            tooltip_label(
+              tr("select_locs", lang),
+              "wq_tooltip_locations",
+              lang
+            ),
+            choices = location_choices,
+            selected = saved_input("locations_AC", character()),
+            multiple = TRUE,
+            width = "100%"
+          ),
+          uiOutput(ns("AC_selectors_ui")),
+          uiOutput(ns("AC_guidelines_ui"))
+        ),
+        uiOutput(ns("SD_inputs_ui")),
+        bslib::input_task_button(
+          ns("go"),
+          tr("create_report", lang),
+          label_busy = tr("generating_working", lang)
+        ),
+        downloadButton(
+          ns("download"),
+          tr("download_button", lang),
+          style = "visibility: hidden;"
+        ) # Hidden; triggered automatically if 'go' is successful
+      )
+    }) %>%
+      bindEvent(language$language, ac_metadata_loaded())
+
     output$data_source_ui <- renderUI({
       if (!eqwin_available) {
         return(NULL)
       }
+      req(language$language)
       radioButtons(
         ns("data_source"),
-        NULL,
-        choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
-        selected = "EQ"
+        tooltip_label(
+          tr("data_source", language$language),
+          "wq_tooltip_data_source",
+          language$language
+        ),
+        choices = stats::setNames(
+          c("AC", "EQ"),
+          c(
+            tr("aquacache", language$language),
+            tr("EQWin_db", language$language)
+          )
+        ),
+        selected = saved_input("data_source", "EQ")
       )
-    })
+    }) %>%
+      bindEvent(language$language)
 
     output$EQWin_source_ui <- renderUI({
       if (!eqwin_available) {
         return(NULL)
       }
+      req(language$language)
       selectizeInput(
         ns("EQWin_source"),
-        "EQWin database",
+        tooltip_label(
+          tr("EQWin_db", language$language),
+          "wq_tooltip_eqwin_source",
+          language$language
+        ),
         choices = stats::setNames(
           configured_mdb_files,
           basename(configured_mdb_files)
         ),
-        selected = configured_mdb_files[[1]]
+        selected = saved_input("EQWin_source", configured_mdb_files[[1]])
       )
-    })
+    }) %>%
+      bindEvent(language$language)
 
     output$SD_inputs_ui <- renderUI({
+      req(language$language)
       tagList(
         tags$br(),
         htmlOutput(ns("SD_note")),
         tags$label(
-          "Standard deviation threshold (leave empty to not calculate)",
+          tr("wq_sd_threshold", language$language),
           class = "form-label"
         ),
-        numericInput(ns("SD_SD"), NULL, value = NULL),
-        tags$label("Start date for SD calculation", class = "form-label"),
-        dateInput(ns("SD_start"), NULL, value = NA),
-        tags$label("End date for SD calculation", class = "form-label"),
-        dateInput(ns("SD_end"), NULL, value = NA),
-        tags$label("Select date range (year is ignored)", class = "form-label"),
+        numericInput(ns("SD_SD"), NULL, value = saved_input("SD_SD")),
+        tags$label(tr("wq_sd_start", language$language), class = "form-label"),
+        dateInput(
+          ns("SD_start"),
+          NULL,
+          value = saved_input("SD_start", NA),
+          language = language$abbrev
+        ),
+        tags$label(tr("wq_sd_end", language$language), class = "form-label"),
+        dateInput(
+          ns("SD_end"),
+          NULL,
+          value = saved_input("SD_end", NA),
+          language = language$abbrev
+        ),
+        tags$label(
+          tr("wq_sd_day_range", language$language),
+          class = "form-label"
+        ),
         dateRangeInput(
           ns("SD_date_range"),
           label = NULL,
-          start = "2000-01-01",
-          end = "2000-12-31",
-          format = "yyyy-mm-dd"
+          start = saved_input(
+            "SD_date_range",
+            as.Date(c("2000-01-01", "2000-12-31"))
+          )[[1]],
+          end = saved_input(
+            "SD_date_range",
+            as.Date(c("2000-01-01", "2000-12-31"))
+          )[[2]],
+          format = "yyyy-mm-dd",
+          language = language$abbrev,
+          separator = tr("date_sep", language$language)
         )
       )
-    })
+    }) %>%
+      bindEvent(language$language)
 
     output$standard_note <- renderUI({
-      HTML(
-        "<p>
-      <i><b>Optional:</b> Select standards/guidelines and station specific standards/guidelines to apply.<br>
-      General standards show up as an additional column in the report with values for each parameter. <br>
-      Station-specific standards show up as notes in the report for each station.<br>
-      Reported values which exceed standards/guidelines are highlighted in red with a note provided.
-      </p>"
-      )
-    })
+      req(language$language)
+      HTML(tr("wq_standard_help", language$language))
+    }) %>%
+      bindEvent(language$language)
     output$SD_note <- renderUI({
-      HTML(
-        "<p>
-      <i><b>Optional:</b> Select a standard deviation threshold to flag outlier values.<br>
-      A mean and standard deviation will be calculated using past measurements if they exist.<br>
-      <b>This can add a lot of time to the report generation process, be patient!</b>
-      </p>"
-      )
-    })
-
-    moduleData <- reactiveValues()
-    ac_metadata_loaded <- reactiveVal(FALSE)
+      req(language$language)
+      HTML(tr("wq_sd_help", language$language))
+    }) %>%
+      bindEvent(language$language)
 
     observeEvent(
       selected_data_source(),
@@ -277,14 +507,11 @@ WQReport <- function(id, mdb_files, language) {
             moduleData$AC_locs <- DBI::dbGetQuery(
               con,
               paste(
-                "SELECT l.location_id, l.location_code, l.name,",
+                "SELECT DISTINCT l.location_id, l.location_code, l.name,",
                 "COALESCE(l.name_fr, l.name, l.location_code) AS name_fr",
                 "FROM public.locations AS l",
-                "WHERE EXISTS (",
-                "SELECT 1 FROM discrete.samples AS s",
+                "INNER JOIN discrete.samples AS s ON s.location_id = l.location_id",
                 "INNER JOIN discrete.results AS r ON r.sample_id = s.sample_id",
-                "WHERE s.location_id = l.location_id",
-                ")",
                 "ORDER BY l.location_code"
               )
             )
@@ -301,36 +528,34 @@ WQReport <- function(id, mdb_files, language) {
                 "ORDER BY p.param_name"
               )
             )
-            moduleData$AC_guidelines <- tryCatch(
-              DBI::dbGetQuery(
-                con,
-                paste(
-                  "SELECT g.guideline_id, g.guideline_code,",
-                  "g.guideline_name, p.param_name, gp.publisher_name",
-                  "FROM criteria.guidelines AS g",
-                  "INNER JOIN public.parameters AS p",
-                  "ON p.parameter_id = g.parameter_id",
-                  "LEFT JOIN criteria.guideline_publishers AS gp",
-                  "ON gp.publisher_id = g.publisher_id",
-                  "WHERE g.active AND g.review_status = 'approved'",
-                  "ORDER BY p.param_name, g.guideline_code, g.guideline_name"
-                )
-              ),
-              error = function(e) {
-                data.frame(
-                  guideline_id = integer(),
-                  guideline_code = character(),
-                  guideline_name = character(),
-                  param_name = character(),
-                  publisher_name = character()
-                )
-              }
+            moduleData$AC_matrix_states <- DBI::dbGetQuery(
+              con,
+              paste(
+                "SELECT DISTINCT ms.matrix_state_id, ms.matrix_state_name",
+                "FROM discrete.results AS r",
+                "INNER JOIN public.matrix_states AS ms",
+                "ON ms.matrix_state_id = r.matrix_state_id",
+                "ORDER BY ms.matrix_state_name"
+              )
+            )
+            moduleData$AC_sample_fractions <- DBI::dbGetQuery(
+              con,
+              paste(
+                "SELECT DISTINCT sf.sample_fraction_id, sf.sample_fraction",
+                "FROM discrete.results AS r",
+                "INNER JOIN discrete.sample_fractions AS sf",
+                "ON sf.sample_fraction_id = r.sample_fraction_id",
+                "ORDER BY sf.sample_fraction"
+              )
             )
             ac_metadata_loaded(TRUE)
           },
           error = function(e) {
             showNotification(
-              paste("Unable to load AquaCache report choices:", e$message),
+              paste(
+                tr("wq_err_load_aquacache_choices", language$language),
+                e$message
+              ),
               type = "error",
               duration = NULL,
               closeButton = TRUE
@@ -341,73 +566,397 @@ WQReport <- function(id, mdb_files, language) {
       ignoreNULL = FALSE
     )
 
-    observe({
+    observeEvent(
+      input$add_date_AC,
+      {
+        selected_dates <- as.character(input$dates_AC)
+        new_date <- suppressWarnings(as.Date(input$date_to_add_AC))
+        if (length(new_date) != 1L || is.na(new_date)) {
+          return()
+        }
+        selected_dates <- unique(c(
+          selected_dates,
+          format(new_date, "%Y-%m-%d")
+        ))
+        updateSelectizeInput(
+          session,
+          "dates_AC",
+          choices = stats::setNames(selected_dates, selected_dates),
+          selected = selected_dates,
+          server = FALSE
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    ac_selector_choices <- reactive({
+      empty <- list(
+        parameters = integer(),
+        matrix_states = integer(),
+        sample_fractions = integer()
+      )
       if (!identical(selected_data_source(), "AC") || !ac_metadata_loaded()) {
-        return()
+        return(NULL)
       }
-      locations <- moduleData$AC_locs
-      parameters <- moduleData$AC_params
-      if (is.null(locations) || is.null(parameters)) {
-        return()
+      dates <- suppressWarnings(as.Date(input$dates_AC))
+      locations <- suppressWarnings(as.integer(input$locations_AC))
+      if (
+        !length(dates) ||
+          anyNA(dates) ||
+          anyDuplicated(dates) ||
+          !length(locations) ||
+          anyNA(locations)
+      ) {
+        return(NULL)
       }
 
-      location_names <- if (identical(language$language, "Français")) {
-        locations$name_fr
+      tolerances <- if (identical(input$date_approx_mode_AC, "per_date")) {
+        date_ids <- format(dates, "%Y%m%d")
+        vapply(
+          date_ids,
+          function(date_id) {
+            value <- input[[paste0("date_approx_", date_id)]]
+            if (is.null(value)) NA_real_ else suppressWarnings(as.numeric(value))
+          },
+          numeric(1)
+        )
       } else {
-        locations$name
+        rep(suppressWarnings(as.numeric(input$date_approx_ac)), length(dates))
       }
-      missing_names <- is.na(location_names) | !nzchar(location_names)
-      location_names[missing_names] <- locations$location_code[missing_names]
-      location_labels <- paste0(
-        locations$location_code,
-        " (",
-        location_names,
-        ")"
-      )
+      if (
+        anyNA(tolerances) ||
+          any(!is.finite(tolerances)) ||
+          any(tolerances < 0) ||
+          any(tolerances > .Machine$integer.max) ||
+          any(tolerances != trunc(tolerances))
+      ) {
+        return(NULL)
+      }
 
-      parameter_names <- if (identical(language$language, "Français")) {
-        parameters$param_name_fr
+      date_json <- as.character(jsonlite::toJSON(
+        data.frame(
+          requested_date = format(dates, "%Y-%m-%d"),
+          date_approx = as.integer(tolerances)
+        ),
+        dataframe = "rows",
+        auto_unbox = TRUE
+      ))
+      location_json <- as.character(jsonlite::toJSON(
+        as.character(unique(locations)),
+        auto_unbox = FALSE
+      ))
+      sql <- paste0(
+        "WITH date_requests AS (",
+        " SELECT requested_date, date_approx",
+        " FROM jsonb_to_recordset($1::jsonb)",
+        " AS d(requested_date date, date_approx integer)",
+        "), matching_results AS (",
+        " SELECT DISTINCT r.parameter_id, r.matrix_state_id,",
+        " r.sample_fraction_id",
+        " FROM date_requests d",
+        " JOIN discrete.samples s ON s.datetime::date BETWEEN",
+        " d.requested_date - d.date_approx AND d.requested_date + d.date_approx",
+        " JOIN discrete.results r ON r.sample_id = s.sample_id",
+        " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+        " WHERE s.location_id IN (SELECT value::integer FROM",
+        " jsonb_array_elements_text($2::jsonb))",
+        " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
+        ") SELECT DISTINCT parameter_id, matrix_state_id, sample_fraction_id",
+        " FROM matching_results"
+      )
+      tryCatch(
+        {
+          available <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            sql,
+            params = list(date_json, location_json)
+          )
+          if (!nrow(available)) {
+            empty
+          } else {
+            list(
+              parameters = unique(as.integer(
+                available$parameter_id[!is.na(available$parameter_id)]
+              )),
+              matrix_states = unique(as.integer(
+                available$matrix_state_id[!is.na(available$matrix_state_id)]
+              )),
+              sample_fractions = unique(as.integer(
+                available$sample_fraction_id[!is.na(available$sample_fraction_id)]
+              ))
+            )
+          }
+        },
+        error = function(e) {
+          showNotification(
+            paste(
+              tr("wq_err_load_aquacache_choices", language$language),
+              e$message
+            ),
+            type = "error",
+            duration = NULL,
+            closeButton = TRUE
+          )
+          empty
+        }
+      )
+    })
+
+    output$AC_selectors_ui <- renderUI({
+      req(language$language)
+      choices <- ac_selector_choices()
+      if (is.null(choices)) {
+        return(NULL)
+      }
+
+      choices_from_metadata <- function(
+        ids,
+        metadata,
+        id_column,
+        label_column,
+        fallback_column = NULL
+      ) {
+        if (!length(ids) || is.null(metadata) || !nrow(metadata)) {
+          return(character())
+        }
+        keep <- as.character(metadata[[id_column]]) %in% as.character(ids)
+        metadata <- metadata[keep, , drop = FALSE]
+        labels <- as.character(metadata[[label_column]])
+        if (!is.null(fallback_column)) {
+          fallback <- as.character(metadata[[fallback_column]])
+          missing <- is.na(labels) | !nzchar(labels)
+          labels[missing] <- fallback[missing]
+        }
+        missing <- is.na(labels) | !nzchar(labels)
+        labels[missing] <- as.character(metadata[[id_column]][missing])
+        stats::setNames(as.character(metadata[[id_column]]), labels)
+      }
+      param_label_column <- if (identical(language$language, "Français")) {
+        "param_name_fr"
       } else {
-        parameters$param_name
+        "param_name"
       }
-      missing_names <- is.na(parameter_names) | !nzchar(parameter_names)
-      parameter_names[missing_names] <- parameters$param_name[missing_names]
-
-      updateSelectizeInput(
-        session,
-        "locations_AC",
-        choices = stats::setNames(
-          as.character(locations$location_id),
-          location_labels
-        ),
-        server = TRUE
+      parameter_choices <- choices_from_metadata(
+        choices$parameters,
+        moduleData$AC_params,
+        "parameter_id",
+        param_label_column,
+        "param_name"
       )
-      updateSelectizeInput(
-        session,
-        "parameters_AC",
-        choices = stats::setNames(
-          as.character(parameters$parameter_id),
-          parameter_names
+      matrix_choices <- choices_from_metadata(
+        choices$matrix_states,
+        moduleData$AC_matrix_states,
+        "matrix_state_id",
+        "matrix_state_name"
+      )
+      fraction_choices <- choices_from_metadata(
+        choices$sample_fractions,
+        moduleData$AC_sample_fractions,
+        "sample_fraction_id",
+        "sample_fraction"
+      )
+      selected_input <- function(id) {
+        value <- isolate(input[[id]])
+        if (is.null(value)) saved_input(id, character()) else value
+      }
+      tagList(
+        selectizeInput(
+          ns("parameters_AC"),
+          tooltip_label(
+            tr("select_params", language$language),
+            "wq_tooltip_parameters",
+            language$language
+          ),
+          choices = parameter_choices,
+          selected = intersect(
+            as.character(selected_input("parameters_AC")),
+            unname(parameter_choices)
+          ),
+          multiple = TRUE,
+          width = "100%"
         ),
-        server = TRUE
+        selectizeInput(
+          ns("matrix_states_AC"),
+          tooltip_label(
+            tr("wq_matrix_states", language$language),
+            "wq_tooltip_matrix_states",
+            language$language
+          ),
+          choices = matrix_choices,
+          selected = intersect(
+            as.character(selected_input("matrix_states_AC")),
+            unname(matrix_choices)
+          ),
+          multiple = TRUE,
+          width = "100%"
+        ),
+        selectizeInput(
+          ns("sample_fractions_AC"),
+          tooltip_label(
+            tr("sample_fraction(s)", language$language),
+            "wq_tooltip_sample_fractions",
+            language$language
+          ),
+          choices = fraction_choices,
+          selected = intersect(
+            as.character(selected_input("sample_fractions_AC")),
+            unname(fraction_choices)
+          ),
+          multiple = TRUE,
+          width = "100%"
+        )
+      )
+    })
+
+    ac_guideline_choices <- reactive({
+      empty <- data.frame(
+        guideline_id = integer(),
+        guideline_code = character(),
+        guideline_name = character(),
+        param_name = character(),
+        publisher_name = character(),
+        stringsAsFactors = FALSE
+      )
+      if (!identical(selected_data_source(), "AC") || !ac_metadata_loaded()) {
+        return(empty)
+      }
+      dates <- suppressWarnings(as.Date(input$dates_AC))
+      locations <- suppressWarnings(as.integer(input$locations_AC))
+      parameters <- suppressWarnings(as.integer(input$parameters_AC))
+      if (
+        !length(dates) ||
+          anyNA(dates) ||
+          anyDuplicated(dates) ||
+          !length(locations) ||
+          anyNA(locations) ||
+          !length(parameters) ||
+          anyNA(parameters)
+      ) {
+        return(empty)
+      }
+      if (identical(input$date_approx_mode_AC, "per_date")) {
+        date_ids <- format(dates, "%Y%m%d")
+        tolerances <- vapply(
+          date_ids,
+          function(date_id) {
+            value <- input[[paste0("date_approx_", date_id)]]
+            if (is.null(value)) {
+              NA_integer_
+            } else {
+              suppressWarnings(as.integer(value))
+            }
+          },
+          integer(1)
+        )
+      } else {
+        tolerances <- rep(
+          suppressWarnings(as.integer(input$date_approx_ac)),
+          length(dates)
+        )
+      }
+      if (anyNA(tolerances) || any(tolerances < 0L)) {
+        return(empty)
+      }
+      matrix_states <- suppressWarnings(as.integer(input$matrix_states_AC))
+      sample_fractions <- suppressWarnings(as.integer(
+        input$sample_fractions_AC
+      ))
+      matrix_states <- matrix_states[!is.na(matrix_states)]
+      sample_fractions <- sample_fractions[!is.na(sample_fractions)]
+      to_json <- function(ids) {
+        as.character(jsonlite::toJSON(
+          as.character(unique(ids)),
+          auto_unbox = FALSE
+        ))
+      }
+      date_json <- as.character(jsonlite::toJSON(
+        data.frame(
+          requested_date = format(dates, "%Y-%m-%d"),
+          date_approx = tolerances
+        ),
+        dataframe = "rows",
+        auto_unbox = TRUE
+      ))
+      sql <- paste0(
+        "WITH date_requests AS (",
+        " SELECT requested_date, date_approx",
+        " FROM jsonb_to_recordset($1::jsonb)",
+        " AS d(requested_date date, date_approx integer) ",
+        "), candidates AS (",
+        " SELECT d.requested_date, s.location_id, s.datetime::date AS sample_date",
+        " FROM date_requests d JOIN discrete.samples s",
+        " ON s.datetime::date BETWEEN d.requested_date - d.date_approx",
+        " AND d.requested_date + d.date_approx",
+        " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+        " WHERE s.location_id IN (SELECT value::integer FROM",
+        " jsonb_array_elements_text($2::jsonb))",
+        " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
+        " AND EXISTS (SELECT 1 FROM discrete.results er",
+        " WHERE er.sample_id = s.sample_id AND er.parameter_id IN (",
+        " SELECT value::integer FROM jsonb_array_elements_text($3::jsonb))",
+        " AND (jsonb_array_length($4::jsonb) = 0 OR er.matrix_state_id IN (",
+        " SELECT value::integer FROM jsonb_array_elements_text($4::jsonb)))",
+        " AND (jsonb_array_length($5::jsonb) = 0 OR er.sample_fraction_id IN (",
+        " SELECT value::integer FROM jsonb_array_elements_text($5::jsonb))))",
+        "), best_dates AS (",
+        " SELECT DISTINCT ON (requested_date, location_id)",
+        " requested_date, location_id, sample_date FROM candidates",
+        " ORDER BY requested_date, location_id,",
+        " abs(sample_date - requested_date),",
+        " (sample_date >= requested_date) DESC, sample_date",
+        "), selected_results AS (",
+        " SELECT DISTINCT r.result_id, s.datetime::date AS sample_date",
+        " FROM best_dates b JOIN discrete.samples s",
+        " ON s.location_id = b.location_id AND s.datetime::date = b.sample_date",
+        " JOIN discrete.results r ON r.sample_id = s.sample_id",
+        " WHERE r.parameter_id IN (SELECT value::integer FROM",
+        " jsonb_array_elements_text($3::jsonb))",
+        " AND (jsonb_array_length($4::jsonb) = 0 OR r.matrix_state_id IN (",
+        " SELECT value::integer FROM jsonb_array_elements_text($4::jsonb)))",
+        " AND (jsonb_array_length($5::jsonb) = 0 OR r.sample_fraction_id IN (",
+        " SELECT value::integer FROM jsonb_array_elements_text($5::jsonb)))",
+        ") SELECT DISTINCT g.guideline_id, g.guideline_code, g.guideline_name,",
+        " p.param_name, gp.publisher_name",
+        " FROM selected_results sr",
+        " CROSS JOIN LATERAL criteria.applicable_guideline_rules_for_result(",
+        " sr.result_id, sr.sample_date, TRUE, FALSE) applicable",
+        " JOIN criteria.guidelines g ON g.guideline_id = applicable.guideline_id",
+        " JOIN public.parameters p ON p.parameter_id = g.parameter_id",
+        " LEFT JOIN criteria.guideline_publishers gp ON gp.publisher_id = g.publisher_id",
+        " WHERE g.active AND g.review_status = 'approved'",
+        " AND g.parameter_id IN (SELECT value::integer FROM",
+        " jsonb_array_elements_text($3::jsonb))",
+        " AND (g.valid_from IS NULL OR sr.sample_date >= g.valid_from)",
+        " AND (g.valid_to IS NULL OR sr.sample_date <= g.valid_to)",
+        " ORDER BY p.param_name, g.guideline_code, g.guideline_name"
+      )
+      tryCatch(
+        DBI::dbGetQuery(
+          session$userData$AquaCache,
+          sql,
+          params = list(
+            date_json,
+            to_json(locations),
+            to_json(parameters),
+            to_json(matrix_states),
+            to_json(sample_fractions)
+          )
+        ),
+        error = function(e) empty
       )
     })
 
     output$AC_guidelines_ui <- renderUI({
+      req(language$language)
       if (!identical(selected_data_source(), "AC")) {
         return(NULL)
       }
       if (!ac_metadata_loaded()) {
-        return(tags$p("Loading AquaCache guidelines..."))
+        return(tags$p(tr("wq_loading_guidelines", language$language)))
       }
-
-      guidelines <- moduleData$AC_guidelines
-      if (is.null(guidelines)) {
-        return(NULL)
-      }
+      guidelines <- ac_guideline_choices()
       code <- ifelse(
-        is.na(guidelines$guideline_code) |
-          !nzchar(guidelines$guideline_code),
+        is.na(guidelines$guideline_code) | !nzchar(guidelines$guideline_code),
         "",
         paste0(guidelines$guideline_code, " - ")
       )
@@ -419,28 +968,83 @@ WQReport <- function(id, mdb_files, language) {
         ")"
       )
       labels <- ifelse(
-        is.na(guidelines$publisher_name) |
-          !nzchar(guidelines$publisher_name),
+        is.na(guidelines$publisher_name) | !nzchar(guidelines$publisher_name),
         labels,
         paste0(labels, " | ", guidelines$publisher_name)
       )
-      choices <- stats::setNames(
-        as.character(guidelines$guideline_id),
-        labels
-      )
-      selected <- input$guidelines_AC
-      if (length(selected)) {
-        selected <- selected[selected %in% unname(choices)]
-      }
-
+      choices <- stats::setNames(as.character(guidelines$guideline_id), labels)
+      selected <- intersect(as.character(input$guidelines_AC), unname(choices))
       selectizeInput(
         ns("guidelines_AC"),
-        "Select AquaCache guidelines to apply (optional)",
+        tooltip_label(
+          tr("wq_select_guidelines", language$language),
+          "wq_tooltip_guidelines",
+          language$language
+        ),
         choices = choices,
         selected = selected,
         multiple = TRUE,
         width = "100%"
       )
+    })
+
+    output$date_approx_ac_ui <- renderUI({
+      dates <- suppressWarnings(as.Date(input$dates_AC))
+      if (
+        !identical(selected_data_source(), "AC") ||
+          !length(dates) ||
+          anyNA(dates)
+      ) {
+        return(NULL)
+      }
+      if (!identical(input$date_approx_mode_AC, "per_date")) {
+        numericInput(
+          ns("date_approx_ac"),
+          tooltip_label(
+            tr("wq_date_match_window", language$language),
+            "wq_tooltip_date_match_window",
+            language$language
+          ),
+          value = saved_input("date_approx_ac", 1),
+          min = 0,
+          step = 1
+        )
+      } else {
+        date_ids <- format(dates, "%Y%m%d")
+        date_labels <- format(dates, "%Y-%m-%d")
+        tagList(lapply(seq_along(date_ids), function(i) {
+          input_id <- paste0("date_approx_", date_ids[[i]])
+          numericInput(
+            ns(input_id),
+            tooltip_label(
+              sprintf(
+                tr("wq_date_approx_for_date", language$language),
+                date_labels[[i]]
+              ),
+              "wq_tooltip_date_match_window",
+              language$language
+            ),
+            value = saved_input(input_id, 1),
+            min = 0,
+            step = 1
+          )
+        }))
+      }
+    })
+
+    observe({
+      dates <- suppressWarnings(as.Date(input$dates_AC))
+      if (!length(dates) || anyNA(dates)) {
+        return()
+      }
+
+      for (date_id in format(dates, "%Y%m%d")) {
+        input_id <- paste0("date_approx_", date_id)
+        value <- input[[input_id]]
+        if (!is.null(value)) {
+          saved_inputs[[input_id]] <- value
+        }
+      }
     })
 
     observeEvent(
@@ -452,7 +1056,14 @@ WQReport <- function(id, mdb_files, language) {
         source <- tryCatch(
           resolve_eqwin_source(input$EQWin_source),
           error = function(e) {
-            showNotification(e$message, type = "error", duration = 8)
+            showNotification(
+              paste(
+                tr("wq_err_resolve_eqwin_source", language$language),
+                e$message
+              ),
+              type = "error",
+              duration = 8
+            )
             NULL
           }
         )
@@ -494,7 +1105,10 @@ WQReport <- function(id, mdb_files, language) {
           },
           error = function(e) {
             showNotification(
-              paste("Unable to load EQWin report choices:", e$message),
+              paste(
+                tr("wq_err_load_eqwin_choices", language$language),
+                e$message
+              ),
               type = "error",
               duration = NULL,
               closeButton = TRUE
@@ -594,8 +1208,8 @@ WQReport <- function(id, mdb_files, language) {
         return(invisible(FALSE))
       }
       showModal(modalDialog(
-        title = "Cannot Generate Water Quality Report",
-        tags$p("Please correct the following before starting the report:"),
+        title = tr("wq_validation_title", language$language),
+        tags$p(tr("wq_validation_intro", language$language)),
         tags$ul(lapply(messages, function(msg) tags$li(msg))),
         easyClose = TRUE,
         footer = modalButton(tr("close", language$language))
@@ -614,28 +1228,94 @@ WQReport <- function(id, mdb_files, language) {
       issues <- character()
       source <- selected_data_source()
 
-      report_date <- as.Date(input$date)
-      if (length(report_date) != 1L || is.na(report_date)) {
-        issues <- c(issues, "Provide a valid report date.")
+      report_dates <- if (identical(source, "AC")) {
+        suppressWarnings(as.Date(input$dates_AC))
+      } else {
+        as.Date(input$date)
+      }
+      if (identical(source, "AC")) {
+        if (
+          !length(report_dates) ||
+            anyNA(report_dates) ||
+            anyDuplicated(report_dates)
+        ) {
+          issues <- c(
+            issues,
+            tr("wq_err_aquacache_dates", language$language)
+          )
+        }
+        if (
+          length(input$format_AC) != 1L ||
+            is.na(input$format_AC) ||
+            !input$format_AC %in% c("by_date", "by_location", "by_parameter")
+        ) {
+          issues <- c(issues, tr("wq_err_aquacache_layout", language$language))
+        }
+      } else if (length(report_dates) != 1L || is.na(report_dates)) {
+        issues <- c(issues, tr("wq_err_report_date", language$language))
+      }
+      tolerances <- if (
+        identical(source, "AC") &&
+          identical(input$date_approx_mode_AC, "per_date") &&
+          length(report_dates) &&
+          !anyNA(report_dates)
+      ) {
+        date_ids <- format(report_dates, "%Y%m%d")
+        vapply(
+          date_ids,
+          function(date_id) {
+            value <- input[[paste0("date_approx_", date_id)]]
+            if (is.null(value)) NA_real_ else as.numeric(value)
+          },
+          numeric(1)
+        )
+      } else if (
+        identical(source, "AC") &&
+          !is.null(input$date_approx_ac) &&
+          length(input$date_approx_ac) == 1L
+      ) {
+        as.numeric(input$date_approx_ac)
+      } else if (
+        identical(source, "EQ") &&
+          !is.null(input$date_approx_eq) &&
+          length(input$date_approx_eq) == 1L
+      ) {
+        as.numeric(input$date_approx_eq)
+      } else {
+        numeric()
+      }
+      expected_tolerance_count <- if (
+        identical(source, "AC") &&
+          identical(input$date_approx_mode_AC, "per_date")
+      ) {
+        length(report_dates)
+      } else {
+        1L
       }
       if (
-        is.null(input$date_approx) ||
-          length(input$date_approx) != 1L ||
-          is.na(input$date_approx) ||
-          input$date_approx < 0 ||
-          input$date_approx != trunc(input$date_approx)
+        !length(tolerances) ||
+          anyNA(tolerances) ||
+          any(!is.finite(tolerances)) ||
+          any(tolerances < 0) ||
+          any(tolerances > .Machine$integer.max) ||
+          any(tolerances != trunc(tolerances)) ||
+          length(tolerances) != expected_tolerance_count
       ) {
         issues <- c(
           issues,
-          "Days around the report date must be a non-negative whole number."
+          tr("wq_err_date_match_days", language$language)
         )
       }
 
-      if (!is.null(input$SD_SD) && length(input$SD_SD) == 1L && !is.na(input$SD_SD)) {
+      if (
+        !is.null(input$SD_SD) &&
+          length(input$SD_SD) == 1L &&
+          !is.na(input$SD_SD)
+      ) {
         if (!is.numeric(input$SD_SD) || input$SD_SD <= 0) {
           issues <- c(
             issues,
-            "Standard deviation threshold must be a number greater than zero."
+            tr("wq_err_sd_threshold", language$language)
           )
         }
         sd_start <- normalize_optional_date(input$SD_start)
@@ -643,7 +1323,7 @@ WQReport <- function(id, mdb_files, language) {
         if (!is.null(sd_start) && !is.null(sd_end) && sd_start > sd_end) {
           issues <- c(
             issues,
-            "Standard deviation start date must be on or before the end date."
+            tr("wq_err_sd_dates", language$language)
           )
         }
         sd_range <- as.Date(input$SD_date_range)
@@ -654,7 +1334,7 @@ WQReport <- function(id, mdb_files, language) {
         ) {
           issues <- c(
             issues,
-            "Provide a valid day-of-year range for the standard deviation filter."
+            tr("wq_err_sd_day_range", language$language)
           )
         }
       }
@@ -663,7 +1343,7 @@ WQReport <- function(id, mdb_files, language) {
         if (!isTRUE(ac_metadata_loaded())) {
           issues <- c(
             issues,
-            "AquaCache choices are still loading. Please wait and try again."
+            tr("wq_err_aquacache_loading", language$language)
           )
         } else {
           if (
@@ -672,12 +1352,20 @@ WQReport <- function(id, mdb_files, language) {
               anyNA(input$locations_AC) ||
               !any(nzchar(input$locations_AC))
           ) {
-            issues <- c(issues, "Select at least one AquaCache location.")
-          } else if (length(setdiff(
-            input$locations_AC,
-            as.character(moduleData$AC_locs$location_id)
-          ))) {
-            issues <- c(issues, "One or more selected AquaCache locations are invalid.")
+            issues <- c(
+              issues,
+              tr("wq_err_aquacache_location_required", language$language)
+            )
+          } else if (
+            length(setdiff(
+              input$locations_AC,
+              as.character(moduleData$AC_locs$location_id)
+            ))
+          ) {
+            issues <- c(
+              issues,
+              tr("wq_err_aquacache_location_invalid", language$language)
+            )
           }
           if (
             is.null(input$parameters_AC) ||
@@ -685,26 +1373,61 @@ WQReport <- function(id, mdb_files, language) {
               anyNA(input$parameters_AC) ||
               !any(nzchar(input$parameters_AC))
           ) {
-            issues <- c(issues, "Select at least one AquaCache parameter.")
-          } else if (length(setdiff(
-            input$parameters_AC,
-            as.character(moduleData$AC_params$parameter_id)
-          ))) {
-            issues <- c(issues, "One or more selected AquaCache parameters are invalid.")
+            issues <- c(
+              issues,
+              tr("wq_err_aquacache_parameter_required", language$language)
+            )
+          } else if (
+            length(setdiff(
+              input$parameters_AC,
+              as.character(moduleData$AC_params$parameter_id)
+            ))
+          ) {
+            issues <- c(
+              issues,
+              tr("wq_err_aquacache_parameter_invalid", language$language)
+            )
+          }
+          if (
+            length(input$matrix_states_AC) &&
+              length(setdiff(
+                input$matrix_states_AC,
+                as.character(moduleData$AC_matrix_states$matrix_state_id)
+              ))
+          ) {
+            issues <- c(
+              issues,
+              tr("wq_err_matrix_state_invalid", language$language)
+            )
+          }
+          if (
+            length(input$sample_fractions_AC) &&
+              length(setdiff(
+                input$sample_fractions_AC,
+                as.character(moduleData$AC_sample_fractions$sample_fraction_id)
+              ))
+          ) {
+            issues <- c(
+              issues,
+              tr("wq_err_sample_fraction_invalid", language$language)
+            )
           }
           if (
             length(input$guidelines_AC) &&
               length(setdiff(
                 input$guidelines_AC,
-                as.character(moduleData$AC_guidelines$guideline_id)
+                as.character(ac_guideline_choices()$guideline_id)
               ))
           ) {
-            issues <- c(issues, "One or more selected AquaCache guidelines are invalid.")
+            issues <- c(
+              issues,
+              tr("wq_err_aquacache_guideline_invalid", language$language)
+            )
           }
         }
       } else {
         if (!eqwin_available) {
-          issues <- c(issues, "No configured EQWin database is available.")
+          issues <- c(issues, tr("wq_err_no_eqwin_database", language$language))
         }
         if (
           is.null(input$EQWin_source) ||
@@ -712,12 +1435,20 @@ WQReport <- function(id, mdb_files, language) {
             anyNA(input$EQWin_source) ||
             !nzchar(input$EQWin_source[[1]])
         ) {
-          issues <- c(issues, "Select a valid EQWin database.")
-        } else if (inherits(
-          try(resolve_eqwin_source(input$EQWin_source[[1]]), silent = TRUE),
-          "try-error"
-        )) {
-          issues <- c(issues, "Select an available configured EQWin database.")
+          issues <- c(
+            issues,
+            tr("wq_err_select_valid_eqwin", language$language)
+          )
+        } else if (
+          inherits(
+            try(resolve_eqwin_source(input$EQWin_source[[1]]), silent = TRUE),
+            "try-error"
+          )
+        ) {
+          issues <- c(
+            issues,
+            tr("wq_err_select_available_eqwin", language$language)
+          )
         }
 
         if (
@@ -727,7 +1458,7 @@ WQReport <- function(id, mdb_files, language) {
         ) {
           issues <- c(
             issues,
-            "EQWin selections are still loading. Please wait a moment and try again."
+            tr("wq_err_eqwin_loading", language$language)
           )
         } else {
           if (identical(input$locs_groups, "Locations")) {
@@ -739,13 +1470,18 @@ WQReport <- function(id, mdb_files, language) {
             ) {
               issues <- c(
                 issues,
-                "Select at least one station, or switch to location groups."
+                tr("wq_err_station_required", language$language)
               )
-            } else if (length(setdiff(
-              input$locations_EQ,
-              moduleData$EQ_locs$StnCode
-            ))) {
-              issues <- c(issues, "One or more selected stations are invalid.")
+            } else if (
+              length(setdiff(
+                input$locations_EQ,
+                moduleData$EQ_locs$StnCode
+              ))
+            ) {
+              issues <- c(
+                issues,
+                tr("wq_err_station_invalid", language$language)
+              )
             }
           } else if (identical(input$locs_groups, "Location Groups")) {
             if (
@@ -754,16 +1490,22 @@ WQReport <- function(id, mdb_files, language) {
                 anyNA(input$location_groups) ||
                 !nzchar(input$location_groups[[1]])
             ) {
-              issues <- c(issues, "Select a location group.")
+              issues <- c(
+                issues,
+                tr("wq_err_location_group_required", language$language)
+              )
             } else if (
               !input$location_groups[[1]] %in% moduleData$EQ_loc_grps$groupname
             ) {
-              issues <- c(issues, "The selected location group is invalid.")
+              issues <- c(
+                issues,
+                tr("wq_err_location_group_invalid", language$language)
+              )
             }
           } else {
             issues <- c(
               issues,
-              "Choose whether to filter by stations or by location groups."
+              tr("wq_err_location_filter_mode", language$language)
             )
           }
 
@@ -776,13 +1518,18 @@ WQReport <- function(id, mdb_files, language) {
             ) {
               issues <- c(
                 issues,
-                "Select at least one parameter, or switch to parameter groups."
+                tr("wq_err_parameter_required", language$language)
               )
-            } else if (length(setdiff(
-              input$parameters_EQ,
-              moduleData$EQ_params$ParamCode
-            ))) {
-              issues <- c(issues, "One or more selected parameters are invalid.")
+            } else if (
+              length(setdiff(
+                input$parameters_EQ,
+                moduleData$EQ_params$ParamCode
+              ))
+            ) {
+              issues <- c(
+                issues,
+                tr("wq_err_parameter_invalid", language$language)
+              )
             }
           } else if (identical(input$params_groups, "Parameter Groups")) {
             if (
@@ -791,23 +1538,33 @@ WQReport <- function(id, mdb_files, language) {
                 anyNA(input$parameter_groups) ||
                 !nzchar(input$parameter_groups[[1]])
             ) {
-              issues <- c(issues, "Select a parameter group.")
+              issues <- c(
+                issues,
+                tr("wq_err_parameter_group_required", language$language)
+              )
             } else if (
-              !input$parameter_groups[[1]] %in% moduleData$EQ_param_grps$groupname
+              !input$parameter_groups[[1]] %in%
+                moduleData$EQ_param_grps$groupname
             ) {
-              issues <- c(issues, "The selected parameter group is invalid.")
+              issues <- c(
+                issues,
+                tr("wq_err_parameter_group_invalid", language$language)
+              )
             }
           } else {
             issues <- c(
               issues,
-              "Choose whether to filter by parameters or by parameter groups."
+              tr("wq_err_parameter_filter_mode", language$language)
             )
           }
           if (
             length(input$stds) &&
               length(setdiff(input$stds, moduleData$EQ_stds$StdCode))
           ) {
-            issues <- c(issues, "One or more selected standards are invalid.")
+            issues <- c(
+              issues,
+              tr("wq_err_standard_invalid", language$language)
+            )
           }
         }
       }
@@ -827,10 +1584,10 @@ WQReport <- function(id, mdb_files, language) {
       invisible(NULL)
     }
 
-    pick_generated_file <- function(files, pattern = NULL) {
+    pick_generated_file <- function(files, pattern = NULL, lang) {
       files <- files[file.exists(files)]
       if (!length(files)) {
-        stop("No files were generated for the report.")
+        stop(tr("wq_err_no_report_files", lang), call. = FALSE)
       }
       if (!is.null(pattern)) {
         matched <- files[grepl(pattern, basename(files), ignore.case = TRUE)]
@@ -838,11 +1595,11 @@ WQReport <- function(id, mdb_files, language) {
           return(matched[[1]])
         }
         if (length(matched) > 1L) {
-          stop("Multiple report files were generated where only one was expected.")
+          stop(tr("wq_err_multiple_report_files", lang), call. = FALSE)
         }
       }
       if (length(files) != 1L) {
-        stop("Expected a single generated report file.")
+        stop(tr("wq_err_expected_report_file", lang), call. = FALSE)
       }
       files[[1]]
     }
@@ -853,6 +1610,7 @@ WQReport <- function(id, mdb_files, language) {
         dir.create(work_dir, recursive = TRUE)
         tryCatch(
           {
+            report_warning <- NULL
             if (identical(req$data_source, "AC")) {
               con <- AquaConnect(
                 name = db_config$dbName,
@@ -872,8 +1630,11 @@ WQReport <- function(id, mdb_files, language) {
                 date = req$date,
                 location_ids = req$location_ids,
                 parameter_ids = req$parameter_ids,
+                matrix_state_ids = req$matrix_state_ids,
+                sample_fraction_ids = req$sample_fraction_ids,
                 guideline_ids = req$guideline_ids,
                 date_approx = req$date_approx,
+                format = req$format,
                 sd_multiplier = req$sd_multiplier,
                 sd_start = req$sd_start,
                 sd_end = req$sd_end,
@@ -883,6 +1644,27 @@ WQReport <- function(id, mdb_files, language) {
                 con = con
               )
               report_path <- result$xlsx_path
+              if (result$reused_sample_count > 0L) {
+                report_warning <- if (result$reused_sample_count == 1L) {
+                  tr("wq_report_sample_reuse_one", req$ui_language)
+                } else {
+                  sprintf(
+                    tr("wq_report_sample_reuse_many", req$ui_language),
+                    result$reused_sample_count
+                  )
+                }
+                report_warning <- paste(
+                  report_warning,
+                  tr(
+                    if (identical(req$format, "by_date")) {
+                      "wq_report_reuse_worksheets"
+                    } else {
+                      "wq_report_reuse_date_columns"
+                    },
+                    req$ui_language
+                  )
+                )
+              }
             } else {
               EQWin <- AccessConnect(req$eqwin_source, silent = TRUE)
               on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
@@ -904,19 +1686,20 @@ WQReport <- function(id, mdb_files, language) {
               )
               report_path <- pick_generated_file(
                 list.files(work_dir, full.names = TRUE),
-                pattern = "\\.xlsx$"
+                pattern = "\\.xlsx$",
+                lang = req$ui_language
               )
             }
 
+            date_label <- paste(format(req$date, "%Y-%m-%d"), collapse = ", ")
             list(
               path = report_path,
-              filename = paste0(
-                "water quality report for ",
-                req$date,
-                " Issued ",
-                Sys.Date(),
-                ".xlsx"
-              )
+              filename = sprintf(
+                tr("wq_report_filename", req$ui_language),
+                date_label,
+                Sys.Date()
+              ),
+              warning_message = report_warning
             )
           },
           error = function(e) {
@@ -955,18 +1738,41 @@ WQReport <- function(id, mdb_files, language) {
       }
       req <- list(
         data_source = source,
-        date = as.Date(input$date),
-        date_approx = as.integer(input$date_approx),
+        date = if (identical(source, "AC")) {
+          as.Date(input$dates_AC)
+        } else {
+          as.Date(input$date)
+        },
+        date_approx = if (identical(source, "AC")) {
+          if (identical(input$date_approx_mode_AC, "per_date")) {
+            date_ids <- format(as.Date(input$dates_AC), "%Y%m%d")
+            as.integer(vapply(
+              date_ids,
+              function(date_id) {
+                input[[paste0("date_approx_", date_id)]]
+              },
+              numeric(1)
+            ))
+          } else {
+            as.integer(input$date_approx_ac)
+          }
+        } else {
+          as.integer(input$date_approx_eq)
+        },
+        format = if (identical(source, "AC")) input$format_AC else NULL,
         sd_multiplier = sd_multiplier,
         sd_start = normalize_optional_date(input$SD_start),
         sd_end = normalize_optional_date(input$SD_end),
         sd_day_of_year = sd_day_of_year,
-        lang = if (identical(language$language, "Français")) "fr" else "en"
+        lang = if (identical(language$language, "Français")) "fr" else "en",
+        ui_language = language$language
       )
 
       if (identical(source, "AC")) {
         req$location_ids <- input$locations_AC
         req$parameter_ids <- input$parameters_AC
+        req$matrix_state_ids <- input$matrix_states_AC
+        req$sample_fraction_ids <- input$sample_fractions_AC
         req$guideline_ids <- if (length(input$guidelines_AC)) {
           input$guidelines_AC
         } else {
@@ -989,7 +1795,9 @@ WQReport <- function(id, mdb_files, language) {
         } else {
           NULL
         }
-        req$paramGrp <- if (identical(input$params_groups, "Parameter Groups")) {
+        req$paramGrp <- if (
+          identical(input$params_groups, "Parameter Groups")
+        ) {
           input$parameter_groups
         } else {
           NULL
@@ -1013,7 +1821,7 @@ WQReport <- function(id, mdb_files, language) {
       result <- report_task$result()
       if (inherits(result, "character")) {
         showNotification(
-          paste("Error generating water quality report:", result),
+          paste(tr("wq_err_generating_prefix", language$language), result),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -1022,7 +1830,7 @@ WQReport <- function(id, mdb_files, language) {
       }
       if (is.null(result$path) || !file.exists(result$path)) {
         showNotification(
-          "Report was generated, but the output file could not be found for download.",
+          tr("wq_err_download_missing", language$language),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -1030,6 +1838,14 @@ WQReport <- function(id, mdb_files, language) {
         return()
       }
       cleanup_download_bundle(download_bundle())
+      if (!is.null(result$warning_message)) {
+        showNotification(
+          result$warning_message,
+          type = "warning",
+          duration = 12,
+          closeButton = TRUE
+        )
+      }
       download_bundle(result)
       shinyjs::click("download")
     })
@@ -1043,11 +1859,11 @@ WQReport <- function(id, mdb_files, language) {
         bundle <- download_bundle()
         req(bundle)
         if (!file.exists(bundle$path)) {
-          stop("Generated report file could not be found for download.")
+          stop(tr("wq_err_download_source_missing", language$language))
         }
         copied <- file.copy(bundle$path, file, overwrite = TRUE)
         if (!isTRUE(copied)) {
-          stop("Unable to copy the generated report to the download location.")
+          stop(tr("wq_err_download_copy", language$language))
         }
         cleanup_download_bundle(bundle)
         download_bundle(NULL)
