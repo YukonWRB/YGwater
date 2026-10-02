@@ -6,8 +6,84 @@
 #' @return A Shiny UI definition.
 #' @keywords internal
 #' @noRd
-floodDashboardUIMod <- function(id) {
+flood_dashboard_parameter_choices <- function(
+    lang,
+    include_none = FALSE,
+    none_value = NULL
+) {
+    parameter_values <- c(
+        "water level",
+        "water flow",
+        "precipitation (1wk)",
+        "temperature, air",
+        "FDD",
+        "DDT",
+        "snow water eq (pillow)",
+        "snow depth (pillow)",
+        "snow water eq (survey)",
+        "snow depth (survey)"
+    )
+    parameter_keys <- c(
+        "water_level",
+        "water_flow",
+        "precipitation",
+        "air_temperature",
+        "flood_parameter_fdd",
+        "flood_parameter_ddt",
+        "flood_parameter_swe_pillow",
+        "flood_parameter_depth_pillow",
+        "flood_parameter_swe_survey",
+        "flood_parameter_depth_survey"
+    )
+    parameter_labels <- vapply(
+        parameter_keys,
+        tr,
+        character(1),
+        lang = lang
+    )
+    choices <- stats::setNames(parameter_values, parameter_labels)
+    if (isTRUE(include_none)) {
+        choices <- c(
+            stats::setNames(none_value, tr("none_m", lang)),
+            choices
+        )
+    }
+    choices
+}
+
+floodDashboardUIMod <- function(id, language, parent_inputs = NULL) {
     ns <- shiny::NS(id)
+    lang <- shiny::req(language$language)
+    saved_ids <- c(
+        "community",
+        "view_mode",
+        "relative_view_weeks_before",
+        "time0",
+        "relative_view_weeks_after",
+        "parameter",
+        "primary_historical_years",
+        "station",
+        "summary_mode",
+        "station_plot_show_legend",
+        "station_plot_label_traces",
+        "filter_upstream_gauges",
+        "precip_accumulation",
+        "secondary_parameter",
+        "secondary_historical_years",
+        "secondary_station"
+    )
+    saved_inputs <- if (is.null(parent_inputs)) {
+        list()
+    } else {
+        shiny::isolate(stats::setNames(
+            lapply(saved_ids, function(input_id) parent_inputs[[input_id]]),
+            saved_ids
+        ))
+    }
+    saved_input <- function(input_id, default = NULL) {
+        value <- saved_inputs[[input_id]]
+        if (is.null(value) || !length(value)) default else value
+    }
 
     tooltip_label <- function(text, tip) {
         bslib::tooltip(
@@ -210,9 +286,10 @@ floodDashboardUIMod <- function(id) {
         ))),
         bslib::accordion(
             id = ns("controls"),
-            open = c("Main"),
+            open = c("main"),
             bslib::accordion_panel(
-                "Main",
+                tr("flood_main", lang),
+                value = "main",
                 shiny::tags$div(
                     class = "dashboard-controls-wrap",
                     shiny::tags$div(
@@ -222,11 +299,11 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectInput(
                                 inputId = ns("community"),
                                 label = tooltip_label(
-                                    "Community",
-                                    "Select the community used to filter stations, map features, and summaries."
+                                    tr("community", lang),
+                                    tr("flood_community_help", lang)
                                 ),
                                 choices = character(0),
-                                selected = NULL
+                                selected = saved_input("community")
                             )
                         ),
                         shiny::tags$div(
@@ -234,14 +311,17 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectInput(
                                 inputId = ns("view_mode"),
                                 label = tooltip_label(
-                                    "Layout",
-                                    "Choose compact or single-column dashboard layout."
+                                    tr("flood_layout", lang),
+                                    tr("flood_layout_help", lang)
                                 ),
-                                choices = c(
-                                    "Compact" = "compact",
-                                    "Single column" = "single-column"
+                                choices = stats::setNames(
+                                    c("compact", "single-column"),
+                                    c(
+                                        tr("flood_layout_compact", lang),
+                                        tr("flood_layout_single_column", lang)
+                                    )
                                 ),
-                                selected = "compact"
+                                selected = saved_input("view_mode", "compact")
                             )
                         ),
                         shiny::tags$div(
@@ -249,10 +329,13 @@ floodDashboardUIMod <- function(id) {
                             shiny::numericInput(
                                 inputId = ns("relative_view_weeks_before"),
                                 label = tooltip_label(
-                                    "Past weeks",
-                                    "Number of weeks to display before the reference time in relative view."
+                                    tr("flood_past_weeks", lang),
+                                    tr("flood_past_weeks_help", lang)
                                 ),
-                                value = 2,
+                                value = saved_input(
+                                    "relative_view_weeks_before",
+                                    2
+                                ),
                                 min = 0,
                                 max = 520,
                                 step = 1,
@@ -267,8 +350,8 @@ floodDashboardUIMod <- function(id) {
                                 shiny::tags$label(
                                     `for` = ns("time0"),
                                     tooltip_label(
-                                        "Current time",
-                                        "Reference date/time used for summaries and plot windows."
+                                        tr("reference_time", lang),
+                                        tr("flood_reference_time_help", lang)
                                     ),
                                     class = "control-label"
                                 ),
@@ -276,9 +359,9 @@ floodDashboardUIMod <- function(id) {
                                     id = ns("time0"),
                                     type = "datetime-local",
                                     class = "form-control",
-                                    value = format(
-                                        Sys.time(),
-                                        "%Y-%m-%dT%H:%M"
+                                    value = saved_input(
+                                        "time0",
+                                        format(Sys.time(), "%Y-%m-%dT%H:%M")
                                     ),
                                     max = format(Sys.time(), "%Y-%m-%dT%H:%M"),
                                     oninput = paste0(
@@ -295,10 +378,13 @@ floodDashboardUIMod <- function(id) {
                             shiny::numericInput(
                                 inputId = ns("relative_view_weeks_after"),
                                 label = tooltip_label(
-                                    "Future weeks",
-                                    "Number of weeks to display after the reference time in relative view."
+                                    tr("flood_future_weeks", lang),
+                                    tr("flood_future_weeks_help", lang)
                                 ),
-                                value = 4,
+                                value = saved_input(
+                                    "relative_view_weeks_after",
+                                    4
+                                ),
                                 min = 0,
                                 max = 520,
                                 step = 1,
@@ -313,14 +399,14 @@ floodDashboardUIMod <- function(id) {
                                 shiny::tags$label(
                                     `for` = ns("export_html_report"),
                                     tooltip_label(
-                                        "Export",
-                                        "Download the current dashboard view as an HTML report."
+                                        tr("flood_export", lang),
+                                        tr("flood_export_help", lang)
                                     ),
                                     class = "control-label"
                                 ),
                                 shiny::downloadButton(
                                     ns("export_html_report"),
-                                    "Export to HTML",
+                                    tr("download_report_html", lang),
                                     style = "width:100%;"
                                 )
                             )
@@ -333,23 +419,22 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectizeInput(
                                 inputId = ns("parameter"),
                                 label = tooltip_label(
-                                    "Parameter",
-                                    "Primary parameter used in the summary table and station plot."
+                                    tr("parameter", lang),
+                                    tr("flood_parameter_help", lang)
                                 ),
-                                choices = c(
-                                    "water level",
-                                    "water flow",
-                                    "precipitation (1wk)",
-                                    "temperature, air",
-                                    "FDD",
-                                    "DDT",
-                                    "snow water eq (pillow)",
-                                    "snow depth (pillow)",
-                                    "snow water eq (survey)",
-                                    "snow depth (survey)"
+                                choices = flood_dashboard_parameter_choices(
+                                    lang
                                 ),
-                                selected = "water level",
-                                options = list(placeholder = "Param")
+                                selected = saved_input(
+                                    "parameter",
+                                    "water level"
+                                ),
+                                options = list(
+                                    placeholder = tr(
+                                        "flood_parameter_placeholder",
+                                        lang
+                                    )
+                                )
                             )
                         ),
                         shiny::tags$div(
@@ -357,14 +442,20 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectizeInput(
                                 inputId = ns("primary_historical_years"),
                                 label = tooltip_label(
-                                    "Historical traces",
-                                    "Optional historical years to overlay for the primary series."
+                                    tr("flood_historical_traces", lang),
+                                    tr("flood_primary_historical_help", lang)
                                 ),
                                 choices = character(0),
-                                selected = character(0),
+                                selected = saved_input(
+                                    "primary_historical_years",
+                                    character(0)
+                                ),
                                 multiple = TRUE,
                                 options = list(
-                                    placeholder = "Years",
+                                    placeholder = tr(
+                                        "flood_years_placeholder",
+                                        lang
+                                    ),
                                     plugins = list("remove_button")
                                 )
                             )
@@ -374,20 +465,26 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectizeInput(
                                 inputId = ns("station"),
                                 label = tooltip_label(
-                                    "Station",
-                                    "Primary station shown in the station plot."
+                                    tr("station", lang),
+                                    tr("flood_primary_station_help", lang)
                                 ),
                                 choices = character(0),
-                                selected = character(0),
+                                selected = saved_input("station", character(0)),
                                 multiple = FALSE,
-                                options = list(placeholder = "Station")
+                                options = list(
+                                    placeholder = tr(
+                                        "flood_station_placeholder",
+                                        lang
+                                    )
+                                )
                             )
                         )
                     )
                 )
             ),
             bslib::accordion_panel(
-                "Advanced",
+                tr("advanced_settings", lang),
+                value = "advanced",
                 shiny::tags$div(
                     class = "dashboard-controls-wrap",
                     shiny::tags$div(
@@ -397,17 +494,32 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectizeInput(
                                 inputId = ns("summary_mode"),
                                 label = tooltip_label(
-                                    "Summary mode",
-                                    "Choose how the summary table values are computed: relative changes, changes, or compared to historical values."
+                                    tr("flood_summary_mode", lang),
+                                    tr("flood_summary_mode_help", lang)
                                 ),
-                                choices = c(
-                                    "Relative changes" = "recent",
-                                    "Changes" = "compared_recent",
-                                    "Compared to historical" = "compared_historical"
+                                choices = stats::setNames(
+                                    c(
+                                        "recent",
+                                        "compared_recent",
+                                        "compared_historical"
+                                    ),
+                                    c(
+                                        tr("flood_summary_relative", lang),
+                                        tr("flood_summary_changes", lang),
+                                        tr("flood_summary_historical", lang)
+                                    )
                                 ),
-                                selected = "recent",
+                                selected = saved_input(
+                                    "summary_mode",
+                                    "recent"
+                                ),
                                 multiple = FALSE,
-                                options = list(placeholder = "Mode")
+                                options = list(
+                                    placeholder = tr(
+                                        "flood_mode_placeholder",
+                                        lang
+                                    )
+                                )
                             )
                         ),
                         shiny::tags$div(
@@ -415,10 +527,13 @@ floodDashboardUIMod <- function(id) {
                             shiny::checkboxInput(
                                 inputId = ns("station_plot_show_legend"),
                                 label = tooltip_label(
-                                    "Show legend",
-                                    "Toggle trace and envelope legend visibility on the station plot."
+                                    tr("flood_show_legend", lang),
+                                    tr("flood_show_legend_help", lang)
                                 ),
-                                value = FALSE,
+                                value = saved_input(
+                                    "station_plot_show_legend",
+                                    FALSE
+                                ),
                                 width = NULL
                             )
                         ),
@@ -427,10 +542,13 @@ floodDashboardUIMod <- function(id) {
                             shiny::checkboxInput(
                                 inputId = ns("station_plot_label_traces"),
                                 label = tooltip_label(
-                                    "Label traces",
-                                    "Add inline labels to plot traces where supported."
+                                    tr("flood_label_traces", lang),
+                                    tr("flood_label_traces_help", lang)
                                 ),
-                                value = TRUE,
+                                value = saved_input(
+                                    "station_plot_label_traces",
+                                    TRUE
+                                ),
                                 width = NULL
                             )
                         ),
@@ -439,10 +557,13 @@ floodDashboardUIMod <- function(id) {
                             shiny::checkboxInput(
                                 inputId = ns("filter_upstream_gauges"),
                                 label = tooltip_label(
-                                    "Filter upstream gauges",
-                                    "Hide upstream gauge stations from summaries and selection lists."
+                                    tr("flood_filter_upstream", lang),
+                                    tr("flood_filter_upstream_help", lang)
                                 ),
-                                value = TRUE,
+                                value = saved_input(
+                                    "filter_upstream_gauges",
+                                    TRUE
+                                ),
                                 width = NULL
                             )
                         ),
@@ -451,20 +572,38 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectizeInput(
                                 inputId = ns("precip_accumulation"),
                                 label = tooltip_label(
-                                    "Precip. accumulation",
-                                    "Precipitation accumulation window applied to both primary and secondary precipitation traces, when selected."
+                                    tr("flood_precip_accumulation", lang),
+                                    tr("flood_precip_accumulation_help", lang)
                                 ),
-                                choices = c(
-                                    "1 week",
-                                    "48h",
-                                    "24h",
-                                    "12h",
-                                    "6h",
-                                    "1h"
+                                choices = stats::setNames(
+                                    c(
+                                        "1 week",
+                                        "48h",
+                                        "24h",
+                                        "12h",
+                                        "6h",
+                                        "1h"
+                                    ),
+                                    c(
+                                        tr("flood_accumulation_week", lang),
+                                        "48 h",
+                                        "24 h",
+                                        "12 h",
+                                        "6 h",
+                                        "1 h"
+                                    )
                                 ),
-                                selected = "1 week",
+                                selected = saved_input(
+                                    "precip_accumulation",
+                                    "1 week"
+                                ),
                                 multiple = FALSE,
-                                options = list(placeholder = "Accumulation")
+                                options = list(
+                                    placeholder = tr(
+                                        "flood_accumulation_placeholder",
+                                        lang
+                                    )
+                                )
                             )
                         )
                     ),
@@ -475,12 +614,24 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectizeInput(
                                 inputId = ns("secondary_parameter"),
                                 label = tooltip_label(
-                                    "Secondary",
-                                    "Optional secondary parameter for comparison in the station plot."
+                                    tr("flood_secondary_parameter", lang),
+                                    tr("flood_secondary_parameter_help", lang)
                                 ),
-                                choices = character(0),
-                                selected = character(0),
-                                options = list(placeholder = "Param")
+                                choices = flood_dashboard_parameter_choices(
+                                    lang,
+                                    TRUE,
+                                    "__none__"
+                                ),
+                                selected = saved_input(
+                                    "secondary_parameter",
+                                    "__none__"
+                                ),
+                                options = list(
+                                    placeholder = tr(
+                                        "flood_parameter_placeholder",
+                                        lang
+                                    )
+                                )
                             )
                         ),
                         shiny::tags$div(
@@ -488,14 +639,20 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectizeInput(
                                 inputId = ns("secondary_historical_years"),
                                 label = tooltip_label(
-                                    "Historical traces",
-                                    "Optional historical years to overlay for the secondary series."
+                                    tr("flood_historical_traces", lang),
+                                    tr("flood_secondary_historical_help", lang)
                                 ),
                                 choices = character(0),
-                                selected = character(0),
+                                selected = saved_input(
+                                    "secondary_historical_years",
+                                    character(0)
+                                ),
                                 multiple = TRUE,
                                 options = list(
-                                    placeholder = "Years",
+                                    placeholder = tr(
+                                        "flood_years_placeholder",
+                                        lang
+                                    ),
                                     plugins = list("remove_button")
                                 )
                             )
@@ -505,12 +662,20 @@ floodDashboardUIMod <- function(id) {
                             shiny::selectizeInput(
                                 inputId = ns("secondary_station"),
                                 label = tooltip_label(
-                                    "Station",
-                                    "Secondary station used for comparison against the primary station."
+                                    tr("station", lang),
+                                    tr("flood_secondary_station_help", lang)
                                 ),
                                 choices = character(0),
-                                selected = character(0),
-                                options = list(placeholder = "Station")
+                                selected = saved_input(
+                                    "secondary_station",
+                                    "__none__"
+                                ),
+                                options = list(
+                                    placeholder = tr(
+                                        "flood_station_placeholder",
+                                        lang
+                                    )
+                                )
                             )
                         )
                     )
@@ -522,7 +687,7 @@ floodDashboardUIMod <- function(id) {
             class = "compact",
             bslib::card(
                 style = "min-height:520px;",
-                bslib::card_header("Summary"),
+                bslib::card_header(tr("flood_summary", lang)),
                 bslib::card_body(
                     style = "height:460px; overflow:auto;",
                     DT::DTOutput(ns("summary_table"))
@@ -545,7 +710,7 @@ floodDashboardUIMod <- function(id) {
                             class = "station-plot-actions",
                             shiny::actionButton(
                                 inputId = ns("create_plot"),
-                                label = "Render plot",
+                                label = tr("create_plot", lang),
                                 class = "btn btn-primary btn-sm"
                             )
                         )
@@ -568,7 +733,7 @@ floodDashboardUIMod <- function(id) {
             bslib::card(
                 style = "height:450px;",
                 bslib::card_header(
-                    "Drainage area and hydrometeorological station map"
+                    tr("flood_station_map_heading", lang)
                 ),
                 leaflet::leafletOutput(ns("stations_map"), height = "390px")
             ),
@@ -2323,25 +2488,37 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         )
     }
 
-    precip_accumulation_display <- function(value) {
+    precip_accumulation_display <- function(
+        value,
+        lang = language$language
+    ) {
         selected <- normalize_precip_accumulation(value)
-        if (identical(selected, "1 week")) {
-            return("1-week")
-        }
-        selected
+        switch(
+            selected,
+            "1 week" = tr("flood_accumulation_week", lang),
+            "48h" = "48 h",
+            "24h" = "24 h",
+            "12h" = "12 h",
+            "6h" = "6 h",
+            "1h" = "1 h",
+            selected
+        )
     }
 
     parameter_display_label <- function(
         parameter,
-        precip_accumulation = "1 week"
+        precip_accumulation = "1 week",
+        lang = language$language
     ) {
         if (identical(parameter, "precipitation (1wk)")) {
             return(sprintf(
-                "precipitation (%s accumulation)",
+                tr("flood_precipitation_display", lang),
                 precip_accumulation_display(precip_accumulation)
             ))
         }
-        parameter
+        choices <- flood_dashboard_parameter_choices(lang)
+        label <- names(choices)[match(parameter, unname(choices))]
+        if (length(label) == 1 && !is.na(label)) label else parameter
     }
 
     #' Get y-axis title for a parameter
@@ -2352,27 +2529,16 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
     #' @noRd
     parameter_axis_title <- function(
         parameter,
-        precip_accumulation = "1 week"
+        precip_accumulation = "1 week",
+        lang = language$language
     ) {
-        axis_titles <- c(
-            "FDD" = "Freezing Degree Days (FDD)",
-            "DDT" = "Thawing Degree Days (DDT)",
-            "snow water eq (pillow)" = "Snow Water Equivalent (Pillow)",
-            "snow depth (pillow)" = "Snow Depth (Pillow)",
-            "snow water eq (survey)" = "Snow Water Equivalent (Survey)",
-            "snow depth (survey)" = "Snow Depth (Survey)"
-        )
         if (identical(parameter, "precipitation (1wk)")) {
             return(sprintf(
-                "Precipitation (%s accumulation, mm)",
+                tr("flood_precipitation_axis", lang),
                 precip_accumulation_display(precip_accumulation)
             ))
         }
-        if (parameter %in% names(axis_titles)) {
-            axis_titles[[parameter]]
-        } else {
-            parameter
-        }
+        parameter_display_label(parameter, precip_accumulation, lang)
     }
 
     sanitize_loaded_series_values <- function(dat, parameter) {
@@ -3789,7 +3955,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             return(empty_plotly_widget(
                 title = title_prefix,
                 annotations = list(list(
-                    text = sprintf("No data available for %s.", location_code),
+                    text = sprintf(
+                        tr("flood_no_data", language$language),
+                        location_code
+                    ),
                     x = 0.5,
                     y = 0.5,
                     xref = "paper",
@@ -3812,7 +3981,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             return(empty_plotly_widget(
                 title = title_prefix,
                 annotations = list(list(
-                    text = sprintf("No plottable data for %s.", location_code),
+                    text = sprintf(
+                        tr("flood_no_plottable_data", language$language),
+                        location_code
+                    ),
                     x = 0.5,
                     y = 0.5,
                     xref = "paper",
@@ -3840,7 +4012,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         title_text <- if (!is.null(title_prefix) && nzchar(title_prefix)) {
             title_prefix
         } else {
-            sprintf("%s [%s]", location_code, parameter)
+            sprintf(
+                "%s [%s]",
+                location_code,
+                parameter_display_label(parameter)
+            )
         }
         plotly::plot_ly(
             data = series,
@@ -3848,13 +4024,16 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             y = ~value,
             type = "scatter",
             mode = "lines",
-            name = "Observed",
+            name = tr("flood_observed", language$language),
             line = list(color = "#000000", width = 1.5),
-            hovertemplate = "Observed: %{y:.3f}<extra></extra>"
+            hovertemplate = paste0(
+                tr("flood_observed_hover", language$language),
+                "<extra></extra>"
+            )
         ) %>%
             plotly::layout(
                 title = title_text,
-                xaxis = list(title = "Date"),
+                xaxis = list(title = tr("date", language$language)),
                 yaxis = list(
                     title = parameter_axis_title(
                         parameter,
@@ -3976,7 +4155,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         ]
         if (nrow(series) == 0) {
             return(empty_plotly_widget(
-                title = sprintf("No data for %s (%s)", location_code, parameter)
+                title = sprintf(
+                    tr("flood_plot_no_data", language$language),
+                    location_code,
+                    parameter_display_label(parameter)
+                )
             ))
         }
 
@@ -4205,11 +4388,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
         observed_name <- if (identical(parameter, "precipitation (1wk)")) {
             sprintf(
-                "Observed %s accumulation",
+                tr("flood_observed_accumulation", language$language),
                 precip_accumulation_display(precip_accumulation)
             )
         } else {
-            "Observed"
+            tr("flood_observed", language$language)
         }
 
         if (!"trace_source" %in% names(series)) {
@@ -4225,9 +4408,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         data = hist_series,
                         x = ~datetime,
                         y = ~value,
-                        name = "Daily observed",
+                        name = tr("flood_daily_observed", language$language),
                         legendrank = 20,
-                        hovertemplate = "Daily observed: %{y:.3f}<extra></extra>",
+                        hovertemplate = paste0(
+                            tr("flood_daily_observed", language$language),
+                            ": %{y:.3f}<extra></extra>"
+                        ),
                         line = list(color = "#4b5563", width = 1)
                     )
             }
@@ -4353,7 +4539,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         p %>%
             plotly::layout(
                 xaxis = list(
-                    title = "Date",
+                    title = tr("date", language$language),
                     range = c(
                         format(
                             view_start,
@@ -4497,7 +4683,32 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
     shiny::moduleServer(id, function(input, output, session) {
         shiny::req(language$language)
 
-        con <- session$userData$AquaCache
+        connection_version <- session$userData$AquaCache_version
+        shiny::req(connection_version, session$userData$AquaCache)
+
+        # Resolve the current session connection wherever existing dashboard
+        # helpers read `con`; the version signal invalidates queries that used
+        # the previous connection after login/logout.
+        makeActiveBinding(
+            "con",
+            function(value) {
+                if (!missing(value)) {
+                    stop(
+                        "The flood dashboard connection is managed by the app session.",
+                        call. = FALSE
+                    )
+                }
+
+                # Reactive reads subscribe to connection changes. Callers
+                # outside a reactive context still need a plain current value.
+                tryCatch(
+                    connection_version(),
+                    error = function(e) shiny::isolate(connection_version())
+                )
+                session$userData$AquaCache
+            },
+            environment()
+        )
         shiny::req(con)
 
         has_valid_connection <- function() {
@@ -4837,7 +5048,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     shiny::updateSelectizeInput(
                         session,
                         inputId = "station",
-                        choices = c("No stations available" = ""),
+                        choices = stats::setNames(
+                            "",
+                            tr("flood_no_stations_available", language$language)
+                        ),
                         selected = "",
                         server = TRUE
                     )
@@ -4904,24 +5118,18 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         shiny::observe({
             dat <- community_locations()
 
-            parameter_candidates <- c(
-                "water level",
-                "water flow",
-                "precipitation (1wk)",
-                "temperature, air",
-                "FDD",
-                "DDT",
-                "snow water eq (pillow)",
-                "snow depth (pillow)",
-                "snow water eq (survey)",
-                "snow depth (survey)"
-            )
+            lang <- language$language
+            parameter_choices <- flood_dashboard_parameter_choices(lang)
+            parameter_candidates <- unname(parameter_choices)
 
             if (is.null(dat) || nrow(dat) == 0) {
                 shiny::updateSelectizeInput(
                     session,
                     inputId = "secondary_parameter",
-                    choices = c("None" = none_select_value),
+                    choices = stats::setNames(
+                        none_select_value,
+                        tr("none_m", lang)
+                    ),
                     selected = none_select_value,
                     server = TRUE
                 )
@@ -4943,7 +5151,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             shiny::updateSelectizeInput(
                 session,
                 inputId = "secondary_parameter",
-                choices = c("None" = none_select_value, parameter_candidates),
+                choices = flood_dashboard_parameter_choices(
+                    lang,
+                    include_none = TRUE,
+                    none_value = none_select_value
+                ),
                 selected = new_selected,
                 server = TRUE
             )
@@ -5022,7 +5234,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 shiny::updateSelectizeInput(
                     session,
                     inputId = "secondary_station",
-                    choices = c("None" = none_select_value),
+                    choices = stats::setNames(
+                        none_select_value,
+                        tr("none_m", language$language)
+                    ),
                     selected = none_select_value,
                     server = TRUE
                 )
@@ -5039,7 +5254,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 shiny::updateSelectizeInput(
                     session,
                     inputId = "secondary_station",
-                    choices = c("None" = none_select_value),
+                    choices = stats::setNames(
+                        none_select_value,
+                        tr("none_m", language$language)
+                    ),
                     selected = none_select_value,
                     server = TRUE
                 )
@@ -5070,7 +5288,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             shiny::updateSelectizeInput(
                 session,
                 inputId = "secondary_station",
-                choices = c("None" = none_select_value, sec_choices),
+                choices = c(
+                    stats::setNames(
+                        none_select_value,
+                        tr("none_m", language$language)
+                    ),
+                    sec_choices
+                ),
                 selected = new_selected,
                 server = TRUE
             )
@@ -5506,15 +5730,19 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 }
                 format(
                     as.POSIXct(timestamps$datetime[[idx]], tz = "Etc/GMT+7"),
-                    "%d-%b-%y %H:%M",
+                    "%Y-%m-%d %H:%M",
                     tz = "Etc/GMT+7"
                 )
             } else {
-                "No images"
+                tr("flood_no_images", language$language)
             }
 
             if (is.null(series) || nrow(series) == 0) {
-                return(shiny::tags$span(paste("Images \u2014", ts_str)))
+                return(shiny::tags$span(paste(
+                    tr("flood_images", language$language),
+                    "\u2014",
+                    ts_str
+                )))
             }
 
             choices <- stats::setNames(
@@ -5547,7 +5775,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         width = "auto",
                         selectize = FALSE
                     ),
-                    "Choose which image series location to display.",
+                    tr("flood_image_location_help", language$language),
                     placement = "top"
                 ),
                 bslib::tooltip(
@@ -5556,7 +5784,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         label = "\u25c0",
                         style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
                     ),
-                    "Show previous image timestamp.",
+                    tr("flood_previous_image_help", language$language),
                     placement = "top"
                 ),
                 shiny::tags$span(
@@ -5578,7 +5806,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         label = "\u25b6",
                         style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
                     ),
-                    "Show next image timestamp.",
+                    tr("flood_next_image_help", language$language),
                     placement = "top"
                 ),
                 shiny::tags$span(
@@ -5596,7 +5824,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             if (!has_valid_connection()) {
                 return(shiny::tags$div(
                     style = "color:#6b7280;",
-                    "Image lookup is unavailable: database connection is not active."
+                    tr("flood_image_connection_unavailable", language$language)
                 ))
             }
 
@@ -5604,7 +5832,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             if (is.null(timestamps) || nrow(timestamps) == 0) {
                 return(shiny::tags$div(
                     style = "color:#6b7280;",
-                    "No images available in the last 7 days for this location."
+                    tr("flood_recent_images_unavailable", language$language)
                 ))
             }
 
@@ -5632,7 +5860,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
 
             if (nrow(image) == 0 || is.null(image$file[[1]])) {
-                return(shiny::tags$div("Image bytes not available"))
+                return(shiny::tags$div(tr(
+                    "flood_image_bytes_unavailable",
+                    language$language
+                )))
             }
 
             img_src <- tryCatch(
@@ -5644,7 +5875,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
 
             if (is.null(img_src)) {
-                return(shiny::tags$div("Unable to render image"))
+                return(shiny::tags$div(tr(
+                    "flood_image_render_error",
+                    language$language
+                )))
             }
 
             shiny::tags$img(
@@ -5654,6 +5888,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         })
 
         output$stations_map <- leaflet::renderLeaflet({
+            lang <- language$language
             dat <- tryCatch(community_locations(), error = function(e) {
                 data.frame()
             })
@@ -5701,6 +5936,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "Snow survey" = "#d97706",
                 "Other" = "#94a3b8"
             )
+            station_type_labels <- c(
+                "Hydrometric" = tr("hydrometric", lang),
+                "Meteorological" = tr("meteorological", lang),
+                "Snow survey" = tr("snow_survey", lang),
+                "Other" = tr("other", lang)
+            )
 
             map <- leaflet::leaflet() %>%
                 leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap)
@@ -5732,7 +5973,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 )]
 
                 if (length(available_parameters) == 0) {
-                    return("<em>No supported parameters</em>")
+                    return(sprintf(
+                        "<em>%s</em>",
+                        htmltools::htmlEscape(tr(
+                            "flood_popup_no_parameters",
+                            lang
+                        ))
+                    ))
                 }
 
                 parameter_links <- vapply(
@@ -5754,7 +6001,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             ),
                             map_primary_selection_input,
                             payload,
-                            htmltools::htmlEscape(parameter_name)
+                            htmltools::htmlEscape(parameter_display_label(
+                                parameter_name,
+                                lang = lang
+                            ))
                         )
                     },
                     character(1)
@@ -5907,10 +6157,19 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         opacity = 0.95,
                         options = leaflet::pathOptions(interactive = FALSE),
                         popup = ~ paste0(
-                            "<strong>Basin:</strong> ",
+                            "<strong>",
+                            htmltools::htmlEscape(tr(
+                                "flood_popup_basin",
+                                lang
+                            )),
+                            ":</strong> ",
                             htmltools::htmlEscape(as.character(feature_name)),
-                            "<br/><strong>Type:</strong> ",
-                            htmltools::htmlEscape(as.character(basin_type))
+                            "<br/><strong>",
+                            htmltools::htmlEscape(tr("type", lang)),
+                            ":</strong> ",
+                            htmltools::htmlEscape(unname(
+                                station_type_labels[as.character(basin_type)]
+                            ))
                         )
                     )
                 }
@@ -5918,7 +6177,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 dat$station_name <- ifelse(
                     !is.na(dat$name) & nzchar(dat$name),
                     as.character(dat$name),
-                    "Unknown station"
+                    tr("flood_unknown_station", lang)
                 )
                 dat$station_code <- ifelse(
                     !is.na(dat$location_code) & nzchar(dat$location_code),
@@ -5926,6 +6185,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     ""
                 )
                 dat$station_color <- unname(basin_colors[dat$station_type])
+                dat$station_type_display <- unname(
+                    station_type_labels[dat$station_type]
+                )
                 dat$station_color[is.na(dat$station_color)] <- basin_colors[[
                     "Other"
                 ]]
@@ -5947,14 +6209,21 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 )
                 dat$popup_html <- sprintf(
                     paste0(
-                        "<strong>Station name:</strong> %s",
-                        "<br/><strong>Location code:</strong> %s",
-                        "<br/><strong>Type:</strong> %s",
-                        "<br/><strong>Parameters:</strong><br/>%s"
+                        "<strong>%s:</strong> %s",
+                        "<br/><strong>%s:</strong> %s",
+                        "<br/><strong>%s:</strong> %s",
+                        "<br/><strong>%s:</strong><br/>%s"
                     ),
+                    htmltools::htmlEscape(tr("flood_popup_station_name", lang)),
                     htmltools::htmlEscape(dat$station_name),
+                    htmltools::htmlEscape(tr(
+                        "location_code_label",
+                        lang
+                    )),
                     htmltools::htmlEscape(dat$station_code),
-                    htmltools::htmlEscape(dat$station_type),
+                    htmltools::htmlEscape(tr("type", lang)),
+                    htmltools::htmlEscape(dat$station_type_display),
+                    htmltools::htmlEscape(tr("parameters", lang)),
                     dat$parameter_links_html
                 )
 
@@ -5997,7 +6266,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 }
                 if (!"name" %in% names(image_series_markers)) {
                     image_series_markers$name <- rep(
-                        "Unknown station",
+                        tr("flood_unknown_station", lang),
                         nrow(image_series_markers)
                     )
                 }
@@ -6030,15 +6299,27 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 if (nrow(image_series_markers) > 0) {
                     image_series_markers$image_popup_html <- sprintf(
                         paste0(
-                            "<strong>Image station:</strong> %s",
-                            "<br/><strong>Location code:</strong> %s",
-                            "<br/><strong>Image series ID:</strong> %s"
+                            "<strong>%s:</strong> %s",
+                            "<br/><strong>%s:</strong> %s",
+                            "<br/><strong>%s:</strong> %s"
                         ),
+                        htmltools::htmlEscape(tr(
+                            "flood_popup_image_station",
+                            lang
+                        )),
                         htmltools::htmlEscape(as.character(
                             image_series_markers$name
                         )),
+                        htmltools::htmlEscape(tr(
+                            "location_code_label",
+                            lang
+                        )),
                         htmltools::htmlEscape(as.character(
                             image_series_markers$location_code
+                        )),
+                        htmltools::htmlEscape(tr(
+                            "flood_popup_image_series_id",
+                            lang
                         )),
                         htmltools::htmlEscape(as.character(
                             image_series_markers$img_series_id
@@ -6143,14 +6424,30 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
             legend_html <- paste0(
                 "<div style='background:rgba(255,255,255,0.95); padding:8px 10px; border-radius:6px; border:1px solid #d1d5db; font-size:12px; line-height:1.35;'>",
-                "<div style='font-weight:600; margin-bottom:6px;'>Legend</div>",
-                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#9ca3af; border:1px solid #6b7280; margin-right:6px;'></span>Upstream gauge (encoding 2)</div>",
-                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#2563eb; border:1px solid #1e3a8a; margin-right:6px;'></span>Hydrometric</div>",
-                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#16a34a; border:1px solid #166534; margin-right:6px;'></span>Meteorological</div>",
-                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#d97706; border:1px solid #92400e; margin-right:6px;'></span>Snow survey</div>",
-                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border:2px solid #475569; background:transparent; box-sizing:border-box; margin-right:6px;'></span>Gauge image series</div>",
-                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#111827; border:1px solid #111827; margin-right:6px;'></span>Community</div>",
-                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:14px; height:0; border-top:2px solid #64748b; margin-right:6px;'></span>Roads</div>",
+                "<div style='font-weight:600; margin-bottom:6px;'>",
+                tr("flood_map_legend", lang),
+                "</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#9ca3af; border:1px solid #6b7280; margin-right:6px;'></span>",
+                tr("flood_upstream_gauge", lang),
+                "</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#2563eb; border:1px solid #1e3a8a; margin-right:6px;'></span>",
+                tr("hydrometric", lang),
+                "</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#16a34a; border:1px solid #166534; margin-right:6px;'></span>",
+                tr("meteorological", lang),
+                "</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#d97706; border:1px solid #92400e; margin-right:6px;'></span>",
+                tr("snow_survey", lang),
+                "</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border:2px solid #475569; background:transparent; box-sizing:border-box; margin-right:6px;'></span>",
+                tr("flood_gauge_images", lang),
+                "</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#111827; border:1px solid #111827; margin-right:6px;'></span>",
+                tr("community", lang),
+                "</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:14px; height:0; border-top:2px solid #64748b; margin-right:6px;'></span>",
+                tr("roads", lang),
+                "</div>",
                 "</div>"
             )
             map <- leaflet::addControl(
@@ -6274,26 +6571,77 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             pending_map_station(NULL)
         })
 
-        summary_mode_choices_for_parameter <- function(parameter) {
+        summary_mode_choices_for_parameter <- function(parameter, lang) {
             selected_parameter <- as.character(parameter %||% "")
             if (identical(selected_parameter, "snow water eq (survey)")) {
-                c(
-                    "Surveys" = "surveys",
-                    "Compared to historical" = "compared_historical"
+                stats::setNames(
+                    c("surveys", "compared_historical"),
+                    c(
+                        tr("flood_summary_surveys", lang),
+                        tr("flood_summary_historical", lang)
+                    )
                 )
             } else {
-                c(
-                    "Relative changes" = "recent",
-                    "Changes" = "compared_recent",
-                    "Compared to historical" = "compared_historical"
+                stats::setNames(
+                    c("recent", "compared_recent", "compared_historical"),
+                    c(
+                        tr("flood_summary_relative", lang),
+                        tr("flood_summary_changes", lang),
+                        tr("flood_summary_historical", lang)
+                    )
                 )
             }
         }
 
+        localize_summary_columns <- function(
+            dat,
+            lang = language$language
+        ) {
+            column_keys <- c(
+                "message" = "message",
+                "Station" = "station",
+                "Last reading (UTC-7)" = "flood_col_last_reading",
+                "7-day (mm)" = "flood_col_7_day",
+                "1-month (mm)" = "flood_col_1_month",
+                "6-month (mm)" = "flood_col_6_month",
+                "Data age (h)" = "flood_col_data_age",
+                "Historical median" = "flood_col_historical_median",
+                "Most recent month" = "flood_col_most_recent_month",
+                "Most recent value" = "flood_col_most_recent_value",
+                "Mar 1" = "flood_col_mar_1",
+                "Apr 1" = "flood_col_apr_1",
+                "May 1" = "flood_col_may_1",
+                "Latest" = "flood_col_latest",
+                "Value" = "value",
+                "Percentile" = "flood_col_percentile",
+                "Rel. to hist. (%)" = "flood_col_relative_historical",
+                "24h change (%)" = "flood_col_24_hour_pct",
+                "48h change (%)" = "flood_col_48_hour_pct",
+                "1wk change (%)" = "flood_col_1_week_pct",
+                "24h change" = "flood_col_24_hour_change",
+                "48h change" = "flood_col_48_hour_change",
+                "1wk change" = "flood_col_1_week_change"
+            )
+            keys <- unname(column_keys[names(dat)])
+            mapped <- !is.na(keys)
+            if (any(mapped)) {
+                names(dat)[mapped] <- vapply(
+                    keys[mapped],
+                    tr,
+                    character(1),
+                    lang = lang
+                )
+            }
+            dat
+        }
+
         shiny::observeEvent(
-            input$parameter,
+            list(input$parameter, language$language),
             {
-                choices <- summary_mode_choices_for_parameter(input$parameter)
+                choices <- summary_mode_choices_for_parameter(
+                    input$parameter,
+                    language$language
+                )
                 current <- as.character(shiny::isolate(
                     input$summary_mode %||% ""
                 ))
@@ -6342,8 +6690,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
 
             if (is.null(dat) || nrow(dat) == 0) {
+                empty <- data.frame(
+                    message = tr(
+                        "flood_no_stations_for_filters",
+                        language$language
+                    )
+                )
+                names(empty) <- tr("message", language$language)
                 return(DT::datatable(
-                    data.frame(message = "No stations for current filters"),
+                    empty,
                     rownames = FALSE,
                     selection = "single"
                 ))
@@ -6384,7 +6739,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     stringsAsFactors = FALSE
                 )
                 return(DT::datatable(
-                    view,
+                    localize_summary_columns(view),
                     rownames = FALSE,
                     selection = "single",
                     options = dt_options
@@ -6407,11 +6762,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
                 most_recent_month <- ifelse(
                     !is.na(may_value),
-                    "May 1",
+                    paste(tr("may", language$language), "1"),
                     ifelse(
                         !is.na(april_value),
-                        "Apr 1",
-                        ifelse(!is.na(march_value), "Mar 1", "Latest sample")
+                        paste(tr("apr", language$language), "1"),
+                        ifelse(
+                            !is.na(march_value),
+                            paste(tr("mar", language$language), "1"),
+                            tr("flood_latest_sample", language$language)
+                        )
                     )
                 )
                 most_recent_value <- ifelse(
@@ -6563,6 +6922,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "Most recent value"
                     names(view)[names(view) == "rel_to_med_pct"] <-
                         "Rel. to hist. (%)"
+                    view <- localize_summary_columns(view)
 
                     result_table <- DT::datatable(
                         view,
@@ -6617,7 +6977,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 }
 
                 return(DT::datatable(
-                    view,
+                    localize_summary_columns(view),
                     rownames = FALSE,
                     selection = "single",
                     options = dt_options
@@ -6859,7 +7219,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
 
             result_table <- DT::datatable(
-                view,
+                localize_summary_columns(view),
                 rownames = FALSE,
                 selection = "single",
                 options = dt_options
@@ -7421,7 +7781,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         })
 
         output$station_plot_title <- shiny::renderText({
-            "Station Plot"
+            tr("flood_station_plot_title", language$language)
         })
 
         # Push showlegend into the live Plotly widget without re-rendering.
@@ -7482,7 +7842,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
             shiny::tags$div(
                 class = "station-plot-stale-banner",
-                "Plot inputs changed \u2014 click Create plot to refresh."
+                tr("flood_plot_stale", language$language)
             )
         })
 
@@ -7492,7 +7852,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 return(
                     empty_plotly_widget(
                         annotations = list(list(
-                            text = "Choose parameters/stations, then click Create plot.",
+                            text = tr("flood_plot_choose", language$language),
                             x = 0.5,
                             y = 0.5,
                             xref = "paper",
@@ -7766,7 +8126,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 return(
                     empty_plotly_widget(
                         annotations = list(list(
-                            text = "No data available for the selected station and parameter.",
+                            text = tr(
+                                "flood_plot_no_selected_data",
+                                language$language
+                            ),
                             x = 0.5,
                             y = 0.5,
                             xref = "paper",
@@ -8164,13 +8527,26 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                             name = .band$name,
                                             legendrank = .band$rank,
                                             customdata = ~ paste0(
-                                                "Low: ",
+                                                paste0(
+                                                    tr(
+                                                        "flood_low_label",
+                                                        language$language
+                                                    ),
+                                                    ": "
+                                                ),
                                                 formatC(
                                                     band_low,
                                                     format = "f",
                                                     digits = 3
                                                 ),
-                                                "<br>High: ",
+                                                paste0(
+                                                    "<br>",
+                                                    tr(
+                                                        "flood_high_label",
+                                                        language$language
+                                                    ),
+                                                    ": "
+                                                ),
                                                 formatC(
                                                     band_high,
                                                     format = "f",
@@ -8200,9 +8576,22 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     name = "P0-P10",
                                     legendrank = 80,
                                     customdata = ~ paste0(
-                                        "Low: ",
+                                        paste0(
+                                            tr(
+                                                "flood_low_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p0, format = "f", digits = 3),
-                                        "<br>High: ",
+                                        paste0(
+                                            "<br>",
+                                            tr(
+                                                "flood_high_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p10, format = "f", digits = 3)
                                     ),
                                     hovertemplate = "P0-P10<br>%{customdata}<extra></extra>",
@@ -8220,9 +8609,22 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     name = "P10-P25",
                                     legendrank = 70,
                                     customdata = ~ paste0(
-                                        "Low: ",
+                                        paste0(
+                                            tr(
+                                                "flood_low_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p10, format = "f", digits = 3),
-                                        "<br>High: ",
+                                        paste0(
+                                            "<br>",
+                                            tr(
+                                                "flood_high_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p25, format = "f", digits = 3)
                                     ),
                                     hovertemplate = "P10-P25<br>%{customdata}<extra></extra>",
@@ -8240,9 +8642,22 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     name = "P25-P50",
                                     legendrank = 60,
                                     customdata = ~ paste0(
-                                        "Low: ",
+                                        paste0(
+                                            tr(
+                                                "flood_low_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p25, format = "f", digits = 3),
-                                        "<br>High: ",
+                                        paste0(
+                                            "<br>",
+                                            tr(
+                                                "flood_high_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p50, format = "f", digits = 3)
                                     ),
                                     hovertemplate = "P25-P50<br>%{customdata}<extra></extra>",
@@ -8260,9 +8675,22 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     name = "P50-P75",
                                     legendrank = 50,
                                     customdata = ~ paste0(
-                                        "Low: ",
+                                        paste0(
+                                            tr(
+                                                "flood_low_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p50, format = "f", digits = 3),
-                                        "<br>High: ",
+                                        paste0(
+                                            "<br>",
+                                            tr(
+                                                "flood_high_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p75, format = "f", digits = 3)
                                     ),
                                     hovertemplate = "P50-P75<br>%{customdata}<extra></extra>",
@@ -8280,9 +8708,22 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     name = "P75-P90",
                                     legendrank = 40,
                                     customdata = ~ paste0(
-                                        "Low: ",
+                                        paste0(
+                                            tr(
+                                                "flood_low_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p75, format = "f", digits = 3),
-                                        "<br>High: ",
+                                        paste0(
+                                            "<br>",
+                                            tr(
+                                                "flood_high_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p90, format = "f", digits = 3)
                                     ),
                                     hovertemplate = "P75-P90<br>%{customdata}<extra></extra>",
@@ -8300,9 +8741,22 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     name = "P90-P100",
                                     legendrank = 30,
                                     customdata = ~ paste0(
-                                        "Low: ",
+                                        paste0(
+                                            tr(
+                                                "flood_low_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p90, format = "f", digits = 3),
-                                        "<br>High: ",
+                                        paste0(
+                                            "<br>",
+                                            tr(
+                                                "flood_high_label",
+                                                language$language
+                                            ),
+                                            ": "
+                                        ),
                                         formatC(p100, format = "f", digits = 3)
                                     ),
                                     hovertemplate = "P90-P100<br>%{customdata}<extra></extra>",
@@ -9201,7 +9655,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             if (is.null(dat) || nrow(dat) == 0) {
                 return(shiny::tags$div(
                     style = "color:#6b7280; margin-bottom:0.75rem;",
-                    "No table data available."
+                    tr("flood_table_no_data", language$language)
                 ))
             }
 
@@ -9274,6 +9728,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             content = function(file) {
                 shiny::req(has_valid_connection())
                 shiny::req(!is.null(input$community) && nzchar(input$community))
+                lang <- language$language
 
                 reference_time <- time_zero()
                 report_generated <- format(
@@ -9318,8 +9773,18 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             fillOpacity = 0.8,
                             popup = ~ paste0(
                                 "<strong>",
+                                htmltools::htmlEscape(tr(
+                                    "flood_popup_station_name",
+                                    lang
+                                )),
+                                ": ",
                                 name,
-                                "</strong><br>",
+                                "</strong><br><strong>",
+                                htmltools::htmlEscape(tr(
+                                    "location_code_label",
+                                    lang
+                                )),
+                                ":</strong> ",
                                 location_code
                             )
                         )
@@ -9431,6 +9896,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                 error = function(e) data.frame()
                             )
                         }
+                        summary_table <- localize_summary_columns(
+                            summary_table,
+                            lang = lang
+                        )
 
                         plot_nodes <- lapply(location_codes, function(code) {
                             series <- tryCatch(
@@ -9521,7 +9990,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             ),
                             shiny::tags$h3(
                                 style = "margin:0.35rem 0; font-size:1rem;",
-                                "Table"
+                                tr("flood_col_table", lang)
                             ),
                             data_frame_to_html_table(
                                 summary_table,
@@ -9529,14 +9998,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             ),
                             shiny::tags$h3(
                                 style = "margin:0.35rem 0; font-size:1rem;",
-                                "Plots"
+                                tr("plots", lang)
                             ),
                             if (length(plot_nodes) > 0) {
                                 plot_nodes
                             } else {
                                 shiny::tags$div(
                                     style = "color:#6b7280; margin-bottom:1rem;",
-                                    "No plots available for this parameter in the selected community."
+                                    tr("flood_plots_no_data", lang)
                                 )
                             }
                         )
@@ -9551,7 +10020,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     if (is.null(series) || nrow(series) == 0) {
                         list(shiny::tags$div(
                             style = "color:#6b7280;",
-                            "No community image series available."
+                            tr("flood_images_no_data", lang)
                         ))
                     } else {
                         lapply(seq_len(nrow(series)), function(i) {
@@ -9610,7 +10079,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                 ),
                                 shiny::tags$div(
                                     style = "color:#6b7280; font-size:0.82rem; margin-bottom:0.3rem;",
-                                    paste("Latest image:", ts_label)
+                                    paste(
+                                        tr("flood_latest_image", lang),
+                                        ts_label
+                                    )
                                 ),
                                 shiny::tags$img(
                                     src = img_src,
@@ -9625,19 +10097,28 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 ]
 
                 report_body <- htmltools::tagList(
-                    shiny::tags$h1("Flood Dashboard Report"),
+                    shiny::tags$h1(tr("flood_report_title", lang)),
                     shiny::tags$div(
                         style = "margin-bottom:0.8rem; color:#334155;",
-                        shiny::tags$div(paste("Community:", input$community)),
-                        shiny::tags$div(paste("Reference time:", ref_str)),
-                        shiny::tags$div(paste("Generated:", report_generated))
+                        shiny::tags$div(paste(
+                            tr("community", lang),
+                            input$community
+                        )),
+                        shiny::tags$div(paste(
+                            tr("reference_time", lang),
+                            ref_str
+                        )),
+                        shiny::tags$div(paste(
+                            tr("flood_col_generated", lang),
+                            report_generated
+                        ))
                     ),
                     shiny::tags$section(
-                        shiny::tags$h2("Map"),
+                        shiny::tags$h2(tr("flood_map", lang)),
                         if (is.null(community_map)) {
                             shiny::tags$div(
                                 style = "color:#6b7280; margin-bottom:1rem;",
-                                "No map data available for this community."
+                                tr("flood_no_map_data", lang)
                             )
                         } else {
                             community_map
@@ -9646,7 +10127,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     parameter_sections,
                     shiny::tags$section(
                         style = "margin-top:1.2rem;",
-                        shiny::tags$h2("Images"),
+                        shiny::tags$h2(tr("flood_images", lang)),
                         image_nodes
                     )
                 )
@@ -9655,7 +10136,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     shiny::tags$html(
                         shiny::tags$head(
                             shiny::tags$meta(charset = "utf-8"),
-                            shiny::tags$title("Flood Dashboard Report"),
+                            shiny::tags$title(tr("flood_report_title", lang)),
                             shiny::tags$style(shiny::HTML(paste(
                                 "body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; margin: 1rem; color: #111827; }",
                                 "h1, h2, h3 { color: #0f172a; }",

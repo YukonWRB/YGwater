@@ -24,7 +24,7 @@ app_server <- function(input, output, session) {
   # Store the config info in the session. If the user connects with their own credentials these need to be used for plot rendering wrapped in an ExtendedTask or future/promises
   session$userData$config <- config
 
-  # Initial database connections without edit privileges
+  # Initial database connection without edit privileges
   session$userData$AquaCache <- AquaConnect(
     name = config$dbName,
     host = config$dbHost,
@@ -33,6 +33,15 @@ app_server <- function(input, output, session) {
     password = config$dbPass,
     silent = TRUE
   )
+
+  # Modules can observe connection replacement without duplicating the handle.
+  session$userData$AquaCache_version <- shiny::reactiveVal(0L)
+  set_session_aquacache_connection <- function(con) {
+    session$userData$AquaCache <- con
+    session$userData$AquaCache_version(
+      shiny::isolate(session$userData$AquaCache_version()) + 1L
+    )
+  }
 
   # Reset the application_name to 'YGwater_shiny'
   DBI::dbExecute(
@@ -2416,14 +2425,14 @@ app_server <- function(input, output, session) {
     # Drop old connection
     safe_disconnect(session$userData$AquaCache)
     # Re-create the connection with the base 'config' parameters, no edit privileges
-    session$userData$AquaCache <- AquaConnect(
+    set_session_aquacache_connection(AquaConnect(
       name = config$dbName,
       host = config$dbHost,
       port = config$dbPort,
       username = config$dbUser,
       password = config$dbPass,
       silent = TRUE
-    )
+    ))
     # Reset the application_name to 'YGwater_shiny'
     DBI::dbExecute(
       session$userData$AquaCache,
@@ -2642,7 +2651,7 @@ app_server <- function(input, output, session) {
           # Means the connection was successful
           # Drop the old connection
           safe_disconnect(session$userData$AquaCache)
-          session$userData$AquaCache <- session$userData$AquaCache_new
+          set_session_aquacache_connection(session$userData$AquaCache_new)
           session$userData$AquaCache_new <- NULL
 
           # Update the session with the new user's credentials
