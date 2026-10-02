@@ -8,15 +8,15 @@ waterInfoUIMod <- function(id) {
       type = "text/css",
       href = "css/card_background.css"
     )),
-    uiOutput(ns("info")),
+    uiOutput(ns("info")), # Information about this module, rendered in the same manner as 'banner'
     card(
       card_body(
         class = "custom-card",
         uiOutput(ns("menu"))
-      )
-    )
-  )
-}
+      ) # End card_body
+    ) # End card
+  ) # End tagList
+} # End waterInfoUIMod
 
 waterInfoMod <- function(id, language) {
   moduleServer(id, function(input, output, session) {
@@ -188,7 +188,7 @@ waterInfoMod <- function(id, language) {
         ),
         downloadButton(
           ns("download"),
-          "download",
+          tr("download_button", language$language),
           style = "visibility: hidden;"
         ) # Hidden; triggered automatically but left hidden if 'go' is successful
       ) # End tagList
@@ -196,19 +196,15 @@ waterInfoMod <- function(id, language) {
       bindEvent(language, moduleData) # Re-render the UI if the language or moduleData changes
 
     output$info <- renderUI({
+      req(language$language)
       text <- HTML(tr("gen_waterInfo_info", language$language))
-      div(
-        style = paste(
-          "background-color: #F7FAFC;",
-          "border-left: 4px solid #0097A9;",
-          "border-radius: 6px;",
-          "padding: 12px 16px;",
-          "margin-bottom: 12px;"
-        ),
-        tags$p(style = "margin-bottom: 0;", text)
+      dismissible_banner_ui(
+        ns = ns,
+        msg_text = text,
+        banner_id = "waterInfo_info",
+        banner_key_prefix = "waterInfo_info"
       )
-    }) %>%
-      bindEvent(language$language) # Re-render the text if the language changes
+    })
 
     # Observe inputs and store in object 'selections'
     observeEvent(
@@ -309,8 +305,8 @@ waterInfoMod <- function(id, language) {
       }
 
       showModal(modalDialog(
-        title = "Cannot Generate Water Quantity/Info Report",
-        tags$p("Please correct the following before starting the report:"),
+        title = tr("water_info_validation_title", language$language),
+        tags$p(tr("report_validation_intro", language$language)),
         tags$ul(lapply(messages, function(msg) tags$li(msg))),
         easyClose = TRUE,
         footer = modalButton(tr("close", language$language))
@@ -330,7 +326,7 @@ waterInfoMod <- function(id, language) {
       ) {
         issues <- c(
           issues,
-          "Select whether to report one parameter or both parameters."
+          tr("water_info_parameter_required", language$language)
         )
       }
 
@@ -342,31 +338,31 @@ waterInfoMod <- function(id, language) {
       ) {
         issues <- c(
           issues,
-          "Select at least one location, or choose 'All locations'."
+          tr("water_info_location_required", language$language)
         )
       } else {
         allowed_locations <- c("all", as.character(moduleData$locs$location))
         if (length(setdiff(as.character(selections$loc), allowed_locations))) {
-          issues <- c(issues, "One or more selected locations are invalid.")
+          issues <- c(issues, tr("report_location_invalid", language$language))
         }
       }
 
       end_date <- as.Date(selections$end)
       if (length(end_date) != 1 || is.na(end_date)) {
-        issues <- c(issues, "Provide a valid end date.")
+        issues <- c(issues, tr("report_end_date_invalid", language$language))
       }
 
       if (is.null(selections$min_m) || length(selections$min_m) == 0) {
         issues <- c(
           issues,
-          "Select at least one month for the low-flow period."
+          tr("water_info_low_flow_months_required", language$language)
         )
       }
 
       if (is.null(selections$max_m) || length(selections$max_m) == 0) {
         issues <- c(
           issues,
-          "Select at least one month for the high-flow period."
+          tr("water_info_high_flow_months_required", language$language)
         )
       }
 
@@ -379,7 +375,7 @@ waterInfoMod <- function(id, language) {
       ) {
         issues <- c(
           issues,
-          "Allowed missing data must be a number between 1 and 100."
+          tr("water_info_missing_data_range", language$language)
         )
       }
 
@@ -392,7 +388,7 @@ waterInfoMod <- function(id, language) {
       ) {
         issues <- c(
           issues,
-          "Select a plot type, or turn off plot generation."
+          tr("report_plot_type_required", language$language)
         )
       }
 
@@ -447,7 +443,7 @@ waterInfoMod <- function(id, language) {
 
             files <- list.files(work_dir, full.names = FALSE)
             if (!length(files)) {
-              stop("No files were generated for the report.")
+              stop(tr("report_error_no_files", req$ui_language), call. = FALSE)
             }
 
             zip_path <- file.path(work_dir, "report.zip")
@@ -461,7 +457,10 @@ waterInfoMod <- function(id, language) {
 
             list(
               path = zip_path,
-              filename = paste0("water info report issued ", Sys.Date(), ".zip")
+              filename = sprintf(
+                tr("water_info_filename", req$ui_language),
+                Sys.Date()
+              )
             )
           },
           error = function(e) {
@@ -486,7 +485,8 @@ waterInfoMod <- function(id, language) {
           max_m = selections$max_m,
           prct = selections$prct,
           plots = selections$plots,
-          ptype = selections$ptype
+          ptype = selections$ptype,
+          ui_language = language$language
         ),
         config = session$userData$config
       )
@@ -497,7 +497,7 @@ waterInfoMod <- function(id, language) {
 
       if (inherits(result, "character")) {
         showNotification(
-          paste("Error generating water quantity/info report:", result),
+          paste(tr("water_info_error_prefix", language$language), result),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -507,7 +507,7 @@ waterInfoMod <- function(id, language) {
 
       if (is.null(result$path) || !file.exists(result$path)) {
         showNotification(
-          "Report was generated, but the zip archive could not be found for download.",
+          tr("report_download_archive_missing", language$language),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -531,13 +531,13 @@ waterInfoMod <- function(id, language) {
         req(bundle)
 
         if (!file.exists(bundle$path)) {
-          stop("Generated report archive could not be found for download.")
+          stop(tr("report_download_source_missing", language$language))
         }
 
         copied <- file.copy(bundle$path, file, overwrite = TRUE)
         if (!isTRUE(copied)) {
           stop(
-            "Unable to copy the generated report archive to the download location."
+            tr("report_download_copy_failed", language$language)
           )
         }
 

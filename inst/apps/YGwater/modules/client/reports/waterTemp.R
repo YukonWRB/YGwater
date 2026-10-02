@@ -102,6 +102,7 @@ waterTempUIMod <- function(id) {
     ))),
 
     uiOutput(ns("banner")),
+    uiOutput(ns("info")), # Information about this module, rendered in the same manner as 'banner'
     uiOutput(ns("main"))
   )
 }
@@ -419,25 +420,26 @@ waterTempMod <- function(id, language, inputs) {
       )
     })
 
+    output$info <- renderUI({
+      req(language$language)
+      intro_text <- HTML(
+        tr("gen_waterTemp_info", language$language)
+      )
+      dismissible_banner_ui(
+        ns = ns,
+        msg_text = intro_text,
+        banner_id = "waterTemp_info",
+        banner_key_prefix = "waterTemp_info",
+      )
+    })
+
     output$main <- renderUI({
       req(moduleData, language$language, language$abbrev)
       network_col <- tr("generic_name_col", language$language)
       project_col <- tr("generic_name_col", language$language)
       param_grp_col <- tr("param_group_col", language$language)
-      intro_text <- HTML(
-        tr("gen_waterTemp_info", language$language)
-      )
+
       tags <- tagList(
-        div(
-          style = paste(
-            "background-color: #F7FAFC;",
-            "border-left: 4px solid #0097A9;",
-            "border-radius: 6px;",
-            "padding: 12px 16px;",
-            "margin-bottom: 12px;"
-          ),
-          tags$p(style = "margin-bottom: 0;", intro_text)
-        ),
         bslib::accordion(
           id = ns("accordion1"),
           open = c(ns("table_panel"), ns("plot_options_panel")),
@@ -473,7 +475,7 @@ waterTempMod <- function(id, language, inputs) {
                 hr(),
                 dateRangeInput(
                   ns("highlight_range"),
-                  "Highlight Range",
+                  tr("water_temp_highlight_range", language$language),
                   start = Sys.Date() - 365,
                   end = Sys.Date(),
                   format = "yyyy-mm-dd",
@@ -483,22 +485,25 @@ waterTempMod <- function(id, language, inputs) {
                 ),
                 actionButton(
                   ns("recent_year"),
-                  "Highlight Most Recent Year"
+                  tr("water_temp_recent_year", language$language)
                 )
               ),
               column(
                 width = 6,
                 selectizeInput(
                   ns("thresholds_select"),
-                  label = "Thresholds",
+                  label = tr("water_temp_thresholds", language$language),
                   choices = c("20 °C" = 20, "18 °C" = 18, "13 °C" = 13),
                   multiple = TRUE
                 ),
                 div(br()),
-                div(strong("Plot Description:")),
-                div("Blue: Highlighted Day of the Year Mean"),
-                div("Grey Line: Non-Highlighted Day of the Year Mean"),
-                div("Grey Ribbon: Non-Highlighted Day of the Year Range")
+                div(strong(tr(
+                  "water_temp_plot_description",
+                  language$language
+                ))),
+                div(tr("water_temp_plot_highlighted_mean", language$language)),
+                div(tr("water_temp_plot_baseline_mean", language$language)),
+                div(tr("water_temp_plot_baseline_range", language$language))
               )
             ),
             hr(),
@@ -508,8 +513,11 @@ waterTempMod <- function(id, language, inputs) {
                 align = "center",
                 bslib::input_task_button(
                   ns("make_plot"),
-                  label = "Create Report Figures",
-                  label_busy = "Creating Figures..."
+                  label = tr("water_temp_create_figures", language$language),
+                  label_busy = tr(
+                    "water_temp_creating_figures",
+                    language$language
+                  )
                 )
               )
             )
@@ -551,11 +559,7 @@ waterTempMod <- function(id, language, inputs) {
     output$report_figures_ui <- renderUI({
       req(plot_bundle())
 
-      figures_heading <- if (identical(language$abbrev, "fr")) {
-        "Figures du rapport"
-      } else {
-        "Report Figures"
-      }
+      figures_heading <- tr("water_temp_report_figures", language$language)
 
       tagList(
         tags$div(style = "height: 10px;"),
@@ -566,12 +570,12 @@ waterTempMod <- function(id, language, inputs) {
             align = "center",
             bslib::input_task_button(
               ns("generate_report"),
-              "Generate Report",
-              label_busy = "Generating Report..."
+              tr("generate_report", language$language),
+              label_busy = tr("generating_working", language$language)
             ),
             shinyjs::hidden(downloadButton(
               ns("download_report"),
-              "Download Report"
+              tr("download_report", language$language)
             ))
           )
         ),
@@ -613,13 +617,13 @@ waterTempMod <- function(id, language, inputs) {
         req(bundle)
 
         if (!file.exists(bundle$zipfile)) {
-          stop("Generated report archive could not be found for download.")
+          stop(tr("report_download_source_missing", language$language))
         }
 
         copied <- file.copy(bundle$zipfile, file, overwrite = TRUE)
         if (!isTRUE(copied)) {
           stop(
-            "Unable to copy the generated report archive to the download location."
+            tr("report_download_copy_failed", language$language)
           )
         }
 
@@ -886,14 +890,17 @@ waterTempMod <- function(id, language, inputs) {
               as.character(row_match$location),
               as.character(row_match$sub_location),
               as.character(row_match$parameter),
-              paste0("ID: ", row_match$timeseries_id)
+              paste(
+                tr("timeseries_id_label", language$language),
+                row_match$timeseries_id
+              )
             )
             label_parts <- label_parts[
               !is.na(label_parts) & nzchar(label_parts)
             ]
             label <- paste(label_parts, collapse = " | ")
           } else {
-            label <- paste0("ID: ", ts_id)
+            label <- paste(tr("timeseries_id_label", language$language), ts_id)
           }
         }
 
@@ -908,7 +915,12 @@ waterTempMod <- function(id, language, inputs) {
           column(
             width = 10,
             tags$div(
-              tags$strong(paste0("Timeseries ", i, ": ")),
+              tags$strong(paste0(
+                tr("timeseries_label", language$language),
+                " ",
+                i,
+                ": "
+              )),
               label
             )
           ),
@@ -917,7 +929,7 @@ waterTempMod <- function(id, language, inputs) {
             if (show_delete && !is.na(ts_id)) {
               actionButton(
                 ns(paste0("delete_timeseries_", i)),
-                label = "Delete",
+                label = tr("delete", language$language),
                 class = "btn btn-outline-danger btn-sm"
               )
             }
@@ -1282,7 +1294,7 @@ waterTempMod <- function(id, language, inputs) {
 
       showModal(modalDialog(
         title = title,
-        tags$p("Please correct the following before continuing:"),
+        tags$p(tr("report_validation_intro", language$language)),
         tags$ul(lapply(messages, function(msg) tags$li(msg))),
         easyClose = TRUE,
         footer = modalButton(tr("close", language$language))
@@ -1297,7 +1309,7 @@ waterTempMod <- function(id, language, inputs) {
       if (length(selected_timeseries_ids()) == 0) {
         issues <- c(
           issues,
-          "Select a water temperature timeseries from the table before creating report figures."
+          tr("water_temp_timeseries_required", language$language)
         )
       }
 
@@ -1307,7 +1319,10 @@ waterTempMod <- function(id, language, inputs) {
           any(is.na(date_range)) ||
           date_range[[1]] > date_range[[2]]
       ) {
-        issues <- c(issues, "Provide a valid report date range.")
+        issues <- c(
+          issues,
+          tr("water_temp_date_range_invalid", language$language)
+        )
       }
 
       highlight_range <- as.Date(input$highlight_range)
@@ -1316,7 +1331,10 @@ waterTempMod <- function(id, language, inputs) {
           any(is.na(highlight_range)) ||
           highlight_range[[1]] > highlight_range[[2]]
       ) {
-        issues <- c(issues, "Provide a valid highlight date range.")
+        issues <- c(
+          issues,
+          tr("water_temp_highlight_range_invalid", language$language)
+        )
       }
 
       if (
@@ -1329,21 +1347,21 @@ waterTempMod <- function(id, language, inputs) {
       ) {
         issues <- c(
           issues,
-          "The highlight date range must fall within the report date range."
+          tr("water_temp_highlight_within_report", language$language)
         )
       }
 
       unique(issues)
     }
 
-    build_report_filename <- function(site_name) {
+    build_report_filename <- function(site_name, lang) {
       site_name <- as.character(site_name)
       if (
         length(site_name) == 0 ||
           is.na(site_name[[1]]) ||
           !nzchar(site_name[[1]])
       ) {
-        site_name <- "Selected site"
+        site_name <- tr("water_temp_selected_site", lang)
       } else {
         site_name <- site_name[[1]]
       }
@@ -1351,7 +1369,9 @@ waterTempMod <- function(id, language, inputs) {
       site_name <- gsub("\\s+", " ", site_name)
       paste0(
         trimws(site_name),
-        " Temperature Report Bundle ",
+        " ",
+        tr("water_temp_report_bundle", lang),
+        " ",
         Sys.Date(),
         ".zip"
       )
@@ -1453,15 +1473,20 @@ waterTempMod <- function(id, language, inputs) {
       thresholds,
       language_abbrev
     ) {
+      report_language <- lengthenLanguage(language_abbrev)
       if (is.null(ts_data) || nrow(ts_data) == 0) {
         stop(
-          "No temperature data found for the selected timeseries and date range."
+          tr("water_temp_no_data", report_language),
+          call. = FALSE
         )
       }
 
       highlight_range <- as.Date(highlight_range)
       if (length(highlight_range) != 2 || any(is.na(highlight_range))) {
-        stop("Please provide a valid highlight date range.")
+        stop(
+          tr("water_temp_highlight_range_invalid", report_language),
+          call. = FALSE
+        )
       }
 
       site_col <- if (
@@ -1517,7 +1542,7 @@ waterTempMod <- function(id, language, inputs) {
 
       site_name <- stats::na.omit(unique(as.character(daily_stats$name)))
       if (length(site_name) == 0) {
-        site_name <- "Selected site"
+        site_name <- tr("water_temp_selected_site", report_language)
       } else {
         site_name <- site_name[[1]]
       }
@@ -1555,9 +1580,13 @@ waterTempMod <- function(id, language, inputs) {
           linewidth = 1.2
         ) +
         ggplot2::labs(
-          title = paste0(site_name, "\n - Daily Mean Temperature"),
-          x = "Date",
-          y = "Temperature (°C)"
+          title = paste0(
+            site_name,
+            "\n - ",
+            tr("water_temp_daily_mean", report_language)
+          ),
+          x = tr("date", report_language),
+          y = tr("temperature_c", report_language)
         ) +
         ggplot2::scale_x_date(date_labels = "%b", date_breaks = "1 month") +
         ggplot2::theme_minimal() +
@@ -1593,9 +1622,13 @@ waterTempMod <- function(id, language, inputs) {
           linewidth = 1.2
         ) +
         ggplot2::labs(
-          title = paste0(site_name, "\n - Daily Max Temperature"),
-          x = "Date",
-          y = "Temperature (°C)"
+          title = paste0(
+            site_name,
+            "\n - ",
+            tr("water_temp_daily_max", report_language)
+          ),
+          x = tr("date", report_language),
+          y = tr("temperature_c", report_language)
         ) +
         ggplot2::scale_x_date(date_labels = "%b", date_breaks = "1 month") +
         ggplot2::theme_minimal() +
@@ -1633,10 +1666,11 @@ waterTempMod <- function(id, language, inputs) {
         ggplot2::labs(
           title = paste0(
             site_name,
-            "\n - 7-Day Rolling Avg of Max Temperature"
+            "\n - ",
+            tr("water_temp_seven_day_max", report_language)
           ),
-          x = "Date",
-          y = "Temperature (°C)"
+          x = tr("date", report_language),
+          y = tr("temperature_c", report_language)
         ) +
         ggplot2::scale_x_date(date_labels = "%b", date_breaks = "1 month") +
         ggplot2::theme_minimal() +
@@ -1657,6 +1691,7 @@ waterTempMod <- function(id, language, inputs) {
         raw_ts = ts_data,
         daily_stats = daily_stats,
         site_name = site_name,
+        language = language_abbrev,
         highlight_range = highlight_range,
         daily_mean_plot = daily_mean_plot,
         daily_max_plot = daily_max_plot,
@@ -1681,7 +1716,10 @@ waterTempMod <- function(id, language, inputs) {
             timeseries_ids <- as.numeric(req$timeseries_ids)
             timeseries_ids <- timeseries_ids[!is.na(timeseries_ids)]
             if (length(timeseries_ids) == 0) {
-              stop("Please select a timeseries before creating report figures.")
+              stop(
+                tr("water_temp_timeseries_required", req$ui_language),
+                call. = FALSE
+              )
             }
 
             date_range <- as.Date(req$date_range)
@@ -1690,7 +1728,10 @@ waterTempMod <- function(id, language, inputs) {
                 any(is.na(date_range)) ||
                 date_range[[1]] > date_range[[2]]
             ) {
-              stop("Please provide a valid date range.")
+              stop(
+                tr("water_temp_date_range_invalid", req$ui_language),
+                call. = FALSE
+              )
             }
 
             ts_data <- DBI::dbGetQuery(
@@ -1750,12 +1791,24 @@ waterTempMod <- function(id, language, inputs) {
               package = "YGwater"
             )
             if (!nzchar(report_template)) {
-              stop("Water temperature report template not found.")
+              stop(
+                tr(
+                  "water_temp_template_missing",
+                  lengthenLanguage(plot_data$language)
+                ),
+                call. = FALSE
+              )
             }
 
             highlight_range <- as.Date(highlight_range)
             if (length(highlight_range) != 2 || any(is.na(highlight_range))) {
-              stop("Please provide a valid highlight date range.")
+              stop(
+                tr(
+                  "water_temp_highlight_range_invalid",
+                  lengthenLanguage(plot_data$language)
+                ),
+                call. = FALSE
+              )
             }
 
             work_dir <- tempfile("water_temp_report_")
@@ -1772,7 +1825,11 @@ waterTempMod <- function(id, language, inputs) {
             )
             if (!isTRUE(copied_template)) {
               stop(
-                "Unable to stage the water temperature report template in the temporary workspace."
+                tr(
+                  "water_temp_template_stage_error",
+                  lengthenLanguage(plot_data$language)
+                ),
+                call. = FALSE
               )
             }
 
@@ -1836,7 +1893,13 @@ waterTempMod <- function(id, language, inputs) {
 
             bundle_files <- list.files(bundle_dir, full.names = FALSE)
             if (!length(bundle_files)) {
-              stop("No report files were generated.")
+              stop(
+                tr(
+                  "report_error_no_files",
+                  lengthenLanguage(plot_data$language)
+                ),
+                call. = FALSE
+              )
             }
 
             zip::zip(
@@ -1849,7 +1912,10 @@ waterTempMod <- function(id, language, inputs) {
 
             list(
               zipfile = zip_path,
-              filename = build_report_filename(plot_data$site_name)
+              filename = build_report_filename(
+                plot_data$site_name,
+                lengthenLanguage(plot_data$language)
+              )
             )
           },
           error = function(e) {
@@ -1886,7 +1952,7 @@ waterTempMod <- function(id, language, inputs) {
     observeEvent(input$make_plot, {
       if (
         show_validation_modal(
-          title = "Cannot Create Water Temperature Figures",
+          title = tr("water_temp_validation_title", language$language),
           messages = validate_plot_request()
         )
       ) {
@@ -1903,7 +1969,8 @@ waterTempMod <- function(id, language, inputs) {
           date_range = as.Date(input$date_range),
           highlight_range = as.Date(input$highlight_range),
           thresholds_select = as.character(input$thresholds_select),
-          lang = language$abbrev
+          lang = language$abbrev,
+          ui_language = language$language
         ),
         config = session$userData$config
       )
@@ -1914,7 +1981,7 @@ waterTempMod <- function(id, language, inputs) {
 
       if (inherits(result, "character")) {
         showNotification(
-          paste("Error generating water temperature plots:", result),
+          paste(tr("water_temp_plot_error_prefix", language$language), result),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -1941,7 +2008,10 @@ waterTempMod <- function(id, language, inputs) {
 
       if (inherits(result, "character")) {
         showNotification(
-          paste("Error generating water temperature report:", result),
+          paste(
+            tr("water_temp_report_error_prefix", language$language),
+            result
+          ),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -1951,7 +2021,7 @@ waterTempMod <- function(id, language, inputs) {
 
       if (is.null(result$zipfile) || !file.exists(result$zipfile)) {
         showNotification(
-          "Report was generated, but the zip archive could not be found for download.",
+          tr("report_download_archive_missing", language$language),
           type = "error",
           duration = NULL,
           closeButton = TRUE

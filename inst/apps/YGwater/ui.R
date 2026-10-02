@@ -416,13 +416,6 @@ app_ui <- function(request) {
             )
           ) # End reports nav_menu
         }, # End if !config$public for reports nav_menu
-        if (config$public) {
-          nav_panel(
-            title = uiOutput("reportsNavWQTitle"),
-            value = "WQReport",
-            uiOutput("WQReport_ui")
-          )
-        },
 
         # Dashboards nav menu
         if (!config$public) {

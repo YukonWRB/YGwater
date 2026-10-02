@@ -81,7 +81,14 @@ snowBulletinMod <- function(id, language) {
         selectizeInput(
           ns("month"),
           label = tr("month", language$language),
-          choices = c(3:5),
+          choices = stats::setNames(
+            c(3:5),
+            c(
+              tr("mar", language$language),
+              tr("apr", language$language),
+              tr("may", language$language)
+            )
+          ),
           selected = selections$month,
           multiple = FALSE,
           width = "100%"
@@ -192,7 +199,7 @@ snowBulletinMod <- function(id, language) {
         ),
         downloadButton(
           ns("download"),
-          "download",
+          tr("download_button", language$language),
           style = "visibility: hidden;"
         ) # Hidden; triggered automatically but left hidden if 'go' is successful
       ) # End tagList
@@ -310,8 +317,8 @@ snowBulletinMod <- function(id, language) {
       }
 
       showModal(modalDialog(
-        title = "Cannot Generate Snow Bulletin Report",
-        tags$p("Please correct the following before starting the report:"),
+        title = tr("snow_bulletin_validation_title", language$language),
+        tags$p(tr("report_validation_intro", language$language)),
         tags$ul(lapply(messages, function(msg) tags$li(msg))),
         easyClose = TRUE,
         footer = modalButton(tr("close", language$language))
@@ -330,7 +337,7 @@ snowBulletinMod <- function(id, language) {
       ) {
         issues <- c(
           issues,
-          "Choose whether to create bulletin statistics or the bulletin report."
+          tr("snow_bulletin_output_required", language$language)
         )
       }
 
@@ -339,7 +346,7 @@ snowBulletinMod <- function(id, language) {
           length(selections$year) != 1 ||
           is.na(selections$year)
       ) {
-        issues <- c(issues, "Select a valid year.")
+        issues <- c(issues, tr("snow_bulletin_year_invalid", language$language))
       }
 
       if (
@@ -348,7 +355,7 @@ snowBulletinMod <- function(id, language) {
           is.na(selections$month) ||
           !selections$month %in% 3:5
       ) {
-        issues <- c(issues, "Select a valid spring month.")
+        issues <- c(issues, tr("snow_bulletin_month_invalid", language$language))
       }
 
       if (
@@ -359,7 +366,7 @@ snowBulletinMod <- function(id, language) {
       ) {
         issues <- c(
           issues,
-          "Select at least one basin, or choose 'All'."
+          tr("snow_bulletin_basin_required", language$language)
         )
       }
 
@@ -370,7 +377,7 @@ snowBulletinMod <- function(id, language) {
             anyNA(selections$language) ||
             !nzchar(selections$language[[1]])
         ) {
-          issues <- c(issues, "Select a report language.")
+          issues <- c(issues, tr("snow_bulletin_language_required", language$language))
         }
 
         if (
@@ -379,7 +386,7 @@ snowBulletinMod <- function(id, language) {
             anyNA(selections$precip_period) ||
             !nzchar(selections$precip_period[[1]])
         ) {
-          issues <- c(issues, "Select a precipitation comparison period.")
+          issues <- c(issues, tr("snow_bulletin_precip_period_required", language$language))
         }
 
         if (
@@ -388,7 +395,7 @@ snowBulletinMod <- function(id, language) {
             anyNA(selections$cddf_period) ||
             !nzchar(selections$cddf_period[[1]])
         ) {
-          issues <- c(issues, "Select a CDDF comparison period.")
+          issues <- c(issues, tr("snow_bulletin_cddf_period_required", language$language))
         }
 
         if (
@@ -400,7 +407,7 @@ snowBulletinMod <- function(id, language) {
         ) {
           issues <- c(
             issues,
-            "Plot scale must be a number between 0.5 and 3."
+            tr("snow_bulletin_scale_range", language$language)
           )
         }
       }
@@ -423,10 +430,10 @@ snowBulletinMod <- function(id, language) {
       invisible(NULL)
     }
 
-    pick_generated_file <- function(files, pattern = NULL) {
+    pick_generated_file <- function(files, pattern = NULL, lang) {
       files <- files[file.exists(files)]
       if (!length(files)) {
-        stop("No files were generated for the report.")
+        stop(tr("report_error_no_files", lang), call. = FALSE)
       }
 
       if (!is.null(pattern)) {
@@ -435,14 +442,12 @@ snowBulletinMod <- function(id, language) {
           return(matched[[1]])
         }
         if (length(matched) > 1) {
-          stop(
-            "Multiple report files were generated where only one was expected."
-          )
+          stop(tr("report_error_multiple_files", lang), call. = FALSE)
         }
       }
 
       if (length(files) != 1) {
-        stop("Expected a single generated report file.")
+        stop(tr("report_error_single_file_expected", lang), call. = FALSE)
       }
 
       files[[1]]
@@ -480,7 +485,7 @@ snowBulletinMod <- function(id, language) {
 
                 files <- list.files(work_dir, full.names = FALSE)
                 if (!length(files)) {
-                  stop("No files were generated for the report.")
+                  stop(tr("report_error_no_files", req$ui_language), call. = FALSE)
                 }
 
                 zip_path <- file.path(work_dir, "report.zip")
@@ -494,10 +499,9 @@ snowBulletinMod <- function(id, language) {
 
                 return(list(
                   path = zip_path,
-                  filename = paste0(
-                    "Snow bulletin stats issued ",
-                    Sys.Date(),
-                    ".zip"
+                  filename = sprintf(
+                    tr("snow_bulletin_stats_filename", req$ui_language),
+                    Sys.Date()
                   )
                 ))
               }
@@ -516,12 +520,16 @@ snowBulletinMod <- function(id, language) {
 
               report_path <- pick_generated_file(
                 list.files(work_dir, full.names = TRUE),
-                pattern = "\\.docx$"
+                pattern = "\\.docx$",
+                lang = req$ui_language
               )
 
               list(
                 path = report_path,
-                filename = paste0("Snow bulletin issued ", Sys.Date(), ".docx")
+                filename = sprintf(
+                  tr("snow_bulletin_filename", req$ui_language),
+                  Sys.Date()
+                )
               )
             })
           },
@@ -551,7 +559,8 @@ snowBulletinMod <- function(id, language) {
           scale = selections$scale,
           precip_period = selections$precip_period,
           cddf_period = selections$cddf_period,
-          report_language = tolower(selections$language)
+          report_language = tolower(selections$language),
+          ui_language = language$language
         ),
         config = session$userData$config
       )
@@ -562,7 +571,7 @@ snowBulletinMod <- function(id, language) {
 
       if (inherits(result, "character")) {
         showNotification(
-          paste("Error generating snow bulletin report:", result),
+          paste(tr("snow_bulletin_error_prefix", language$language), result),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -572,7 +581,7 @@ snowBulletinMod <- function(id, language) {
 
       if (is.null(result$path) || !file.exists(result$path)) {
         showNotification(
-          "Report was generated, but the output file could not be found for download.",
+          tr("report_download_file_missing", language$language),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -596,12 +605,12 @@ snowBulletinMod <- function(id, language) {
         req(bundle)
 
         if (!file.exists(bundle$path)) {
-          stop("Generated report file could not be found for download.")
+          stop(tr("report_download_source_missing", language$language))
         }
 
         copied <- file.copy(bundle$path, file, overwrite = TRUE)
         if (!isTRUE(copied)) {
-          stop("Unable to copy the generated report to the download location.")
+          stop(tr("report_download_copy_failed", language$language))
         }
 
         cleanup_download_bundle(bundle)

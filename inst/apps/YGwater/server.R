@@ -3157,7 +3157,11 @@ WHERE rolname = current_user;"
     if (input$navbar == "floodDashboard") {
       if (!ui_loaded$floodDashboard) {
         output$floodDashboard_ui <- renderUI(
-          floodDashboardUIMod("floodDashboard")
+          floodDashboardUIMod(
+            "floodDashboard",
+            language = languageSelection,
+            parent_inputs = input
+          )
         )
         ui_loaded$floodDashboard <- TRUE
         # Call the server

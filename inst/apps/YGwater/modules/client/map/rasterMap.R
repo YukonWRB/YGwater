@@ -401,7 +401,7 @@ mapRaster <- function(id, language) {
             ),
             " mm"
           ),
-          group = tr("snowbull_snow_survey", language$language)
+          group = tr("snow_survey", language$language)
         ) %>%
         # --- Add colorbar legend for raster ---
         leaflet::addLegend(
@@ -421,7 +421,7 @@ mapRaster <- function(id, language) {
           overlayGroups = c(
             tr("snowbull_raster", language$language),
             tr("snowbull_snow_pillow", language$language),
-            tr("snowbull_snow_survey", language$language),
+            tr("snow_survey", language$language),
             tr("gen_snowBul_basins", language$language),
             tr("snowbull_swe_basin", language$language),
             tr("communities", language$language),

@@ -8,7 +8,7 @@ snowInfoUIMod <- function(id) {
       type = "text/css",
       href = "css/card_background.css"
     )),
-    uiOutput(ns("info")), # Information about the app
+    uiOutput(ns("info")), # Information about this module, rendered in the same manner as 'banner'
     card(
       card_body(
         class = "custom-card",
@@ -29,6 +29,17 @@ snowInfoMod <- function(id, language) {
         lang = language$language,
         con = session$userData$AquaCache,
         module_id = "snowInfo"
+      )
+    })
+
+    output$info <- renderUI({
+      req(language$language)
+      text <- HTML(tr("gen_snowInfo_info", language$language))
+      dismissible_banner_ui(
+        ns = ns,
+        msg_text = text,
+        banner_id = "snowInfo_info",
+        banner_key_prefix = "snowInfo_info",
       )
     })
 
@@ -122,27 +133,12 @@ snowInfoMod <- function(id, language) {
         ),
         downloadButton(
           ns("download"),
-          "download",
+          tr("download_button", language$language),
           style = "visibility: hidden;"
         ) # Hidden; triggered automatically but left hidden if 'go' is successful
       ) # End tagList
     }) %>% # End renderUI
       bindEvent(language$language, moduleData$locs) # Re-render the UI if the language or moduleData changes
-
-    output$info <- renderUI({
-      text <- HTML(tr("gen_snowInfo_info", language$language))
-      div(
-        style = paste(
-          "background-color: #F7FAFC;",
-          "border-left: 4px solid #0097A9;",
-          "border-radius: 6px;",
-          "padding: 12px 16px;",
-          "margin-bottom: 12px;"
-        ),
-        tags$p(style = "margin-bottom: 0;", text)
-      )
-    }) %>%
-      bindEvent(language$language) # Re-render the text if the language changes
 
     # Observe inputs and store in object 'selections'
     observeEvent(
@@ -223,8 +219,8 @@ snowInfoMod <- function(id, language) {
       }
 
       showModal(modalDialog(
-        title = "Cannot Generate Snow Information Report",
-        tags$p("Please correct the following before starting the report:"),
+        title = tr("snow_info_validation_title", language$language),
+        tags$p(tr("report_validation_intro", language$language)),
         tags$ul(lapply(messages, function(msg) tags$li(msg))),
         easyClose = TRUE,
         footer = modalButton(tr("close", language$language))
@@ -244,7 +240,7 @@ snowInfoMod <- function(id, language) {
       ) {
         issues <- c(
           issues,
-          "Select at least one snow survey location, or choose 'All locations'."
+          tr("snow_info_location_required", language$language)
         )
       }
 
@@ -257,7 +253,7 @@ snowInfoMod <- function(id, language) {
       ) {
         issues <- c(
           issues,
-          "Select a plot type, or turn off plot generation."
+          tr("report_plot_type_required", language$language)
         )
       }
 
@@ -326,7 +322,7 @@ snowInfoMod <- function(id, language) {
 
             files <- list.files(work_dir, full.names = FALSE)
             if (!length(files)) {
-              stop("No files were generated for the report.")
+              stop(tr("report_error_no_files", req$ui_language), call. = FALSE)
             }
 
             zip_path <- file.path(work_dir, "report.zip")
@@ -340,7 +336,10 @@ snowInfoMod <- function(id, language) {
 
             list(
               path = zip_path,
-              filename = paste0("Snow info report issued ", Sys.Date(), ".zip")
+              filename = sprintf(
+                tr("snow_info_filename", req$ui_language),
+                Sys.Date()
+              )
             )
           },
           error = function(e) {
@@ -351,30 +350,35 @@ snowInfoMod <- function(id, language) {
     }) |>
       bind_task_button("go")
 
-    observeEvent(input$go, {
-      if (show_validation_modal(validate_report_request())) {
-        return()
-      }
+    observeEvent(
+      input$go,
+      {
+        if (show_validation_modal(validate_report_request())) {
+          return()
+        }
 
-      report_task$invoke(
-        req = list(
-          loc = selections$loc,
-          inactive = selections$inactive,
-          stats = selections$stats,
-          complete = selections$complete,
-          plots = selections$plots,
-          plot_type = selections$plot_type
-        ),
-        config = session$userData$config
-      )
-    })
+        report_task$invoke(
+          req = list(
+            loc = selections$loc,
+            inactive = selections$inactive,
+            stats = selections$stats,
+            complete = selections$complete,
+            plots = selections$plots,
+            plot_type = selections$plot_type,
+            ui_language = language$language
+          ),
+          config = session$userData$config
+        )
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(report_task$result(), {
       result <- report_task$result()
 
       if (inherits(result, "character")) {
         showNotification(
-          paste("Error generating snow information report:", result),
+          paste(tr("snow_info_error_prefix", language$language), result),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -384,7 +388,7 @@ snowInfoMod <- function(id, language) {
 
       if (is.null(result$path) || !file.exists(result$path)) {
         showNotification(
-          "Report was generated, but the zip archive could not be found for download.",
+          tr("report_download_archive_missing", language$language),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -408,13 +412,13 @@ snowInfoMod <- function(id, language) {
         req(bundle)
 
         if (!file.exists(bundle$path)) {
-          stop("Generated report archive could not be found for download.")
+          stop(tr("report_download_source_missing", language$language))
         }
 
         copied <- file.copy(bundle$path, file, overwrite = TRUE)
         if (!isTRUE(copied)) {
           stop(
-            "Unable to copy the generated report archive to the download location."
+            tr("report_download_copy_failed", language$language)
           )
         }
       }, # End content
