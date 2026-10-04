@@ -2,7 +2,7 @@ test_that("editBoreholesWells selects filtered and sorted rows by record key", {
   module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/editBoreholesWells.R",
+        "apps/aqualink/modules/admin/boreholes_wells/editBoreholesWells.R",
         package = "YGwater"
       ),
       warn = FALSE

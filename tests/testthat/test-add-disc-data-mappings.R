@@ -1,6 +1,6 @@
 add_disc_data_mapping_environment <- function() {
   module_path <- system.file(
-    "apps/YGwater/modules/admin/discreteData/addDiscData.R",
+    "apps/aqualink/modules/admin/discreteData/addDiscData.R",
     package = "YGwater"
   )
   env <- new.env(parent = asNamespace("shiny"))

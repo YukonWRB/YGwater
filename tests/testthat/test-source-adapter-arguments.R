@@ -1,5 +1,5 @@
 source_adapter_helper_path <- system.file(
-  "apps/YGwater/modules/admin/sourceAdapterArguments.R",
+  "apps/aqualink/modules/admin/sourceAdapterArguments.R",
   package = "YGwater"
 )
 
@@ -205,15 +205,15 @@ test_that("source adapter test previews are bounded and include list sections", 
 test_that("timeseries modules use the catalogued argument editor", {
   module_paths <- c(
     system.file(
-      "apps/YGwater/modules/admin/continuousData/addTimeseries.R",
+      "apps/aqualink/modules/admin/continuousData/addTimeseries.R",
       package = "YGwater"
     ),
     system.file(
-      "apps/YGwater/modules/admin/discreteData/addSampleSeries.R",
+      "apps/aqualink/modules/admin/discreteData/addSampleSeries.R",
       package = "YGwater"
     ),
     system.file(
-      "apps/YGwater/modules/admin/imgupload/addImgSeries.R",
+      "apps/aqualink/modules/admin/imgupload/addImgSeries.R",
       package = "YGwater"
     )
   )

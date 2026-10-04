@@ -1,4 +1,4 @@
-#' The YGwater app server-side
+#' The AquaLink app server-side
 #'
 #' @param input,output,session Internal parameters for {shiny}.
 #'     DO NOT REMOVE.
@@ -2492,7 +2492,7 @@ app_server <- function(input, output, session) {
   })
 
   ## Log in #########
-  # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
+  # Login UI elements are not created if AquaLink() is launched in public mode, in which case this code would not run
   observeEvent(
     input$loginBtn + input$loginBtnMobile,
     {
@@ -2881,8 +2881,8 @@ WHERE rolname = current_user;"
   app_www_file_exists <- function(path) {
     candidates <- c(
       file.path("www", path),
-      file.path("inst", "apps", "YGwater", "www", path),
-      system.file("apps", "YGwater", "www", path, package = "YGwater")
+      file.path("inst", "apps", "aqualink", "www", path),
+      system.file("apps", "aqualink", "www", path, package = "YGwater")
     )
     any(file.exists(candidates[nzchar(candidates)]))
   }

@@ -51,7 +51,7 @@ addLocation <- function(id, inputs, language) {
 
     # Location code auto-generation logic
     source(system.file(
-      "apps/YGwater/modules/admin/locations/loc_code_auto_generate.R",
+      "apps/aqualink/modules/admin/locations/loc_code_auto_generate.R",
       package = "YGwater"
     ))
 

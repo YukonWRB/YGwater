@@ -1,4 +1,4 @@
-# This file contains functions used in the simplerIndex module of the YGwater app.
+# This file contains functions used in the simplerIndex module of the AquaLink app.
 
 # OCR helper functions #########################
 concat_ocr_words_by_row <- function(ocr_df) {

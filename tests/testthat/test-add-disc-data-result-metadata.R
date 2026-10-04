@@ -1,6 +1,6 @@
 add_disc_data_module_environment <- function() {
   module_path <- system.file(
-    "apps/YGwater/modules/admin/discreteData/addDiscData.R",
+    "apps/aqualink/modules/admin/discreteData/addDiscData.R",
     package = "YGwater"
   )
 
@@ -47,7 +47,7 @@ test_that("discrete import rows retain laboratory result identifiers", {
 test_that("discrete import persists finalized Patch 60 result metadata", {
   module_code <- readLines(
     system.file(
-      "apps/YGwater/modules/admin/discreteData/addDiscData.R",
+      "apps/aqualink/modules/admin/discreteData/addDiscData.R",
       package = "YGwater"
     ),
     warn = FALSE

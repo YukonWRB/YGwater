@@ -1,7 +1,7 @@
-#' YGwater user interface
+#' AquaLink user interface
 #'
 #' Constructs the navigation bar and main UI containers used by the
-#' application. Called internally by [YGwater()].
+#' application. Called internally by [AquaLink()].
 #'
 #' @param request Internal parameter for `{shiny}`.
 #'     DO NOT REMOVE.

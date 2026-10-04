@@ -2,7 +2,7 @@ test_that("borehole document uploads run in an ExtendedTask", {
   module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/manageBoreholeDocuments.R",
+        "apps/aqualink/modules/admin/boreholes_wells/manageBoreholeDocuments.R",
         package = "YGwater"
       ),
       warn = FALSE

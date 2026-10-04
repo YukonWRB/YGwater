@@ -2,7 +2,7 @@ transmission_admin_environment <- function() {
   module_env <- new.env(parent = asNamespace("shiny"))
   sys.source(
     system.file(
-      "apps/YGwater/modules/admin/metadata/manageReferenceTables.R",
+      "apps/aqualink/modules/admin/metadata/manageReferenceTables.R",
       package = "YGwater"
     ),
     envir = module_env

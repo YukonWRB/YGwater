@@ -503,7 +503,6 @@ addDiscData_share_choices <- function(con, relation) {
           AND NOT role_catalog.rolcanlogin
           AND role_catalog.rolname <> 'public'
           AND role_catalog.rolname !~ '^pg_'
-          AND pg_has_role(current_user, shareable.role_name, 'member')
         ORDER BY shareable.role_name",
       params = list(relation)
     )$role_name,
@@ -1701,6 +1700,126 @@ addDiscData_run_mapping_save <- function(request) {
         request = request,
         message = conditionMessage(e)
       )
+    }
+  )
+}
+
+addDiscData_run_location_create <- function(request) {
+  config <- request$config
+  con <- YGwater::AquaConnect(
+    name = config$dbName,
+    host = config$dbHost,
+    port = config$dbPort,
+    username = config$dbUser,
+    password = config$dbPass,
+    silent = TRUE
+  )
+  if (is.null(con)) {
+    stop("Could not connect to the dev AquaCache database.")
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  location_rows <- request$location_rows
+  latitude <- location_rows$latitude
+  longitude <- location_rows$longitude
+  elevation_details <- lapply(seq_len(nrow(location_rows)), function(i) {
+    tryCatch(
+      AquaCache::get_elevation(
+        lat = latitude[[i]],
+        lon = longitude[[i]],
+        details = TRUE
+      ),
+      error = function(e) NULL
+    )
+  })
+  elevation_available <- vapply(
+    elevation_details,
+    function(details) {
+      if (!is.list(details)) {
+        return(FALSE)
+      }
+      elevation <- suppressWarnings(as.numeric(details$elevation))
+      vertical_datum <- details$vertical_datum
+      length(elevation) == 1L &&
+        is.finite(elevation) &&
+        length(vertical_datum) == 1L &&
+        !is.na(vertical_datum) &&
+        nzchar(trimws(as.character(vertical_datum)))
+    },
+    logical(1)
+  )
+  elevation_fallback <- !elevation_available
+  location_rows$conversion_m <- ifelse(elevation_fallback, 0, NA_real_)
+  location_rows$datum_id_from <- NA_integer_
+  location_rows$datum_id_to <- NA_integer_
+  location_rows$elevation_details <- I(elevation_details)
+
+  active <- FALSE
+  tryCatch(
+    {
+      active <- AquaCache::dbTransBegin(con)
+      tryCatch(
+        {
+          added <- AquaCache::addACLocation(
+            con = con,
+            df = location_rows
+          )
+          for (i in seq_along(request$sources)) {
+            if (length(request$networks[[i]]) > 1L) {
+              for (network_id in request$networks[[i]][-1L]) {
+                DBI::dbExecute(
+                  con,
+                  "INSERT INTO public.locations_networks (location_id, network_id) VALUES ($1, $2)",
+                  params = list(added$location_id[[i]], network_id)
+                )
+              }
+            }
+            if (length(request$projects[[i]]) > 1L) {
+              for (project_id in request$projects[[i]][-1L]) {
+                DBI::dbExecute(
+                  con,
+                  "INSERT INTO public.locations_projects (location_id, project_id) VALUES ($1, $2)",
+                  params = list(added$location_id[[i]], project_id)
+                )
+              }
+            }
+          }
+          mapping_rows <- data.frame(
+            source_location_code = request$sources,
+            source_location_name = request$sources,
+            location_id = as.integer(added$location_id),
+            stringsAsFactors = FALSE
+          )
+          AquaCache::upsertImportLocationMappings(
+            con = con,
+            source_code = request$profile$source_code[[1]],
+            profile_code = request$profile$profile_code[[1]],
+            mappings = mapping_rows,
+            publish = FALSE
+          )
+          if (active) {
+            DBI::dbExecute(con, "COMMIT")
+          }
+          active <- FALSE
+          list(
+            ok = TRUE,
+            added = added,
+            profile = request$profile,
+            names = request$names,
+            elevation_fallback = elevation_fallback
+          )
+        },
+        error = function(e) {
+          if (active) {
+            try(DBI::dbExecute(con, "ROLLBACK"), silent = TRUE)
+            active <- FALSE
+          }
+          stop(e)
+        }
+      )
+    },
+    error = function(e) {
+      list(ok = FALSE, message = conditionMessage(e))
     }
   )
 }
@@ -3154,9 +3273,10 @@ addDiscDataUI <- function(id) {
             )
           ),
           uiOutput(ns("new_location_rows")),
-          actionButton(
+          bslib::input_task_button(
             ns("create_new_locations"),
-            "Create locations and map source names"
+            "Create locations and map source names",
+            label_busy = "Creating new locations..."
           )
         ),
         tabPanel(
@@ -4513,6 +4633,18 @@ addDiscData <- function(id, language) {
     }) |>
       bslib::bind_task_button("save_location_mapping")
 
+    location_create_task <- ExtendedTask$new(function(request) {
+      promises::future_promise(seed = TRUE, expr = {
+        tryCatch(
+          addDiscData_run_location_create(request),
+          error = function(e) {
+            list(ok = FALSE, message = conditionMessage(e))
+          }
+        )
+      })
+    }) |>
+      bslib::bind_task_button("create_new_locations")
+
     upload_task <- ExtendedTask$new(function(request) {
       promises::future_promise(seed = TRUE, expr = {
         tryCatch(
@@ -4670,6 +4802,79 @@ addDiscData <- function(id, language) {
     observeEvent(location_mapping_save_task$result(), {
       apply_mapping_save_result(location_mapping_save_task$result())
     })
+
+    observeEvent(location_create_task$result(), {
+      result <- location_create_task$result()
+      if (!isTRUE(result$ok)) {
+        showNotification(
+          paste("Creating locations failed:", result$message),
+          type = "error"
+        )
+        return()
+      }
+
+      mapping_revision(mapping_revision() + 1L)
+      locations(read_locations())
+      update_location_selectize()
+      refresh_error <- tryCatch(
+        {
+          if (
+            isTRUE(refresh_current_preview(
+              result$profile,
+              preserve_edits = TRUE
+            ))
+          ) {
+            NULL
+          } else {
+            "The locations and mappings were saved. Preview the file again to apply them."
+          }
+        },
+        error = function(e) e$message
+      )
+      summary_rows <- lapply(seq_len(nrow(result$added)), function(i) {
+        tags$tr(
+          tags$td(result$added$name[[i]]),
+          tags$td(result$added$location_code[[i]])
+        )
+      })
+      showModal(modalDialog(
+        title = "New locations created",
+        tags$p(
+          "Location codes are generated automatically. Elevations are fetched from web services when a usable value is available."
+        ),
+        tags$table(
+          class = "table table-sm",
+          tags$thead(tags$tr(
+            tags$th("Location name"),
+            tags$th("Location code")
+          )),
+          tags$tbody(summary_rows)
+        ),
+        if (any(result$elevation_fallback)) {
+          tags$p(
+            class = "text-warning",
+            paste0(
+              "Elevation services could not provide an elevation for ",
+              paste(result$names[result$elevation_fallback], collapse = ", "),
+              ". Elevation was set to 0 m using the assumed datum. Review these locations under Locations -> Add/modify locations."
+            )
+          )
+        },
+        if (is.null(refresh_error)) {
+          tags$p("The new source mappings are ready in this preview.")
+        } else {
+          tags$p(
+            class = "text-warning",
+            paste("The locations were created, but:", refresh_error)
+          )
+        },
+        tags$p(
+          "For further changes, go to Locations -> Add/modify locations."
+        ),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+    }, ignoreInit = TRUE)
 
     observeEvent(
       input$file,
@@ -9327,179 +9532,31 @@ addDiscData <- function(id, language) {
           stringsAsFactors = FALSE
         )
 
-        # Fetch elevation details once before writing. AquaCache uses the details
-        # column to save the returned vertical datum; if no usable elevation and
-        # datum are returned, record 0 m against the assumed datum instead.
-        elevation_details <- lapply(seq_len(nrow(location_rows)), function(i) {
-          tryCatch(
-            AquaCache::get_elevation(
-              lat = latitude[[i]],
-              lon = longitude[[i]],
-              details = TRUE
-            ),
-            error = function(e) NULL
-          )
-        })
-        elevation_available <- vapply(
-          elevation_details,
-          function(details) {
-            if (!is.list(details)) {
-              return(FALSE)
-            }
-            elevation <- suppressWarnings(as.numeric(details$elevation))
-            vertical_datum <- details$vertical_datum
-            length(elevation) == 1L &&
-              is.finite(elevation) &&
-              length(vertical_datum) == 1L &&
-              !is.na(vertical_datum) &&
-              nzchar(trimws(as.character(vertical_datum)))
-          },
-          logical(1)
+        request <- list(
+          config = session$userData$config,
+          location_rows = location_rows,
+          sources = sources,
+          names = names,
+          networks = networks,
+          projects = projects,
+          profile = profile
         )
-        elevation_fallback <- !elevation_available
-        location_rows$conversion_m <- ifelse(elevation_fallback, 0, NA_real_)
-        location_rows$datum_id_from <- NA_integer_
-        location_rows$datum_id_to <- NA_integer_
-        location_rows$elevation_details <- I(elevation_details)
-
-        active <- FALSE
-        added <- tryCatch(
+        invoke_error <- tryCatch(
           {
-            active <- AquaCache::dbTransBegin(con)
-            tryCatch(
-              {
-                result <- AquaCache::addACLocation(
-                  con = con,
-                  df = location_rows
-                )
-                for (i in seq_along(sources)) {
-                  if (length(networks[[i]]) > 1L) {
-                    for (network_id in networks[[i]][-1L]) {
-                      DBI::dbExecute(
-                        con,
-                        "INSERT INTO public.locations_networks (location_id, network_id) VALUES ($1, $2)",
-                        params = list(
-                          result$location_id[[i]],
-                          network_id
-                        )
-                      )
-                    }
-                  }
-                  if (length(projects[[i]]) > 1L) {
-                    for (project_id in projects[[i]][-1L]) {
-                      DBI::dbExecute(
-                        con,
-                        "INSERT INTO public.locations_projects (location_id, project_id) VALUES ($1, $2)",
-                        params = list(
-                          result$location_id[[i]],
-                          project_id
-                        )
-                      )
-                    }
-                  }
-                }
-                mapping_rows <- data.frame(
-                  source_location_code = sources,
-                  source_location_name = sources,
-                  location_id = as.integer(result$location_id),
-                  stringsAsFactors = FALSE
-                )
-                AquaCache::upsertImportLocationMappings(
-                  con = con,
-                  source_code = profile$source_code[[1]],
-                  profile_code = profile$profile_code[[1]],
-                  mappings = mapping_rows,
-                  publish = FALSE
-                )
-                if (active) {
-                  DBI::dbExecute(con, "COMMIT")
-                }
-                active <- FALSE
-                result
-              },
-              error = function(e) {
-                if (active) {
-                  try(DBI::dbExecute(con, "ROLLBACK"), silent = TRUE)
-                  active <- FALSE
-                }
-                stop(e)
-              }
-            )
-          },
-          error = function(e) {
-            showNotification(
-              paste("Creating locations failed:", e$message),
-              type = "error"
-            )
+            location_create_task$invoke(request)
             NULL
-          }
-        )
-        if (is.null(added)) {
-          return()
-        }
-
-        mapping_revision(mapping_revision() + 1L)
-        locations(read_locations())
-        update_location_selectize()
-        refresh_error <- tryCatch(
-          {
-            if (
-              isTRUE(refresh_current_preview(profile, preserve_edits = TRUE))
-            ) {
-              NULL
-            } else {
-              "The locations and mappings were saved. Preview the file again to apply them."
-            }
           },
-          error = function(e) e$message
+          error = function(e) e
         )
-        summary_rows <- lapply(seq_len(nrow(added)), function(i) {
-          tags$tr(
-            tags$td(added$name[[i]]),
-            tags$td(added$location_code[[i]])
+        if (inherits(invoke_error, "error")) {
+          showNotification(
+            paste("Could not start creating locations:", invoke_error$message),
+            type = "error"
           )
-        })
-        showModal(modalDialog(
-          title = "New locations created",
-          tags$p(
-            "Location codes are generated automatically. Elevations are fetched from web services when a usable value is available."
-          ),
-          tags$table(
-            class = "table table-sm",
-            tags$thead(tags$tr(
-              tags$th("Location name"),
-              tags$th("Location code")
-            )),
-            tags$tbody(summary_rows)
-          ),
-          if (any(elevation_fallback)) {
-            tags$p(
-              class = "text-warning",
-              paste0(
-                "Elevation services could not provide an elevation for ",
-                paste(names[elevation_fallback], collapse = ", "),
-                ". Elevation was set to 0 m using the assumed datum. Review these locations under Locations -> Add/modify locations."
-              )
-            )
-          },
-          if (is.null(refresh_error)) {
-            tags$p("The new source mappings are ready in this preview.")
-          } else {
-            tags$p(
-              class = "text-warning",
-              paste("The locations were created, but:", refresh_error)
-            )
-          },
-          tags$p(
-            "For further changes, go to Locations -> Add/modify locations."
-          ),
-          easyClose = TRUE,
-          footer = modalButton("Close")
-        ))
+        }
       },
       ignoreInit = TRUE
     )
-
     observeEvent(input$save_result_flag_mapping, {
       row <- selected_result_flag_mapping()
       if (is.null(row)) {

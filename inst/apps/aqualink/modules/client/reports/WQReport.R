@@ -45,8 +45,11 @@ WQReport <- function(id, mdb_files, language) {
     preserved_input_ids <- c(
       "data_source",
       "date",
+      "date_mode_AC",
       "date_to_add_AC",
       "dates_AC",
+      "date_range_start_AC",
+      "date_range_end_AC",
       "format_AC",
       "date_approx_ac",
       "date_approx_eq",
@@ -85,6 +88,52 @@ WQReport <- function(id, mdb_files, language) {
     saved_input <- function(id, default = NULL) {
       value <- isolate(saved_inputs[[id]])
       if (is.null(value)) default else value
+    }
+
+    report_date_range_AC <- reactive({
+      start_date <- suppressWarnings(as.Date(input$date_range_start_AC))
+      end_date <- suppressWarnings(as.Date(input$date_range_end_AC))
+      if (
+        length(start_date) != 1L ||
+          is.na(start_date) ||
+          length(end_date) != 1L ||
+          is.na(end_date) ||
+          start_date > end_date
+      ) {
+        return(as.Date(character()))
+      }
+      c(start_date, end_date)
+    })
+
+    # In range mode these are interval boundaries, not daily target dates.
+    # The report queries samples in the interval directly.
+    report_dates_AC <- reactive({
+      if (identical(input$date_mode_AC, "range")) {
+        return(report_date_range_AC())
+      }
+      suppressWarnings(as.Date(input$dates_AC))
+    })
+
+    report_date_tolerances_AC <- function(dates) {
+      if (identical(input$date_mode_AC, "range")) {
+        return(rep(0L, length(dates)))
+      }
+      if (identical(input$date_approx_mode_AC, "per_date")) {
+        date_ids <- format(dates, "%Y%m%d")
+        return(vapply(
+          date_ids,
+          function(date_id) {
+            value <- input[[paste0("date_approx_", date_id)]]
+            if (is.null(value)) NA_real_ else suppressWarnings(as.numeric(value))
+          },
+          numeric(1)
+        ))
+      }
+      value <- suppressWarnings(as.numeric(input$date_approx_ac))
+      if (length(value) != 1L) {
+        return(rep(NA_real_, length(dates)))
+      }
+      rep(value, length(dates))
     }
 
     tooltip_label <- function(label, key, lang) {
@@ -207,69 +256,122 @@ WQReport <- function(id, mdb_files, language) {
         conditionalPanel(
           ns = ns,
           condition = "input.data_source == 'AC' || input.data_source == null",
-          tags$div(
-            style = paste(
-              "display: flex; flex-wrap: wrap; align-items: baseline;",
-              "column-gap: 0.5rem;"
-            ),
-            tags$label(
-              tooltip_label(
-                tr("report_date", lang),
-                "wq_tooltip_report_date_ac",
-                lang
-              ),
-              `for` = ns("date_to_add_AC"),
-              class = "form-label",
-              style = "margin-bottom: 0;"
-            ),
-            uiOutput(ns("ac_date_add_warning_ui"))
-          ),
-          dateInput(
-            ns("date_to_add_AC"),
-            NULL,
-            value = saved_input("date_to_add_AC", Sys.Date() - 30),
-            format = "yyyy-mm-dd",
-            language = language$abbrev
-          ),
-          actionButton(
-            ns("add_date_AC"),
-            tooltip_label(
-              tr("wq_add_report_date", lang),
-              "wq_tooltip_add_report_date",
-              lang
-            ),
-            icon = icon("plus")
-          ),
-          selectizeInput(
-            ns("dates_AC"),
-            tooltip_label(
-              tr("wq_report_dates", lang),
-              "wq_tooltip_report_dates",
-              lang
-            ),
-            choices = stats::setNames(selected_dates, selected_dates),
-            selected = selected_dates,
-            multiple = TRUE,
-            width = "100%"
-          ),
           selectInput(
-            ns("date_approx_mode_AC"),
+            ns("date_mode_AC"),
             tooltip_label(
-              tr("wq_date_approx_mode", lang),
-              "wq_tooltip_date_approx_mode",
+              tr("wq_date_mode", lang),
+              "wq_tooltip_date_mode",
               lang
             ),
             choices = stats::setNames(
-              c("shared", "per_date"),
+              c("specific", "range"),
               c(
-                tr("wq_date_approx_shared", lang),
-                tr("wq_date_approx_per_date", lang)
+                tr("wq_date_mode_specific", lang),
+                tr("wq_date_mode_range", lang)
               )
             ),
-            selected = saved_input("date_approx_mode_AC", "shared"),
+            selected = saved_input("date_mode_AC", "specific"),
             width = "100%"
           ),
-          uiOutput(ns("date_approx_ac_ui")),
+          conditionalPanel(
+            ns = ns,
+            condition = "input.date_mode_AC == 'specific'",
+            tags$div(
+              style = paste(
+                "display: flex; flex-wrap: wrap; align-items: baseline;",
+                "column-gap: 0.5rem;"
+              ),
+              tags$label(
+                tooltip_label(
+                  tr("report_date", lang),
+                  "wq_tooltip_report_date_ac",
+                  lang
+                ),
+                `for` = ns("date_to_add_AC"),
+                class = "form-label",
+                style = "margin-bottom: 0;"
+              ),
+              uiOutput(ns("ac_date_add_warning_ui"))
+            ),
+            dateInput(
+              ns("date_to_add_AC"),
+              NULL,
+              value = saved_input("date_to_add_AC", Sys.Date() - 30),
+              format = "yyyy-mm-dd",
+              language = language$abbrev
+            ),
+            actionButton(
+              ns("add_date_AC"),
+              tooltip_label(
+                tr("wq_add_report_date", lang),
+                "wq_tooltip_add_report_date",
+                lang
+              ),
+              icon = icon("plus")
+            ),
+            selectizeInput(
+              ns("dates_AC"),
+              tooltip_label(
+                tr("wq_report_dates", lang),
+                "wq_tooltip_report_dates",
+                lang
+              ),
+              choices = stats::setNames(selected_dates, selected_dates),
+              selected = selected_dates,
+              multiple = TRUE,
+              width = "100%"
+            ),
+            selectInput(
+              ns("date_approx_mode_AC"),
+              tooltip_label(
+                tr("wq_date_approx_mode", lang),
+                "wq_tooltip_date_approx_mode",
+                lang
+              ),
+              choices = stats::setNames(
+                c("shared", "per_date"),
+                c(
+                  tr("wq_date_approx_shared", lang),
+                  tr("wq_date_approx_per_date", lang)
+                )
+              ),
+              selected = saved_input("date_approx_mode_AC", "shared"),
+              width = "100%"
+            ),
+            uiOutput(ns("date_approx_ac_ui"))
+          ),
+          conditionalPanel(
+            ns = ns,
+            condition = "input.date_mode_AC == 'range'",
+            tags$div(
+              style = paste(
+                "display: flex; flex-wrap: wrap; align-items: baseline;",
+                "column-gap: 1rem;"
+              ),
+              dateInput(
+                ns("date_range_start_AC"),
+                tooltip_label(
+                  tr("wq_report_range_start", lang),
+                  "wq_tooltip_report_range",
+                  lang
+                ),
+                value = saved_input("date_range_start_AC", Sys.Date() - 30),
+                format = "yyyy-mm-dd",
+                language = language$abbrev
+              ),
+              dateInput(
+                ns("date_range_end_AC"),
+                tooltip_label(
+                  tr("wq_report_range_end", lang),
+                  "wq_tooltip_report_range",
+                  lang
+                ),
+                value = saved_input("date_range_end_AC", Sys.Date()),
+                format = "yyyy-mm-dd",
+                language = language$abbrev
+              )
+            )
+          ),
           selectizeInput(
             ns("format_AC"),
             tooltip_label(
@@ -603,6 +705,9 @@ WQReport <- function(id, mdb_files, language) {
     )
 
     output$ac_date_add_warning_ui <- renderUI({
+      if (identical(input$date_mode_AC, "range")) {
+        return(NULL)
+      }
       candidate_date <- suppressWarnings(as.Date(input$date_to_add_AC))
       if (length(candidate_date) != 1L || is.na(candidate_date)) {
         return(NULL)
@@ -634,71 +739,86 @@ WQReport <- function(id, mdb_files, language) {
       if (!identical(selected_data_source(), "AC") || !ac_metadata_loaded()) {
         return(NULL)
       }
-      dates <- suppressWarnings(as.Date(input$dates_AC))
+      dates <- report_dates_AC()
+      range_mode <- identical(input$date_mode_AC, "range")
+      date_range <- report_date_range_AC()
       locations <- suppressWarnings(as.integer(input$locations_AC))
       if (
         !length(dates) ||
           anyNA(dates) ||
-          anyDuplicated(dates) ||
+          (!range_mode && anyDuplicated(dates)) ||
+          (range_mode && length(date_range) != 2L) ||
           !length(locations) ||
           anyNA(locations)
       ) {
         return(NULL)
       }
 
-      tolerances <- if (identical(input$date_approx_mode_AC, "per_date")) {
-        date_ids <- format(dates, "%Y%m%d")
-        vapply(
-          date_ids,
-          function(date_id) {
-            value <- input[[paste0("date_approx_", date_id)]]
-            if (is.null(value)) NA_real_ else suppressWarnings(as.numeric(value))
-          },
-          numeric(1)
-        )
-      } else {
-        rep(suppressWarnings(as.numeric(input$date_approx_ac)), length(dates))
-      }
-      if (
-        length(tolerances) != length(dates) ||
-          anyNA(tolerances) ||
-          any(!is.finite(tolerances)) ||
-          any(tolerances < 0) ||
-          any(tolerances > .Machine$integer.max) ||
-          any(tolerances != trunc(tolerances))
-      ) {
-        return(NULL)
-      }
-
-      date_json <- as.character(jsonlite::toJSON(
-        data.frame(
-          requested_date = format(dates, "%Y-%m-%d"),
-          date_approx = as.integer(tolerances)
-        ),
-        dataframe = "rows",
-        auto_unbox = TRUE
-      ))
       location_json <- as.character(jsonlite::toJSON(
         as.character(unique(locations)),
         auto_unbox = FALSE
       ))
-      sql <- paste0(
-        "WITH date_requests AS (",
-        " SELECT requested_date, date_approx",
-        " FROM jsonb_to_recordset($1::jsonb)",
-        " AS d(requested_date date, date_approx integer)",
-        ") SELECT DISTINCT d.requested_date, s.location_id,",
-        " s.datetime::date AS sample_date, r.parameter_id,",
-        " r.matrix_state_id, r.sample_fraction_id",
-        " FROM date_requests d",
-        " JOIN discrete.samples s ON s.datetime::date BETWEEN",
-        " d.requested_date - d.date_approx AND d.requested_date + d.date_approx",
-        " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
-        " JOIN discrete.results r ON r.sample_id = s.sample_id",
-        " WHERE s.location_id IN (SELECT value::integer FROM",
-        " jsonb_array_elements_text($2::jsonb))",
-        " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')"
-      )
+      if (range_mode) {
+        date_json <- as.character(jsonlite::toJSON(
+          list(
+            range_start = format(date_range[[1]], "%Y-%m-%d"),
+            range_end = format(date_range[[2]], "%Y-%m-%d")
+          ),
+          auto_unbox = TRUE
+        ))
+        sql <- paste0(
+          "WITH date_range AS (",
+          " SELECT range_start, range_end FROM jsonb_to_record($1::jsonb)",
+          " AS d(range_start date, range_end date)",
+          ") SELECT DISTINCT s.datetime::date AS requested_date,",
+          " s.location_id, s.datetime::date AS sample_date, r.parameter_id,",
+          " r.matrix_state_id, r.sample_fraction_id",
+          " FROM date_range d JOIN discrete.samples s",
+          " ON s.datetime::date BETWEEN d.range_start AND d.range_end",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " JOIN discrete.results r ON r.sample_id = s.sample_id",
+          " WHERE s.location_id IN (SELECT value::integer FROM",
+          " jsonb_array_elements_text($2::jsonb))",
+          " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')"
+        )
+      } else {
+        tolerances <- report_date_tolerances_AC(dates)
+        if (
+          length(tolerances) != length(dates) ||
+            anyNA(tolerances) ||
+            any(!is.finite(tolerances)) ||
+            any(tolerances < 0) ||
+            any(tolerances > .Machine$integer.max) ||
+            any(tolerances != trunc(tolerances))
+        ) {
+          return(NULL)
+        }
+        date_json <- as.character(jsonlite::toJSON(
+          data.frame(
+            requested_date = format(dates, "%Y-%m-%d"),
+            date_approx = as.integer(tolerances)
+          ),
+          dataframe = "rows",
+          auto_unbox = TRUE
+        ))
+        sql <- paste0(
+          "WITH date_requests AS (",
+          " SELECT requested_date, date_approx",
+          " FROM jsonb_to_recordset($1::jsonb)",
+          " AS d(requested_date date, date_approx integer)",
+          ") SELECT DISTINCT d.requested_date, s.location_id,",
+          " s.datetime::date AS sample_date, r.parameter_id,",
+          " r.matrix_state_id, r.sample_fraction_id",
+          " FROM date_requests d",
+          " JOIN discrete.samples s ON s.datetime::date BETWEEN",
+          " d.requested_date - d.date_approx AND d.requested_date + d.date_approx",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " JOIN discrete.results r ON r.sample_id = s.sample_id",
+          " WHERE s.location_id IN (SELECT value::integer FROM",
+          " jsonb_array_elements_text($2::jsonb))",
+          " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')"
+        )
+      }
       tryCatch(
         DBI::dbGetQuery(
           session$userData$AquaCache,
@@ -1045,13 +1165,16 @@ WQReport <- function(id, mdb_files, language) {
       if (!identical(selected_data_source(), "AC") || !ac_metadata_loaded()) {
         return(NULL)
       }
-      dates <- suppressWarnings(as.Date(input$dates_AC))
+      dates <- report_dates_AC()
+      range_mode <- identical(input$date_mode_AC, "range")
+      date_range <- report_date_range_AC()
       locations <- suppressWarnings(as.integer(input$locations_AC))
       parameters <- suppressWarnings(as.integer(input$parameters_AC))
       if (
         !length(dates) ||
           anyNA(dates) ||
-          anyDuplicated(dates) ||
+          (!range_mode && anyDuplicated(dates)) ||
+          (range_mode && length(date_range) != 2L) ||
           !length(locations) ||
           anyNA(locations) ||
           !length(parameters) ||
@@ -1059,31 +1182,14 @@ WQReport <- function(id, mdb_files, language) {
       ) {
         return(NULL)
       }
-      if (identical(input$date_approx_mode_AC, "per_date")) {
-        date_ids <- format(dates, "%Y%m%d")
-        tolerances <- vapply(
-          date_ids,
-          function(date_id) {
-            value <- input[[paste0("date_approx_", date_id)]]
-            if (is.null(value)) {
-              NA_integer_
-            } else {
-              suppressWarnings(as.integer(value))
-            }
-          },
-          integer(1)
-        )
-      } else {
-        tolerances <- rep(
-          suppressWarnings(as.integer(input$date_approx_ac)),
-          length(dates)
-        )
-      }
-      if (
+      tolerances <- if (range_mode) integer() else suppressWarnings(as.integer(
+        report_date_tolerances_AC(dates)
+      ))
+      if (!range_mode && (
         anyNA(tolerances) ||
           any(tolerances < 0L) ||
           any(tolerances > .Machine$integer.max)
-      ) {
+      )) {
         return(NULL)
       }
       matrix_states <- suppressWarnings(as.integer(input$matrix_states_AC))
@@ -1098,54 +1204,90 @@ WQReport <- function(id, mdb_files, language) {
           auto_unbox = FALSE
         ))
       }
-      date_json <- as.character(jsonlite::toJSON(
-        data.frame(
-          requested_date = format(dates, "%Y-%m-%d"),
-          date_approx = tolerances
-        ),
-        dataframe = "rows",
-        auto_unbox = TRUE
-      ))
+      date_json <- if (range_mode) {
+        as.character(jsonlite::toJSON(
+          list(
+            range_start = format(date_range[[1]], "%Y-%m-%d"),
+            range_end = format(date_range[[2]], "%Y-%m-%d")
+          ),
+          auto_unbox = TRUE
+        ))
+      } else {
+        as.character(jsonlite::toJSON(
+          data.frame(
+            requested_date = format(dates, "%Y-%m-%d"),
+            date_approx = tolerances
+          ),
+          dataframe = "rows",
+          auto_unbox = TRUE
+        ))
+      }
+      selected_results_cte <- if (range_mode) {
+        paste0(
+          "WITH date_range AS (",
+          " SELECT range_start, range_end FROM jsonb_to_record($1::jsonb)",
+          " AS d(range_start date, range_end date)",
+          "), selected_results AS (",
+          " SELECT DISTINCT r.result_id, s.datetime::date AS sample_date",
+          " FROM date_range d JOIN discrete.samples s",
+          " ON s.datetime::date BETWEEN d.range_start AND d.range_end",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " JOIN discrete.results r ON r.sample_id = s.sample_id",
+          " WHERE s.location_id IN (SELECT value::integer FROM",
+          " jsonb_array_elements_text($2::jsonb))",
+          " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
+          " AND r.parameter_id IN (SELECT value::integer FROM",
+          " jsonb_array_elements_text($3::jsonb))",
+          " AND (jsonb_array_length($4::jsonb) = 0 OR r.matrix_state_id IN (",
+          " SELECT value::integer FROM jsonb_array_elements_text($4::jsonb)))",
+          " AND (jsonb_array_length($5::jsonb) = 0 OR r.sample_fraction_id IN (",
+          " SELECT value::integer FROM jsonb_array_elements_text($5::jsonb)))"
+        )
+      } else {
+        paste0(
+          "WITH date_requests AS (",
+          " SELECT requested_date, date_approx",
+          " FROM jsonb_to_recordset($1::jsonb)",
+          " AS d(requested_date date, date_approx integer) ",
+          "), candidates AS (",
+          " SELECT d.requested_date, s.location_id, s.datetime::date AS sample_date",
+          " FROM date_requests d JOIN discrete.samples s",
+          " ON s.datetime::date BETWEEN d.requested_date - d.date_approx",
+          " AND d.requested_date + d.date_approx",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " WHERE s.location_id IN (SELECT value::integer FROM",
+          " jsonb_array_elements_text($2::jsonb))",
+          " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
+          " AND EXISTS (SELECT 1 FROM discrete.results er",
+          " WHERE er.sample_id = s.sample_id AND er.parameter_id IN (",
+          " SELECT value::integer FROM jsonb_array_elements_text($3::jsonb))",
+          " AND (jsonb_array_length($4::jsonb) = 0 OR er.matrix_state_id IN (",
+          " SELECT value::integer FROM jsonb_array_elements_text($4::jsonb)))",
+          " AND (jsonb_array_length($5::jsonb) = 0 OR er.sample_fraction_id IN (",
+          " SELECT value::integer FROM jsonb_array_elements_text($5::jsonb))))",
+          "), best_dates AS (",
+          " SELECT DISTINCT ON (requested_date, location_id)",
+          " requested_date, location_id, sample_date FROM candidates",
+          " ORDER BY requested_date, location_id,",
+          " abs(sample_date - requested_date),",
+          " (sample_date >= requested_date) DESC, sample_date",
+          "), selected_results AS (",
+          " SELECT DISTINCT r.result_id, s.datetime::date AS sample_date",
+          " FROM best_dates b JOIN discrete.samples s",
+          " ON s.location_id = b.location_id AND s.datetime::date = b.sample_date",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " JOIN discrete.results r ON r.sample_id = s.sample_id",
+          " WHERE r.parameter_id IN (SELECT value::integer FROM",
+          " jsonb_array_elements_text($3::jsonb))",
+          " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
+          " AND (jsonb_array_length($4::jsonb) = 0 OR r.matrix_state_id IN (",
+          " SELECT value::integer FROM jsonb_array_elements_text($4::jsonb)))",
+          " AND (jsonb_array_length($5::jsonb) = 0 OR r.sample_fraction_id IN (",
+          " SELECT value::integer FROM jsonb_array_elements_text($5::jsonb)))"
+        )
+      }
       sql <- paste0(
-        "WITH date_requests AS (",
-        " SELECT requested_date, date_approx",
-        " FROM jsonb_to_recordset($1::jsonb)",
-        " AS d(requested_date date, date_approx integer) ",
-        "), candidates AS (",
-        " SELECT d.requested_date, s.location_id, s.datetime::date AS sample_date",
-        " FROM date_requests d JOIN discrete.samples s",
-        " ON s.datetime::date BETWEEN d.requested_date - d.date_approx",
-        " AND d.requested_date + d.date_approx",
-        " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
-        " WHERE s.location_id IN (SELECT value::integer FROM",
-        " jsonb_array_elements_text($2::jsonb))",
-        " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
-        " AND EXISTS (SELECT 1 FROM discrete.results er",
-        " WHERE er.sample_id = s.sample_id AND er.parameter_id IN (",
-        " SELECT value::integer FROM jsonb_array_elements_text($3::jsonb))",
-        " AND (jsonb_array_length($4::jsonb) = 0 OR er.matrix_state_id IN (",
-        " SELECT value::integer FROM jsonb_array_elements_text($4::jsonb)))",
-        " AND (jsonb_array_length($5::jsonb) = 0 OR er.sample_fraction_id IN (",
-        " SELECT value::integer FROM jsonb_array_elements_text($5::jsonb))))",
-        "), best_dates AS (",
-        " SELECT DISTINCT ON (requested_date, location_id)",
-        " requested_date, location_id, sample_date FROM candidates",
-        " ORDER BY requested_date, location_id,",
-        " abs(sample_date - requested_date),",
-        " (sample_date >= requested_date) DESC, sample_date",
-        "), selected_results AS (",
-        " SELECT DISTINCT r.result_id, s.datetime::date AS sample_date",
-        " FROM best_dates b JOIN discrete.samples s",
-        " ON s.location_id = b.location_id AND s.datetime::date = b.sample_date",
-        " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
-        " JOIN discrete.results r ON r.sample_id = s.sample_id",
-        " WHERE r.parameter_id IN (SELECT value::integer FROM",
-        " jsonb_array_elements_text($3::jsonb))",
-        " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
-        " AND (jsonb_array_length($4::jsonb) = 0 OR r.matrix_state_id IN (",
-        " SELECT value::integer FROM jsonb_array_elements_text($4::jsonb)))",
-        " AND (jsonb_array_length($5::jsonb) = 0 OR r.sample_fraction_id IN (",
-        " SELECT value::integer FROM jsonb_array_elements_text($5::jsonb)))",
+        selected_results_cte,
         ") SELECT DISTINCT g.guideline_id, g.guideline_code, g.guideline_name,",
         " p.param_name, gp.publisher_name",
         " FROM selected_results sr",
@@ -1324,9 +1466,10 @@ WQReport <- function(id, mdb_files, language) {
     })
 
     output$date_approx_ac_ui <- renderUI({
-      dates <- suppressWarnings(as.Date(input$dates_AC))
+      dates <- report_dates_AC()
       if (
         !identical(selected_data_source(), "AC") ||
+          identical(input$date_mode_AC, "range") ||
           !length(dates) ||
           anyNA(dates)
       ) {
@@ -1368,7 +1511,10 @@ WQReport <- function(id, mdb_files, language) {
     })
 
     observe({
-      dates <- suppressWarnings(as.Date(input$dates_AC))
+      if (identical(input$date_mode_AC, "range")) {
+        return()
+      }
+      dates <- report_dates_AC()
       if (!length(dates) || anyNA(dates)) {
         return()
       }
@@ -1564,20 +1710,32 @@ WQReport <- function(id, mdb_files, language) {
       source <- selected_data_source()
 
       report_dates <- if (identical(source, "AC")) {
-        suppressWarnings(as.Date(input$dates_AC))
+        report_dates_AC()
       } else {
         as.Date(input$date)
       }
       if (identical(source, "AC")) {
-        if (
+        if (identical(input$date_mode_AC, "range")) {
+          start_date <- suppressWarnings(as.Date(input$date_range_start_AC))
+          end_date <- suppressWarnings(as.Date(input$date_range_end_AC))
+          if (
+            length(start_date) != 1L ||
+              is.na(start_date) ||
+              length(end_date) != 1L ||
+              is.na(end_date) ||
+              start_date > end_date
+          ) {
+            issues <- c(
+              issues,
+              tr("wq_err_aquacache_date_range", language$language)
+            )
+          }
+        } else if (
           !length(report_dates) ||
             anyNA(report_dates) ||
             anyDuplicated(report_dates)
         ) {
-          issues <- c(
-            issues,
-            tr("wq_err_aquacache_dates", language$language)
-          )
+          issues <- c(issues, tr("wq_err_aquacache_dates", language$language))
         }
         if (
           length(input$format_AC) != 1L ||
@@ -1589,27 +1747,8 @@ WQReport <- function(id, mdb_files, language) {
       } else if (length(report_dates) != 1L || is.na(report_dates)) {
         issues <- c(issues, tr("wq_err_report_date", language$language))
       }
-      tolerances <- if (
-        identical(source, "AC") &&
-          identical(input$date_approx_mode_AC, "per_date") &&
-          length(report_dates) &&
-          !anyNA(report_dates)
-      ) {
-        date_ids <- format(report_dates, "%Y%m%d")
-        vapply(
-          date_ids,
-          function(date_id) {
-            value <- input[[paste0("date_approx_", date_id)]]
-            if (is.null(value)) NA_real_ else as.numeric(value)
-          },
-          numeric(1)
-        )
-      } else if (
-        identical(source, "AC") &&
-          !is.null(input$date_approx_ac) &&
-          length(input$date_approx_ac) == 1L
-      ) {
-        as.numeric(input$date_approx_ac)
+      tolerances <- if (identical(source, "AC")) {
+        report_date_tolerances_AC(report_dates)
       } else if (
         identical(source, "EQ") &&
           !is.null(input$date_approx_eq) &&
@@ -1619,22 +1758,21 @@ WQReport <- function(id, mdb_files, language) {
       } else {
         numeric()
       }
-      expected_tolerance_count <- if (
-        identical(source, "AC") &&
-          identical(input$date_approx_mode_AC, "per_date")
-      ) {
+      expected_tolerance_count <- if (identical(source, "AC")) {
         length(report_dates)
       } else {
         1L
       }
       if (
-        !length(tolerances) ||
+        !(identical(source, "AC") &&
+          identical(input$date_mode_AC, "range")) &&
+        (!length(tolerances) ||
           anyNA(tolerances) ||
           any(!is.finite(tolerances)) ||
           any(tolerances < 0) ||
           any(tolerances > .Machine$integer.max) ||
           any(tolerances != trunc(tolerances)) ||
-          length(tolerances) != expected_tolerance_count
+          length(tolerances) != expected_tolerance_count)
       ) {
         issues <- c(
           issues,
@@ -1975,6 +2113,7 @@ WQReport <- function(id, mdb_files, language) {
                 sample_fraction_ids = req$sample_fraction_ids,
                 guideline_ids = req$guideline_ids,
                 date_approx = req$date_approx,
+                date_range = req$date_range,
                 format = req$format,
                 sd_multiplier = req$sd_multiplier,
                 sd_start = req$sd_start,
@@ -2032,7 +2171,24 @@ WQReport <- function(id, mdb_files, language) {
               )
             }
 
-            date_label <- paste(format(req$date, "%Y-%m-%d"), collapse = ", ")
+            date_label <- if (!is.null(req$date_range)) {
+              paste(
+                format(req$date_range[[1]], "%Y-%m-%d"),
+                format(req$date_range[[2]], "%Y-%m-%d"),
+                sep = if (identical(req$lang, "fr")) " au " else " to "
+              )
+            } else if (
+              length(req$date) > 1L &&
+                all(diff(as.integer(req$date)) == 1L)
+            ) {
+              paste(
+                format(req$date[[1]], "%Y-%m-%d"),
+                format(req$date[[length(req$date)]], "%Y-%m-%d"),
+                sep = if (identical(req$lang, "fr")) " au " else " to "
+              )
+            } else {
+              paste(format(req$date, "%Y-%m-%d"), collapse = ", ")
+            }
             list(
               path = report_path,
               filename = sprintf(
@@ -2080,23 +2236,20 @@ WQReport <- function(id, mdb_files, language) {
       req <- list(
         data_source = source,
         date = if (identical(source, "AC")) {
-          as.Date(input$dates_AC)
+          report_dates_AC()
         } else {
           as.Date(input$date)
         },
+        date_range = if (
+          identical(source, "AC") &&
+            identical(input$date_mode_AC, "range")
+        ) {
+          report_date_range_AC()
+        } else {
+          NULL
+        },
         date_approx = if (identical(source, "AC")) {
-          if (identical(input$date_approx_mode_AC, "per_date")) {
-            date_ids <- format(as.Date(input$dates_AC), "%Y%m%d")
-            as.integer(vapply(
-              date_ids,
-              function(date_id) {
-                input[[paste0("date_approx_", date_id)]]
-              },
-              numeric(1)
-            ))
-          } else {
-            as.integer(input$date_approx_ac)
-          }
+          as.integer(report_date_tolerances_AC(report_dates_AC()))
         } else {
           as.integer(input$date_approx_eq)
         },

@@ -30,7 +30,7 @@ YGwater_globals <- function(
 
   # Load the cache functions (in a file so they can be used across a few modules)
   source(system.file(
-    "apps/YGwater/modules/cache_functions.R",
+    "apps/aqualink/modules/cache_functions.R",
     package = "YGwater"
   ))
 
@@ -47,7 +47,7 @@ YGwater_globals <- function(
     if (g_drive) {
       # FOD module (only visible internally)
       source(system.file(
-        "apps/YGwater/modules/client/FOD/FOD_main.R",
+        "apps/aqualink/modules/client/FOD/FOD_main.R",
         package = "YGwater"
       ))
     }
@@ -55,7 +55,7 @@ YGwater_globals <- function(
 
   # General purpose files
   source(system.file(
-    "apps/YGwater/modules/modulePrivilegeRequirements.R",
+    "apps/aqualink/modules/modulePrivilegeRequirements.R",
     package = "YGwater"
   ))
 
@@ -63,69 +63,69 @@ YGwater_globals <- function(
 
   # Plot modules
   source(system.file(
-    "apps/YGwater/modules/client/plot/discretePlot.R",
+    "apps/aqualink/modules/client/plot/discretePlot.R",
     package = "YGwater"
   ))
   source(system.file(
-    "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+    "apps/aqualink/modules/client/plot/continuousPlotAdaptive.R",
     package = "YGwater"
   ))
 
   # Map modules
   source(system.file(
-    "apps/YGwater/modules/client/map/paramsMap.R",
+    "apps/aqualink/modules/client/map/paramsMap.R",
     package = "YGwater"
   ))
   source(system.file(
-    "apps/YGwater/modules/client/map/locationsMap.R",
+    "apps/aqualink/modules/client/map/locationsMap.R",
     package = "YGwater"
   ))
   source(system.file(
-    "apps/YGwater/modules/client/map/snowBulletinMap.R",
+    "apps/aqualink/modules/client/map/snowBulletinMap.R",
     package = "YGwater"
   ))
 
   # Water well registry map
   source(system.file(
-    "apps/YGwater/modules/client/WWR/registry_front_end.R",
+    "apps/aqualink/modules/client/WWR/registry_front_end.R",
     package = "YGwater"
   ))
 
   # Image and document modules
   source(system.file(
-    "apps/YGwater/modules/client/images/image_table_view.R",
+    "apps/aqualink/modules/client/images/image_table_view.R",
     package = "YGwater"
   ))
   source(system.file(
-    "apps/YGwater/modules/client/images/image_map_view.R",
+    "apps/aqualink/modules/client/images/image_map_view.R",
     package = "YGwater"
   ))
   source(system.file(
-    "apps/YGwater/modules/client/documents/document_table_view.R",
+    "apps/aqualink/modules/client/documents/document_table_view.R",
     package = "YGwater"
   ))
 
   # Data modules
   source(system.file(
-    "apps/YGwater/modules/client/data/continuousData.R",
+    "apps/aqualink/modules/client/data/continuousData.R",
     package = "YGwater"
   ))
   source(system.file(
-    "apps/YGwater/modules/client/data/discreteData.R",
+    "apps/aqualink/modules/client/data/discreteData.R",
     package = "YGwater"
   ))
 
   # Info modules
   source(system.file(
-    "apps/YGwater/modules/client/info/home.R",
+    "apps/aqualink/modules/client/info/home.R",
     package = "YGwater"
   ))
   source(system.file(
-    "apps/YGwater/modules/client/info/news.R",
+    "apps/aqualink/modules/client/info/news.R",
     package = "YGwater"
   ))
   source(system.file(
-    "apps/YGwater/modules/client/info/about.R",
+    "apps/aqualink/modules/client/info/about.R",
     package = "YGwater"
   ))
 
@@ -134,36 +134,36 @@ YGwater_globals <- function(
     # Report modules
     if (network_check) {
       source(system.file(
-        "apps/YGwater/modules/client/reports/snowBulletin.R",
+        "apps/aqualink/modules/client/reports/snowBulletin.R",
         package = "YGwater"
       ))
     }
     source(system.file(
-      "apps/YGwater/modules/client/reports/WQReport.R",
+      "apps/aqualink/modules/client/reports/WQReport.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/client/reports/snowInfo.R",
+      "apps/aqualink/modules/client/reports/snowInfo.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/client/reports/waterInfo.R",
+      "apps/aqualink/modules/client/reports/waterInfo.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/client/reports/waterTemp.R",
+      "apps/aqualink/modules/client/reports/waterTemp.R",
       package = "YGwater"
     ))
 
     # Dashboard modules
     source(system.file(
-      "apps/YGwater/modules/client/reports/floodDashboard.R",
+      "apps/aqualink/modules/client/reports/floodDashboard.R",
       package = "YGwater"
     ))
 
     # Map modules
     source(system.file(
-      "apps/YGwater/modules/client/map/rasterMap.R",
+      "apps/aqualink/modules/client/map/rasterMap.R",
       package = "YGwater"
     ))
   }
@@ -173,157 +173,157 @@ YGwater_globals <- function(
   if (!public) {
     # database admin modules
     source(system.file(
-      "apps/YGwater/modules/admin/locations/locationMetadata.R",
+      "apps/aqualink/modules/admin/locations/locationMetadata.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/locations/addLocation.R",
+      "apps/aqualink/modules/admin/locations/addLocation.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/locations/addSubLocation.R",
+      "apps/aqualink/modules/admin/locations/addSubLocation.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/metadata/manageReferenceTables.R",
+      "apps/aqualink/modules/admin/metadata/manageReferenceTables.R",
       package = "YGwater"
     ))
 
     # equipment sub-modules
     source(system.file(
-      "apps/YGwater/modules/admin/instruments/calibrate.R",
+      "apps/aqualink/modules/admin/instruments/calibrate.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/instruments/manageInstruments.R",
+      "apps/aqualink/modules/admin/instruments/manageInstruments.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/instruments/manageSensors.R",
+      "apps/aqualink/modules/admin/instruments/manageSensors.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/instruments/instrumentMaintenance.R",
+      "apps/aqualink/modules/admin/instruments/instrumentMaintenance.R",
       package = "YGwater"
     ))
 
     # continuous data sub-modules
     source(system.file(
-      "apps/YGwater/modules/admin/sourceAdapterArguments.R",
+      "apps/aqualink/modules/admin/sourceAdapterArguments.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/continuousData/addContData.R",
+      "apps/aqualink/modules/admin/continuousData/addContData.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/continuousData/imputeMissing.R",
+      "apps/aqualink/modules/admin/continuousData/imputeMissing.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/continuousData/continuousDataReview.R",
+      "apps/aqualink/modules/admin/continuousData/continuousDataReview.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/continuousData/transmissionTimeseriesHelpers.R",
+      "apps/aqualink/modules/admin/continuousData/transmissionTimeseriesHelpers.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/continuousData/addTimeseries.R",
+      "apps/aqualink/modules/admin/continuousData/addTimeseries.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/continuousData/addCompoundTimeseries.R",
+      "apps/aqualink/modules/admin/continuousData/addCompoundTimeseries.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/continuousData/syncCont.R",
+      "apps/aqualink/modules/admin/continuousData/syncCont.R",
       package = "YGwater"
     ))
 
     # discrete data sub-modules
     source(system.file(
-      "apps/YGwater/modules/admin/discreteData/addDiscData.R",
+      "apps/aqualink/modules/admin/discreteData/addDiscData.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/discreteData/editSamples.R",
+      "apps/aqualink/modules/admin/discreteData/editSamples.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/discreteData/addSampleSeries.R",
+      "apps/aqualink/modules/admin/discreteData/addSampleSeries.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/discreteData/addGuidelines.R",
+      "apps/aqualink/modules/admin/discreteData/addGuidelines.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/discreteData/syncDisc.R",
+      "apps/aqualink/modules/admin/discreteData/syncDisc.R",
       package = "YGwater"
     ))
 
     # Borehole/well modules
     source(system.file(
-      "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+      "apps/aqualink/modules/admin/boreholes_wells/simplerIndex.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/boreholes_wells/editBoreholesWells.R",
+      "apps/aqualink/modules/admin/boreholes_wells/editBoreholesWells.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/boreholes_wells/manageBoreholeDocuments.R",
+      "apps/aqualink/modules/admin/boreholes_wells/manageBoreholeDocuments.R",
       package = "YGwater"
     ))
 
     # Field visit modules
     source(system.file(
-      "apps/YGwater/modules/admin/field/field_visit.R",
+      "apps/aqualink/modules/admin/field/field_visit.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/field/deploy_recover.R",
+      "apps/aqualink/modules/admin/field/deploy_recover.R",
       package = "YGwater"
     ))
 
     # Files/document/image sub-modules
     source(system.file(
-      "apps/YGwater/modules/admin/documents/addDocs.R",
+      "apps/aqualink/modules/admin/documents/addDocs.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/imgupload/addImgs.R",
+      "apps/aqualink/modules/admin/imgupload/addImgs.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/imgupload/addImgSeries.R",
+      "apps/aqualink/modules/admin/imgupload/addImgSeries.R",
       package = "YGwater"
     ))
 
     # Admin modules
     source(system.file(
-      "apps/YGwater/modules/admin/applicationTasks/adminLanding.R",
+      "apps/aqualink/modules/admin/applicationTasks/adminLanding.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R",
+      "apps/aqualink/modules/admin/applicationTasks/manageNewsContent.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/applicationTasks/manageNotifications.R",
+      "apps/aqualink/modules/admin/applicationTasks/manageNotifications.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/applicationTasks/viewFeedback.R",
+      "apps/aqualink/modules/admin/applicationTasks/viewFeedback.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/users/manageUsers.R",
+      "apps/aqualink/modules/admin/users/manageUsers.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/users/changePassword.R",
+      "apps/aqualink/modules/admin/users/changePassword.R",
       package = "YGwater"
     ))
 

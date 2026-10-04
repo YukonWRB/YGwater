@@ -2,7 +2,7 @@ add_cont_data_module_text <- function() {
   paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/continuousData/addContData.R",
+        "apps/aqualink/modules/admin/continuousData/addContData.R",
         package = "YGwater"
       ),
 

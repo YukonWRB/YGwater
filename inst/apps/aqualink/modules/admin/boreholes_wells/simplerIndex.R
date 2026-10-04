@@ -3,7 +3,7 @@
 simplerIndexUI <- function(id) {
   ns <- NS(id)
   css_file <- system.file(
-    "apps/YGwater/www/css/simplerIndex.css",
+    "apps/aqualink/www/css/simplerIndex.css",
     package = "YGwater"
   )
   css <- gsub("%1$s", ns("pdf-container"), readLines(css_file), fixed = TRUE)
@@ -1402,7 +1402,7 @@ simplerIndex <- function(id, language) {
     # local = TRUE ensures the functions are loaded into this module's environment only
     source(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex_helpers.R",
+        "apps/aqualink/modules/admin/boreholes_wells/simplerIndex_helpers.R",
         package = "YGwater"
       ),
       local = TRUE
