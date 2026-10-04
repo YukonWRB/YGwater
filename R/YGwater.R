@@ -13,9 +13,11 @@ YGwater <- function(...) {
     "WARNING: the `YGwater()` function is deprecated and will be removed in a future release.\n",
     "Please use `AquaLink()` instead."
   )
-  warning(
-    "`YGwater()` is deprecated; use `AquaLink()` instead.",
-    call. = FALSE
+
+  .Deprecated(
+    "AquaLink",
+    package = "YGwater",
+    msg = "The `YGwater()` function is deprecated; please use `AquaLink()` instead."
   )
   AquaLink(...)
 }
