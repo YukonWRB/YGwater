@@ -23,7 +23,8 @@ AquaCacheReport(
   con = NULL,
   format = c("by_date", "by_location", "by_parameter"),
   matrix_state_ids = NULL,
-  sample_fraction_ids = NULL
+  sample_fraction_ids = NULL,
+  date_range = NULL
 )
 }
 \arguments{
@@ -54,7 +55,8 @@ selected for each location and target date; ties prefer the later date.}
 \item{sd_multiplier}{Optional number of sample standard deviations from the
 mean used to flag unusually high or low results. Only numeric result values
 are used; censored and missing results are excluded. Groups are calculated
-separately by location, parameter, matrix, fraction, and speciation.}
+separately by location, parameter, matrix, fraction, speciation, and result
+type.}
 
 \item{sd_start}{Optional first date included in the SD calculation.}
 
@@ -74,16 +76,20 @@ file named from \code{output_path}.}
 function is closed on exit; a caller-supplied connection remains open.}
 
 \item{format}{Workbook layout. One of \code{"by_date"} (locations as columns,
-parameters as rows, one worksheet per date), \code{"by_location"} (parameters
-as rows, dates as columns, one worksheet per location), or
-\code{"by_parameter"} (locations as rows, dates as columns, one worksheet per
-parameter).}
+parameters as rows, one worksheet per target date or sample date),
+\code{"by_location"} (parameters as rows, dates or samples as columns, one
+worksheet per location), or \code{"by_parameter"} (locations as rows, dates or
+samples as columns, one worksheet per parameter).}
 
 \item{matrix_state_ids}{Optional matrix-state IDs to include. \code{NULL} or an
 empty vector includes every matrix state.}
 
 \item{sample_fraction_ids}{Optional sample-fraction IDs to include. \code{NULL} or
 an empty vector includes every sample fraction.}
+
+\item{date_range}{Optional inclusive pair of start and end dates. When
+supplied, every eligible sample collected in the interval is included;
+\code{date_approx} is not used. Range reports identify columns by sample.}
 }
 \value{
 An invisible list with \code{xlsx_path}, \code{map_path}, \code{map_assets_path}
@@ -104,7 +110,11 @@ warns and reports the reuse count; each result detail row includes both its
 requested and actual sample dates. Optional matrix-state and sample-fraction
 filters are applied when finding the closest eligible sample, then retained
 in the report matrix and result details. Result speciation is shown in the
-report whenever it is recorded for a measurement.
+report whenever it is recorded for a measurement. Matrix rows also
+distinguish result type, so field and laboratory measurements of the same
+parameter and sample remain separate. When \code{date_range} is
+supplied, all eligible samples collected in the inclusive interval are
+included directly, and matrix columns represent individual sample IDs.
 }
 \examples{
 \dontrun{

@@ -13,7 +13,11 @@
 #' requested and actual sample dates. Optional matrix-state and sample-fraction
 #' filters are applied when finding the closest eligible sample, then retained
 #' in the report matrix and result details. Result speciation is shown in the
-#' report whenever it is recorded for a measurement.
+#' report whenever it is recorded for a measurement. Matrix rows also
+#' distinguish result type, so field and laboratory measurements of the same
+#' parameter and sample remain separate. When `date_range` is
+#' supplied, all eligible samples collected in the inclusive interval are
+#' included directly, and matrix columns represent individual sample IDs.
 #'
 #' @param date One or more target sample dates, supplied as `Date` values or
 #'   `YYYY-MM-DD` strings. The report layout controls whether dates are written
@@ -28,23 +32,27 @@
 #'   when a location has no eligible sample on that date. Supply one value to
 #'   use it for all dates, or one value per `date`. The closest sample date is
 #'   selected for each location and target date; ties prefer the later date.
+#' @param date_range Optional inclusive pair of start and end dates. When
+#'   supplied, every eligible sample collected in the interval is included;
+#'   `date_approx` is not used. Range reports identify columns by sample.
 #' @param include_blanks Include samples whose sample type contains "blank".
 #' @param include_duplicates Include samples whose sample type contains
 #'   "duplicate" or "replicate".
 #' @param sd_multiplier Optional number of sample standard deviations from the
 #'   mean used to flag unusually high or low results. Only numeric result values
 #'   are used; censored and missing results are excluded. Groups are calculated
-#'   separately by location, parameter, matrix, fraction, and speciation.
+#'   separately by location, parameter, matrix, fraction, speciation, and result
+#'   type.
 #' @param sd_start Optional first date included in the SD calculation.
 #' @param sd_end Optional last date included in the SD calculation.
 #' @param sd_day_of_year Optional day-of-year values included in the SD
 #'   calculation, from 1 to 366.
 #' @param include_map Write an HTML map of locations with report results.
 #' @param format Workbook layout. One of `"by_date"` (locations as columns,
-#'   parameters as rows, one worksheet per date), `"by_location"` (parameters
-#'   as rows, dates as columns, one worksheet per location), or
-#'   `"by_parameter"` (locations as rows, dates as columns, one worksheet per
-#'   parameter).
+#'   parameters as rows, one worksheet per target date or sample date),
+#'   `"by_location"` (parameters as rows, dates or samples as columns, one
+#'   worksheet per location), or `"by_parameter"` (locations as rows, dates or
+#'   samples as columns, one worksheet per parameter).
 #' @param map_path Optional full path for the map HTML. Defaults to a sibling
 #'   file named from `output_path`.
 #' @param lang Language for location and parameter labels (`"en"` or `"fr"`).
@@ -91,21 +99,38 @@ AquaCacheReport <- function(
   con = NULL,
   format = c("by_date", "by_location", "by_parameter"),
   matrix_state_ids = NULL,
-  sample_fraction_ids = NULL
+  sample_fraction_ids = NULL,
+  date_range = NULL
 ) {
   lang <- match.arg(lang)
   report_format <- match.arg(format)
-  if (inherits(date, "Date")) {
-    date <- as.Date(date)
-  } else if (is.character(date) && length(date) && !anyNA(date)) {
-    date <- tryCatch(as.Date(date), error = function(e) as.Date(rep(NA, length(date))))
+  sample_range_mode <- !is.null(date_range)
+  date_values <- if (sample_range_mode) date_range else date
+  if (inherits(date_values, "Date")) {
+    date <- as.Date(date_values)
+  } else if (
+    is.character(date_values) && length(date_values) && !anyNA(date_values)
+  ) {
+    date <- tryCatch(
+      as.Date(date_values),
+      error = function(e) as.Date(rep(NA, length(date_values)))
+    )
   } else {
-    stop("'date' must contain Date values or YYYY-MM-DD strings.", call. = FALSE)
+    stop(
+      "'date' and 'date_range' must contain Date values or YYYY-MM-DD strings.",
+      call. = FALSE
+    )
   }
   if (!length(date) || anyNA(date)) {
-    stop("'date' must contain one or more valid dates.", call. = FALSE)
+    stop("'date' must contain valid dates.", call. = FALSE)
   }
-  if (anyDuplicated(date)) {
+  if (sample_range_mode && length(date) != 2L) {
+    stop("'date_range' must contain a start and end date.", call. = FALSE)
+  }
+  if (sample_range_mode && date[[1]] > date[[2]]) {
+    stop("'date_range' start must be on or before its end.", call. = FALSE)
+  }
+  if (!sample_range_mode && anyDuplicated(date)) {
     stop("'date' must not contain duplicate dates.", call. = FALSE)
   }
   validate_ids <- function(x, name, optional = FALSE) {
@@ -129,14 +154,19 @@ AquaCacheReport <- function(
     sample_fraction_ids, "sample_fraction_ids", optional = TRUE
   )
   guideline_ids <- validate_ids(guideline_ids, "guideline_ids", optional = TRUE)
-  if (!is.numeric(date_approx) || !length(date_approx) ||
-      anyNA(date_approx) || any(!is.finite(date_approx)) ||
-      any(date_approx < 0) || any(date_approx > .Machine$integer.max) ||
-      any(date_approx != trunc(date_approx)) ||
-      !(length(date_approx) %in% c(1L, length(date)))) {
+  if (!sample_range_mode &&
+      (!is.numeric(date_approx) || !length(date_approx) ||
+       anyNA(date_approx) || any(!is.finite(date_approx)) ||
+       any(date_approx < 0) || any(date_approx > .Machine$integer.max) ||
+       any(date_approx != trunc(date_approx)) ||
+       !(length(date_approx) %in% c(1L, length(date))))) {
     stop("'date_approx' must be one non-negative integer or one per date.", call. = FALSE)
   }
-  date_approx <- rep(as.integer(date_approx), length.out = length(date))
+  date_approx <- if (sample_range_mode) {
+    rep(0L, length(date))
+  } else {
+    rep(as.integer(date_approx), length.out = length(date))
+  }
   for (flag in c("include_blanks", "include_duplicates", "include_map")) {
     value <- get(flag)
     if (!is.logical(value) || length(value) != 1L || is.na(value)) {
@@ -205,14 +235,24 @@ AquaCacheReport <- function(
   parameter_json <- id_json(parameter_ids)
   matrix_state_json <- id_json(matrix_state_ids)
   sample_fraction_json <- id_json(sample_fraction_ids)
-  date_request_json <- as.character(jsonlite::toJSON(
-    data.frame(
-      requested_date = format(date, "%Y-%m-%d"),
-      date_approx = date_approx
-    ),
-    dataframe = "rows",
-    auto_unbox = TRUE
-  ))
+  date_request_json <- if (sample_range_mode) {
+    as.character(jsonlite::toJSON(
+      list(
+        range_start = format(date[[1]], "%Y-%m-%d"),
+        range_end = format(date[[2]], "%Y-%m-%d")
+      ),
+      auto_unbox = TRUE
+    ))
+  } else {
+    as.character(jsonlite::toJSON(
+      data.frame(
+        requested_date = format(date, "%Y-%m-%d"),
+        date_approx = date_approx
+      ),
+      dataframe = "rows",
+      auto_unbox = TRUE
+    ))
+  }
   requested_locations <- DBI::dbGetQuery(
     con,
     paste0(
@@ -258,42 +298,69 @@ AquaCacheReport <- function(
     output_alias = "units",
     matrix_state_alias = "r"
   )
+  selected_samples_sql <- if (sample_range_mode) {
+    paste0(
+      "date_range AS (\n",
+      "  SELECT range_start, range_end\n",
+      "  FROM jsonb_to_record($3::jsonb) AS d(range_start date, range_end date)\n",
+      "), selected_samples AS (\n",
+      "  SELECT s.*, s.datetime::date AS requested_date, 0::integer AS date_approx\n",
+      "  FROM date_range d JOIN discrete.samples s\n",
+      "    ON s.datetime::date BETWEEN d.range_start AND d.range_end\n",
+      "  LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
+      "  WHERE s.location_id IN (SELECT value::integer FROM jsonb_array_elements_text($1::jsonb))\n",
+      "    AND ($4::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')\n",
+      "    AND ($5::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')\n",
+      "    AND EXISTS (SELECT 1 FROM discrete.results er\n",
+      "      WHERE er.sample_id = s.sample_id\n",
+      "        AND er.parameter_id IN (SELECT value::integer FROM jsonb_array_elements_text($2::jsonb))\n",
+      "        AND (jsonb_array_length($6::jsonb) = 0 OR er.matrix_state_id IN\n",
+      "          (SELECT value::integer FROM jsonb_array_elements_text($6::jsonb)))\n",
+      "        AND (jsonb_array_length($7::jsonb) = 0 OR er.sample_fraction_id IN\n",
+      "          (SELECT value::integer FROM jsonb_array_elements_text($7::jsonb))))\n",
+      ")\n"
+    )
+  } else {
+    paste0(
+      "date_requests AS (\n",
+      "  SELECT requested_date, date_approx\n",
+      "  FROM jsonb_to_recordset($3::jsonb) AS d(requested_date date, date_approx integer)\n",
+      "), candidates AS (\n",
+      "  SELECT d.requested_date, d.date_approx, s.location_id,\n",
+      "    s.datetime::date AS sample_date\n",
+      "  FROM date_requests d\n",
+      "  JOIN discrete.samples s ON s.datetime::date BETWEEN\n",
+      "    d.requested_date - d.date_approx AND d.requested_date + d.date_approx\n",
+      "  LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
+      "  WHERE s.location_id IN (SELECT value::integer FROM jsonb_array_elements_text($1::jsonb))\n",
+      "    AND ($4::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')\n",
+      "    AND ($5::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')\n",
+      "    AND EXISTS (SELECT 1 FROM discrete.results er\n",
+      "      WHERE er.sample_id = s.sample_id\n",
+      "        AND er.parameter_id IN (SELECT value::integer FROM jsonb_array_elements_text($2::jsonb))\n",
+      "        AND (jsonb_array_length($6::jsonb) = 0 OR er.matrix_state_id IN\n",
+      "          (SELECT value::integer FROM jsonb_array_elements_text($6::jsonb)))\n",
+      "        AND (jsonb_array_length($7::jsonb) = 0 OR er.sample_fraction_id IN\n",
+      "          (SELECT value::integer FROM jsonb_array_elements_text($7::jsonb))))\n",
+      "), best_dates AS (\n",
+      "  SELECT DISTINCT ON (requested_date, location_id)\n",
+      "    requested_date, date_approx, location_id, sample_date\n",
+      "  FROM candidates\n",
+      "  ORDER BY requested_date, location_id,\n",
+      "    abs(sample_date - requested_date),\n",
+      "    (sample_date >= requested_date) DESC, sample_date\n",
+      "), selected_samples AS (\n",
+      "  SELECT s.*, b.requested_date, b.date_approx FROM discrete.samples s\n",
+      "  JOIN best_dates b ON b.location_id = s.location_id\n",
+      "    AND b.sample_date = s.datetime::date\n",
+      "  LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
+      "  WHERE ($4::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')\n",
+      "    AND ($5::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')\n",
+      ")\n"
+    )
+  }
   result_sql <- paste0(
-    "WITH date_requests AS (\n",
-    "  SELECT requested_date, date_approx\n",
-    "  FROM jsonb_to_recordset($3::jsonb) AS d(requested_date date, date_approx integer)\n",
-    "), candidates AS (\n",
-    "  SELECT d.requested_date, d.date_approx, s.location_id,\n",
-    "    s.datetime::date AS sample_date\n",
-    "  FROM date_requests d\n",
-    "  JOIN discrete.samples s ON s.datetime::date BETWEEN\n",
-    "    d.requested_date - d.date_approx AND d.requested_date + d.date_approx\n",
-    "  LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
-    "  WHERE s.location_id IN (SELECT value::integer FROM jsonb_array_elements_text($1::jsonb))\n",
-    "    AND ($4::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')\n",
-    "    AND ($5::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')\n",
-    "    AND EXISTS (SELECT 1 FROM discrete.results er\n",
-    "      WHERE er.sample_id = s.sample_id\n",
-    "        AND er.parameter_id IN (SELECT value::integer FROM jsonb_array_elements_text($2::jsonb))\n",
-    "        AND (jsonb_array_length($6::jsonb) = 0 OR er.matrix_state_id IN\n",
-    "          (SELECT value::integer FROM jsonb_array_elements_text($6::jsonb)))\n",
-    "        AND (jsonb_array_length($7::jsonb) = 0 OR er.sample_fraction_id IN\n",
-    "          (SELECT value::integer FROM jsonb_array_elements_text($7::jsonb))))\n",
-    "), best_dates AS (\n",
-    "  SELECT DISTINCT ON (requested_date, location_id)\n",
-    "    requested_date, date_approx, location_id, sample_date\n",
-    "  FROM candidates\n",
-    "  ORDER BY requested_date, location_id,\n",
-    "    abs(sample_date - requested_date),\n",
-    "    (sample_date >= requested_date) DESC, sample_date\n",
-    "), selected_samples AS (\n",
-    "  SELECT s.*, b.requested_date, b.date_approx FROM discrete.samples s\n",
-    "  JOIN best_dates b ON b.location_id = s.location_id\n",
-    "    AND b.sample_date = s.datetime::date\n",
-    "  LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
-    "  WHERE ($4::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')\n",
-    "    AND ($5::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')\n",
-    ")\n",
+    "WITH ", selected_samples_sql,
     "SELECT r.result_id, s.sample_id, s.location_id, l.location_code AS location,\n",
     "  l.alias, l.name AS location_name, l.name_fr AS location_name_fr,\n",
     "  l.latitude, l.longitude, s.sub_location_id, sl.sub_location_name,\n",
@@ -345,9 +412,17 @@ AquaCacheReport <- function(
     )
   )
   if (nrow(results) == 0L) {
-    stop("No results matched the selected locations, parameters, and target dates.", call. = FALSE)
+    stop(
+      if (sample_range_mode) {
+        "No results matched the selected locations, parameters, and date range."
+      } else {
+        "No results matched the selected locations, parameters, and target dates."
+      },
+      call. = FALSE
+    )
   }
   results$requested_date <- as.Date(results$requested_date)
+  results$sample_date <- as.Date(results$sample_date)
   selected_date_pairs <- unique(results[c("sample_id", "requested_date")])
   repeated_samples <- unique(
     selected_date_pairs$sample_id[duplicated(selected_date_pairs$sample_id)]
@@ -689,7 +764,8 @@ AquaCacheReport <- function(
       con,
       paste0(
         "SELECT s.location_id, r.parameter_id, r.matrix_state_id,\n",
-        "  r.sample_fraction_id, r.result_speciation_id, r.result AS result\n",
+        "  r.sample_fraction_id, r.result_speciation_id,\n",
+        "  r.result_type AS result_type_id, r.result AS result\n",
         "FROM discrete.results r\n",
         "JOIN discrete.samples s ON s.sample_id = r.sample_id\n",
         "LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
@@ -699,7 +775,7 @@ AquaCacheReport <- function(
     )
     key_columns <- c(
       "location_id", "parameter_id", "matrix_state_id",
-      "sample_fraction_id", "result_speciation_id"
+      "sample_fraction_id", "result_speciation_id", "result_type_id"
     )
     if (nrow(sd_history)) {
       sd_dt <- data.table::as.data.table(sd_history)
@@ -749,11 +825,11 @@ AquaCacheReport <- function(
     results$guideline_assessments <- ""
   }
 
-  # Assemble the matrix sheets, with one row per parameter/result context or
-  # location/result context, depending on the selected layout.
+  # Keep distinct result types on separate matrix rows so field and laboratory
+  # measurements from the same sample are not combined into one cell.
   param_key_columns <- c(
     "parameter_id", "matrix_state_id", "sample_fraction_id",
-    "result_speciation_id", "units"
+    "result_speciation_id", "units", "result_type_id"
   )
   make_matrix_key <- function(x, columns) do.call(paste, c(
     lapply(x[columns], function(value) {
@@ -765,24 +841,34 @@ AquaCacheReport <- function(
   ))
   all_param_groups <- unique(results[c(
     param_key_columns, "parameter_label", "matrix_label",
-    "sample_fraction", "result_speciation"
+    "sample_fraction", "result_speciation", "result_type"
   )])
   all_param_groups <- all_param_groups[order(
     match(all_param_groups$parameter_id, parameter_ids),
     all_param_groups$matrix_state_id,
     all_param_groups$sample_fraction_id,
     all_param_groups$result_speciation_id,
+    all_param_groups$result_type_id,
     na.last = TRUE
   ), , drop = FALSE]
   all_param_groups$row_key <- make_matrix_key(all_param_groups, param_key_columns)
   results$result_row_key <- make_matrix_key(results, param_key_columns)
 
   report_tabs <- if (report_format == "by_date") {
-    lapply(seq_along(date), function(i) list(
-      id = date[[i]],
-      base_name = if (length(date) == 1L) "Report" else format(date[[i]], "%Y-%m-%d"),
-      result_rows = which(results$requested_date == date[[i]])
-    ))
+    if (sample_range_mode) {
+      sample_dates <- sort(unique(results$sample_date))
+      lapply(sample_dates, function(sample_date) list(
+        id = sample_date,
+        base_name = if (length(sample_dates) == 1L) "Report" else format(sample_date, "%Y-%m-%d"),
+        result_rows = which(results$sample_date == sample_date)
+      ))
+    } else {
+      lapply(seq_along(date), function(i) list(
+        id = date[[i]],
+        base_name = if (length(date) == 1L) "Report" else format(date[[i]], "%Y-%m-%d"),
+        result_rows = which(results$requested_date == date[[i]])
+      ))
+    }
   } else if (report_format == "by_location") {
     lapply(location_ids, function(id) {
       meta <- requested_locations[requested_locations$location_id == id, , drop = FALSE]
@@ -846,7 +932,6 @@ AquaCacheReport <- function(
     `Sample date (UTC)` = results$sample_date,
     `Sample datetime (UTC)` = results$datetime,
     `Target datetime (UTC)` = results$target_datetime,
-    `Parameter ID` = results$parameter_id,
     Parameter = results$parameter_label,
     Matrix = results$matrix_state,
     `Sample fraction` = results$sample_fraction,
@@ -901,12 +986,21 @@ AquaCacheReport <- function(
     fontColour = "black", border = "TopBottomLeftRight",
     borderColour = "red2", borderStyle = "medium"
   )
-  format_note <- switch(
-    report_format,
-    by_date = "Each requested date has a separate worksheet; locations are columns.",
-    by_location = "Each location has a separate worksheet; target dates are columns.",
-    by_parameter = "Each parameter has a separate worksheet; locations are rows and target dates are columns."
-  )
+  format_note <- if (sample_range_mode) {
+    switch(
+      report_format,
+      by_date = "Each sample date has a separate worksheet; each result column represents one sample.",
+      by_location = "Each location has a separate worksheet; each result column represents one sample.",
+      by_parameter = "Each parameter has a separate worksheet; locations are rows and result columns represent samples."
+    )
+  } else {
+    switch(
+      report_format,
+      by_date = "Each requested date has a separate worksheet; locations are columns.",
+      by_location = "Each location has a separate worksheet; target dates are columns.",
+      by_parameter = "Each parameter has a separate worksheet; locations are rows and target dates are columns."
+    )
+  }
   flag_note <- if (length(guideline_ids)) {
     paste0(
       "Run with guideline IDs: ", paste(guideline_ids, collapse = ", "),
@@ -946,12 +1040,14 @@ AquaCacheReport <- function(
       row_groups <- unique(row_results[c(
         "location_id", "location", "location_label", "parameter_id",
         "matrix_state_id", "sample_fraction_id", "result_speciation_id",
-        "units", "matrix_label", "sample_fraction", "result_speciation"
+        "units", "result_type_id", "matrix_label", "sample_fraction",
+        "result_speciation", "result_type"
       )])
       row_groups <- row_groups[order(
         match(row_groups$location_id, location_ids),
         row_groups$matrix_state_id, row_groups$sample_fraction_id,
-        row_groups$result_speciation_id, na.last = TRUE
+        row_groups$result_speciation_id, row_groups$result_type_id,
+        na.last = TRUE
       ), , drop = FALSE]
       row_groups$row_key <- make_matrix_key(row_groups, param_key_columns)
     } else {
@@ -997,22 +1093,49 @@ AquaCacheReport <- function(
       }, character(1)
     ) else character()
 
-    if (report_format == "by_date") {
-      sample_meta <- unique(sheet_results[c(
+    if (report_format == "by_date" || sample_range_mode) {
+      sample_source <- if (report_format == "by_date") {
+        sheet_results
+      } else {
+        row_results
+      }
+      sample_meta <- unique(sample_source[c(
         "sample_id", "location", "sub_location_label", "sample_date", "datetime"
       )])
-      sample_meta <- sample_meta[order(sample_meta$location, sample_meta$datetime), , drop = FALSE]
+      sample_meta <- sample_meta[order(
+        sample_meta$sample_date,
+        sample_meta$location,
+        sample_meta$datetime,
+        sample_meta$sample_id
+      ), , drop = FALSE]
       if (!nrow(sample_meta)) {
         date_headers <- "No eligible samples"
       } else {
-        date_headers <- paste0(
-          sample_meta$location,
-          ifelse(
-            is.na(sample_meta$sub_location_label) | !nzchar(sample_meta$sub_location_label),
-            "", paste0(" - ", sample_meta$sub_location_label)
-          ),
-          " (", format(sample_meta$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"), " UTC)"
-        )
+        date_headers <- if (sample_range_mode) {
+          paste0(
+            format(sample_meta$sample_date, "%Y-%m-%d"),
+            " - Sample ", sample_meta$sample_id,
+            if (report_format == "by_location") {
+              ""
+            } else {
+              paste0(" - ", sample_meta$location)
+            },
+            ifelse(
+              is.na(sample_meta$sub_location_label) | !nzchar(sample_meta$sub_location_label),
+              "", paste0(" - ", sample_meta$sub_location_label)
+            ),
+            " (", format(sample_meta$datetime, "%H:%M", tz = "UTC"), " UTC)"
+          )
+        } else {
+          paste0(
+            sample_meta$location,
+            ifelse(
+              is.na(sample_meta$sub_location_label) | !nzchar(sample_meta$sub_location_label),
+              "", paste0(" - ", sample_meta$sub_location_label)
+            ),
+            " (", format(sample_meta$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"), " UTC)"
+          )
+        }
         date_headers <- make.unique(date_headers, sep = " #")
       }
     } else {
@@ -1028,7 +1151,7 @@ AquaCacheReport <- function(
         Matrix = row_groups$matrix_label,
         `Sample fraction` = row_groups$sample_fraction,
         Speciation = row_groups$result_speciation,
-        `Parameter ID` = row_groups$parameter_id,
+        `Result type` = row_groups$result_type,
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
@@ -1059,7 +1182,7 @@ AquaCacheReport <- function(
       matrix_report$Matrix <- row_groups$matrix_label
       matrix_report$`Sample fraction` <- row_groups$sample_fraction
       matrix_report$Speciation <- row_groups$result_speciation
-      matrix_report$`Parameter ID` <- row_groups$parameter_id
+      matrix_report$`Result type` <- row_groups$result_type
     }
     for (header in date_headers) {
       matrix_report[[header]] <- rep("", nrow(row_groups))
@@ -1070,7 +1193,9 @@ AquaCacheReport <- function(
         "result_id", "sample_id", "requested_date", "result_display",
         "sd_exceedance", "cell_row_key"
       )])
-      cell_table[, cell_column_index := if (report_format == "by_date") {
+      cell_table[, cell_column_index := if (
+        report_format == "by_date" || sample_range_mode
+      ) {
         match(sample_id, sample_meta$sample_id)
       } else match(requested_date, date)]
       cell_table[, cell_flagged := (!is.na(sd_exceedance) & sd_exceedance) |
@@ -1144,7 +1269,21 @@ AquaCacheReport <- function(
     } else {
       paste0("WQ report for AquaCache locations  ", paste(unique(results$location), collapse = ", "))
     }
-    if (report_format == "by_date") {
+    if (sample_range_mode) {
+      date_note <- if (report_format == "by_date") {
+        paste0(
+          "Sample date: ", format(tab$id, "%Y-%m-%d"),
+          ". Samples are restricted to ", format(date[[1]], "%Y-%m-%d"),
+          " through ", format(date[[2]], "%Y-%m-%d"), "."
+        )
+      } else {
+        paste0(
+          "Sample collection range: ", format(date[[1]], "%Y-%m-%d"),
+          " through ", format(date[[2]], "%Y-%m-%d"),
+          ". Each result column represents one sample."
+        )
+      }
+    } else if (report_format == "by_date") {
       target_date <- tab$id
       target_tolerance <- date_approx[match(target_date, date)]
       date_note <- paste0("Target date: ", format(target_date, "%Y-%m-%d"))
@@ -1181,7 +1320,13 @@ AquaCacheReport <- function(
       openxlsx::writeData(wb, sheet_name, "Guidelines", startCol = guideline_start, startRow = 4, colNames = FALSE)
     }
     context_title <- if (report_format == "by_parameter") "Location and result details" else "Parameter details"
-    date_title <- if (report_format == "by_date") "Samples (date-time UTC)" else "Target dates"
+    date_title <- if (sample_range_mode) {
+      "Samples (sample ID, date-time UTC)"
+    } else if (report_format == "by_date") {
+      "Samples (date-time UTC)"
+    } else {
+      "Target dates"
+    }
     openxlsx::writeData(
       wb, sheet_name, context_title,
       startCol = context_start, startRow = 4, colNames = FALSE
@@ -1252,7 +1397,10 @@ AquaCacheReport <- function(
     if (guide_count) {
       openxlsx::setColWidths(wb, sheet_name, cols = guideline_start:guideline_end, widths = 24)
     }
-    openxlsx::setColWidths(wb, sheet_name, cols = date_start:date_end, widths = if (report_format == "by_date") 23 else 16)
+    openxlsx::setColWidths(
+      wb, sheet_name, cols = date_start:date_end,
+      widths = if (report_format == "by_date") 23 else if (sample_range_mode) 24 else 16
+    )
     openxlsx::setRowHeights(wb, sheet_name, rows = 1, heights = 24)
     openxlsx::setRowHeights(wb, sheet_name, rows = 3, heights = 34)
     openxlsx::setRowHeights(wb, sheet_name, rows = 4:5, heights = 32)
