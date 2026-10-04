@@ -1,8 +1,8 @@
 #* AquaCache API version 2
 #*
-#* API for programmatic access to AquaCache using plumber2.
+#* API for read-only programmatic access to the AquaCache database.
 #*
-#* @version 2.0.0
+#* @version 2.1.0
 "_API"
 
 api_request_budget <- YGwater:::api_request_budget
@@ -2742,7 +2742,7 @@ function(client_id, query) {
 #* @then
 v2_finalize_tabular_response
 
-#* Return metadata for documents accessible to the requesting database role
+#* Return metadata for documents
 #*
 #* Use `/documents/download?document_id=...` to fetch a document stored in
 #* AquaCache. Documents represented by a URL retain that URL in the metadata.
@@ -2846,11 +2846,11 @@ function(client_id, query) {
 #* @then
 v2_finalize_tabular_response
 
-#* Download a stored document by its AquaCache document ID
+#* Download a stored document by its document ID
 #*
 #* Downloads files from `files.documents` subject to the requesting database
 #* role's row-level permissions. URL-only records are listed by `/documents`
-#* but do not have file bytes to download from AquaCache.
+#* but do not have file bytes to download from the storage system.
 #*
 #* @get /documents/download
 #* @query document_id:integer* AquaCache document ID.
@@ -2972,6 +2972,9 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return sample metadata
+#*
+#* AquaCache samples are any point observations, such as field and laboratory water quality measurements, snowpack measurements, and other discrete observations. Each sample may have multiple results for different parameters. Use the `locations` and `parameters` query parameters to filter samples by their locations and measured parameters.
+#*
 #* @get /samples
 #* @query start:string* Start date/time, inclusive, in ISO 8601 format.
 #* @query end:string End date/time, inclusive, in ISO 8601 format.
@@ -3876,7 +3879,8 @@ function(client_id, query) {
 #* @then
 v2_finalize_response
 
-#* Return SWE snow bulletin leaflet map HTML
+#* Return snow water equivalent map as a leaflet/HTML output
+#*
 #* @get /snow-bulletin/leaflet
 #* @query year:integer Bulletin year.
 #* @query month:integer Bulletin month.
