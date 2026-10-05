@@ -664,6 +664,100 @@ v2_parse_id_csv <- function(value, parameter) {
   list(ids = unique(ids), error = NULL)
 }
 
+v2_parse_optional_logical <- function(value, parameter) {
+  if (v2_query_missing(value)) {
+    return(list(value = NULL, error = NULL))
+  }
+
+  value <- tolower(trimws(as.character(value[[1L]])))
+  if (value %in% c("true", "t", "1", "yes", "y")) {
+    return(list(value = TRUE, error = NULL))
+  }
+  if (value %in% c("false", "f", "0", "no", "n")) {
+    return(list(value = FALSE, error = NULL))
+  }
+
+  list(
+    value = NULL,
+    error = sprintf("Invalid '%s' parameter. Provide true or false.", parameter)
+  )
+}
+
+v2_parse_bbox <- function(value) {
+  if (v2_query_missing(value)) {
+    return(list(bounds = NULL, error = NULL))
+  }
+
+  coordinates <- trimws(
+    strsplit(as.character(value[[1L]]), ",", fixed = TRUE)[[1L]]
+  )
+  bounds <- suppressWarnings(as.numeric(coordinates))
+  if (length(bounds) != 4L || anyNA(bounds) || any(!is.finite(bounds))) {
+    return(list(
+      bounds = NULL,
+      error = paste(
+        "Invalid 'bbox' parameter. Provide four decimal-degree values",
+        "in west,south,east,north order."
+      )
+    ))
+  }
+
+  if (
+    bounds[[1L]] < -180 || bounds[[1L]] > 180 ||
+      bounds[[3L]] < -180 || bounds[[3L]] > 180 ||
+      bounds[[2L]] < -90 || bounds[[2L]] > 90 ||
+      bounds[[4L]] < -90 || bounds[[4L]] > 90 ||
+      bounds[[2L]] > bounds[[4L]]
+  ) {
+    return(list(
+      bounds = NULL,
+      error = paste(
+        "Invalid 'bbox' parameter. Longitudes must be within [-180, 180],",
+        "latitudes within [-90, 90], and south must not exceed north."
+      )
+    ))
+  }
+
+  list(bounds = bounds, error = NULL)
+}
+
+v2_bbox_sql_filter <- function(bounds, longitude_column, latitude_column) {
+  west_param <- 1L
+  south_param <- 2L
+  east_param <- 3L
+  north_param <- 4L
+
+  longitude_filter <- if (bounds[[west_param]] <= bounds[[east_param]]) {
+    sprintf(
+      "%s >= $%d AND %s <= $%d",
+      longitude_column,
+      west_param,
+      longitude_column,
+      east_param
+    )
+  } else {
+    sprintf(
+      "(%s >= $%d OR %s <= $%d)",
+      longitude_column,
+      west_param,
+      longitude_column,
+      east_param
+    )
+  }
+
+  list(
+    sql = sprintf(
+      "(%s) AND %s >= $%d AND %s <= $%d",
+      longitude_filter,
+      latitude_column,
+      south_param,
+      latitude_column,
+      north_param
+    ),
+    params = as.list(bounds)
+  )
+}
+
 v2_parse_logical <- function(value, default = FALSE) {
   if (v2_query_missing(value)) {
     return(default)
@@ -1134,10 +1228,11 @@ function(request, response, client_id) {
 
 #* Return available locations and their metadata
 #*
-#* The returned 'location_id' value can be used in other API endpoints to filter results by location. 'location_id' values are unique and stable identifiers for each location, and are not expected to change over time. The 'location_name' and 'location_description' fields provide human-readable information about each location, and are available in both English and French based on the 'lang' query parameter.
+#* The returned `location_id` value can be used in other API endpoints to filter results by location. `location_id` values are unique and stable identifiers for each location, and are not expected to change over time. The `location_name` and `location_description` fields provide human-readable information about each location, and are available in both English and French based on the `lang` query parameter.
 #*
 #* @get /locations
 #* @query lang:string("en") Language for location names and descriptions ("en" or "fr" or things this API recognizes and can coerce to "en" or "fr").
+#* @query bbox:string Geographic bounding box in decimal degrees, ordered west,south,east,north. West greater than east crosses the antimeridian.
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
@@ -1163,19 +1258,55 @@ function(request, response, query) {
     ))
   }
 
+  bbox_filter <- v2_parse_bbox(v2_query_value(query, "bbox"))
+  if (!is.null(bbox_filter$error)) {
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df(bbox_filter$error),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ),
+      response,
+      request,
+      query
+    ))
+  }
+
   ctx <- v2_context_request(request)
   if (!is.null(ctx$error)) {
     return(v2_apply_response(ctx$error, response, request, query))
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
-  sql <- if (lang == "en") {
-    "SELECT * FROM public.location_metadata_en ORDER BY location_id"
+  metadata_view <- if (lang == "en") {
+    "public.location_metadata_en"
   } else {
-    "SELECT * FROM public.location_metadata_fr ORDER BY location_id"
+    "public.location_metadata_fr"
   }
 
-  out <- DBI::dbGetQuery(ctx$con, sql)
+  sql <- sprintf("SELECT lm.* FROM %s lm", metadata_view)
+  query_params <- list()
+  if (!is.null(bbox_filter$bounds)) {
+    bbox_sql <- v2_bbox_sql_filter(
+      bbox_filter$bounds,
+      "l.longitude",
+      "l.latitude"
+    )
+    sql <- paste(
+      sql,
+      "JOIN public.locations l ON l.location_id = lm.location_id",
+      "WHERE",
+      bbox_sql$sql
+    )
+    query_params <- bbox_sql$params
+  }
+  sql <- paste(sql, "ORDER BY lm.location_id")
+
+  out <- if (length(query_params) > 0L) {
+    DBI::dbGetQuery(ctx$con, sql, params = query_params)
+  } else {
+    DBI::dbGetQuery(ctx$con, sql)
+  }
 
   if (nrow(out) == 0L) {
     return(v2_apply_response(
@@ -1199,10 +1330,11 @@ function(request, response, query) {
 
 #* Return available timeseries and their metadata
 #*
-#* The returned 'timeseries_id' value can be used in other API endpoints to filter results by timeseries, such as with the timeseries/measurements endpoint. 'timeseries_id' values are unique and stable identifiers for each timeseries, and are not expected to change over time.
+#* The returned `timeseries_id` value can be used in other API endpoints to filter results by timeseries, such as with the timeseries/measurements endpoint. `timeseries_id` values are unique and stable identifiers for each timeseries, and are not expected to change over time.
 #*
 #* @get /timeseries
 #* @query lang:string("en") Language for timeseries names and descriptions ("en" or "fr" or things this API recognizes and can coerce to "en" or "fr").
+#* @query location_id:string Location IDs to target, separated by commas (up to 100 IDs).
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
@@ -1228,17 +1360,62 @@ function(request, response, query) {
     ))
   }
 
+  location_filter <- v2_parse_id_csv(
+    v2_query_value(query, "location_id"),
+    "location_id"
+  )
+  if (!is.null(location_filter$error)) {
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df(location_filter$error),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ),
+      response,
+      request,
+      query
+    ))
+  }
+
+  budget <- api_request_budget(
+    id_groups = list(location_id = location_filter$ids)
+  )
+  if (!budget$valid) {
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df(budget$message),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ),
+      response,
+      request,
+      query
+    ))
+  }
+
   ctx <- v2_context_request(request)
   if (!is.null(ctx$error)) {
     return(v2_apply_response(ctx$error, response, request, query))
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
-  visibility_sql <- if (v2_request_cache_allowed(ctx$credentials)) {
-    "WHERE ts.publicly_visible = TRUE"
-  } else {
-    ""
+  filters <- character()
+  if (v2_request_cache_allowed(ctx$credentials)) {
+    filters <- c(filters, "ts.publicly_visible = TRUE")
   }
+  if (length(location_filter$ids) > 0L) {
+    filters <- c(
+      filters,
+      paste0(
+        "ts.location_id IN (",
+        paste(location_filter$ids, collapse = ","),
+        ")"
+      )
+    )
+  }
+  visibility_sql <- if (length(filters) > 0L) {
+    paste("WHERE", paste(filters, collapse = " AND "))
+  } else ""
 
   compound_sql <- "
     SELECT
@@ -1341,7 +1518,7 @@ function(request, response, query) {
 
 #* Return measurements for a timeseries
 #*
-#* Returns measurements for one or more timeseries, filtered by the specified start and end date/time range. The response includes measurement values, timestamps, and associated metadata such as grades, approvals, and qualifiers. The 'limit' parameter controls the maximum number of records returned, with a default of 100000 and a maximum of 1000000; measurements are returned from earliest to most recent, allowing you to send follow-up queries if needed to fetch all measurements. The 'modifiedSince' parameter can be used to return only measurements that have been changed since a specific date/time. The response format can be specified as either "csv" or "json", with "csv" being the default unless the request header specifies "Accept: application/json".
+#* Returns measurements for one or more timeseries, filtered by the specified start and end date/time range. The response includes measurement values, timestamps, and associated metadata such as grades, approvals, and qualifiers. The `limit` parameter controls the maximum number of records returned, with a default of 100000 and a maximum of 1000000; measurements are returned from earliest to most recent, allowing you to send follow-up queries if needed to fetch all measurements. The `modifiedSince` parameter can be used to return only measurements that have been changed since a specific date/time. The response format can be specified as either "csv" or "json", with "csv" being the default unless the request header specifies "Accept: application/json".
 #*
 #* Both corrected and uncorrected measurements are returned; where no corrections apply the two values will be the same.
 #*
@@ -2025,6 +2202,9 @@ function(client_id, query) {
 v2_finalize_tabular_response
 
 #* Return daily calculated measurements for a timeseries
+#* 
+#* Returns daily mean/max/min/median/meteorological mean measurements for one or more timeseries, with the type of statistic calculated dependent on the timeseries metadata, and historic range statistics if requested. 
+#* 
 #* @get /timeseries/measurementsDaily
 #* @query id:string* Timeseries IDs to target, separated by commas.
 #* @query start:string* Start date, inclusive, in ISO 8601 date format.
@@ -2263,6 +2443,9 @@ function(client_id, query) {
 v2_finalize_tabular_response
 
 #* Return available parameters in the database
+#* 
+#* Returns a list of parameters available in the database, including their names, descriptions, and units. Use this endpoint to retrieve metadata about the parameters that can be queried in other endpoints, such as `/samples` or `/timeseries/measurements`.
+#* 
 #* @get /parameters
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
@@ -2310,6 +2493,9 @@ function(request, response, query) {
 }
 
 #* Return grade types in the database
+#* 
+#* Returns a list of grade types available in the database, including their codes, descriptions, and associated color codes. Use this endpoint to retrieve metadata about the grade types that can be assigned to measurements.
+#* 
 #* @get /grades
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
@@ -2331,6 +2517,9 @@ function(request, response, query) {
 }
 
 #* Return approval types in the database
+#* 
+#* Returns a list of approval types available in the database, including their codes, descriptions, and associated color codes. Use this endpoint to retrieve metadata about the approval types that can be assigned to measurements.
+#* 
 #* @get /approvals
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
@@ -2352,6 +2541,9 @@ function(request, response, query) {
 }
 
 #* Return qualifier types in the database
+#* 
+#* Returns a list of qualifier types available in the database, including their codes, descriptions, and associated color codes. Use this endpoint to retrieve metadata about the qualifier types that can be assigned to measurements.
+#* 
 #* @get /qualifiers
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
@@ -2373,6 +2565,9 @@ function(request, response, query) {
 }
 
 #* Return organizations in the database
+#* 
+#* Returns a list of organizations available in the database, including their names, contact information, and notes. Use this endpoint to retrieve metadata about the organizations that can be associated with measurements, such as owners and contributors.
+#* 
 #* @get /organizations
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
@@ -2395,18 +2590,19 @@ function(request, response, query) {
   )
 }
 
-#* Return boreholes and their associated wells
+#* Return boreholes and well metadata
 #*
 #* The response includes each borehole's `location_id` when it is linked to a
-#* monitoring location. Pass that ID as `locations` to `/samples`. To get
-#* continuous data, match the `/timeseries` response on `location_id`, then
-#* pass its `timeseries_id` to a measurements endpoint. `document_ids` is a
-#* comma-separated value in CSV responses and an integer array in JSON.
+#* monitoring location. Pass that ID as `locations` to `/samples` to get available water quality data (if available); to get
+#* continuous data, match the `/timeseries` response on `location_id`, identify the timeseries of interest, and pass its `timeseries_id` to `timeseries/measurements`. `document_ids` can be used to retrieve related documents, such as driller's logs and stratigraphic logs, from `/documents`.
 #*
 #* @get /boreholes
 #* @query borehole_ids:string Borehole IDs to target, separated by commas (up to 100 IDs).
 #* @query well_ids:string Well IDs to target, separated by commas (up to 100 IDs).
 #* @query location_ids:string Linked monitoring location IDs to target, separated by commas (up to 100 IDs).
+#* @query isWell:boolean Filter to boreholes with wells (`true`) or without wells (`false`). Omit to return both.
+#* @query isMonitored:boolean Filter to boreholes with a linked `location_id` (`true`) or without one (`false`). Omit to return both.
+#* @query bbox:string Geographic bounding box in decimal degrees, ordered west,south,east,north. West greater than east crosses the antimeridian.
 #* @query limit:integer(100000) Maximum number of records to return; capped at 100000.
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
@@ -2424,8 +2620,24 @@ function(client_id, query) {
     v2_query_value(query, "location_ids"),
     "location_ids"
   )
+  is_well_filter <- v2_parse_optional_logical(
+    v2_query_value(query, "isWell"),
+    "isWell"
+  )
+  is_monitored_filter <- v2_parse_optional_logical(
+    v2_query_value(query, "isMonitored"),
+    "isMonitored"
+  )
+  bbox_filter <- v2_parse_bbox(v2_query_value(query, "bbox"))
 
-  for (parsed in list(borehole_filter, well_filter, location_filter)) {
+  for (parsed in list(
+    borehole_filter,
+    well_filter,
+    location_filter,
+    is_well_filter,
+    is_monitored_filter,
+    bbox_filter
+  )) {
     if (!is.null(parsed$error)) {
       return(v2_response(
         v2_error_df(parsed$error),
@@ -2478,6 +2690,40 @@ function(client_id, query) {
         ")"
       )
     )
+  }
+  if (!is.null(is_well_filter$value)) {
+    filters <- c(
+      filters,
+      if (is_well_filter$value) {
+        "w.well_id IS NOT NULL"
+      } else {
+        "w.well_id IS NULL"
+      }
+    )
+  }
+  if (!is.null(is_monitored_filter$value)) {
+    filters <- c(
+      filters,
+      if (is_monitored_filter$value) {
+        "b.location_id IS NOT NULL"
+      } else {
+        "b.location_id IS NULL"
+      }
+    )
+  }
+
+  query_params <- list()
+  if (!is.null(bbox_filter$bounds)) {
+    bbox_sql <- v2_bbox_sql_filter(
+      bbox_filter$bounds,
+      "b.longitude",
+      "b.latitude"
+    )
+    filters <- c(
+      filters,
+      bbox_sql$sql
+    )
+    query_params <- bbox_sql$params
   }
 
   sql <- "
@@ -2571,7 +2817,11 @@ function(client_id, query) {
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
   api_set_query_timeout(ctx$con)
 
-  out <- DBI::dbGetQuery(ctx$con, sql)
+  out <- if (length(query_params) > 0L) {
+    DBI::dbGetQuery(ctx$con, sql, params = query_params)
+  } else {
+    DBI::dbGetQuery(ctx$con, sql)
+  }
   if (nrow(out) == 0L) {
     return(v2_response(
       v2_error_df(
@@ -2594,143 +2844,6 @@ function(client_id, query) {
       }
       I(as.integer(strsplit(ids, ",", fixed = TRUE)[[1L]]))
     })
-  }
-
-  v2_make_serialized_tabular_response(
-    out,
-    client_id = client_id,
-    query = query
-  )
-}
-#* @then
-v2_finalize_tabular_response
-
-#* Return document metadata associated with boreholes and wells
-#*
-#* Rows include the `borehole_id`, optional `well_id`, and linked
-#* `location_id` alongside each document ID. Pass `document_id` to
-#* `/documents/download` to retrieve the stored file.
-#*
-#* @get /boreholes/documents
-#* @query borehole_ids:string Borehole IDs to target, separated by commas (up to 100 IDs).
-#* @query well_ids:string Well IDs to target, separated by commas (up to 100 IDs).
-#* @query limit:integer(100000) Maximum number of records to return; capped at 100000.
-#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
-#* @serializer text/plain v2_identity_serializer()
-#* @async
-function(client_id, query) {
-  borehole_filter <- v2_parse_id_csv(
-    v2_query_value(query, "borehole_ids"),
-    "borehole_ids"
-  )
-  well_filter <- v2_parse_id_csv(
-    v2_query_value(query, "well_ids"),
-    "well_ids"
-  )
-
-  for (parsed in list(borehole_filter, well_filter)) {
-    if (!is.null(parsed$error)) {
-      return(v2_response(
-        v2_error_df(parsed$error),
-        status = 400L,
-        headers = list("X-Status" = "error")
-      ))
-    }
-  }
-
-  budget <- api_request_budget(
-    limit = v2_query_value(query, "limit", "100000"),
-    id_groups = list(
-      borehole_ids = borehole_filter$ids,
-      well_ids = well_filter$ids
-    ),
-    max_rows = 100000L
-  )
-  if (!budget$valid) {
-    return(v2_response(
-      v2_error_df(budget$message),
-      status = 400L,
-      headers = list("X-Status" = "error")
-    ))
-  }
-
-  filters <- character()
-  if (length(borehole_filter$ids) > 0L) {
-    filters <- c(
-      filters,
-      paste0(
-        "b.borehole_id IN (",
-        paste(borehole_filter$ids, collapse = ","),
-        ")"
-      )
-    )
-  }
-  if (length(well_filter$ids) > 0L) {
-    filters <- c(
-      filters,
-      paste0("w.well_id IN (", paste(well_filter$ids, collapse = ","), ")")
-    )
-  }
-
-  sql <- "
-    SELECT
-      bd.borehole_id,
-      b.borehole_name,
-      b.location_id,
-      w.well_id,
-      d.document_id,
-      d.name,
-      d.description,
-      d.publish_date,
-      d.url,
-      d.format,
-      d.type AS document_type_id,
-      dt.document_type_en,
-      dt.document_type_fr,
-      d.owner AS owner_organization_id,
-      owner.name AS owner,
-      d.contributor AS contributor_organization_id,
-      contributor.name AS contributor
-    FROM boreholes.boreholes_documents bd
-    JOIN boreholes.boreholes b
-      ON b.borehole_id = bd.borehole_id
-    LEFT JOIN boreholes.wells w
-      ON w.borehole_id = b.borehole_id
-    JOIN files.documents d
-      ON d.document_id = bd.document_id
-    LEFT JOIN files.document_types dt
-      ON dt.document_type_id = d.type
-    LEFT JOIN public.organizations owner
-      ON owner.organization_id = d.owner
-    LEFT JOIN public.organizations contributor
-      ON contributor.organization_id = d.contributor
-  "
-  if (length(filters) > 0L) {
-    sql <- paste(sql, "WHERE", paste(filters, collapse = " AND "))
-  }
-  sql <- paste(
-    sql,
-    "ORDER BY bd.borehole_id, d.document_id",
-    "LIMIT",
-    budget$limit
-  )
-
-  ctx <- v2_context(client_id)
-  if (!is.null(ctx$error)) {
-    return(ctx$error)
-  }
-  on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
-  api_set_query_timeout(ctx$con)
-
-  out <- DBI::dbGetQuery(ctx$con, sql)
-  if (nrow(out) == 0L) {
-    return(v2_response(
-      v2_error_df(
-        "No borehole documents found for the specified criteria.",
-        status = "info"
-      ),
-      headers = list("X-Status" = "info")
-    ))
   }
 
   v2_make_serialized_tabular_response(
@@ -2846,11 +2959,9 @@ function(client_id, query) {
 #* @then
 v2_finalize_tabular_response
 
-#* Download a stored document by its document ID
+#* Download a document by its document ID
 #*
-#* Downloads files from `files.documents` subject to the requesting database
-#* role's row-level permissions. URL-only records are listed by `/documents`
-#* but do not have file bytes to download from the storage system.
+#* Downloads files from from the AquaCache database. URL-only records are listed by `/documents` but do not have file bytes to download from the storage system.
 #*
 #* @get /documents/download
 #* @query document_id:integer* AquaCache document ID.
@@ -3140,6 +3251,9 @@ function(client_id, query) {
 v2_finalize_tabular_response
 
 #* Return sample results
+#* 
+#* Returns results for the specified sample IDs and parameters. Each row represents a single result for a specific parameter in a sample. Use the `samples` endpoint to retrieve sample metadata, including the `sample_id` values needed to query this endpoint.
+#* 
 #* @get /samples/results
 #* @query sample_ids:string* Up to 100000 sample IDs, separated by commas.
 #* @query parameters:string Parameter IDs to target, separated by commas.
@@ -3274,6 +3388,9 @@ function(client_id, query) {
 v2_finalize_tabular_response
 
 #* Return image(s)
+#* 
+#* Returns image files stored in AquaCache for a specific location and time window. If only the `start` parameter is provided, the endpoint returns the single image closest to that timestamp. If both `start` and `end` are provided, all images within that time window are returned. If neither `start` nor `end` is provided, the most recent image(s) for the location are returned. Use the `image_type` parameter to filter by specific image types.
+#* 
 #* @get /images/download
 #* @query start:string Start timestamp in ISO 8601 format (example: 2026-06-01T14:30:00Z), or date only (YYYY-MM-DD) to select all images for that day.
 #* @query end:string End timestamp in ISO 8601 format (example: 2026-06-01T15:30:00Z). Leave empty to download the single image closest to start. If both start and end are empty, the endpoint returns the most recent image(s) for the location.
@@ -4148,7 +4265,7 @@ v2_finalize_response
 
 #* Return CSW layer data to drive Yukon Flood Hub maps
 #*
-#* Returns a CSV or JSON table of CSW layer data for use in Yukon Flood Hub maps. The data is derived from the public.get_csw_layer() database function.
+#* Returns a CSV or JSON table of CSW layer data for use in Yukon Flood Hub maps. The data is derived from the public.get_csw_layer() database function. This endpoint is likely not useful for most users, but is provided to support Yukon Flood Hub map functionality.
 #*
 #* @get /csw-layer
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
