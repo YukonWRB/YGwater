@@ -39,6 +39,10 @@ adminLandingUI <- function(id) {
           " — create user accounts, reset passwords, and assign roles (if authorized)."
         ),
         tags$li(
+          tags$strong("Database status"),
+          " — check freshness of automated continuous data feeds and image series downloads."
+        ),
+        tags$li(
           tags$strong("Manage notifications"),
           " — configure system alerts and automated messages."
         ),

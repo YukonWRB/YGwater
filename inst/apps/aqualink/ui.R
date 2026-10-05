@@ -809,6 +809,11 @@ app_ui <- function(request) {
               uiOutput("adminHome_ui")
             ),
             nav_panel(
+              title = uiOutput("dbStatusNavTitle"),
+              value = "dbStatus",
+              uiOutput("dbStatus_ui")
+            ),
+            nav_panel(
               title = uiOutput("changePwdNavTitle"),
               value = "changePwd",
               uiOutput("changePwd_ui")

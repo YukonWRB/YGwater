@@ -566,6 +566,20 @@ ygwater_module_privilege_requirements <- function() {
         "application.page_content"
       )
     ),
+    dbStatus = req(
+      c(
+        "continuous.timeseries_metadata_en",
+        "continuous.timeseries_source_adapters",
+        "files.image_series",
+        "files.image_series_source_adapters",
+        "public.locations",
+        "public.parameters",
+        "spatial.raster_series_index",
+        "spatial.raster_series_source_adapters",
+        "spatial.raster_types"
+      ),
+      rep(list("SELECT"), 9)
+    ),
     manageNotifications = req(
       "application.notifications",
       list(c("INSERT", "SELECT", "UPDATE"))

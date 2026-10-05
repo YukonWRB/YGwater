@@ -107,6 +107,7 @@ app_server <- function(input, output, session) {
 
   admin_leaf_pages <- c(
     "adminHome",
+    "dbStatus",
     "syncCont",
     "syncDisc",
     "addLocation",
@@ -1400,6 +1401,11 @@ app_server <- function(input, output, session) {
       nav_show(id = "navbar", target = "adminHelpTasks")
       nav_show(id = "navbar", target = "adminHome")
       nav_show(id = "navbar", target = "changePwd")
+      if (isTRUE(session$userData$admin_privs$dbStatus)) {
+        nav_show(id = "navbar", target = "dbStatus")
+      } else {
+        nav_hide(id = "navbar", target = "dbStatus")
+      }
       if (!isTRUE(session$userData$can_create_role)) {
         nav_hide(id = "navbar", target = "manageUsers")
       }
@@ -1792,6 +1798,7 @@ app_server <- function(input, output, session) {
     ui_loaded$manageNewsContent <- FALSE
     ui_loaded$viewFeedback <- FALSE
     ui_loaded$adminHome <- FALSE
+    ui_loaded$dbStatus <- FALSE
 
     ui_loaded$visit <- FALSE
   }
@@ -2097,6 +2104,13 @@ app_server <- function(input, output, session) {
     })
     output$changePwdNavTitle <- renderUI({
       tr("changepwd_nav", languageSelection$language)
+    })
+    output$dbStatusNavTitle <- renderUI({
+      if (identical(languageSelection$language, "Français")) {
+        "État de la base"
+      } else {
+        "Database status"
+      }
     })
 
     output$FODNavTitle <- renderUI({
@@ -2669,14 +2683,15 @@ app_server <- function(input, output, session) {
 
           # Check if the user has more than SELECT privileges on relevant tables, used to determine if the 'admin' tab should be shown
 
-          # Show list of tables that the user has more than SELECT privileges on:
+          # Include views as well as tables so read-only module requirements
+          # can be checked against the same relation used by their query.
           sql <- "
         WITH tbls AS (
           SELECT n.nspname AS schema, c.relname AS table_name, c.oid AS tbl_oid
           FROM pg_catalog.pg_class c
           JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-          WHERE c.relkind IN ('r','p')
-            AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field')
+          WHERE c.relkind IN ('r','p','v','m','f')
+            AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field', 'spatial')
         )
         SELECT t.schema,
                t.table_name,
@@ -3776,6 +3791,15 @@ WHERE rolname = current_user;"
         output$adminHome_ui <- renderUI(adminLandingUI("adminHome"))
         ui_loaded$adminHome <- TRUE
         adminLanding("adminHome", language = languageSelection)
+      }
+    }
+    if (input$navbar == "dbStatus") {
+      if (!ui_loaded$dbStatus) {
+        output$dbStatus_ui <- renderUI({
+          databaseStatusUI("dbStatus", languageSelection$language)
+        })
+        ui_loaded$dbStatus <- TRUE
+        databaseStatus("dbStatus", language = languageSelection)
       }
     }
     if (input$navbar == "manageNotifications") {

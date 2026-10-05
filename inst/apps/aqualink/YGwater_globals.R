@@ -303,6 +303,10 @@ YGwater_globals <- function(
 
     # Admin modules
     source(system.file(
+      "apps/aqualink/modules/admin/applicationTasks/databaseStatus.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/aqualink/modules/admin/applicationTasks/adminLanding.R",
       package = "YGwater"
     ))
