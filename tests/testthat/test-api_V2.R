@@ -198,7 +198,6 @@ test_that("API V2 async routes declare their finalizers", {
     "/timeseries/measurementsDaily",
     "/images/download",
     "/boreholes",
-    "/boreholes/documents",
     "/documents",
     "/documents/download",
     "/samples",

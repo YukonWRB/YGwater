@@ -2590,7 +2590,7 @@ function(request, response, query) {
   )
 }
 
-#* Return boreholes and well metadata
+#* Return borehole and well metadata
 #*
 #* The response includes each borehole's `location_id` when it is linked to a
 #* monitoring location. Pass that ID as `locations` to `/samples` to get available water quality data (if available); to get

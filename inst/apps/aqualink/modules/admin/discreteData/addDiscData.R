@@ -3145,38 +3145,7 @@ addDiscDataUI <- function(id) {
                       width = "100%"
                     )
                   ),
-                  column(
-                    3,
-                    selectizeInput(
-                      ns("manual_laboratory"),
-                      "Laboratory",
-                      choices = NULL,
-                      multiple = TRUE,
-                      options = list(
-                        maxItems = 1,
-                        placeholder = "Enter if applicable"
-                      ),
-                      width = "100%"
-                    )
-                  ),
-                  column(
-                    3,
-                    textInput(
-                      ns("manual_lab_report"),
-                      "Lab report number",
-                      placeholder = "Optional",
-                      width = "100%"
-                    )
-                  ),
-                  column(
-                    3,
-                    textInput(
-                      ns("manual_lab_sample"),
-                      "Lab sample number",
-                      placeholder = "Optional",
-                      width = "100%"
-                    )
-                  )
+                  column(9, uiOutput(ns("manual_lab_metadata")))
                 ),
                 shinyWidgets::airDatepickerInput(
                   ns("manual_analysis_datetime"),
@@ -3982,6 +3951,20 @@ addDiscData <- function(id, language) {
          FROM discrete.result_types
         ORDER BY result_type"
     )
+    field_result_type_ids <- result_types$result_type_id[
+      tolower(trimws(result_types$result_type)) == "field"
+    ]
+    field_result_type_id <- if (length(field_result_type_ids) == 1L) {
+      as.integer(field_result_type_ids[[1]])
+    } else {
+      NA_integer_
+    }
+    is_field_result_type <- function(result_type_id) {
+      result_type_id <- addDiscData_int(result_type_id)
+      !is.na(field_result_type_id) &&
+        !is.na(result_type_id) &&
+        result_type_id == field_result_type_id
+    }
     result_conditions <- DBI::dbGetQuery(
       con,
       "SELECT result_condition_id, result_condition
@@ -6706,6 +6689,102 @@ addDiscData <- function(id, language) {
       )
     })
 
+    output$manual_lab_metadata <- renderUI({
+      if (is_field_result_type(input$manual_result_type)) {
+        return(NULL)
+      }
+      fluidRow(
+        column(
+          4,
+          selectizeInput(
+            ns("manual_laboratory"),
+            "Laboratory",
+            choices = stats::setNames(
+              laboratories$lab_id,
+              laboratories$lab_name
+            ),
+            multiple = TRUE,
+            options = list(
+              maxItems = 1,
+              placeholder = "Enter if applicable"
+            ),
+            width = "100%"
+          )
+        ),
+        column(
+          4,
+          textInput(
+            ns("manual_lab_report"),
+            "Lab report number",
+            placeholder = "Optional",
+            width = "100%"
+          )
+        ),
+        column(
+          4,
+          textInput(
+            ns("manual_lab_sample"),
+            "Lab sample number",
+            placeholder = "Optional",
+            width = "100%"
+          )
+        )
+      )
+    })
+
+    observeEvent(
+      list(input$manual_result_condition, input$manual_condition_value),
+      {
+        result_value <- addDiscData_num(input$manual_result)
+        condition_id <- addDiscData_int(input$manual_result_condition)
+        condition_value <- addDiscData_num(input$manual_condition_value)
+        if (
+          !is.na(result_value) &&
+            (!is.na(condition_id) || !is.na(condition_value))
+        ) {
+          showNotification(
+            "A result value cannot be combined with a result condition. The condition and its value were cleared.",
+            type = "warning"
+          )
+          updateSelectizeInput(
+            session,
+            "manual_result_condition",
+            selected = character()
+          )
+          updateNumericInput(
+            session,
+            "manual_condition_value",
+            value = NA_real_
+          )
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$manual_result,
+      {
+        result_value <- addDiscData_num(input$manual_result)
+        condition_id <- addDiscData_int(input$manual_result_condition)
+        condition_value <- addDiscData_num(input$manual_condition_value)
+        if (
+          !is.na(result_value) &&
+            (!is.na(condition_id) || !is.na(condition_value))
+        ) {
+          showNotification(
+            "A result value cannot be combined with a result condition. The result value was cleared.",
+            type = "warning"
+          )
+          updateNumericInput(
+            session,
+            "manual_result",
+            value = NA_real_
+          )
+        }
+      },
+      ignoreInit = TRUE
+    )
+
     observeEvent(
       input$create_sample_group,
       {
@@ -7154,6 +7233,16 @@ addDiscData <- function(id, language) {
       result_value <- addDiscData_num(input$manual_result)
       condition_id <- addDiscData_int(input$manual_result_condition)
       condition_value <- addDiscData_num(input$manual_condition_value)
+      if (
+        !is.na(result_value) &&
+          (!is.na(condition_id) || !is.na(condition_value))
+      ) {
+        showNotification(
+          "A numeric result value cannot be combined with a result condition or condition value.",
+          type = "error"
+        )
+        return()
+      }
       if (is.na(result_value) && is.na(condition_id)) {
         showNotification(
           "Enter a numeric result value or choose a result condition.",
@@ -7228,7 +7317,11 @@ addDiscData <- function(id, language) {
       )
       row$result_speciation_id <- addDiscData_int(input$manual_speciation)
       row$protocol_method <- addDiscData_int(input$manual_protocol)
-      row$laboratory <- addDiscData_int(input$manual_laboratory)
+      row$laboratory <- if (is_field_result_type(row$result_type)) {
+        NA_integer_
+      } else {
+        addDiscData_int(input$manual_laboratory)
+      }
       row$grade_type_id <- addDiscData_int(input$manual_grade)
       row$approval_type_id <- addDiscData_int(input$manual_approval)
       row$source_result_text <- if (is.na(result_value)) {
@@ -7242,14 +7335,19 @@ addDiscData <- function(id, language) {
       row$result <- result_value
       row$result_condition <- condition_id
       row$result_condition_value <- condition_value
-      row$lab_report_no <- trimws(addDiscData_first(
-        input$manual_lab_report,
-        ""
-      ))
-      row$lab_sample_no <- trimws(addDiscData_first(
-        input$manual_lab_sample,
-        ""
-      ))
+      if (is_field_result_type(row$result_type)) {
+        row$lab_report_no <- NA_character_
+        row$lab_sample_no <- NA_character_
+      } else {
+        row$lab_report_no <- trimws(addDiscData_first(
+          input$manual_lab_report,
+          ""
+        ))
+        row$lab_sample_no <- trimws(addDiscData_first(
+          input$manual_lab_sample,
+          ""
+        ))
+      }
       row$conversion <- 1
       row$result_offset <- 0
       row$analysis_datetime <- as.POSIXct(
