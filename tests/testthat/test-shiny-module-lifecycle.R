@@ -1,5 +1,5 @@
 ygwater_app_test_path <- function(...) {
-  system.file("apps", "YGwater", ..., package = "YGwater")
+  system.file("apps", "aqualink", ..., package = "YGwater")
 }
 
 shiny_server_test_environment <- function() {

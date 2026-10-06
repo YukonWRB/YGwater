@@ -315,7 +315,8 @@ ac_parameter_unit_schema <- function(con) {
       "solid_unit_id",
       "unit_solid_id"
     )),
-    gas = resolve_column(c("units_gas"))
+    gas = resolve_column(c("units_gas")),
+    not_applicable = resolve_column(c("units_na"))
   )
 }
 
@@ -451,10 +452,10 @@ ac_parameter_unit_select_sql <- function(
 
     order <- switch(
       prefer,
-      default = c("liquid", "solid", "gas"),
-      solid = c("solid", "liquid", "gas"),
-      default_or_solid = c("liquid", "solid", "gas"),
-      solid_or_default = c("solid", "liquid", "gas")
+      default = c("liquid", "solid", "gas", "not_applicable"),
+      solid = c("solid", "liquid", "gas", "not_applicable"),
+      default_or_solid = c("liquid", "solid", "gas", "not_applicable"),
+      solid_or_default = c("solid", "liquid", "gas", "not_applicable")
     )
 
     exprs <- vapply(

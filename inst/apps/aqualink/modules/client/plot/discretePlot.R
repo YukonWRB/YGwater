@@ -1,0 +1,3655 @@
+#' Flatten list columns for display or workbook output
+#'
+#' @param x A data-frame-like object.
+#'
+#' @return A data table whose list columns contain comma-separated text.
+#'
+#' @keywords internal
+#' @noRd
+disc_plot_tabularize <- function(x) {
+  x <- data.table::copy(data.table::as.data.table(x))
+  list_columns <- names(x)[vapply(x, is.list, logical(1))]
+  for (column in list_columns) {
+    data.table::set(
+      x,
+      j = column,
+      value = vapply(
+        x[[column]],
+        function(value) paste(value, collapse = ", "),
+        character(1)
+      )
+    )
+  }
+  x[]
+}
+
+#' Retrieve component observations for discrete results
+#'
+#' Returns the observations, calculation contract, and inherited canonical
+#' result metadata behind component-built results. Direct results are omitted
+#' because they have no rows in `discrete.result_components`. The result IDs
+#' are normalized to integers before they are placed in the query.
+#'
+#' @param con An open AquaCache DBI connection.
+#' @param result_ids Result IDs to retrieve.
+#' @param lang Language code used for the parameter label.
+#'
+#' @return A data frame with one row per result component.
+#'
+#' @keywords internal
+#' @noRd
+disc_result_components <- function(con, result_ids, lang = "en") {
+  result_ids <- unique(suppressWarnings(as.integer(result_ids)))
+  result_ids <- result_ids[!is.na(result_ids)]
+  if (!length(result_ids)) {
+    return(data.frame())
+  }
+
+  parameter_name <- if (identical(lang, "fr")) {
+    "COALESCE(p.param_name_fr, p.param_name)"
+  } else {
+    "p.param_name"
+  }
+  grade_description <- if (identical(lang, "fr")) {
+    "COALESCE(result_grade.grade_type_description_fr,
+              result_grade.grade_type_description)"
+  } else {
+    "result_grade.grade_type_description"
+  }
+  approval_description <- if (identical(lang, "fr")) {
+    "COALESCE(result_approval.approval_type_description_fr,
+              result_approval.approval_type_description)"
+  } else {
+    "result_approval.approval_type_description"
+  }
+  DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT
+         rc.result_component_id,
+         rc.result_id,
+         r.sample_id,
+         r.parameter_id,
+         ",
+      parameter_name,
+      " AS parameter,
+         public.get_parameter_unit_name(
+           r.parameter_id,
+           r.matrix_state_id
+         ) AS units,
+         r.lab_report_no,
+         r.lab_sample_no,
+         r.grade_type_id AS result_grade_id,
+         result_grade.grade_type_code AS result_grade_code,
+         ",
+      grade_description,
+      " AS result_grade_description,
+         r.approval_type_id AS result_approval_id,
+         result_approval.approval_type_code AS result_approval_code,
+         ",
+      approval_description,
+      " AS result_approval_description,
+         rat.aggregation_type,
+         ra.calculation_version,
+         ra.calculation_arguments::text AS calculation_arguments,
+         ra.expected_count,
+         rc.observation_number,
+         rc.observation_datetime,
+         rc.result,
+         rc.result_condition,
+         condition.result_condition AS result_condition_name,
+         rc.result_condition_value,
+         rc.included_in_aggregate,
+         rc.weight,
+         rc.note
+       FROM discrete.result_components rc
+       JOIN discrete.result_aggregations ra USING (result_id)
+       JOIN discrete.result_aggregation_types rat
+         USING (result_aggregation_type_id)
+       JOIN discrete.results r USING (result_id)
+       JOIN public.parameters p USING (parameter_id)
+       LEFT JOIN public.grade_types result_grade
+         ON r.grade_type_id = result_grade.grade_type_id
+       LEFT JOIN public.approval_types result_approval
+         ON r.approval_type_id = result_approval.approval_type_id
+       LEFT JOIN discrete.result_conditions condition
+         ON rc.result_condition = condition.result_condition_id
+       WHERE rc.result_id IN (",
+      paste(result_ids, collapse = ","),
+      ")
+       ORDER BY rc.result_id, rc.observation_number"
+    )
+  )
+}
+
+#' Retrieve complete sample metadata for downloads
+#'
+#' Patch 61 metadata views flatten the normalized sample fields while
+#' retaining RLS. Their renamed source-identity columns are part of the query
+#' contract, so this module requires Patch 61 or later.
+#'
+#' @param con An open AquaCache DBI connection.
+#' @param sample_ids Sample IDs to retrieve.
+#' @param lang Language code used to select the bilingual metadata view.
+#'
+#' @return A data table with one row per visible sample.
+#'
+#' @keywords internal
+#' @noRd
+disc_sample_metadata <- function(con, sample_ids, lang = "en") {
+  sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
+  sample_ids <- sample_ids[!is.na(sample_ids)]
+  if (!length(sample_ids)) {
+    return(data.table::data.table())
+  }
+  suffix <- if (identical(lang, "fr")) "fr" else "en"
+  disc_plot_tabularize(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT * FROM discrete.samples_metadata_",
+      suffix,
+      " WHERE sample_id IN (",
+      paste(sample_ids, collapse = ","),
+      ") ORDER BY datetime, sample_id, source_adapter_function"
+    )
+  ))
+}
+
+#' Retrieve complete result metadata for downloads
+#'
+#' @inheritParams disc_sample_metadata
+#'
+#' @return A data table with one row per visible canonical result.
+#'
+#' @keywords internal
+#' @noRd
+disc_result_metadata <- function(con, sample_ids, lang = "en") {
+  sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
+  sample_ids <- sample_ids[!is.na(sample_ids)]
+  if (!length(sample_ids)) {
+    return(data.table::data.table())
+  }
+  suffix <- if (identical(lang, "fr")) "fr" else "en"
+  disc_plot_tabularize(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT * FROM discrete.results_metadata_",
+      suffix,
+      " WHERE sample_id IN (",
+      paste(sample_ids, collapse = ","),
+      ") ORDER BY datetime, sample_id, parameter_name, result_id, ",
+      "sample_source_adapter_function, sample_external_sample_id"
+    )
+  ))
+}
+
+#' Retrieve document metadata linked to samples
+#'
+#' Embedded document bytes are intentionally omitted; downloads include the
+#' relationship and document metadata needed to identify or retrieve each file.
+#'
+#' @inheritParams disc_sample_metadata
+#'
+#' @return A data table with one row per visible sample-document relationship.
+#'
+#' @keywords internal
+#' @noRd
+disc_sample_documents <- function(con, sample_ids) {
+  sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
+  sample_ids <- sample_ids[!is.na(sample_ids)]
+  if (!length(sample_ids)) {
+    return(data.table::data.table())
+  }
+  disc_plot_tabularize(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT
+         sd.sample_id,
+         sd.document_role,
+         sd.note AS relationship_note,
+         d.document_id,
+         d.name AS document_name,
+         d.type AS document_type_id,
+         d.authors,
+         d.url,
+         d.publish_date,
+         d.description,
+         d.format,
+         d.tags,
+         d.owner AS document_owner_id,
+         d.contributor AS document_contributor_id,
+         octet_length(d.document) AS embedded_size_bytes,
+         d.created,
+         d.created_by,
+         d.modified,
+         d.modified_by
+       FROM discrete.sample_documents AS sd
+       INNER JOIN files.documents AS d ON d.document_id = sd.document_id
+       WHERE sd.sample_id IN (",
+      paste(sample_ids, collapse = ","),
+      ") ORDER BY sd.sample_id, d.document_id"
+    )
+  ))
+}
+
+#' Retrieve group memberships for selected samples
+#'
+#' @inheritParams disc_sample_metadata
+#'
+#' @return A data table with group and membership metadata.
+#'
+#' @keywords internal
+#' @noRd
+disc_sample_group_memberships <- function(con, sample_ids, lang = "en") {
+  sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
+  sample_ids <- sample_ids[!is.na(sample_ids)]
+  if (!length(sample_ids)) {
+    return(data.table::data.table())
+  }
+  group_type_name <- if (identical(lang, "fr")) {
+    "COALESCE(sgt.group_type_name_fr, sgt.group_type_name)"
+  } else {
+    "sgt.group_type_name"
+  }
+  disc_plot_tabularize(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT
+         sgm.sample_id,
+         sg.sample_group_id,
+         sg.group_type,
+         ",
+      group_type_name,
+      " AS group_type_name,
+         sg.group_code,
+         sg.group_name,
+         sg.start_datetime,
+         sg.end_datetime,
+         sg.owner AS group_owner_id,
+         sg.contributor AS group_contributor_id,
+         sg.active AS group_active,
+         sg.note AS group_note,
+         sgm.sequence_in_group,
+         sgm.note AS membership_note
+       FROM discrete.sample_group_members AS sgm
+       INNER JOIN discrete.sample_groups AS sg USING (sample_group_id)
+       INNER JOIN discrete.sample_group_types AS sgt
+         ON sgt.group_type = sg.group_type
+       WHERE sgm.sample_id IN (",
+      paste(sample_ids, collapse = ","),
+      ") ORDER BY sgm.sample_id, sg.sample_group_id"
+    )
+  ))
+}
+
+#' Create an empty discrete QA/QC data bundle
+#'
+#' @return A named list of empty data tables matching the result of
+#'   `disc_plot_related_qaqc_data()`.
+#'
+#' @keywords internal
+#' @noRd
+disc_plot_empty_qaqc_data <- function() {
+  list(
+    group_links = data.table::data.table(),
+    samples = data.table::data.table(),
+    results = data.table::data.table(),
+    result_components = data.table::data.table(),
+    documents = data.table::data.table()
+  )
+}
+
+#' Identify source samples represented in a discrete plot
+#'
+#' @param plot_result A result returned by `plotDiscrete(data = TRUE)`.
+#'
+#' @return A sorted unique integer vector of sample IDs.
+#'
+#' @keywords internal
+#' @noRd
+disc_plot_source_sample_ids <- function(plot_result) {
+  sample_ids <- plot_result$source_sample_ids
+  if (is.null(sample_ids) && "sample_id" %in% names(plot_result$data)) {
+    sample_ids <- plot_result$data$sample_id
+  }
+  sample_ids <- suppressWarnings(as.integer(sample_ids))
+  sort(unique(sample_ids[!is.na(sample_ids)]))
+}
+
+#' Identify source results represented in a discrete plot
+#'
+#' Uses the separately preserved source IDs when plotted rows combine duplicate
+#' samples, and otherwise falls back to canonical result IDs in the plotted
+#' data.
+#'
+#' @param plot_result A result returned by `plotDiscrete(data = TRUE)`.
+#'
+#' @return A sorted unique integer vector of result IDs.
+#'
+#' @keywords internal
+#' @noRd
+disc_plot_source_result_ids <- function(plot_result) {
+  result_ids <- plot_result$source_result_ids
+  if (is.null(result_ids) && "result_id" %in% names(plot_result$data)) {
+    result_ids <- plot_result$data$result_id
+  }
+  result_ids <- suppressWarnings(as.integer(result_ids))
+  sort(unique(result_ids[!is.na(result_ids)]))
+}
+
+#' Retrieve grouped QA/QC samples related to plotted samples
+#'
+#' Retrieves locationless QA/QC samples that share a sample group with a
+#' plotted sample, together with their canonical results, component
+#' observations, group links, and documents.
+#'
+#' @param con An open AquaCache DBI connection.
+#' @param plotted_sample_ids Sample IDs represented in the plot.
+#' @param lang Language code used for metadata labels.
+#'
+#' @return A named list of tabular QA/QC data.
+#'
+#' @keywords internal
+#' @noRd
+disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
+  sample_ids <- suppressWarnings(as.integer(plotted_sample_ids))
+  sample_ids <- sort(unique(sample_ids[!is.na(sample_ids)]))
+  if (length(sample_ids) == 0L) {
+    return(disc_plot_empty_qaqc_data())
+  }
+
+  sample_id_sql <- paste(sample_ids, collapse = ", ")
+  group_links <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "WITH plotted_members AS (
+         SELECT DISTINCT sample_group_id, sample_id AS plotted_sample_id
+         FROM discrete.sample_group_members
+         WHERE sample_id IN (",
+      sample_id_sql,
+      ")
+       )
+       SELECT DISTINCT
+         pm.plotted_sample_id,
+         qm.sample_id AS qaqc_sample_id,
+         sg.sample_group_id,
+         sg.group_type,
+         CASE WHEN '",
+      if (identical(lang, "fr")) "fr" else "en",
+      "' = 'fr' THEN sgt.group_type_name_fr
+              ELSE sgt.group_type_name END AS group_type_name,
+         sg.group_code,
+         sg.group_name,
+         sg.start_datetime,
+         sg.end_datetime,
+         sg.owner AS group_owner_id,
+         sg.contributor AS group_contributor_id,
+         sg.active AS group_active,
+         sg.note AS group_note,
+         qm.sequence_in_group AS qaqc_sequence_in_group,
+         qm.note AS qaqc_membership_note
+       FROM plotted_members AS pm
+       INNER JOIN discrete.sample_group_members AS qm
+         ON qm.sample_group_id = pm.sample_group_id
+        AND qm.sample_id <> pm.plotted_sample_id
+       INNER JOIN discrete.samples AS qs
+         ON qs.sample_id = qm.sample_id
+       INNER JOIN discrete.sample_types AS qst
+         ON qst.sample_type_id = qs.sample_type
+       INNER JOIN discrete.sample_groups AS sg
+         ON sg.sample_group_id = pm.sample_group_id
+       INNER JOIN discrete.sample_group_types AS sgt
+         ON sgt.group_type = sg.group_type
+       WHERE qs.location_id IS NULL
+         AND qst.requires_sample_group
+       ORDER BY pm.plotted_sample_id, sg.sample_group_id, qm.sample_id"
+    )
+  )
+  if (nrow(group_links) == 0L) {
+    return(disc_plot_empty_qaqc_data())
+  }
+
+  qaqc_sample_ids <- sort(unique(group_links$qaqc_sample_id))
+  metadata_suffix <- if (identical(lang, "fr")) "fr" else "en"
+
+  samples <- disc_sample_metadata(con, qaqc_sample_ids, metadata_suffix)
+  results <- disc_result_metadata(con, qaqc_sample_ids, metadata_suffix)
+  result_components <- disc_result_components(
+    con,
+    results$result_id,
+    lang = metadata_suffix
+  )
+  documents <- disc_sample_documents(con, qaqc_sample_ids)
+
+  list(
+    group_links = disc_plot_tabularize(group_links),
+    samples = disc_plot_tabularize(samples),
+    results = disc_plot_tabularize(results),
+    result_components = disc_plot_tabularize(result_components),
+    documents = disc_plot_tabularize(documents)
+  )
+}
+
+#' Assemble workbook tables for a discrete-data plot download
+#'
+#' @param plot_data Canonical result rows used in the plot.
+#' @param qaqc_data Related QA/QC data returned by
+#'   `disc_plot_related_qaqc_data()`.
+#' @param result_components Component observations for the plotted canonical
+#'   results.
+#'
+#' @return A named list of tabular data suitable for `openxlsx::write.xlsx()`.
+#'
+#' @keywords internal
+#' @noRd
+disc_plot_download_tables <- function(
+  plot_data,
+  qaqc_data,
+  result_components = data.frame()
+) {
+  tables <- list(plot_data = disc_plot_tabularize(plot_data))
+  if (nrow(result_components) > 0L) {
+    tables$result_components <- disc_plot_tabularize(result_components)
+  }
+  if (nrow(qaqc_data$samples) == 0L) {
+    return(tables)
+  }
+
+  tables$qaqc_group_links <- disc_plot_tabularize(qaqc_data$group_links)
+  tables$qaqc_samples <- disc_plot_tabularize(qaqc_data$samples)
+  tables$qaqc_results <- disc_plot_tabularize(qaqc_data$results)
+  if (nrow(qaqc_data$result_components) > 0L) {
+    tables$qaqc_result_components <- disc_plot_tabularize(
+      qaqc_data$result_components
+    )
+  }
+  if (nrow(qaqc_data$documents) > 0L) {
+    tables$qaqc_documents <- disc_plot_tabularize(qaqc_data$documents)
+  }
+  tables
+}
+
+discPlotUI <- function(id) {
+  ns <- NS(id)
+
+  banner_key <- paste0("discPlot_banner_v2026_01_14__", id)
+
+  tagList(
+    uiOutput(ns("banner")),
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        width = 350,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
+        uiOutput(ns("sidebar"))
+      ),
+      uiOutput(ns("main"))
+    )
+  )
+}
+
+discPlot <- function(id, mdb_files, language, windowDims, inputs) {
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns # Used to create UI elements within the server code
+
+    EQWin_selector <- reactiveVal(FALSE) # flags whether the EQWin source UI is already rendered
+
+    # Static lookup data is shared across sessions; availability is queried
+    # narrowly below as users choose location, media, date range, and parameters.
+    if (isTRUE(session$userData$user_logged_in)) {
+      cached <- disc_plot_module_data(
+        con = session$userData$AquaCache,
+        env = session$userData$app_cache
+      )
+    } else {
+      cached <- disc_plot_module_data(con = session$userData$AquaCache)
+    }
+
+    moduleData <- reactiveValues(
+      AC_locs = cached$locs,
+      AC_params = cached$params,
+      AC_sub_locs = cached$sub_locs,
+      AC_media = cached$media,
+      AC_sample_types = cached$sample_types,
+      AC_collection_methods = cached$collection_methods,
+      AC_result_types = cached$result_types,
+      AC_sample_fractions = cached$sample_fractions,
+      AC_result_value_types = cached$result_value_types,
+      AC_result_speciations = cached$result_speciations
+    )
+
+    browse_selected_sample_ids <- reactiveVal(numeric(0))
+
+    map_location_from_inputs <- function(target_tab) {
+      if (is.null(inputs)) {
+        return(NULL)
+      }
+      if (!identical(inputs$location_target, target_tab)) {
+        return(NULL)
+      }
+
+      location_id <- suppressWarnings(as.numeric(inputs$location_id))
+      location_id <- unique(location_id[!is.na(location_id)])
+      if (length(location_id) == 0) {
+        return(NULL)
+      }
+
+      location_id
+    }
+
+    clear_map_location_request <- function(target_tab) {
+      if (!is.null(inputs) && identical(inputs$location_target, target_tab)) {
+        inputs$location_id <- NULL
+        inputs$location_target <- NULL
+      }
+    }
+
+    moduleInputs <- reactiveValues(
+      location_id = map_location_from_inputs("discPlot")
+    )
+
+    ac_option_rows <- function(scope, lookup, scope_col, lookup_col) {
+      if (is.null(scope) || nrow(scope) == 0 || nrow(lookup) == 0) {
+        return(lookup[0, , drop = FALSE])
+      }
+      ids <- unique(scope[[scope_col]])
+      ids <- ids[!is.na(ids)]
+      lookup[lookup[[lookup_col]] %in% ids, , drop = FALSE]
+    }
+
+    ac_keep_selection <- function(selected, choices) {
+      if (is.null(selected) || length(selected) == 0) {
+        return("all")
+      }
+      selected <- as.character(selected)
+      if ("all" %in% selected) {
+        return("all")
+      }
+      kept <- selected[selected %in% as.character(choices)]
+      if (length(kept) == 0) {
+        return("all")
+      }
+      kept
+    }
+
+    ac_selectize <- function(input_id, label, choices, selected = NULL) {
+      if (length(choices) <= 1) {
+        return(NULL)
+      }
+      choices <- c(
+        stats::setNames("all", tr("all_m", language$language)),
+        choices
+      )
+      selectizeInput(
+        ns(input_id),
+        label,
+        choices = choices,
+        selected = ac_keep_selection(selected, choices),
+        multiple = TRUE
+      )
+    }
+
+    season_highlight_colors <- c(
+      "rgba(102, 194, 165, 0.11)",
+      "rgba(252, 141, 98, 0.10)",
+      "rgba(141, 160, 203, 0.11)",
+      "rgba(231, 138, 195, 0.10)"
+    )
+
+    season_date_range_input <- function(input_id, label, current_year) {
+      selected <- input[[input_id]]
+      if (!is.null(selected) && length(selected) == 2) {
+        selected <- suppressWarnings(as.Date(selected))
+      }
+      if (
+        is.null(selected) ||
+          length(selected) != 2 ||
+          any(is.na(selected))
+      ) {
+        selected <- as.Date(c(
+          sprintf("%d-01-01", current_year),
+          sprintf("%d-12-31", current_year)
+        ))
+      }
+
+      dateRangeInput(
+        ns(input_id),
+        label,
+        start = selected[[1]],
+        end = selected[[2]],
+        min = as.Date(sprintf("%d-01-01", current_year - 1L)),
+        max = as.Date(sprintf("%d-12-31", current_year)),
+        format = "yyyy-mm-dd",
+        language = language$abbrev,
+        separator = tr("date_sep", language$language)
+      )
+    }
+
+    format_season_range <- function(range) {
+      dates <- suppressWarnings(as.Date(range))
+      if (length(dates) != 2 || any(is.na(dates))) {
+        return("")
+      }
+      paste(
+        format(dates[[1]], "%m-%d"),
+        tr("to", language$language),
+        format(dates[[2]], "%m-%d")
+      )
+    }
+
+    format_season_ranges <- function(ranges) {
+      labels <- vapply(ranges, format_season_range, character(1))
+      paste(labels[nzchar(labels)], collapse = "; ")
+    }
+
+    observe_all_selectize <- function(input_id) {
+      observeEvent(
+        input[[input_id]],
+        {
+          values <- input[[input_id]]
+          if (is.null(values) || length(values) == 0) {
+            updateSelectizeInput(session, input_id, selected = "all")
+            return()
+          }
+          values <- as.character(values)
+          if (length(values) > 1 && "all" %in% values) {
+            selected <- if (identical(values[[length(values)]], "all")) {
+              "all"
+            } else {
+              setdiff(values, "all")
+            }
+            updateSelectizeInput(session, input_id, selected = selected)
+          }
+        },
+        ignoreNULL = FALSE
+      )
+    }
+
+    lapply(
+      c(
+        "media_AC",
+        "sub_locations_AC",
+        "sample_types_AC",
+        "collection_methods_AC",
+        "result_speciations_AC",
+        "sample_fractions_AC",
+        "result_value_types_AC",
+        "result_types_AC",
+        "browse_sample_parameters_AC",
+        "browse_plot_parameters_AC"
+      ),
+      observe_all_selectize
+    )
+
+    ac_numeric_values <- function(values, include_all = FALSE) {
+      if (is.null(values) || length(values) == 0) {
+        return(numeric(0))
+      }
+      values <- as.character(values)
+      if (!include_all) {
+        values <- values[values != "all"]
+      }
+      values <- suppressWarnings(as.numeric(values))
+      unique(values[!is.na(values)])
+    }
+
+    ac_in_clause <- function(column, values) {
+      values <- ac_numeric_values(values)
+      if (length(values) == 0) {
+        return(NULL)
+      }
+      paste0(column, " IN (", paste(values, collapse = ", "), ")")
+    }
+
+    ac_date_clause <- function(column, date_range) {
+      if (is.null(date_range) || length(date_range) != 2) {
+        return(NULL)
+      }
+      date_range <- as.Date(date_range)
+      if (any(is.na(date_range))) {
+        return(NULL)
+      }
+      paste0(
+        column,
+        " >= ",
+        DBI::dbQuoteLiteral(session$userData$AquaCache, date_range[1]),
+        "::date AND ",
+        column,
+        " < (",
+        DBI::dbQuoteLiteral(session$userData$AquaCache, date_range[2]),
+        "::date + INTERVAL '1 day')"
+      )
+    }
+
+    ac_where <- function(
+      locations = NULL,
+      media = NULL,
+      date_range = NULL,
+      parameters = NULL
+    ) {
+      clauses <- Filter(
+        Negate(is.null),
+        list(
+          ac_in_clause("s.location_id", locations),
+          ac_in_clause("s.media_id", media),
+          ac_date_clause("s.datetime", date_range),
+          ac_in_clause("r.parameter_id", parameters)
+        )
+      )
+      if (length(clauses) == 0) {
+        return("")
+      }
+      paste("WHERE", paste(clauses, collapse = " AND "))
+    }
+
+    ac_query <- function(sql, empty = data.frame()) {
+      tryCatch(
+        DBI::dbGetQuery(session$userData$AquaCache, sql),
+        error = function(e) {
+          warning(e$message, call. = FALSE)
+          empty
+        }
+      )
+    }
+
+    ac_available_media <- reactive({
+      if (length(ac_numeric_values(input$locations_AC)) == 0) {
+        return(moduleData$AC_media[0, , drop = FALSE])
+      }
+      sql <- paste(
+        "SELECT DISTINCT m.media_id, m.media_type, m.media_type_fr",
+        "FROM public.media_types AS m",
+        "INNER JOIN discrete.samples AS s ON m.media_id = s.media_id",
+        ac_where(locations = input$locations_AC),
+        "ORDER BY m.media_type ASC"
+      )
+      ac_query(sql, moduleData$AC_media[0, , drop = FALSE])
+    })
+
+    ac_available_date_range <- reactive({
+      if (length(ac_numeric_values(input$locations_AC)) == 0) {
+        return(NULL)
+      }
+      sql <- paste(
+        "SELECT MIN(s.datetime)::date AS start_date,",
+        "MAX(s.datetime)::date AS end_date",
+        "FROM discrete.samples AS s",
+        ac_where(
+          locations = input$locations_AC,
+          media = input$media_AC
+        )
+      )
+      range <- ac_query(
+        sql,
+        data.frame(start_date = as.Date(NA), end_date = as.Date(NA))
+      )
+      if (
+        nrow(range) == 0 ||
+          is.na(range$start_date[1]) ||
+          is.na(range$end_date[1])
+      ) {
+        return(NULL)
+      }
+      range
+    })
+
+    ac_available_parameters <- reactive({
+      if (length(ac_numeric_values(input$locations_AC)) == 0) {
+        return(moduleData$AC_params[0, , drop = FALSE])
+      }
+      sql <- paste(
+        "SELECT DISTINCT p.parameter_id, p.param_name",
+        "FROM public.parameters AS p",
+        "INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id",
+        "INNER JOIN discrete.samples AS s ON r.sample_id = s.sample_id",
+        ac_where(
+          locations = input$locations_AC,
+          media = input$media_AC,
+          date_range = input$date_range_AC
+        ),
+        "ORDER BY p.param_name ASC"
+      )
+      ac_query(sql, moduleData$AC_params[0, , drop = FALSE])
+    })
+
+    ac_scope <- reactive({
+      if (
+        length(ac_numeric_values(input$locations_AC)) == 0 ||
+          is.null(input$date_range_AC) ||
+          length(ac_numeric_values(input$parameters_AC, include_all = TRUE)) ==
+            0
+      ) {
+        return(data.frame())
+      }
+      sql <- paste(
+        "SELECT DISTINCT",
+        "s.sub_location_id, s.media_id, s.sample_type, s.collection_method,",
+        "r.result_type, r.sample_fraction_id, r.result_value_type,",
+        "r.result_speciation_id",
+        "FROM discrete.samples AS s",
+        "INNER JOIN discrete.results AS r ON s.sample_id = r.sample_id",
+        ac_where(
+          locations = input$locations_AC,
+          media = input$media_AC,
+          date_range = input$date_range_AC,
+          parameters = input$parameters_AC
+        )
+      )
+      ac_query(sql, data.frame())
+    })
+
+    ac_sample_id_clause <- function(values, column = "s.sample_id") {
+      values <- unique(suppressWarnings(as.numeric(values)))
+      values <- values[!is.na(values)]
+      if (length(values) == 0) {
+        return(NULL)
+      }
+      paste0(column, " IN (", paste(values, collapse = ", "), ")")
+    }
+
+    ac_browse_parameter_filter <- function() {
+      parameter_ids <- ac_numeric_values(input$browse_sample_parameters_AC)
+      if (length(parameter_ids) == 0) {
+        return(NULL)
+      }
+      ids_sql <- paste(parameter_ids, collapse = ", ")
+      if (identical(input$browse_sample_parameter_match, "all")) {
+        paste0(
+          "(SELECT COUNT(DISTINCT rpf.parameter_id)",
+          " FROM discrete.results AS rpf",
+          " WHERE rpf.sample_id = s.sample_id",
+          " AND rpf.parameter_id IN (",
+          ids_sql,
+          ")) = ",
+          length(parameter_ids)
+        )
+      } else {
+        paste0(
+          "EXISTS (SELECT 1 FROM discrete.results AS rpf",
+          " WHERE rpf.sample_id = s.sample_id",
+          " AND rpf.parameter_id IN (",
+          ids_sql,
+          "))"
+        )
+      }
+    }
+
+    ac_browse_where <- function(include_parameter_filter = TRUE) {
+      clauses <- Filter(
+        Negate(is.null),
+        list(
+          ac_date_clause("s.datetime", input$browse_date_range),
+          if (isTRUE(include_parameter_filter)) {
+            ac_browse_parameter_filter()
+          }
+        )
+      )
+      if (length(clauses) == 0) {
+        return("")
+      }
+      paste("WHERE", paste(clauses, collapse = " AND "))
+    }
+
+    ac_browse_sample_table <- reactive({
+      sql <- paste(
+        "WITH base AS (",
+        "SELECT s.sample_id, s.location_id, l.name AS location,",
+        "l.location_code, sl.sub_location_name AS sub_location,",
+        "s.datetime::date AS sample_date, s.datetime,",
+        "s.media_id, mt.media_type AS media,",
+        "s.sample_type AS sample_type_id, st.sample_type,",
+        "s.collection_method AS collection_method_id, cm.collection_method",
+        "FROM discrete.samples AS s",
+        "INNER JOIN public.locations AS l ON s.location_id = l.location_id",
+        "LEFT JOIN public.sub_locations AS sl ON s.sub_location_id = sl.sub_location_id",
+        "LEFT JOIN public.media_types AS mt ON s.media_id = mt.media_id",
+        "LEFT JOIN discrete.sample_types AS st ON s.sample_type = st.sample_type_id",
+        "LEFT JOIN discrete.collection_methods AS cm ON",
+        "s.collection_method = cm.collection_method_id",
+        ac_browse_where(include_parameter_filter = TRUE),
+        "ORDER BY s.datetime DESC",
+        ")",
+        "SELECT base.sample_id, base.location, base.location_code,",
+        "base.sub_location, base.sample_date, base.media,",
+        "base.sample_type, base.collection_method,",
+        "COALESCE(params.result_count, 0) AS result_count,",
+        "COALESCE(params.parameters, '') AS parameters",
+        "FROM base",
+        "LEFT JOIN LATERAL (",
+        "SELECT COUNT(*) AS result_count,",
+        "STRING_AGG(DISTINCT p.param_name, ', ' ORDER BY p.param_name)",
+        "AS parameters",
+        "FROM discrete.results AS r",
+        "INNER JOIN public.parameters AS p ON r.parameter_id = p.parameter_id",
+        "WHERE r.sample_id = base.sample_id",
+        ") AS params ON TRUE",
+        "ORDER BY base.datetime DESC"
+      )
+      ac_query(sql, data.frame())
+    })
+
+    ac_browse_sample_parameter_choices <- reactive({
+      if (
+        is.null(input$browse_date_range) ||
+          length(input$browse_date_range) != 2
+      ) {
+        return(data.frame(
+          parameter_id = numeric(),
+          param_name = character(),
+          n = numeric()
+        ))
+      }
+
+      sql <- paste(
+        "SELECT p.parameter_id, p.param_name, COUNT(DISTINCT s.sample_id) AS n",
+        "FROM discrete.samples AS s",
+        "INNER JOIN discrete.results AS r ON s.sample_id = r.sample_id",
+        "INNER JOIN public.parameters AS p ON r.parameter_id = p.parameter_id",
+        ac_browse_where(include_parameter_filter = FALSE),
+        "GROUP BY p.parameter_id, p.param_name",
+        "ORDER BY p.param_name ASC"
+      )
+      ac_query(
+        sql,
+        data.frame(
+          parameter_id = numeric(),
+          param_name = character(),
+          n = numeric()
+        )
+      )
+    })
+
+    ac_browse_plot_parameter_choices <- reactive({
+      selected <- browse_selected_sample_ids()
+      sample_clause <- ac_sample_id_clause(selected, "s.sample_id")
+
+      where <- if (!is.null(sample_clause)) {
+        paste("WHERE", sample_clause)
+      } else {
+        if (
+          is.null(input$browse_date_range) ||
+            length(input$browse_date_range) != 2
+        ) {
+          return(data.frame(
+            parameter_id = numeric(),
+            param_name = character(),
+            n = numeric()
+          ))
+        }
+        ac_browse_where(include_parameter_filter = TRUE)
+      }
+
+      sql <- paste(
+        "SELECT p.parameter_id, p.param_name, COUNT(DISTINCT s.sample_id) AS n",
+        "FROM discrete.samples AS s",
+        "INNER JOIN discrete.results AS r ON s.sample_id = r.sample_id",
+        "INNER JOIN public.parameters AS p ON r.parameter_id = p.parameter_id",
+        where,
+        "GROUP BY p.parameter_id, p.param_name",
+        "ORDER BY p.param_name ASC"
+      )
+      ac_query(
+        sql,
+        data.frame(
+          parameter_id = numeric(),
+          param_name = character(),
+          n = numeric()
+        )
+      )
+    })
+
+    ac_selected_sample_rows <- reactive({
+      selected <- browse_selected_sample_ids()
+      sample_clause <- ac_sample_id_clause(selected, "s.sample_id")
+      if (is.null(sample_clause)) {
+        return(data.frame())
+      }
+      sql <- paste(
+        "SELECT s.sample_id, l.name AS location,",
+        "s.datetime::date AS sample_date, mt.media_type AS media",
+        "FROM discrete.samples AS s",
+        "INNER JOIN public.locations AS l ON s.location_id = l.location_id",
+        "LEFT JOIN public.media_types AS mt ON s.media_id = mt.media_id",
+        "WHERE",
+        sample_clause,
+        "ORDER BY s.datetime DESC"
+      )
+      ac_query(sql, data.frame())
+    })
+
+    ac_selected_plot_parameter_ids <- reactive({
+      if (!identical(input$data_source, "AC")) {
+        return(numeric(0))
+      }
+      if (identical(input$AC_selector_mode, "browse")) {
+        selected <- ac_numeric_values(input$browse_plot_parameters_AC)
+        if (length(selected) > 0) {
+          return(selected)
+        }
+        choices <- ac_browse_plot_parameter_choices()
+        if (is.null(choices) || !"parameter_id" %in% names(choices)) {
+          return(numeric(0))
+        }
+        return(unique(choices$parameter_id[!is.na(choices$parameter_id)]))
+      }
+      ac_numeric_values(input$parameters_AC, include_all = TRUE)
+    })
+
+    ac_available_guidelines <- reactive({
+      parameter_ids <- ac_selected_plot_parameter_ids()
+      if (length(parameter_ids) == 0) {
+        return(data.frame())
+      }
+
+      sql <- paste0(
+        "SELECT g.guideline_id, g.guideline_code, g.guideline_name,",
+        " p.param_name, gp.publisher_name, gs.series_name",
+        " FROM criteria.guidelines AS g",
+        " INNER JOIN public.parameters AS p ON p.parameter_id = g.parameter_id",
+        " LEFT JOIN criteria.guideline_publishers AS gp",
+        " ON gp.publisher_id = g.publisher_id",
+        " LEFT JOIN criteria.guideline_series AS gs",
+        " ON gs.series_id = g.series_id",
+        " WHERE g.active",
+        " AND g.review_status = 'approved'",
+        " AND (g.valid_from IS NULL OR CURRENT_DATE >= g.valid_from)",
+        " AND (g.valid_to IS NULL OR CURRENT_DATE <= g.valid_to)",
+        " AND g.parameter_id IN (",
+        paste(parameter_ids, collapse = ", "),
+        ")",
+        " ORDER BY p.param_name, g.guideline_code, g.guideline_name"
+      )
+      ac_query(sql, data.frame())
+    })
+
+    ensure_discrete_plot_function <- function() {
+      new_args <- c(
+        "sub_location_ids",
+        "media",
+        "sample_types",
+        "collection_methods",
+        "result_types",
+        "sample_fractions",
+        "result_value_types",
+        "result_speciations",
+        "include_blanks",
+        "duplicate_action",
+        "sample_ids",
+        "season_ranges",
+        "season_highlight_ranges",
+        "guidelines"
+      )
+      if (all(new_args %in% names(formals(plotDiscrete)))) {
+        return(invisible(TRUE))
+      }
+
+      candidates <- unique(c(
+        file.path(getwd(), "R", "plotDiscrete.R"),
+        file.path(dirname(getwd()), "R", "plotDiscrete.R"),
+        "C:/Users/g_del/Documents/R/YGwater/R/plotDiscrete.R"
+      ))
+      candidates <- candidates[file.exists(candidates)]
+      for (path in candidates) {
+        root <- dirname(dirname(path))
+        for (helper in c("titleCase.R", "utils.R", "AquaConnect.R")) {
+          helper_path <- file.path(root, "R", helper)
+          if (file.exists(helper_path)) {
+            source(helper_path, local = .GlobalEnv)
+          }
+        }
+        source(path, local = .GlobalEnv)
+        if (all(new_args %in% names(formals(plotDiscrete)))) {
+          return(invisible(TRUE))
+        }
+      }
+
+      stop(
+        "The loaded plotDiscrete() function is older than the discrete plot ",
+        "module. Restart the app from the current YGwater source tree or ",
+        "reinstall/reload YGwater so R/plotDiscrete.R is current."
+      )
+    }
+
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "discPlot"
+      )
+    })
+
+    output$sidebar <- renderUI({
+      tagList(
+        # Toggle for data source
+        if (is.null(mdb_files)) {
+          shinyjs::hidden(radioButtons(
+            ns("data_source"),
+            NULL,
+            choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
+            selected = "AC"
+          ))
+        } else {
+          radioButtons(
+            ns("data_source"),
+            NULL,
+            choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
+            selected = "AC"
+          )
+        },
+        uiOutput(ns("EQWin_source_ui")),
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'AC'",
+          radioButtons(
+            ns("AC_selector_mode"),
+            tooltip(
+              trigger = list(
+                tr("disc_selector_mode", language$language),
+                bsicons::bs_icon("info-circle-fill")
+              ),
+              tr("disc_selector_mode_tooltip", language$language)
+            ),
+            choices = c(
+              stats::setNames(
+                "guided",
+                tr(
+                  "disc_guided_selectors",
+                  language$language
+                )
+              ),
+              stats::setNames(
+                "browse",
+                tr(
+                  "disc_browse_samples",
+                  language$language
+                )
+              )
+            ),
+            selected = "guided"
+          )
+        ),
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'EQ'",
+          dateRangeInput(
+            ns("date_range_EQ"),
+            tr("date_range_lab", language$language),
+            start = Sys.Date() - 30,
+            end = Sys.Date(),
+            max = Sys.Date() + 1,
+            format = "yyyy-mm-dd",
+            language = language$abbrev,
+            separator = tr("date_sep", language$language)
+          ),
+          # Toggle button for locations or location groups (only show if data source == EQWin)
+          radioButtons(
+            ns("locs_groups"),
+            NULL,
+            choices = stats::setNames(
+              c("locations", "loc_groups"),
+              c(
+                tr("locs", language$language),
+                tr("loc_groups", language$language)
+              )
+            ),
+            selected = "locations"
+          ),
+          # Selectize input for locations, populated once connection is established
+          selectizeInput(
+            ns("locations_EQ"),
+            tr("select_locs", language$language),
+            choices = NULL,
+            multiple = TRUE
+          ),
+          # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
+          selectizeInput(
+            ns("location_groups"),
+            tr("select_loc_group", language$language),
+            choices = NULL,
+            multiple = TRUE,
+            options = list(maxItems = 1)
+          ), # This fixes a bug where the 'Placeholder' value remains after updating values
+
+          # Toggle button for parameters or parameter groups (only show if data source == EQWin)
+          radioButtons(
+            ns("params_groups"),
+            NULL,
+            choices = stats::setNames(
+              c("parameters", "param_groups"),
+              c(
+                tr("parameters", language$language),
+                tr("param_groups", language$language)
+              )
+            ),
+            selected = "parameters"
+          ),
+          # Selectize input for parameters, populated once connection is established
+          selectizeInput(
+            ns("parameters_EQ"),
+            tr("select_params", language$language),
+            choices = NULL,
+            multiple = TRUE
+          ),
+          # Selectize input for parameter groups, populated once connection is established. only shown if data source is EQWin
+          selectizeInput(
+            ns("parameter_groups"),
+            tr("select_param_group", language$language),
+            choices = NULL,
+            multiple = TRUE,
+            options = list(maxItems = 1)
+          ), # This fixes a bug where the 'Placeholder' value remains after updating values
+          # Selectize input for a standard to apply
+          div(
+            style = "display: flex; align-items: center;",
+            tags$label(
+              tr("select_standard_opt", language$language),
+              class = "form-label",
+              style = "margin-right: 5px;"
+            ),
+            span(
+              id = ns("standard_info"),
+              `data-bs-toggle` = "tooltip",
+              `data-bs-placement` = "right",
+              `data-bs-trigger` = "click hover",
+              title = tr("standard_warning", language$language),
+              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+            )
+          ),
+          selectizeInput(
+            ns("standard"),
+            NULL,
+            choices = NULL,
+            multiple = TRUE,
+            options = list(maxItems = 1)
+          ) # This is to be able to use the default no selection upon initialization but only have one possible selection anyways.
+        ),
+
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'AC' && (input.AC_selector_mode == 'guided' || input.AC_selector_mode == null)",
+          # Selectize input for locations, populated once connection is established
+          selectizeInput(
+            ns("locations_AC"),
+            tr("loc(s)", language$language),
+            choices = NULL,
+            multiple = TRUE
+          ),
+          uiOutput(ns("AC_media_ui")),
+          uiOutput(ns("AC_date_range_ui")),
+          checkboxInput(
+            ns("season_highlight_enabled"),
+            tr("disc_season_highlight", language$language),
+            value = FALSE
+          ),
+          uiOutput(ns("AC_season_highlight_ranges_ui")),
+          checkboxInput(
+            ns("season_filter_enabled"),
+            tr("disc_season_filter", language$language),
+            value = FALSE
+          ),
+          uiOutput(ns("AC_season_ranges_ui")),
+          # Selectize input for parameters, populated once connection is established
+          selectizeInput(
+            ns("parameters_AC"),
+            tr("parameter(s)", language$language),
+            choices = NULL,
+            multiple = TRUE
+          ),
+          uiOutput(ns("AC_options_ui"))
+        ),
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'AC' && input.AC_selector_mode == 'browse'",
+          helpText(tr("disc_browse_help", language$language)),
+          dateRangeInput(
+            ns("browse_date_range"),
+            tr("date_range_lab", language$language),
+            start = Sys.Date() - 365,
+            end = Sys.Date() + 1,
+            max = Sys.Date() + 1,
+            format = "yyyy-mm-dd",
+            language = language$abbrev,
+            separator = tr("date_sep", language$language)
+          ),
+          uiOutput(ns("AC_browse_plot_parameter_ui"))
+        ),
+        uiOutput(ns("AC_guidelines_ui")),
+        radioButtons(
+          ns("facet_on"),
+          label = tooltip(
+            trigger = list(
+              tr("facet_on", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("facet_on_tooltip", language$language)
+          ),
+          choices = stats::setNames(
+            c("locs", "params"),
+            c(
+              tr("locs", language$language),
+              tr("parameters", language$language)
+            )
+          ),
+          selected = "locs"
+        ),
+        checkboxInput(
+          ns("log_scale"),
+          label = tooltip(
+            trigger = list(
+              tr("use_log_scale", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("log_scale_warning", language$language),
+          )
+        ),
+        checkboxInput(
+          ns("shareX"),
+          label = tooltip(
+            trigger = list(
+              tr("share_x_axis", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("share_x_axis_tooltip", language$language)
+          ),
+          value = TRUE
+        ),
+        checkboxInput(
+          ns("shareY"),
+          label = tooltip(
+            trigger = list(
+              tr("share_y_axis", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("share_y_axis_tooltip", language$language)
+          ),
+          value = FALSE
+        ),
+        div(
+          selectizeInput(
+            ns("loc_code"),
+            label = tr("loc_code", language$language),
+            choices = stats::setNames(
+              c("name", "code", "nameCode", "codeName"),
+              c(
+                tr("name", language$language),
+                tr("code", language$language),
+                tr("loc_code_nameCode", language$language),
+                tr("loc_code_codeName", language$language)
+              )
+            ),
+            selected = "name"
+          ),
+          style = "display: flex; align-items: center;"
+        ),
+
+        # div(
+        checkboxInput(
+          ns("target_datetime"),
+          label = tooltip(
+            trigger = list(
+              tr("target_datetime", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("target_datetime_tooltip", language$language)
+          )
+        ),
+        div(
+          actionButton(
+            ns("extra_aes"),
+            tr("modify_plot_aes", language$language),
+            style = "display: block; width: 100%; margin-bottom: 10px;"
+          ), # Ensure block display and full width
+          input_task_button(
+            ns("make_plot"),
+            label = tr("create_plot", language$language),
+            label_busy = tr("processing", language$language),
+            style = "display: block; width: 100%;", # Ensure block display and full width
+            class = "btn btn-primary"
+          )
+        )
+      ) # End of tagList
+    }) %>% # End of renderUI for sidebar
+      bindEvent(language$language) #TODO: bindEvent should also be on moduleData, but moduleData is not being used in the creation of lists yet
+
+    output$AC_media_ui <- renderUI({
+      req(input$data_source == "AC")
+
+      media <- ac_available_media()
+      choices <- stats::setNames(
+        media$media_id,
+        media[, tr("media_type_col", language$language)]
+      )
+      ac_selectize(
+        "media_AC",
+        tr("media_type(s)", language$language),
+        choices,
+        input$media_AC
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$locations_AC,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_date_range_ui <- renderUI({
+      req(input$data_source == "AC")
+      if (length(ac_numeric_values(input$locations_AC)) == 0) {
+        return(NULL)
+      }
+
+      available <- ac_available_date_range()
+      if (is.null(available)) {
+        start_date <- Sys.Date() - 30
+        end_date <- Sys.Date()
+      } else {
+        start_date <- as.Date(available$start_date[1])
+        end_date <- as.Date(available$end_date[1])
+      }
+      current <- input$date_range_AC
+      if (!is.null(current) && length(current) == 2) {
+        current <- as.Date(current)
+        if (!any(is.na(current))) {
+          start_date <- max(start_date, current[1])
+          end_date <- min(end_date, current[2])
+          if (!is.null(available) && start_date > end_date) {
+            start_date <- as.Date(available$start_date[1])
+            end_date <- as.Date(available$end_date[1])
+          }
+        }
+      }
+
+      dateRangeInput(
+        ns("date_range_AC"),
+        tr("date_range_lab", language$language),
+        start = start_date,
+        end = end_date,
+        min = if (is.null(available)) {
+          NULL
+        } else {
+          as.Date(available$start_date[1])
+        },
+        max = if (is.null(available)) {
+          Sys.Date() + 1
+        } else {
+          as.Date(available$end_date[1])
+        },
+        format = "yyyy-mm-dd",
+        language = language$abbrev,
+        separator = tr("date_sep", language$language)
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$locations_AC,
+        input$media_AC,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_season_ranges_ui <- renderUI({
+      req(input$data_source == "AC")
+      if (!isTRUE(input$season_filter_enabled)) {
+        return(NULL)
+      }
+
+      current_year <- lubridate::year(Sys.Date())
+      count <- suppressWarnings(as.integer(input$season_range_count))
+      if (length(count) == 0 || is.na(count)) {
+        count <- 1L
+      }
+      count <- max(1L, min(count, 4L))
+
+      tagList(
+        helpText(tr("disc_doy_range_help", language$language)),
+        selectInput(
+          ns("season_range_count"),
+          tr("disc_season_range_count", language$language),
+          choices = stats::setNames(
+            1:4,
+            c(
+              tr("one", language$language),
+              tr("two", language$language),
+              tr("three", language$language),
+              tr("four", language$language)
+            )
+          ),
+          selected = count
+        ),
+        lapply(seq_len(count), function(i) {
+          season_date_range_input(
+            paste0("season_range_", i),
+            paste(tr("season", language$language), i),
+            current_year
+          )
+        })
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$season_filter_enabled,
+        input$season_range_count,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_season_highlight_ranges_ui <- renderUI({
+      req(input$data_source == "AC")
+      if (!isTRUE(input$season_highlight_enabled)) {
+        return(NULL)
+      }
+
+      current_year <- lubridate::year(Sys.Date())
+      count <- suppressWarnings(as.integer(input$season_highlight_range_count))
+      if (length(count) == 0 || is.na(count)) {
+        count <- 1L
+      }
+      count <- max(1L, min(count, 4L))
+
+      tagList(
+        helpText(tr("disc_doy_range_help", language$language)),
+        selectInput(
+          ns("season_highlight_range_count"),
+          tr("disc_season_highlight_range_count", language$language),
+          choices = stats::setNames(
+            1:4,
+            c(
+              tr("one", language$language),
+              tr("two", language$language),
+              tr("three", language$language),
+              tr("four", language$language)
+            )
+          ),
+          selected = count
+        ),
+        lapply(seq_len(count), function(i) {
+          season_date_range_input(
+            paste0("season_highlight_range_", i),
+            paste(tr("season", language$language), i),
+            current_year
+          )
+        })
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$season_highlight_enabled,
+        input$season_highlight_range_count,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_options_ui <- renderUI({
+      req(input$data_source == "AC")
+
+      scope <- ac_scope()
+      if (is.null(scope) || nrow(scope) == 0) {
+        return(NULL)
+      }
+      plot_lang <- if (identical(language$language, "Français")) {
+        "fr"
+      } else {
+        "en"
+      }
+
+      sub_locs <- ac_option_rows(
+        scope,
+        moduleData$AC_sub_locs,
+        "sub_location_id",
+        "sub_location_id"
+      )
+      sample_types <- ac_option_rows(
+        scope,
+        moduleData$AC_sample_types,
+        "sample_type",
+        "sample_type_id"
+      )
+      collection_methods <- ac_option_rows(
+        scope,
+        moduleData$AC_collection_methods,
+        "collection_method",
+        "collection_method_id"
+      )
+      result_types <- ac_option_rows(
+        scope,
+        moduleData$AC_result_types,
+        "result_type",
+        "result_type_id"
+      )
+      sample_fractions <- ac_option_rows(
+        scope,
+        moduleData$AC_sample_fractions,
+        "sample_fraction_id",
+        "sample_fraction_id"
+      )
+      result_value_types <- ac_option_rows(
+        scope,
+        moduleData$AC_result_value_types,
+        "result_value_type",
+        "result_value_type_id"
+      )
+      result_speciations <- ac_option_rows(
+        scope,
+        moduleData$AC_result_speciations,
+        "result_speciation_id",
+        "result_speciation_id"
+      )
+
+      sub_loc_choices <- stats::setNames(
+        sub_locs$sub_location_id,
+        sub_locs[, tr("sub_location_col", language$language)]
+      )
+      sample_type_choices <- stats::setNames(
+        sample_types$sample_type_id,
+        sample_types[, tr("sample_type_col", language$language)]
+      )
+      collection_method_choices <- stats::setNames(
+        collection_methods$collection_method_id,
+        collection_methods$collection_method
+      )
+      result_type_choices <- stats::setNames(
+        result_types$result_type_id,
+        titleCase(result_types$result_type, plot_lang)
+      )
+      sample_fraction_choices <- stats::setNames(
+        sample_fractions$sample_fraction_id,
+        titleCase(sample_fractions$sample_fraction, plot_lang)
+      )
+      result_value_type_choices <- stats::setNames(
+        result_value_types$result_value_type_id,
+        titleCase(result_value_types$result_value_type, plot_lang)
+      )
+      result_speciation_choices <- stats::setNames(
+        result_speciations$result_speciation_id,
+        result_speciations$result_speciation
+      )
+
+      blank_available <- any(
+        grepl("blank", sample_types$sample_type, ignore.case = TRUE)
+      )
+      duplicate_available <- any(
+        grepl(
+          "duplicate|replicate",
+          sample_types$sample_type,
+          ignore.case = TRUE
+        )
+      )
+
+      advanced_inputs <- Filter(
+        Negate(is.null),
+        list(
+          ac_selectize(
+            "sub_locations_AC",
+            tr("sub_loc(s)", language$language),
+            sub_loc_choices,
+            input$sub_locations_AC
+          ),
+          ac_selectize(
+            "sample_types_AC",
+            tr("sample_type(s)", language$language),
+            sample_type_choices,
+            input$sample_types_AC
+          ),
+          ac_selectize(
+            "collection_methods_AC",
+            tr("collection_method(s)", language$language),
+            collection_method_choices,
+            input$collection_methods_AC
+          ),
+          ac_selectize(
+            "result_speciations_AC",
+            tr("result_speciation(s)", language$language),
+            result_speciation_choices,
+            input$result_speciations_AC
+          )
+        )
+      )
+      primary_inputs <- Filter(
+        Negate(is.null),
+        list(
+          ac_selectize(
+            "sample_fractions_AC",
+            tr("sample_fraction(s)", language$language),
+            sample_fraction_choices,
+            input$sample_fractions_AC
+          ),
+          ac_selectize(
+            "result_value_types_AC",
+            tr("result_value_type(s)", language$language),
+            result_value_type_choices,
+            input$result_value_types_AC
+          ),
+          ac_selectize(
+            "result_types_AC",
+            tr("result_type(s)", language$language),
+            result_type_choices,
+            input$result_types_AC
+          )
+        )
+      )
+
+      tagList(
+        tags$hr(),
+        tags$h6(tr("disc_sample_result_filters", language$language)),
+        tagList(primary_inputs),
+        if (blank_available) {
+          checkboxInput(
+            ns("include_blanks"),
+            tr("disc_show_blank_samples", language$language),
+            value = if (is.null(input$include_blanks)) {
+              TRUE
+            } else {
+              isTRUE(input$include_blanks)
+            }
+          )
+        },
+        if (duplicate_available) {
+          radioButtons(
+            ns("duplicate_action"),
+            tr("disc_duplicate_samples", language$language),
+            choices = c(
+              stats::setNames(
+                "show",
+                tr(
+                  "disc_duplicates_show",
+                  language$language
+                )
+              ),
+              stats::setNames(
+                "average",
+                tr(
+                  "disc_duplicates_average",
+                  language$language
+                )
+              ),
+              stats::setNames(
+                "hide",
+                tr(
+                  "disc_duplicates_hide",
+                  language$language
+                )
+              )
+            ),
+            selected = if (!is.null(input$duplicate_action)) {
+              input$duplicate_action
+            } else {
+              "show"
+            }
+          )
+        },
+        if (
+          length(primary_inputs) == 0 &&
+            length(advanced_inputs) == 0 &&
+            !blank_available &&
+            !duplicate_available
+        ) {
+          tags$small(
+            class = "text-muted",
+            tr("disc_no_additional_filters", language$language)
+          )
+        },
+        if (length(advanced_inputs) > 0) {
+          accordion(
+            id = ns("AC_advanced_options"),
+            open = character(0),
+            accordion_panel(
+              title = tr("disc_more_sample_result_filters", language$language),
+              tagList(advanced_inputs)
+            )
+          )
+        }
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$locations_AC,
+        input$media_AC,
+        input$date_range_AC,
+        input$parameters_AC,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_guidelines_ui <- renderUI({
+      req(input$data_source == "AC")
+
+      guidelines <- ac_available_guidelines()
+      if (
+        is.null(guidelines) ||
+          nrow(guidelines) == 0 ||
+          !"guideline_id" %in% names(guidelines)
+      ) {
+        return(NULL)
+      }
+
+      code <- ifelse(
+        is.na(guidelines$guideline_code) |
+          !nzchar(guidelines$guideline_code),
+        "",
+        paste0(guidelines$guideline_code, " - ")
+      )
+      labels <- paste0(
+        code,
+        guidelines$guideline_name,
+        " (",
+        guidelines$param_name,
+        ")"
+      )
+      if ("publisher_name" %in% names(guidelines)) {
+        labels <- ifelse(
+          is.na(guidelines$publisher_name) |
+            !nzchar(guidelines$publisher_name),
+          labels,
+          paste0(labels, " | ", guidelines$publisher_name)
+        )
+      }
+
+      choices <- stats::setNames(as.character(guidelines$guideline_id), labels)
+      selected <- input$guidelines_AC
+      selected <- selected[selected %in% unname(choices)]
+      selectizeInput(
+        ns("guidelines_AC"),
+        tr("disc_ac_guidelines", language$language),
+        choices = choices,
+        selected = selected,
+        multiple = TRUE
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$AC_selector_mode,
+        input$parameters_AC,
+        input$browse_plot_parameters_AC,
+        browse_selected_sample_ids(),
+        ignoreNULL = FALSE
+      )
+
+    output$main <- renderUI({
+      plot_outputs <- tagList(
+        plotly::plotlyOutput(
+          ns("plot"),
+          width = "100%",
+          height = if (
+            identical(input$data_source, "AC") &&
+              identical(input$AC_selector_mode, "browse")
+          ) {
+            "650px"
+          } else {
+            "800px"
+          },
+          inline = TRUE
+        ),
+        uiOutput(ns("season_plot_metadata_ui")),
+        page_fluid(
+          div(
+            class = "d-inline-block",
+            actionButton(
+              ns("full_screen"),
+              tr("full_screen", language$language)
+            ),
+            style = "display: none;"
+          ),
+          div(
+            class = "d-inline-block",
+            downloadButton(
+              ns("download_data"),
+              tr("dl_data", language$language)
+            ),
+            style = "display: none;"
+          ),
+          div(
+            class = "d-inline-block",
+            uiOutput(ns("qaqc_sample_data_ui"), inline = TRUE)
+          )
+        )
+      )
+
+      if (
+        identical(input$data_source, "AC") &&
+          identical(input$AC_selector_mode, "browse")
+      ) {
+        tagList(
+          accordion(
+            id = ns("AC_browse_samples_accordion"),
+            accordion_panel(
+              title = tr("samples", language$language),
+              value = "samples_panel",
+              uiOutput(ns("AC_browse_sample_filter_ui")),
+              tags$hr(),
+              DT::dataTableOutput(ns("AC_sample_table")),
+              tags$hr(),
+              uiOutput(ns("AC_selected_samples_ui"))
+            )
+          ),
+          tags$hr(),
+          plot_outputs
+        )
+      } else {
+        plot_outputs
+      }
+    }) %>% # End renderUI
+      bindEvent(language$language, input$data_source, input$AC_selector_mode)
+
+    output$AC_sample_table <- DT::renderDataTable({
+      samples <- ac_browse_sample_table()
+      validate(need(
+        nrow(samples) > 0,
+        tr("disc_no_samples_match_filters", language$language)
+      ))
+
+      # Make columns factors for filtering and display
+      samples$location <- factor(samples$location)
+      samples$location_code <- factor(samples$location_code)
+      samples$sub_location <- factor(samples$sub_location)
+      samples$media <- factor(samples$media)
+      samples$sample_type <- factor(samples$sample_type)
+      samples$collection_method <- factor(samples$collection_method)
+
+      samples$result_count <- as.integer(samples$result_count)
+
+      column_labels <- c(
+        sample_id = tr("sample_id", language$language),
+        location = tr("loc", language$language),
+        location_code = tr("code", language$language),
+        sub_location = tr("sub_loc", language$language),
+        sample_date = tr("date", language$language),
+        media = tr("media", language$language),
+        sample_type = tr("sample_type", language$language),
+        collection_method = tr("collection_method", language$language),
+        result_count = tr("results", language$language),
+        parameters = tr("parameters", language$language)
+      )
+
+      visible_cols <- names(samples)
+      DT::datatable(
+        samples,
+        rownames = FALSE,
+        selection = list(mode = "multiple", selected = NULL),
+        colnames = unname(column_labels[visible_cols]),
+        filter = "top",
+        options = list(
+          pageLength = 10,
+          lengthMenu = c(5, 10, 25, 50),
+          columnDefs = list(list(visible = FALSE, targets = 0)),
+          scrollX = TRUE,
+          order = list(list(match("sample_date", visible_cols) - 1, "desc")),
+          initComplete = htmlwidgets::JS(
+            sprintf(
+              "function(settings, json) {
+                 var api = this.api();
+                 $(api.table().header()).css({'font-size': '90%%'});
+                 $(api.table().body()).css({'font-size': '80%%'});
+                 setTimeout(function() {
+                   $(api.table().container())
+                     .find('thead input[type=\"search\"]')
+                     .attr('placeholder', '%s');
+                 }, 0);
+               }",
+              tr("all_m", language$language)
+            )
+          ),
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          ),
+          stateSave = FALSE
+        )
+      )
+    })
+
+    observeEvent(input$AC_sample_table_rows_selected, {
+      samples <- ac_browse_sample_table()
+      rows <- input$AC_sample_table_rows_selected
+      if (is.null(rows) || length(rows) == 0 || nrow(samples) == 0) {
+        return()
+      }
+      rows <- rows[rows <= nrow(samples)]
+      sample_ids <- unique(c(
+        browse_selected_sample_ids(),
+        as.numeric(samples$sample_id[rows])
+      ))
+      browse_selected_sample_ids(sample_ids[!is.na(sample_ids)])
+    })
+
+    observeEvent(
+      input$AC_selector_mode,
+      {
+        if (!identical(input$AC_selector_mode, "browse")) {
+          return()
+        }
+        shinyjs::hide("full_screen")
+        shinyjs::hide("download_data")
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$clear_selected_samples,
+      {
+        browse_selected_sample_ids(numeric(0))
+        DT::selectRows(DT::dataTableProxy("AC_sample_table"), NULL)
+      },
+      ignoreInit = TRUE
+    )
+
+    lapply(seq_len(50), function(i) {
+      observeEvent(
+        input[[paste0("remove_selected_sample_", i)]],
+        {
+          rows <- ac_selected_sample_rows()
+          if (i > nrow(rows)) {
+            return()
+          }
+          keep <- setdiff(browse_selected_sample_ids(), rows$sample_id[[i]])
+          browse_selected_sample_ids(keep)
+        },
+        ignoreInit = TRUE
+      )
+    })
+
+    observeEvent(
+      list(browse_selected_sample_ids(), ac_browse_sample_table()),
+      {
+        samples <- ac_browse_sample_table()
+        selected <- browse_selected_sample_ids()
+        proxy <- DT::dataTableProxy("AC_sample_table")
+        if (nrow(samples) == 0 || length(selected) == 0) {
+          DT::selectRows(proxy, NULL)
+          return()
+        }
+        rows <- which(samples$sample_id %in% selected)
+        DT::selectRows(proxy, rows)
+      },
+      ignoreInit = TRUE
+    )
+
+    output$AC_browse_sample_filter_ui <- renderUI({
+      req(input$data_source == "AC", input$AC_selector_mode == "browse")
+
+      params <- ac_browse_sample_parameter_choices()
+      if (
+        is.null(params) ||
+          nrow(params) == 0 ||
+          !all(c("parameter_id", "param_name", "n") %in% names(params))
+      ) {
+        params <- data.frame(
+          parameter_id = character(),
+          param_name = character(),
+          n = numeric(),
+          stringsAsFactors = FALSE
+        )
+      }
+      selected <- ac_keep_selection(
+        input$browse_sample_parameters_AC,
+        as.character(params$parameter_id)
+      )
+      choices <- character(0)
+      if (nrow(params) > 0) {
+        choices <- stats::setNames(
+          as.character(params$parameter_id),
+          paste0(params$param_name, " (", params$n, ")")
+        )
+      }
+
+      tagList(
+        selectizeInput(
+          ns("browse_sample_parameters_AC"),
+          tr("disc_filter_samples_by_parameter", language$language),
+          choices = c(
+            stats::setNames("all", tr("all_m", language$language)),
+            choices
+          ),
+          selected = selected,
+          multiple = TRUE,
+          width = "100%"
+        ),
+        radioButtons(
+          ns("browse_sample_parameter_match"),
+          tr("disc_sample_must_include", language$language),
+          choices = c(
+            stats::setNames(
+              "any",
+              tr(
+                "disc_any_selected_parameter",
+                language$language
+              )
+            ),
+            stats::setNames(
+              "all",
+              tr(
+                "disc_all_selected_parameters",
+                language$language
+              )
+            )
+          ),
+          selected = if (is.null(input$browse_sample_parameter_match)) {
+            "any"
+          } else {
+            input$browse_sample_parameter_match
+          }
+        )
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$AC_selector_mode,
+        input$browse_date_range,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_browse_plot_parameter_ui <- renderUI({
+      req(input$data_source == "AC", input$AC_selector_mode == "browse")
+
+      params <- ac_browse_plot_parameter_choices()
+      if (
+        is.null(params) ||
+          nrow(params) == 0 ||
+          !all(c("parameter_id", "param_name", "n") %in% names(params))
+      ) {
+        params <- data.frame(
+          parameter_id = character(),
+          param_name = character(),
+          n = numeric(),
+          stringsAsFactors = FALSE
+        )
+      }
+      selected <- ac_keep_selection(
+        input$browse_plot_parameters_AC,
+        as.character(params$parameter_id)
+      )
+      choices <- character(0)
+      if (nrow(params) > 0) {
+        choices <- stats::setNames(
+          as.character(params$parameter_id),
+          paste0(params$param_name, " (", params$n, ")")
+        )
+      }
+
+      tagList(
+        if (length(browse_selected_sample_ids()) == 0) {
+          tags$small(
+            class = "text-muted",
+            tr("disc_select_rows_parameter_list", language$language)
+          )
+        },
+        selectizeInput(
+          ns("browse_plot_parameters_AC"),
+          tr("disc_plot_parameters", language$language),
+          choices = c(
+            stats::setNames("all", tr("all_m", language$language)),
+            choices
+          ),
+          selected = selected,
+          multiple = TRUE
+        )
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$AC_selector_mode,
+        browse_selected_sample_ids(),
+        input$browse_date_range,
+        input$browse_sample_parameters_AC,
+        input$browse_sample_parameter_match,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_selected_samples_ui <- renderUI({
+      rows <- ac_selected_sample_rows()
+      count <- nrow(rows)
+      if (count == 0) {
+        return(tags$small(
+          class = "text-muted",
+          tr("disc_no_samples_selected", language$language)
+        ))
+      }
+
+      shown <- utils::head(rows, 50)
+      tagList(
+        div(
+          style = "display: flex; gap: 8px; align-items: center;",
+          tags$strong(paste(
+            count,
+            tr("disc_samples_selected", language$language)
+          )),
+          actionButton(
+            ns("clear_selected_samples"),
+            tr("clear", language$language),
+            class = "btn btn-outline-danger btn-sm"
+          )
+        ),
+        tags$div(
+          style = "max-height: 360px; overflow-y: auto; margin-top: 8px;",
+          lapply(seq_len(nrow(shown)), function(i) {
+            label <- paste(
+              shown$location[[i]],
+              shown$sample_date[[i]],
+              shown$media[[i]],
+              paste0(
+                tr("id_label", language$language),
+                ": ",
+                shown$sample_id[[i]]
+              ),
+              sep = " | "
+            )
+            fluidRow(
+              style = "margin-bottom: 6px;",
+              column(width = 9, tags$small(label)),
+              column(
+                width = 3,
+                actionButton(
+                  ns(paste0("remove_selected_sample_", i)),
+                  tr("remove", language$language),
+                  class = "btn btn-outline-secondary btn-sm"
+                )
+              )
+            )
+          })
+        ),
+        if (count > nrow(shown)) {
+          tags$small(
+            class = "text-muted",
+            paste(
+              tr("showing_first", language$language),
+              nrow(shown),
+              tr("selected_samples_lc", language$language)
+            )
+          )
+        }
+      )
+    })
+
+    observeEvent(
+      input$data_source,
+      {
+        if (input$data_source == "AC") {
+          shinyjs::hide("EQWin_source_ui")
+        } else {
+          if (!EQWin_selector()) {
+            # Only renders the ui element once
+            output$EQWin_source_ui <- renderUI({
+              selectizeInput(
+                ns("EQWin_source"),
+                tr("EQWin_db", language$language),
+                choices = stats::setNames(mdb_files, basename(mdb_files)),
+                selected = mdb_files[1]
+              )
+            })
+            EQWin_selector(TRUE)
+          }
+          shinyjs::show("EQWin_source_ui")
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$EQWin_source,
+      {
+        EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
+        EQ_locs <- DBI::dbGetQuery(
+          EQWin,
+          paste0("SELECT StnCode, StnDesc FROM eqstns ORDER BY StnCode;")
+        )
+        EQ_loc_grps <- DBI::dbGetQuery(
+          EQWin,
+          "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns' ORDER BY groupname;"
+        )
+        EQ_params <- DBI::dbGetQuery(
+          EQWin,
+          paste0(
+            "SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams ORDER BY ParamDesc;"
+          )
+        )
+        EQ_param_grps <- DBI::dbGetQuery(
+          EQWin,
+          "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams' ORDER BY groupname;"
+        )
+        EQ_stds <- DBI::dbGetQuery(
+          EQWin,
+          "SELECT StdName, StdCode FROM eqstds ORDER BY StdName;"
+        )
+        DBI::dbDisconnect(EQWin)
+
+        # Check encoding and if necessary convert to UTF-8
+        locale_info <- Sys.getlocale("LC_CTYPE")
+        encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
+        tryCatch(
+          {
+            grepl("[^\x01-\x7F]", EQ_locs$StnDesc)
+          },
+          warning = function(w) {
+            if (encoding != "utf8") {
+              EQ_locs$StnDesc <<- iconv(
+                EQ_locs$StnDesc,
+                from = encoding,
+                to = "UTF-8"
+              )
+            }
+          }
+        )
+
+        moduleData$EQ_locs <- EQ_locs
+        moduleData$EQ_loc_grps <- EQ_loc_grps
+        moduleData$EQ_params <- EQ_params
+        moduleData$EQ_param_grps <- EQ_param_grps
+        moduleData$EQ_stds <- EQ_stds
+
+        # Update the selectize inputs
+        updateSelectizeInput(
+          session,
+          "parameters_EQ",
+          choices = stats::setNames(
+            moduleData$EQ_params$ParamCode,
+            paste0(
+              moduleData$EQ_params$ParamCode,
+              " (",
+              moduleData$EQ_params$ParamDesc,
+              ")"
+            )
+          ),
+          server = TRUE,
+          selected = character(0)
+        )
+        updateSelectizeInput(
+          session,
+          "parameter_groups",
+          choices = moduleData$EQ_param_grps$groupname,
+          server = TRUE,
+          selected = character(0)
+        )
+        updateSelectizeInput(
+          session,
+          "locations_EQ",
+          choices = stats::setNames(
+            moduleData$EQ_locs$StnCode,
+            paste0(
+              moduleData$EQ_locs$StnCode,
+              " (",
+              moduleData$EQ_locs$StnDesc,
+              ")"
+            )
+          ),
+          server = TRUE,
+          selected = character(0)
+        )
+        updateSelectizeInput(
+          session,
+          "location_groups",
+          choices = moduleData$EQ_loc_grps$groupname,
+          server = TRUE,
+          selected = character(0)
+        )
+        updateSelectizeInput(
+          session,
+          "standard",
+          choices = stats::setNames(
+            moduleData$EQ_stds$StdCode,
+            moduleData$EQ_stds$StdName
+          ),
+          server = TRUE,
+          selected = character(0)
+        )
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    # Helper function to update the list of available parameters based on selected locations
+    update_parameters <- function() {
+      if (
+        !identical(input$data_source, "AC") ||
+          identical(input$AC_selector_mode, "browse")
+      ) {
+        return(invisible(NULL))
+      }
+      params <- ac_available_parameters()
+      selected <- input$parameters_AC[
+        input$parameters_AC %in% params$parameter_id
+      ]
+      updateSelectizeInput(
+        session,
+        "parameters_AC",
+        choices = stats::setNames(params$parameter_id, params$param_name),
+        selected = selected,
+        server = TRUE
+      )
+    }
+
+    apply_map_location_request <- function() {
+      loc_id <- map_location_from_inputs("discPlot")
+      if (is.null(loc_id)) {
+        return(invisible(NULL))
+      }
+
+      loc_id <- loc_id[loc_id %in% moduleData$AC_locs$location_id]
+      if (length(loc_id) == 0) {
+        clear_map_location_request("discPlot")
+        return(invisible(NULL))
+      }
+      loc_id <- loc_id[[1]]
+      moduleInputs$location_id <- loc_id
+      browse_selected_sample_ids(numeric(0))
+
+      updateRadioButtons(session, "data_source", selected = "AC")
+      updateRadioButtons(session, "AC_selector_mode", selected = "guided")
+      updateSelectizeInput(
+        session,
+        "locations_AC",
+        choices = stats::setNames(
+          moduleData$AC_locs$location_id,
+          moduleData$AC_locs$name
+        ),
+        selected = loc_id,
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session,
+        "parameters_AC",
+        selected = character(0),
+        server = TRUE
+      )
+
+      for (input_id in c(
+        "media_AC",
+        "sub_locations_AC",
+        "sample_types_AC",
+        "collection_methods_AC",
+        "result_speciations_AC",
+        "sample_fractions_AC",
+        "result_value_types_AC",
+        "result_types_AC",
+        "browse_sample_parameters_AC",
+        "browse_plot_parameters_AC",
+        "guidelines_AC"
+      )) {
+        updateSelectizeInput(
+          session,
+          input_id,
+          selected = "all",
+          server = TRUE
+        )
+      }
+      updateCheckboxInput(session, "season_highlight_enabled", value = FALSE)
+      updateCheckboxInput(session, "season_filter_enabled", value = FALSE)
+
+      clear_map_location_request("discPlot")
+      invisible(NULL)
+    }
+
+    observeEvent(
+      if (!is.null(inputs)) inputs$location_request_id else NULL,
+      {
+        apply_map_location_request()
+      },
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(input$data_source, {
+      req(moduleData)
+      if (input$data_source == "EQ") {
+        # These updates are performed in the observeEvent for input$EQWin_source
+      } else if (input$data_source == "AC") {
+        # AC selected
+        updateSelectizeInput(
+          session,
+          "locations_AC",
+          choices = stats::setNames(
+            moduleData$AC_locs$location_id,
+            moduleData$AC_locs$name
+          ),
+          selected = if (!is.null(moduleInputs$location_id)) {
+            moduleInputs$location_id
+          } else {
+            NULL
+          },
+          server = TRUE
+        )
+        update_parameters()
+      }
+    })
+
+    # Update parameters after the location, sample media, and date range scope is set.
+    observeEvent(
+      list(input$locations_AC, input$media_AC, input$date_range_AC),
+      {
+        if (
+          identical(input$data_source, "AC") &&
+            !identical(input$AC_selector_mode, "browse")
+        ) {
+          update_parameters()
+        }
+      },
+      ignoreNULL = FALSE
+    )
+
+    # Toggle visibility of location and location group inputs
+    observeEvent(input$locs_groups, {
+      if (input$locs_groups == "loc_groups") {
+        shinyjs::show("location_groups")
+        shinyjs::hide("locations_EQ")
+      } else {
+        shinyjs::hide("location_groups")
+        shinyjs::show("locations_EQ")
+      }
+    })
+    observeEvent(input$params_groups, {
+      if (input$params_groups == "param_groups") {
+        shinyjs::show("parameter_groups")
+        shinyjs::hide("parameters_EQ")
+      } else {
+        shinyjs::hide("parameter_groups")
+        shinyjs::show("parameters_EQ")
+      }
+    })
+
+    # Modal dialog for extra aesthetics  ####
+
+    # Create a list with default aesthetic values
+    plot_aes <- reactiveValues(
+      lang = "en",
+      showgridx = FALSE,
+      showgridy = FALSE,
+      colorblind = FALSE,
+      nrows = NULL,
+      point_scale = 1,
+      guideline_scale = 1,
+      axis_scale = 1,
+      legend_scale = 1
+    )
+
+    observeEvent(input$extra_aes, {
+      showModal(modalDialog(
+        title = tr("modify_plot_aes", language$language),
+        tags$div(
+          tags$h5(tr("language", language$language)),
+          radioButtons(
+            ns("lang"),
+            NULL,
+            choices = stats::setNames(
+              c("en", "fr"),
+              c(
+                tr("english", language$language),
+                tr("francais", language$language)
+              )
+            ),
+            selected = plot_aes$lang
+          ),
+          checkboxInput(
+            ns("showgridx"),
+            tr("show_x_grid", language$language),
+            value = plot_aes$showgridx
+          ),
+          checkboxInput(
+            ns("showgridy"),
+            tr("show_y_grid", language$language),
+            value = plot_aes$showgridy
+          ),
+          numericInput(
+            ns("nrows"),
+            tr("num_rows", language$language),
+            value = plot_aes$nrows,
+            min = 1
+          ),
+          checkboxInput(
+            ns("colorblind"),
+            tr("colorblind_friend", language$language),
+            value = plot_aes$colorblind
+          ),
+          tags$hr(),
+          sliderInput(
+            ns("point_scale"),
+            tr("point_scale", language$language),
+            min = 0.2,
+            max = 3,
+            value = plot_aes$point_scale,
+            step = 0.1
+          ),
+          sliderInput(
+            ns("guideline_scale"),
+            tr("guideline_scale", language$language),
+            min = 0.2,
+            max = 3,
+            value = plot_aes$guideline_scale,
+            step = 0.1
+          ),
+          sliderInput(
+            ns("axis_scale"),
+            tr("axis_scale", language$language),
+            min = 0.2,
+            max = 3,
+            value = plot_aes$axis_scale,
+            step = 0.1
+          ),
+          sliderInput(
+            ns("legend_scale"),
+            tr("legend_scale", language$language),
+            min = 0.2,
+            max = 3,
+            value = plot_aes$legend_scale,
+            step = 0.1
+          )
+        ),
+        easyClose = FALSE,
+        footer = tagList(
+          actionButton(ns("aes_apply"), tr("apply", language$language)),
+          actionButton(ns("cancel"), tr("cancel", language$language))
+        )
+      ))
+    })
+
+    observeEvent(input$aes_apply, {
+      plot_aes$lang <- input$lang
+      plot_aes$colorblind <- input$colorblind
+      plot_aes$showgridx <- input$showgridx
+      plot_aes$showgridy <- input$showgridy
+      if (!is.na(input$nrows)) {
+        plot_aes$nrows <- if (input$nrows > 0) input$nrows else NULL
+      }
+      plot_aes$point_scale <- input$point_scale
+      plot_aes$guideline_scale <- input$guideline_scale
+      plot_aes$axis_scale <- input$axis_scale
+      plot_aes$legend_scale <- input$legend_scale
+      removeModal()
+    })
+
+    observeEvent(input$cancel, {
+      removeModal()
+    })
+
+    ac_guided_season_ranges <- function() {
+      if (!isTRUE(input$season_filter_enabled)) {
+        return(NULL)
+      }
+      count <- suppressWarnings(as.integer(input$season_range_count))
+      if (length(count) == 0 || is.na(count)) {
+        count <- 1L
+      }
+      count <- max(1L, min(count, 4L))
+      ranges <- lapply(seq_len(count), function(i) {
+        range <- input[[paste0("season_range_", i)]]
+        if (is.null(range) || length(range) != 2) {
+          return(NULL)
+        }
+        as.Date(range)
+      })
+      ranges <- Filter(Negate(is.null), ranges)
+      if (length(ranges) == 0) {
+        return(NULL)
+      }
+      ranges
+    }
+
+    ac_guided_season_highlight_ranges <- function() {
+      if (!isTRUE(input$season_highlight_enabled)) {
+        return(NULL)
+      }
+      count <- suppressWarnings(as.integer(input$season_highlight_range_count))
+      if (length(count) == 0 || is.na(count)) {
+        count <- 1L
+      }
+      count <- max(1L, min(count, 4L))
+      ranges <- lapply(seq_len(count), function(i) {
+        range <- input[[paste0("season_highlight_range_", i)]]
+        if (is.null(range) || length(range) != 2) {
+          return(NULL)
+        }
+        as.Date(range)
+      })
+      ranges <- Filter(Negate(is.null), ranges)
+      if (length(ranges) == 0) {
+        return(NULL)
+      }
+      ranges
+    }
+
+    # Create and render the plot ############################################################
+    ## ExtendedTask for plot generation ######################################################
+    plot_output_discrete <- ExtendedTask$new(
+      function(
+        start,
+        end,
+        locations,
+        locGrp,
+        parameters,
+        paramGrp,
+        standard,
+        guidelines,
+        log,
+        facet_on,
+        loc_code,
+        shareX,
+        shareY,
+        rows,
+        target_datetime,
+        colorblind,
+        lang,
+        point_scale,
+        guideline_scale,
+        axis_scale,
+        legend_scale,
+        legend_position,
+        gridx,
+        gridy,
+        sub_location_ids,
+        media,
+        sample_types,
+        collection_methods,
+        result_types,
+        sample_fractions,
+        result_value_types,
+        result_speciations,
+        include_blanks,
+        duplicate_action,
+        sample_ids,
+        season_ranges,
+        season_highlight_ranges,
+        dbSource,
+        dbPath,
+        config
+      ) {
+        promises::future_promise({
+          tryCatch(
+            {
+              if (is.null(dbPath)) {
+                con <- AquaConnect(
+                  name = config$dbName,
+                  host = config$dbHost,
+                  port = config$dbPort,
+                  username = config$dbUser,
+                  password = config$dbPass,
+                  silent = TRUE
+                )
+                on.exit(DBI::dbDisconnect(con))
+              } else {
+                con <- NULL
+              }
+
+              ensure_discrete_plot_function()
+
+              plot <- plotDiscrete(
+                start = start,
+                end = end,
+                locations = locations,
+                locGrp = locGrp,
+                parameters = parameters,
+                paramGrp = paramGrp,
+                standard = standard,
+                guidelines = guidelines,
+                log = log,
+                facet_on = facet_on,
+                loc_code = loc_code,
+                shareX = shareX,
+                shareY = shareY,
+                rows = rows,
+                target_datetime = target_datetime,
+                colorblind = colorblind,
+                lang = lang,
+                point_scale = point_scale,
+                guideline_scale = guideline_scale,
+                axis_scale = axis_scale,
+                legend_scale = legend_scale,
+                legend_position = legend_position,
+                gridx = gridx,
+                gridy = gridy,
+                sub_location_ids = sub_location_ids,
+                media = media,
+                sample_types = sample_types,
+                collection_methods = collection_methods,
+                result_types = result_types,
+                sample_fractions = sample_fractions,
+                result_value_types = result_value_types,
+                result_speciations = result_speciations,
+                include_blanks = include_blanks,
+                duplicate_action = duplicate_action,
+                sample_ids = sample_ids,
+                season_ranges = season_ranges,
+                season_highlight_ranges = season_highlight_ranges,
+                dbSource = dbSource,
+                dbPath = dbPath,
+                dbCon = con,
+                data = TRUE
+              )
+              return(plot)
+            },
+            error = function(e) {
+              return(e$message)
+            }
+          ) # End of tryCatch
+        }) # End of future_promise
+      }
+    ) |>
+      bind_task_button("make_plot")
+    # --- End ExtendedTask -------------------------------------------------------------------
+
+    observeEvent(
+      input$make_plot,
+      {
+        shinyjs::hide("full_screen")
+        shinyjs::hide("download_data")
+        qaQcData(disc_plot_empty_qaqc_data())
+        plot_created(FALSE)
+        plotSeasonMetadata(NULL)
+
+        # Validate required inputs based on data source
+        if (input$data_source == "EQ") {
+          if (input$locs_groups == "locations") {
+            if (is.null(input$locations_EQ)) {
+              showModal(modalDialog(
+                tr("pl_select_loc", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+          } else {
+            if (is.null(input$location_groups)) {
+              showModal(modalDialog(
+                tr("select_loc_group_msg", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+          }
+          # Same treatment for parameters/parameter_groups
+          if (input$params_groups == "parameters") {
+            if (is.null(input$parameters_EQ)) {
+              showModal(modalDialog(
+                tr("pl_select_param", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+          } else {
+            if (is.null(input$parameter_groups)) {
+              showModal(modalDialog(
+                tr("select_param_group_msg", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+          }
+        } else if (input$data_source == "AC") {
+          ac_mode <- if (is.null(input$AC_selector_mode)) {
+            "guided"
+          } else {
+            input$AC_selector_mode
+          }
+          if (identical(ac_mode, "browse")) {
+            if (length(browse_selected_sample_ids()) == 0) {
+              showModal(modalDialog(
+                tr("disc_select_samples_from_table", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+          } else {
+            if (is.null(input$locations_AC)) {
+              showModal(modalDialog(
+                tr("pl_select_loc", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+            if (
+              is.null(input$date_range_AC) ||
+                length(input$date_range_AC) != 2
+            ) {
+              showModal(modalDialog(
+                tr("date_range_lab", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+            if (is.null(input$parameters_AC)) {
+              showModal(modalDialog(
+                tr("pl_select_param", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+          }
+        }
+
+        if (input$data_source == "EQ") {
+          pendingSeasonMetadata(NULL)
+
+          # get out all inputs for debugging purposes
+          out <<- list(
+            start = input$date_range_EQ[1],
+            end = input$date_range_EQ[2],
+            locations = if (input$locs_groups == "locations") {
+              input$locations_EQ
+            } else {
+              NULL
+            },
+            locGrp = if (input$locs_groups == "loc_groups") {
+              input$location_groups
+            } else {
+              NULL
+            },
+            parameters = if (input$params_groups == "parameters") {
+              input$parameters_EQ
+            } else {
+              NULL
+            },
+            paramGrp = if (input$params_groups == "param_groups") {
+              input$parameter_groups
+            } else {
+              NULL
+            },
+            standard = if (length(input$standard) == 0) {
+              NULL
+            } else {
+              input$standard
+            },
+            guidelines = NULL,
+            log = input$log_scale,
+            facet_on = input$facet_on,
+            loc_code = input$loc_code,
+            shareX = input$shareX,
+            shareY = input$shareY,
+            rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
+            target_datetime = input$target_datetime,
+            colorblind = plot_aes$colorblind,
+            lang = plot_aes$lang,
+            point_scale = plot_aes$point_scale,
+            guideline_scale = plot_aes$guideline_scale,
+            axis_scale = plot_aes$axis_scale,
+            legend_scale = plot_aes$legend_scale,
+            legend_position = if (
+              windowDims()$width > 1.3 * windowDims()$height
+            ) {
+              "v"
+            } else {
+              "h"
+            },
+            gridx = plot_aes$showgridx,
+            gridy = plot_aes$showgridy,
+            sub_location_ids = NULL,
+            media = NULL,
+            sample_types = NULL,
+            collection_methods = NULL,
+            result_types = NULL,
+            sample_fractions = NULL,
+            result_value_types = NULL,
+            result_speciations = NULL,
+            include_blanks = TRUE,
+            duplicate_action = "show",
+            sample_ids = NULL,
+            season_ranges = NULL,
+            season_highlight_ranges = NULL,
+            dbSource = input$data_source,
+            dbPath = input$EQWin_source, # EQWin connection so no need to pass config
+            config = NULL # EQWin connection so no need to pass config
+          )
+
+          plot_output_discrete$invoke(
+            start = input$date_range_EQ[1],
+            end = input$date_range_EQ[2],
+            locations = if (input$locs_groups == "locations") {
+              input$locations_EQ
+            } else {
+              NULL
+            },
+            locGrp = if (input$locs_groups == "loc_groups") {
+              input$location_groups
+            } else {
+              NULL
+            },
+            parameters = if (input$params_groups == "parameters") {
+              input$parameters_EQ
+            } else {
+              NULL
+            },
+            paramGrp = if (input$params_groups == "param_groups") {
+              input$parameter_groups
+            } else {
+              NULL
+            },
+            standard = if (length(input$standard) == 0) {
+              NULL
+            } else {
+              input$standard
+            },
+            guidelines = NULL,
+            log = input$log_scale,
+            facet_on = input$facet_on,
+            loc_code = input$loc_code,
+            shareX = input$shareX,
+            shareY = input$shareY,
+            rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
+            target_datetime = input$target_datetime,
+            colorblind = plot_aes$colorblind,
+            lang = plot_aes$lang,
+            point_scale = plot_aes$point_scale,
+            guideline_scale = plot_aes$guideline_scale,
+            axis_scale = plot_aes$axis_scale,
+            legend_scale = plot_aes$legend_scale,
+            legend_position = if (
+              windowDims()$width > 1.3 * windowDims()$height
+            ) {
+              "v"
+            } else {
+              "h"
+            },
+            gridx = plot_aes$showgridx,
+            gridy = plot_aes$showgridy,
+            sub_location_ids = NULL,
+            media = NULL,
+            sample_types = NULL,
+            collection_methods = NULL,
+            result_types = NULL,
+            sample_fractions = NULL,
+            result_value_types = NULL,
+            result_speciations = NULL,
+            include_blanks = TRUE,
+            duplicate_action = "show",
+            sample_ids = NULL,
+            season_ranges = NULL,
+            season_highlight_ranges = NULL,
+            dbSource = input$data_source,
+            dbPath = input$EQWin_source, # EQWin connection so no need to pass config
+            config = NULL # EQWin connection so no need to pass config
+          )
+        } else if (input$data_source == "AC") {
+          ac_mode <- if (is.null(input$AC_selector_mode)) {
+            "guided"
+          } else {
+            input$AC_selector_mode
+          }
+          scope <- isolate(ac_scope())
+          keep_ac_ids <- function(values, lookup, scope_col, lookup_col) {
+            if (is.null(values) || length(values) == 0) {
+              return(NULL)
+            }
+            values <- as.character(values)
+            if ("all" %in% values) {
+              return(NULL)
+            }
+            allowed <- as.character(
+              ac_option_rows(scope, lookup, scope_col, lookup_col)[[lookup_col]]
+            )
+            values <- values[values %in% allowed]
+            if (length(values) == 0) {
+              return(NULL)
+            }
+            as.numeric(values)
+          }
+
+          browse_sample_ids <- NULL
+          browse_parameters <- NULL
+          browse_start <- input$date_range_AC[1]
+          browse_end <- input$date_range_AC[2]
+          if (identical(ac_mode, "browse")) {
+            selected_rows <- ac_selected_sample_rows()
+            browse_sample_ids <- browse_selected_sample_ids()
+            browse_parameters <- ac_numeric_values(
+              input$browse_plot_parameters_AC
+            )
+            if (length(browse_parameters) == 0) {
+              browse_parameters <- NULL
+            }
+            if (nrow(selected_rows) > 0) {
+              selected_dates <- as.Date(selected_rows$sample_date)
+              browse_start <- min(selected_dates, na.rm = TRUE) - 1
+              browse_end <- max(selected_dates, na.rm = TRUE) + 1
+            } else {
+              browse_start <- input$browse_date_range[1]
+              browse_end <- input$browse_date_range[2]
+            }
+          }
+          use_guided_filters <- !identical(ac_mode, "browse")
+          season_ranges <- if (use_guided_filters) {
+            ac_guided_season_ranges()
+          } else {
+            NULL
+          }
+          season_highlight_ranges <- if (use_guided_filters) {
+            ac_guided_season_highlight_ranges()
+          } else {
+            NULL
+          }
+          pendingSeasonMetadata(list(
+            season_ranges = season_ranges,
+            season_highlight_ranges = season_highlight_ranges
+          ))
+
+          plot_output_discrete$invoke(
+            start = if (identical(ac_mode, "browse")) {
+              browse_start
+            } else {
+              input$date_range_AC[1]
+            },
+            end = if (identical(ac_mode, "browse")) {
+              browse_end
+            } else {
+              input$date_range_AC[2]
+            },
+            locations = if (identical(ac_mode, "browse")) {
+              NULL
+            } else {
+              as.numeric(input$locations_AC)
+            },
+            locGrp = NULL,
+            parameters = if (identical(ac_mode, "browse")) {
+              browse_parameters
+            } else {
+              as.numeric(input$parameters_AC)
+            },
+            paramGrp = NULL,
+            standard = NULL,
+            guidelines = if (length(input$guidelines_AC) == 0) {
+              NULL
+            } else {
+              input$guidelines_AC
+            },
+            log = input$log_scale,
+            facet_on = input$facet_on,
+            loc_code = input$loc_code,
+            shareX = input$shareX,
+            shareY = input$shareY,
+            rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
+            target_datetime = input$target_datetime,
+            colorblind = plot_aes$colorblind,
+            lang = plot_aes$lang,
+            point_scale = plot_aes$point_scale,
+            guideline_scale = plot_aes$guideline_scale,
+            axis_scale = plot_aes$axis_scale,
+            legend_scale = plot_aes$legend_scale,
+            legend_position = if (
+              windowDims()$width > 1.3 * windowDims()$height
+            ) {
+              "v"
+            } else {
+              "h"
+            },
+            gridx = plot_aes$showgridx,
+            gridy = plot_aes$showgridy,
+            sub_location_ids = if (use_guided_filters) {
+              keep_ac_ids(
+                input$sub_locations_AC,
+                moduleData$AC_sub_locs,
+                "sub_location_id",
+                "sub_location_id"
+              )
+            } else {
+              NULL
+            },
+            media = if (use_guided_filters) {
+              keep_ac_ids(
+                input$media_AC,
+                moduleData$AC_media,
+                "media_id",
+                "media_id"
+              )
+            } else {
+              NULL
+            },
+            sample_types = if (use_guided_filters) {
+              keep_ac_ids(
+                input$sample_types_AC,
+                moduleData$AC_sample_types,
+                "sample_type",
+                "sample_type_id"
+              )
+            } else {
+              NULL
+            },
+            collection_methods = if (use_guided_filters) {
+              keep_ac_ids(
+                input$collection_methods_AC,
+                moduleData$AC_collection_methods,
+                "collection_method",
+                "collection_method_id"
+              )
+            } else {
+              NULL
+            },
+            result_types = if (use_guided_filters) {
+              keep_ac_ids(
+                input$result_types_AC,
+                moduleData$AC_result_types,
+                "result_type",
+                "result_type_id"
+              )
+            } else {
+              NULL
+            },
+            sample_fractions = if (use_guided_filters) {
+              keep_ac_ids(
+                input$sample_fractions_AC,
+                moduleData$AC_sample_fractions,
+                "sample_fraction_id",
+                "sample_fraction_id"
+              )
+            } else {
+              NULL
+            },
+            result_value_types = if (use_guided_filters) {
+              keep_ac_ids(
+                input$result_value_types_AC,
+                moduleData$AC_result_value_types,
+                "result_value_type",
+                "result_value_type_id"
+              )
+            } else {
+              NULL
+            },
+            result_speciations = if (use_guided_filters) {
+              keep_ac_ids(
+                input$result_speciations_AC,
+                moduleData$AC_result_speciations,
+                "result_speciation_id",
+                "result_speciation_id"
+              )
+            } else {
+              NULL
+            },
+            include_blanks = if (
+              !use_guided_filters || is.null(input$include_blanks)
+            ) {
+              TRUE
+            } else {
+              isTRUE(input$include_blanks)
+            },
+            duplicate_action = if (
+              !use_guided_filters || is.null(input$duplicate_action)
+            ) {
+              "show"
+            } else {
+              input$duplicate_action
+            },
+            sample_ids = browse_sample_ids,
+            season_ranges = season_ranges,
+            season_highlight_ranges = season_highlight_ranges,
+            dbSource = input$data_source,
+            dbPath = NULL, # AquaCache connection so no need to pass database path
+            config = session$userData$config
+          )
+        }
+      },
+      ignoreInit = TRUE
+    ) # End of plot rendering loop
+
+    # flags
+    plot_created <- reactiveVal(FALSE) # Flags if a plot has been created so that window dimensions can be checked for legend position
+    first_plot <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session, in which case a modal is shown
+    first_plot_with_standards <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session with standards, in which case a modal is shown
+    plotData <- reactiveVal() # Holds the data for the plot in case the user wants to download it
+    plottedResultIds <- reactiveVal(integer())
+    qaQcData <- reactiveVal(disc_plot_empty_qaqc_data())
+    pendingSeasonMetadata <- reactiveVal(NULL)
+    plotSeasonMetadata <- reactiveVal(NULL)
+
+    output$qaqc_sample_data_ui <- renderUI({
+      data <- qaQcData()
+      if (nrow(data$samples) == 0L) {
+        return(NULL)
+      }
+      actionButton(
+        ns("show_qaqc_sample_data"),
+        tr("disc_qaqc_show_data", language$language),
+        icon = icon("table")
+      )
+    })
+
+    qaqc_table <- function(name) {
+      DT::renderDataTable({
+        data <- qaQcData()[[name]]
+        req(nrow(data) > 0L)
+        DT::datatable(
+          data,
+          rownames = FALSE,
+          filter = "top",
+          options = list(
+            pageLength = 10,
+            lengthMenu = c(10, 25, 50, 100),
+            scrollX = TRUE
+          )
+        )
+      })
+    }
+
+    output$qaqc_samples_table <- qaqc_table("samples")
+    output$qaqc_results_table <- qaqc_table("results")
+    output$qaqc_result_components_table <- qaqc_table("result_components")
+    output$qaqc_group_links_table <- qaqc_table("group_links")
+    output$qaqc_documents_table <- qaqc_table("documents")
+
+    observeEvent(input$show_qaqc_sample_data, {
+      data <- qaQcData()
+      req(nrow(data$samples) > 0L)
+
+      tabs <- list(
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("samples", language$language),
+            nrow(data$samples)
+          ),
+          DT::dataTableOutput(ns("qaqc_samples_table"))
+        ),
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("results", language$language),
+            nrow(data$results)
+          ),
+          DT::dataTableOutput(ns("qaqc_results_table"))
+        ),
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("disc_qaqc_group_links", language$language),
+            nrow(data$group_links)
+          ),
+          DT::dataTableOutput(ns("qaqc_group_links_table"))
+        )
+      )
+      if (nrow(data$documents) > 0L) {
+        tabs[[length(tabs) + 1L]] <- tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("documents", language$language),
+            nrow(data$documents)
+          ),
+          DT::dataTableOutput(ns("qaqc_documents_table"))
+        )
+      }
+      if (nrow(data$result_components) > 0L) {
+        tabs[[length(tabs) + 1L]] <- tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("disc_result_components", language$language),
+            nrow(data$result_components)
+          ),
+          DT::dataTableOutput(ns("qaqc_result_components_table"))
+        )
+      }
+
+      showModal(modalDialog(
+        title = tr("disc_qaqc_sample_data", language$language),
+        do.call(tabsetPanel, tabs),
+        footer = modalButton(tr("close", language$language)),
+        easyClose = TRUE,
+        size = "xl"
+      ))
+    })
+
+    output$season_plot_metadata_ui <- renderUI({
+      metadata <- plotSeasonMetadata()
+      if (is.null(metadata)) {
+        return(NULL)
+      }
+
+      highlight_ranges <- metadata$season_highlight_ranges
+      restrict_ranges <- metadata$season_ranges
+      if (length(highlight_ranges) == 0 && length(restrict_ranges) == 0) {
+        return(NULL)
+      }
+
+      blocks <- list()
+      if (length(highlight_ranges) > 0) {
+        blocks[[length(blocks) + 1L]] <- tags$div(
+          class = "d-flex flex-wrap align-items-center gap-2",
+          tags$strong(tr("disc_highlighted_ranges", language$language)),
+          lapply(seq_along(highlight_ranges), function(i) {
+            color <- season_highlight_colors[
+              ((i - 1L) %% length(season_highlight_colors)) + 1L
+            ]
+            tags$span(
+              class = "d-inline-flex align-items-center gap-1",
+              tags$span(
+                style = paste0(
+                  "display:inline-block;width:1.6em;height:0.9em;",
+                  "border:1px solid rgba(0,0,0,0.18);",
+                  "background-color:",
+                  color,
+                  ";"
+                )
+              ),
+              format_season_range(highlight_ranges[[i]])
+            )
+          })
+        )
+      }
+      if (length(restrict_ranges) > 0) {
+        blocks[[length(blocks) + 1L]] <- tags$div(
+          tags$strong(tr("disc_restricted_ranges", language$language)),
+          ": ",
+          format_season_ranges(restrict_ranges)
+        )
+      }
+
+      tags$div(
+        class = "small text-muted",
+        style = paste(
+          "margin: 0.35rem 0 0.75rem 0;",
+          "padding: 0.5rem 0.75rem;",
+          "border-left: 3px solid #6c757d;",
+          "background-color: rgba(108,117,125,0.06);"
+        ),
+        blocks
+      )
+    })
+
+    observeEvent(plot_output_discrete$result(), {
+      if (inherits(plot_output_discrete$result(), "character")) {
+        showModal(modalDialog(
+          title = tr("error", language$language),
+          plot_output_discrete$result(),
+          footer = tagList(
+            actionButton(ns("cancel"), tr("cancel", language$language))
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
+      output$plot <- plotly::renderPlotly({
+        isolate(plot_output_discrete$result()$plot)
+      })
+      plotData(plot_output_discrete$result()$data)
+      plottedResultIds(disc_plot_source_result_ids(
+        plot_output_discrete$result()
+      ))
+      qaQcData(disc_plot_empty_qaqc_data())
+      plotted_sample_ids <- disc_plot_source_sample_ids(
+        plot_output_discrete$result()
+      )
+      if (
+        identical(input$data_source, "AC") &&
+          length(plotted_sample_ids)
+      ) {
+        qaqc_data <- tryCatch(
+          disc_plot_related_qaqc_data(
+            session$userData$AquaCache,
+            plotted_sample_ids,
+            language$abbrev
+          ),
+          error = function(e) {
+            showNotification(
+              paste(
+                tr("disc_qaqc_retrieval_error", language$language),
+                e$message
+              ),
+              type = "warning",
+              duration = 15
+            )
+            disc_plot_empty_qaqc_data()
+          }
+        )
+        qaQcData(qaqc_data)
+      }
+      plotSeasonMetadata(pendingSeasonMetadata())
+      plot_created(TRUE)
+
+      guideline_warning <- attr(
+        plot_output_discrete$result()$data,
+        "guideline_warning"
+      )
+      if (!is.null(guideline_warning) && nzchar(guideline_warning)) {
+        showNotification(guideline_warning, type = "warning", duration = 15)
+      }
+
+      shinyjs::show("full_screen")
+      shinyjs::show("download_data")
+
+      if (
+        identical(input$data_source, "AC") &&
+          identical(input$AC_selector_mode, "browse")
+      ) {
+        bslib::accordion_panel_close(
+          "AC_browse_samples_accordion",
+          "samples_panel"
+        )
+      }
+
+      # If this is the first plot generated by the user in this session show them a modal
+      if (first_plot()) {
+        if (first_plot_with_standards()) {
+          showModal(
+            modalDialog(
+              HTML(tr("first_plot_hints_standards", language$language)),
+              footer = tagList(
+                actionButton(ns("cancel"), tr("cancel", language$language))
+              ),
+              easyClose = TRUE
+            )
+          )
+          first_plot_with_standards(FALSE)
+        } else {
+          showModal(
+            modalDialog(
+              HTML(tr("first_plot_hints_no_standards", language$language)),
+              footer = tagList(
+                actionButton(ns("cancel"), tr("cancel", language$language))
+              ),
+              easyClose = TRUE
+            )
+          )
+        }
+        first_plot(FALSE)
+      }
+
+      if (first_plot_with_standards()) {
+        showModal(
+          modalDialog(
+            HTML(tr("first_plot_hints_standards_short", language$language)),
+            footer = tagList(
+              actionButton(ns("cancel"), tr("cancel", language$language))
+            ),
+            easyClose = TRUE
+          )
+        )
+        first_plot_with_standards(FALSE)
+      }
+    })
+
+    # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
+    # The js function takes care of debouncing the window resize event and also reacts to a change in orientation or full screen event
+
+    observeEvent(
+      windowDims(),
+      {
+        req(plot_created())
+        if (is.null(windowDims())) {
+          return()
+        }
+        if (windowDims()$width > 1.3 * windowDims()$height) {
+          plotly::plotlyProxy("plot", session) %>%
+            plotly::plotlyProxyInvoke(
+              "relayout",
+              legend = list(orientation = "v")
+            )
+        } else {
+          plotly::plotlyProxy("plot", session) %>%
+            plotly::plotlyProxyInvoke(
+              "relayout",
+              legend = list(orientation = "h")
+            )
+        }
+      },
+      ignoreNULL = TRUE
+    )
+
+    # Observe the full screen button and run the javascript function to make the plot full screen
+    observeEvent(
+      input$full_screen,
+      {
+        shinyjs::runjs(paste0("toggleFullScreen('", ns("plot"), "');"))
+
+        # Manually trigger a window resize event after some delay
+        shinyjs::runjs(
+          "
+                      setTimeout(function() {
+                        sendWindowSizeToShiny();
+                      }, 700);
+                    "
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    # Send the user the plotting data
+    output$download_data <- downloadHandler(
+      filename = function() {
+        time <- Sys.time()
+        attr(time, "tzone") <- "UTC"
+        paste0(
+          "discrete_plot_data_",
+          gsub("-", "", gsub(" ", "_", gsub(":", "", substr(time, 0, 16)))),
+          "_UTC.xlsx"
+        )
+      },
+      content = function(file) {
+        openxlsx::write.xlsx(
+          disc_plot_download_tables(
+            plotData(),
+            qaQcData(),
+            disc_result_components(
+              session$userData$AquaCache,
+              plottedResultIds(),
+              lang = language$abbrev
+            )
+          ),
+          file
+        )
+      }
+    )
+  }) # End of moduleServer
+}

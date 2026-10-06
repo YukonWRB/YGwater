@@ -1,0 +1,885 @@
+#' AquaLink user interface
+#'
+#' Constructs the navigation bar and main UI containers used by the
+#' application. Called internally by [AquaLink()].
+#'
+#' @param request Internal parameter for `{shiny}`.
+#'     DO NOT REMOVE.
+#' @import shiny
+#' @noRd
+
+app_ui <- function(request) {
+  default_app_title <- tr(config$brand$text$app_title, "English")
+  default_app_description <- tr(config$brand$text$SEO_desc, "English")
+
+  tagList(
+    shinyjs::useShinyjs(),
+
+    div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")), # Used for a heartbeat every 5 seconds to keep app alive, which occasionally gives issues on mobile devices.
+
+    # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
+    # Uses two parameters: 'id' for the element ID and 'col' for the color. Color can be R-recognized color name or hex code.
+    shinyjs::extendShinyjs(
+      text = 'shinyjs.backgroundCol = function(params) {
+      var defaultParams = {
+        id : null,
+        col : "red"
+      };
+      params = shinyjs.getParams(params, defaultParams);
+      var el = $("#" + params.id);
+                         el.css("background-color", params.col);
+}',
+      functions = c("backgroundCol")
+    ),
+
+    tags$head(
+      # do not change to !analytics because analytics can be a character string with the file path
+      if (config$analytics != FALSE) {
+        includeHTML(config$analytics) # Include analytics html code
+      },
+      tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
+      tags$script(src = "js/window_resize.js"), # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
+      tags$script(src = "js/idle_timer.js"), # JS to report user activity for inactivity logout
+      tags$script(src = "js/usage_tracking.js"), # JS telemetry for usage analytics events
+      tags$script(src = "js/air_datepicker_manual_fix.js"), # Fix manual text entry for shinyWidgets::airDatepickerInput
+      # JS below is for updating the title of the page from the server, when the user changes language
+      tags$script(HTML(
+        "
+      Shiny.addCustomMessageHandler('updateBrandTitle', function(newTitle) {
+        ['app-header-title', 'app-mobile-title'].forEach(function(id) {
+          var titleElement = document.getElementById(id);
+          if (titleElement) {
+            titleElement.textContent = newTitle;
+          }
+        });
+      });
+    "
+      )),
+      tags$script(HTML(
+        "
+      Shiny.addCustomMessageHandler('updateTitle', function(newTitle) {
+        document.title = newTitle;
+      });
+    "
+      )),
+      tags$script(HTML(
+        "
+      Shiny.addCustomMessageHandler('updateSeo', function(meta) {
+        var descriptionTag = document.getElementById('app-meta-description');
+        var ogTitleTag = document.getElementById('app-og-title');
+        var ogDescriptionTag = document.getElementById('app-og-description');
+
+        if (descriptionTag && meta.description) {
+          descriptionTag.setAttribute('content', meta.description);
+        }
+        if (ogTitleTag && meta.title) {
+          ogTitleTag.setAttribute('content', meta.title);
+        }
+        if (ogDescriptionTag && meta.description) {
+          ogDescriptionTag.setAttribute('content', meta.description);
+        }
+      });
+    "
+      )),
+      tags$script(HTML(
+        "
+      Shiny.addCustomMessageHandler('updateLang', function(message) {
+        $('html').attr('lang', message.lang);
+      });"
+      )),
+      tags$script(HTML(
+        "
+      (function() {
+        function isVisible(el) {
+          return !!(el && el.offsetParent !== null);
+        }
+
+        function syncHeaderMode() {
+          var toggles = Array.prototype.slice.call(
+            document.querySelectorAll('.navbar-toggle, .navbar-toggler')
+          );
+          var collapsedView = toggles.some(isVisible);
+          var header = document.querySelector('.app-navbar-header');
+          var brand = document.querySelector('.app-navbar-brand');
+          var topBar = document.querySelector('.top-bar-container');
+
+          if (!document.body) {
+            return;
+          }
+
+          document.body.classList.toggle('navbar-collapsed-view', collapsedView);
+          document.body.classList.toggle('navbar-expanded-view', !collapsedView);
+
+          if (header) {
+            header.style.display = collapsedView ? 'flex' : 'none';
+          }
+          if (brand) {
+            brand.style.display = collapsedView ? 'flex' : 'none';
+          }
+          if (topBar) {
+            topBar.style.display = collapsedView ? 'none' : '';
+          }
+        }
+
+        window.addEventListener('resize', syncHeaderMode);
+        document.addEventListener('DOMContentLoaded', syncHeaderMode);
+        document.addEventListener('shiny:connected', function() {
+          window.setTimeout(syncHeaderMode, 0);
+        });
+      })();
+    "
+      )),
+      tags$meta(
+        id = "app-meta-description",
+        name = "description",
+        content = default_app_description
+      ),
+      tags$meta(
+        id = "app-og-title",
+        property = "og:title",
+        content = default_app_title
+      ),
+      tags$meta(
+        id = "app-og-description",
+        property = "og:description",
+        content = default_app_description
+      ),
+      tags$meta(property = "og:type", content = "website"),
+      # Disable the login/logout button after it's clicked to prevent multiple clicks while waiting for response
+      # Since re-enabling happens in an observer but the 'disable' is right in the browser, it's possible to click the button and have it disable before the server is ready - and until it's ready it won't accept the click anyways. The JS hook below ensures that it's only disabled once the server is ready to handle it, which prevents the button from getting stuck in a disabled state if clicked too early.
+      tags$script(HTML(
+        "
+      $(document).on('shiny:connected', function() {
+        $('#loginBtn, #logoutBtn, #loginBtnMobile, #logoutBtnMobile').prop('disabled', false);
+      });
+
+      $(document).on('shiny:disconnected', function() {
+        $('#loginBtn, #logoutBtn, #loginBtnMobile, #logoutBtnMobile').prop('disabled', true);
+      });
+      "
+      )),
+      tags$script(
+        "Shiny.addCustomMessageHandler(
+      'toggleDropdown',
+          function toggleDropdown(msg) {
+            $('.dropdown-menu').removeClass('show')
+          });
+        "
+      ),
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
+      tags$link(
+        rel = "stylesheet",
+        type = "text/css",
+        href = "css/top-bar.css"
+      ), # Top bar size, position, etc.
+      # Old YG_bs5  CSS file is huge. Commented out, YG_bs5_compact.css only targets the necesasry pieces.
+      # tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
+      tags$link(
+        rel = "stylesheet",
+        type = "text/css",
+        href = "css/buttons.css"
+      ), # styling for hover effects on buttons with YG colors
+      tags$link(
+        rel = "stylesheet",
+        type = "text/css",
+        href = "css/YG_bs5_compact.css"
+      ), # minimal replacements for legacy YG_bs5.css button and DT stripe styles
+      # Allow datatable filters to overflow the table, helpful when table is filtered to only a few rows.
+      tags$style(
+        HTML(
+          "
+            /* Allow filter dropdowns to overflow the DT scroll containers */
+            div.dataTables_scroll,
+            div.dataTables_scrollHead,
+            div.dataTables_scrollHeadInner,
+            div.dataTables_scrollBody {
+              overflow: visible !important;
+            }
+          "
+        )
+      ),
+      # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
+      tags$style(
+        HTML(
+          "
+        a.dropdown-toggle > .shiny-html-output {
+        display: inline;
+        }
+      "
+        )
+      ),
+      tags$style(
+        HTML(
+          ".alert { white-space: normal !important; }"
+        )
+      )
+    ),
+    # page_fluid is the main container for the app, which contains the top bar, nav bar, content, and footer.
+    page_fluid(
+      style = "padding:0; margin:0; max-width:100%;", # Remove the default padding/margin for better space utilization
+      # Make the container for the top bar, which sits above the nav bar
+      div(
+        class = "top-bar-container",
+        style = "background-color: #244C5A; margin-bottom: 0; border-bottom: none",
+        fluidRow(
+          column(
+            3,
+            div(
+              class = "logo",
+              htmltools::img(
+                src = "imgs/Yukon_logo_white-min.png",
+                .noWS = "outside",
+                alt = "Yukon Government logo"
+              )
+            ),
+            class = "logo-container"
+          ),
+          column(
+            9,
+            div(
+              class = paste(
+                "app-title-container",
+                if (config$public) "app-title-container--public" else ""
+              ),
+              tags$span(
+                id = "app-header-title",
+                class = "app-title-text",
+                default_app_title
+              )
+            ),
+            div(
+              class = "aurora",
+              htmltools::img(
+                src = "imgs/YG_Aurora_resized_flipped-min.png",
+                .noWS = "outside",
+                alt = "Aurora"
+              )
+            ),
+            div(
+              class = "login-container",
+              if (!config$public) {
+                # 'public' is a global variable established in the globals file
+                div(
+                  class = "login-btn-container",
+                  actionButton(
+                    "loginBtn",
+                    "Login"
+                  ),
+                  actionButton(
+                    "logoutBtn",
+                    "Logout",
+                    style = "display: none;"
+                  )
+                ) # Initially hidden
+              }
+            ),
+            class = "aurora-login-container"
+          ),
+        )
+      ),
+      # And now the navbar itself
+      page_navbar(
+        title = tags$div(
+          class = "app-navbar-header",
+          style = "align-items: center; display: none; flex: 1 1 auto; gap: 8px; min-width: 0;",
+          tags$a(
+            class = "app-navbar-brand",
+            href = "#",
+            style = "align-items: center; display: none; flex: 1 1 auto; gap: 8px; max-width: calc(100vw - 168px); min-width: 0; padding: 0; text-decoration: none;",
+            tags$img(
+              src = "imgs/Yukon_logo_white-min.png",
+              alt = "Yukon Government logo"
+            ),
+            tags$span(
+              id = "app-mobile-title",
+              class = "app-navbar-title",
+              default_app_title
+            )
+          ),
+          if (!config$public) {
+            div(
+              class = "mobile-auth-container",
+              style = "display: flex; flex: 0 0 auto;",
+              actionButton(
+                "loginBtnMobile",
+                "Login",
+                class = "mobile-auth-button",
+                style = "background-color: #F2A900; border: 0; border-radius: 6px; color: #244C5A; font-weight: 600; min-height: 40px; min-width: 68px; padding: 0.4rem 0.8rem; white-space: nowrap;"
+              ),
+              actionButton(
+                "logoutBtnMobile",
+                "Logout",
+                class = "mobile-auth-button",
+                style = "background-color: #F2A900; border: 0; border-radius: 6px; color: #244C5A; display: none; font-weight: 600; min-height: 40px; min-width: 68px; padding: 0.4rem 0.8rem; white-space: nowrap;"
+              )
+            )
+          }
+        ),
+        id = "navbar",
+        window_title = default_app_title,
+        navbar_options = navbar_options(
+          bg = "#244C5A",
+          collapsible = TRUE,
+          style = "z-index:1002"
+        ), # Just above any leaflet possibilities which only go up to 1000. Otherwise the map overlays the open nav menus.
+        fluid = TRUE,
+        lang = "en",
+        theme = NULL, # Theme is set earlier by css file references
+        gap = "10px",
+
+        # Home is just a nav panel, no nav_menu
+        nav_panel(
+          title = uiOutput("homeNavTitle"),
+          value = "home",
+          uiOutput("home_ui")
+        ),
+
+        # Maps nav menu
+        nav_menu(
+          title = uiOutput("mapsNavMenuTitle"),
+          value = "maps",
+          nav_panel(
+            title = uiOutput("mapsNavLocsTitle"),
+            value = "monitoringLocationsMap",
+            uiOutput("mapLocs_ui")
+          ),
+          nav_panel(
+            title = uiOutput("mapsNavParamsTitle"),
+            value = "parameterValuesMap",
+            uiOutput("mapParams_ui")
+          ),
+          if (!config$public) {
+            nav_panel(
+              title = uiOutput("mapsNavRasterTitle"),
+              value = "rasterValuesMap",
+              uiOutput("mapRaster_ui")
+            )
+          },
+
+          if (config$brand$brand == 'yukon') {
+            nav_panel(
+              title = uiOutput("mapsNavSnowbullTitle"),
+              value = "snowBulletinMap",
+              uiOutput("mapSnowbull_ui")
+            )
+          }
+        ), # End maps nav_menu
+
+        # Plot nav menu
+        nav_menu(
+          title = uiOutput("plotsNavMenuTitle"),
+          value = "plot",
+          nav_panel(
+            title = uiOutput("plotsNavDiscTitle"),
+            value = "discPlot",
+            uiOutput("plotDiscrete_ui")
+          ),
+          nav_panel(
+            title = uiOutput("plotsNavContTitle"),
+            value = "contPlot",
+            uiOutput("plotContinuous_ui")
+          )
+        ), # End plot nav_menu
+
+        # Reports nav menu
+        if (!config$public) {
+          nav_menu(
+            title = uiOutput("reportsNavMenuTitle"),
+            value = "reports",
+            nav_panel(
+              title = uiOutput("reportsNavSnowstatsTitle"),
+              value = "snowInfo",
+              uiOutput("snowInfo_ui")
+            ),
+            nav_panel(
+              title = uiOutput("reportsNavWaterTitle"),
+              value = "waterInfo",
+              uiOutput("waterInfo_ui")
+            ),
+            nav_panel(
+              title = uiOutput("reportsNavWQTitle"),
+              value = "WQReport",
+              uiOutput("WQReport_ui")
+            ),
+            # Don't show the snow bulletin menu if not deployed on YG internal network
+            if (config$network_check && config$brand$brand == 'yukon') {
+              nav_panel(
+                title = uiOutput("reportsNavSnowbullTitle"),
+                value = "snowBulletin",
+                uiOutput("snowBulletin_ui")
+              )
+            },
+            nav_panel(
+              title = uiOutput("reportsNavWaterTempTitle"),
+              value = "waterTemp",
+              uiOutput("waterTemp_ui")
+            )
+          ) # End reports nav_menu
+        }, # End if !config$public for reports nav_menu
+
+        # Dashboards nav menu
+        if (!config$public) {
+          nav_menu(
+            title = uiOutput("dashboardsNavMenuTitle"),
+            value = "dashboards",
+            nav_panel(
+              title = uiOutput("dashboardsNavFloodTitle"),
+              value = "floodDashboard",
+              uiOutput("floodDashboard_ui")
+            )
+          ) # End dashboards nav_menu
+        }, # End if !config$public for dashboards nav_menu
+
+        # Images nav menu
+        nav_menu(
+          title = uiOutput("imagesNavMenuTitle"),
+          value = "images",
+          nav_panel(
+            title = uiOutput("imagesNavTableTitle"),
+            value = "imgTableView",
+            uiOutput("imgTableView_ui")
+          ),
+          nav_panel(
+            title = uiOutput("imagesNavMapTitle"),
+            value = "imgMapView",
+            uiOutput("imgMapView_ui")
+          )
+        ), # End images nav_menu
+
+        # Data nav menu
+        nav_menu(
+          title = uiOutput("dataNavMenuTitle"),
+          value = "data",
+          nav_panel(
+            title = uiOutput("dataNavDiscTitle"),
+            value = "discData",
+            uiOutput("discData_ui")
+          ),
+          nav_panel(
+            title = uiOutput("dataNavContTitle"),
+            value = "contData",
+            uiOutput("contData_ui")
+          )
+        ), # End data nav_menu
+
+        # Forecaster on Duty (FOD) reports are only possible with access to the G Drive
+        if (!config$public & config$g_drive) {
+          # if public or if g drive access is not possible, don't show the tab for FOD reports
+          nav_panel(
+            title = uiOutput("FODNavTitle"),
+            value = "FOD",
+            uiOutput("fod_ui")
+          )
+        },
+
+        nav_panel(
+          title = uiOutput("WWRNavTitle"),
+          value = "WWR",
+          uiOutput("WWR_ui")
+        ),
+
+        nav_panel(
+          title = uiOutput("documentsNavMenuTitle"),
+          value = "docTableView",
+          uiOutput("docTableView_ui")
+        ),
+
+        # Info nav menu
+        nav_menu(
+          title = uiOutput("infoNavMenuTitle"),
+          value = "info",
+          nav_panel(
+            title = uiOutput("infoNavAboutTitle"),
+            value = "about",
+            uiOutput("about_ui")
+          ),
+          nav_panel(
+            title = uiOutput("infoNavNewsTitle"),
+            value = "news",
+            uiOutput("news_ui")
+          )
+        ), # End info nav_menu
+
+        # Admin side modules, only show, if public = FALSE and logged in.
+        if (!config$public) {
+          nav_menu(
+            title = "Continuous data",
+            value = "continuousDataTasks",
+            nav_panel(
+              title = "Add continuous data",
+              value = "addContData",
+              uiOutput("addContData_ui")
+            ),
+            nav_panel(
+              title = "Impute missing values",
+              value = "imputeMissing",
+              uiOutput("imputeMissing_ui")
+            ),
+            nav_panel(
+              title = "Review / edit timeseries data",
+              value = "continuousDataReview",
+              uiOutput("continuousDataReview_ui")
+            ),
+            nav_panel(
+              title = "Add / edit basic timeseries",
+              value = "addTimeseries",
+              uiOutput("addTimeseries_ui")
+            ),
+            nav_panel(
+              title = "Add / edit derived timeseries",
+              value = "addCompoundTimeseries",
+              uiOutput("addCompoundTimeseries_ui")
+            ),
+            nav_panel(
+              title = "Sync timeseries",
+              value = "syncCont",
+              uiOutput("syncCont_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Discrete data",
+            value = "discreteDataTasks",
+            nav_panel(
+              title = "Add samples and results",
+              value = "addDiscData",
+              uiOutput("addDiscData_ui")
+            ),
+            nav_panel(
+              title = "Edit samples and results",
+              value = "editSamples",
+              uiOutput("editSamples_ui")
+            ),
+            nav_panel(
+              title = "Add / modify guidelines",
+              value = "addGuidelines",
+              uiOutput("addGuidelines_ui")
+            ),
+            nav_panel(
+              title = "Add / edit sample series",
+              value = "addSampleSeries",
+              uiOutput("addSampleSeries_ui")
+            ),
+            nav_panel(
+              title = "Sync sample series",
+              value = "syncDisc",
+              uiOutput("syncDisc_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Locations",
+            value = "dbLocsTasks",
+            nav_panel(
+              title = "Add / modify locations",
+              value = "addLocation",
+              uiOutput("addLocation_ui")
+            ),
+            nav_panel(
+              title = "Add / modify sub-locations",
+              value = "addSubLocation",
+              uiOutput("addSubLocation_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Files / Docs",
+            value = "fileTasks",
+            nav_panel(
+              title = "Documents",
+              value = "addDocs",
+              uiOutput("addDocs_ui")
+            ),
+            nav_panel(
+              title = "Images",
+              value = "addImgs",
+              uiOutput("addImgs_ui")
+            ),
+            nav_panel(
+              title = "Image series",
+              value = "addImgSeries",
+              uiOutput("addImgSeries_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Field",
+            value = "fieldTasks",
+            nav_panel(
+              title = "Add / modify field visit",
+              value = "visit",
+              uiOutput("visit_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Equipment",
+            value = "equipTasks",
+            nav_panel(
+              title = "Checks + calibrations",
+              value = "calibrate",
+              uiOutput("calibrate_ui")
+            ),
+            nav_panel(
+              title = "Create / modify instruments",
+              value = "manageInstruments",
+              uiOutput("manageInstruments_ui")
+            ),
+            nav_panel(
+              title = "Create / modify sensors",
+              value = "manageSensors",
+              uiOutput("manageSensors_ui")
+            ),
+            nav_panel(
+              title = "Log instrument maintenance",
+              value = "instrumentMaintenance",
+              uiOutput("instrumentMaintenance_ui")
+            ),
+            nav_panel(
+              title = "Deploy / recover instruments",
+              value = "deploy_recover",
+              uiOutput("deploy_recover_ui"), # points to the same module as in Equipment
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Boreholes / wells",
+            value = "wellTasks",
+            nav_panel(
+              title = "Simpler Index",
+              value = "simplerIndex",
+              uiOutput("simplerIndex_ui")
+            ),
+            nav_panel(
+              title = "Edit borehole / well records",
+              value = "editBoreholesWells",
+              uiOutput("editBoreholesWells_ui")
+            ),
+            nav_panel(
+              title = "Manage borehole documents",
+              value = "manageBoreholeDocuments",
+              uiOutput("manageBoreholeDocuments_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Reference data",
+            value = "metadataTasks",
+            nav_panel(
+              title = "Organizations",
+              value = "manageOrganizations",
+              uiOutput("manageOrganizations_ui")
+            ),
+            nav_panel(
+              title = "Networks",
+              value = "manageNetworks",
+              uiOutput("manageNetworks_ui")
+            ),
+            nav_panel(
+              title = "Projects",
+              value = "manageProjects",
+              uiOutput("manageProjects_ui")
+            ),
+            nav_panel(
+              title = "Network / Project Types",
+              value = "manageNetworkProjectTypes",
+              uiOutput("manageNetworkProjectTypes_ui")
+            ),
+            nav_panel(
+              title = "Location Types",
+              value = "manageLocationTypes",
+              uiOutput("manageLocationTypes_ui")
+            ),
+            nav_panel(
+              title = "Media Types",
+              value = "manageMediaTypes",
+              uiOutput("manageMediaTypes_ui")
+            ),
+            nav_panel(
+              title = "Matrix States",
+              value = "manageMatrixStates",
+              uiOutput("manageMatrixStates_ui")
+            ),
+            nav_panel(
+              title = "Parameter Groups",
+              value = "manageParameterGroups",
+              uiOutput("manageParameterGroups_ui")
+            ),
+            nav_panel(
+              title = "Parameter Sub-Groups",
+              value = "manageParameterSubGroups",
+              uiOutput("manageParameterSubGroups_ui")
+            ),
+            nav_panel(
+              title = "Parameters",
+              value = "manageParameters",
+              uiOutput("manageParameters_ui")
+            ),
+            nav_panel(
+              title = "Communication Protocol Families",
+              value = "manageCommunicationProtocolFamilies",
+              uiOutput("manageCommunicationProtocolFamilies_ui")
+            ),
+            nav_panel(
+              title = "Communication Protocols",
+              value = "manageCommunicationProtocols",
+              uiOutput("manageCommunicationProtocols_ui")
+            ),
+            nav_panel(
+              title = "Transmission Method Families",
+              value = "manageTransmissionMethodFamilies",
+              uiOutput("manageTransmissionMethodFamilies_ui")
+            ),
+            nav_panel(
+              title = "Transmission Methods",
+              value = "manageTransmissionMethods",
+              uiOutput("manageTransmissionMethods_ui")
+            ),
+            nav_panel(
+              title = "Transmission Component Roles",
+              value = "manageTransmissionComponentRoles",
+              uiOutput("manageTransmissionComponentRoles_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Acquisition / telemetry",
+            value = "acquisitionTelemetryTasks",
+            nav_panel(
+              title = "Instrument / logger connections",
+              value = "manageInstrumentConnections",
+              uiOutput("manageInstrumentConnections_ui")
+            ),
+            nav_panel(
+              title = "Connection signals",
+              value = "manageInstrumentConnectionSignals",
+              uiOutput("manageInstrumentConnectionSignals_ui")
+            ),
+            nav_panel(
+              title = "Transmission setups",
+              value = "manageTransmissionSetups",
+              uiOutput("manageTransmissionSetups_ui")
+            ),
+            nav_panel(
+              title = "Transmission routes",
+              value = "manageTransmissionRoutes",
+              uiOutput("manageTransmissionRoutes_ui")
+            ),
+            nav_panel(
+              title = "Timeseries mappings",
+              value = "manageTransmissionTimeseriesMappings",
+              uiOutput("manageTransmissionTimeseriesMappings_ui")
+            ),
+            nav_panel(
+              title = "Import history",
+              value = "viewTransmissionImportRuns",
+              uiOutput("viewTransmissionImportRuns_ui")
+            ),
+            nav_panel(
+              title = "Transmission components",
+              value = "manageTransmissionComponents",
+              uiOutput("manageTransmissionComponents_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Admin",
+            value = "adminTasks",
+            nav_panel(
+              title = "Admin overview",
+              value = "adminHome",
+              uiOutput("adminHome_ui")
+            ),
+            nav_panel(
+              title = uiOutput("dbStatusNavTitle"),
+              value = "dbStatus",
+              uiOutput("dbStatus_ui")
+            ),
+            nav_panel(
+              title = uiOutput("changePwdNavTitle"),
+              value = "changePwd",
+              uiOutput("changePwd_ui")
+            ),
+            nav_panel(
+              title = "Manage users",
+              value = "manageUsers",
+              uiOutput("manageUsers_ui")
+            ),
+            nav_panel(
+              title = "Manage notifications",
+              value = "manageNotifications",
+              uiOutput("manageNotifications_ui")
+            ),
+            nav_panel(
+              title = "Update news page content",
+              value = "manageNewsContent",
+              uiOutput("manageNewsContent_ui")
+            ),
+            nav_panel(
+              title = "View feedback",
+              value = "viewFeedback",
+              uiOutput("viewFeedback_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Help",
+            value = "adminHelpTasks",
+            nav_item(tags$a(
+              "YGwater admin help",
+              href = "html/admin_help/admin_help.html",
+              target = "_blank",
+              rel = "noopener noreferrer",
+              class = "dropdown-item"
+            )),
+            nav_item(actionLink(
+              "open_admin_page_help",
+              "Current page help",
+              class = "dropdown-item"
+            )),
+            nav_item(actionLink(
+              "open_aquacache_vignette",
+              "AquaCache database reference",
+              class = "dropdown-item"
+            ))
+          )
+        },
+        # The nav_spacer() and nav_item below are used to have an actionButton to toggle language on the right side of the navbar
+        nav_spacer(),
+        # actionButton with no border (so only text is visible). Slight gray to match nav_panel text, white on hover
+        nav_item(actionButton(
+          "language_button",
+          NULL,
+          class = "language-button",
+          style = "border: none; border-color: transparent; box-shadow: none; outline: none; background: transparent; -webkit-appearance: none; appearance: none;"
+        )),
+      ), # End page_navbar
+
+      # Now a footer, rendered in the server for language support
+      div(
+        hr(),
+        uiOutput("footer_ui")
+      )
+    ) # End of page_fluid
+  ) # End tagList
+}

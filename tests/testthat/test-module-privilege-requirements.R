@@ -2,7 +2,7 @@ module_privilege_environment <- function() {
   module_env <- new.env(parent = baseenv())
   sys.source(
     system.file(
-      "apps/YGwater/modules/modulePrivilegeRequirements.R",
+      "apps/aqualink/modules/modulePrivilegeRequirements.R",
       package = "YGwater"
     ),
     envir = module_env
@@ -14,7 +14,7 @@ test_that("the privilege catalogue covers server admin privilege keys", {
   module_env <- module_privilege_environment()
   requirements <- module_env$ygwater_module_privilege_requirements()
   server <- readLines(
-    system.file("apps/YGwater/server.R", package = "YGwater"),
+    system.file("apps/aqualink/server.R", package = "YGwater"),
     warn = FALSE
   )
   matches <- regmatches(

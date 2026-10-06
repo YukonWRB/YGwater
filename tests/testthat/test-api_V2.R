@@ -188,7 +188,7 @@ test_that("api(version = 2) builds a plumber2 router without running", {
   expect_equal(Sys.getenv("APIaquacacheLogRequests"), "TRUE")
 })
 
-test_that("API V2 async annotations are limited to long-running endpoints", {
+test_that("API V2 async routes declare their finalizers", {
   lines <- readLines(v2_route_file(), warn = FALSE)
   route_starts <- grep("^#\\* @get\\s+", lines)
   route_ends <- c(route_starts[-1L] - 1L, length(lines))
@@ -197,6 +197,9 @@ test_that("API V2 async annotations are limited to long-running endpoints", {
     "/timeseries/measurements",
     "/timeseries/measurementsDaily",
     "/images/download",
+    "/boreholes",
+    "/documents",
+    "/documents/download",
     "/samples",
     "/samples/results",
     "/snow-bulletin/leaflet",

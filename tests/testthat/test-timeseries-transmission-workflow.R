@@ -2,7 +2,7 @@ timeseries_transmission_test_environment <- function() {
   env <- new.env(parent = globalenv())
   sys.source(
     system.file(
-      "apps/YGwater/modules/admin/continuousData/transmissionTimeseriesHelpers.R",
+      "apps/aqualink/modules/admin/continuousData/transmissionTimeseriesHelpers.R",
       package = "YGwater"
     ),
     envir = env
@@ -369,7 +369,7 @@ test_that("addTimeseries uses registry-driven transmission UI and persistence", 
   module_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/continuousData/addTimeseries.R",
+        "apps/aqualink/modules/admin/continuousData/addTimeseries.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -379,7 +379,7 @@ test_that("addTimeseries uses registry-driven transmission UI and persistence", 
   globals_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/YGwater_globals.R",
+        "apps/aqualink/YGwater_globals.R",
         package = "YGwater"
       ),
       warn = FALSE

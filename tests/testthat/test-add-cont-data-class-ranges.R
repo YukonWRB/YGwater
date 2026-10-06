@@ -2,7 +2,7 @@ add_cont_data_module_environment <- function() {
   env <- new.env(parent = asNamespace("YGwater"))
   sys.source(
     system.file(
-      "apps/YGwater/modules/admin/continuousData/addContData.R",
+      "apps/aqualink/modules/admin/continuousData/addContData.R",
       package = "YGwater"
     ),
     envir = env

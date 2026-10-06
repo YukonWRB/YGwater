@@ -19,7 +19,7 @@ dashboards_flood,dashboardsNavFloodTitle,Flood conditions,Conditions d'inondatio
 reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométriques
 reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de niveau/débit d'eau
 reports_flood,reportsNavFloodTitle,Flood dashboard,Tableau de bord des inondations
-reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualité de l'eau
+reports_wq,reportsNavWQTitle,Water quality,Qualité de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
 reports_waterTemp,reportsNavWaterTempTitle,Water temperature,Température de l'eau
 data,dataNavMenuTitle,Data,Données
@@ -27,7 +27,6 @@ images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
 images_map,imagesNavMapTitle,Map selection,À partir de la carte
 documents,translation,Documents,Documents
-document_download,documentsModuleDownload,Download document,Télécharger le document
 authors,documentsModuleColAuthors,Authors,Auteurs
 document_published,documentsModuleColPublished,Published,Date de publication
 description,documentsModuleColDescription,Description,Description
@@ -80,7 +79,6 @@ instructions,,How to use this interface,Utilisation de l'interface
 params_map_module_instructions,,"This module shows you conditions as actual values or as a percentage of the historic range for that day of year. Switch between actual or historic range values usng the drop-down menu, and change the parameter displayed using the 'Edit parameter' button.","Ce module vous montre les conditions soit en valeurs réelles, soit en pourcentage de la plage historique pour ce jour de l'année. Basculez entre les valeurs réelles ou de la plage historique à l'aide du menu déroulant, et changez le paramètre affiché en utilisant le bouton « Modifier le paramètre »."
 view_data_instructions_discrete,instructions,"<li>(Optional) Change the drop-down menus to narrow the list of samples.</li><li>Click 'Show samples' to view them in a table.</li><li>Select the samples you need, or use the button below the table to select all, then choose 'View X sample results' to go to the download screen.</li>","<li>Sélectionnez des valeurs dans les menus déroulants pour réduire la liste d’échantillons. (Facultatif)</li><li>Cliquez sur « Afficher les échantillons » pour les visualiser dans un tableau.</li><li>Sélectionnez les échantillons dont vous avez besoin ou cliquez sur le bouton « Tout sélectionner » sous le tableau, puis sur « Afficher X échantillons » pour accéder à l’écran de téléchargement.</li>"
 view_data_instructions_continuous,instructions,"<li>(Optional) Change the drop-down menus to narrow the timeseries list.</li><li>Click 'Show timeseries' to view them in a table.</li><li>Select the timeseries you need, or use the button below the table to select all, then choose 'View X timeseries details' to go to the download screen.</li>","<li>Sélectionnez des valeurs dans les menus déroulants pour réduire la liste de séries temporelles. (Facultatif)</li><li>Cliquez sur « Afficher les séries temporelles » pour les visualiser dans un tableau.</li><li>Sélectionnez les séries temporelles dont vous avez besoin ou cliquez sur le bouton « Tout sélectionner » sous le tableau, puis sur « Afficher X séries temporelles » pour accéder à l’écran de téléchargement.</li>"
-dl_data,download data button,Download data,Télécharger des données
 dl_num_rows,advice about number of rows selected (modal),Number of rows which will be returned:,Nombre de rangées à télécharger :
 dl_num_results,,Number of results which will be returned:,Nombre de résultats à télécharger :
 frequency,modal selection title,Frequency:,Résolution :
@@ -130,8 +128,14 @@ reset_filters,,Reset filters,Réinitialiser les filtres
 view_samples,,Show samples,Afficher les échantillons
 view_timeseries,,Show timeseries,Afficher les séries temporelles
 view_data,text or button,View data,Afficher les données
+document_download,documentsModuleDownload,Download document,Télécharger le document
+download_button,Generic report download button,Download,Télécharger
+download_report,Water temperature report download button,Download report,Télécharger le rapport
+download_report_html,Dashboard report export button,Download HTML report,Télécharger le rapport HTML
+dl_data,download data button,Download data,Télécharger des données
 dl_data_discrete,,Download discrete (sample) data,Télécharger des données discrètes (échantillons)
 dl_data_continuous,,Download continuous data,Télécharger des données continues
+flood_export_help,Dashboard report export help,Download a self-contained HTML report for the selected community.,Téléchargez un rapport HTML autonome pour la collectivité sélectionnée.
 view_data1,"text, part 1",View,Afficher les détails de
 view_data2_discrete,"text, part 2",sample results,échantillons
 view_data2_continuous,"text, part2",timeseries details,séries temporelles
@@ -336,7 +340,7 @@ map_add_second_param,,Add secondary parameter,Ajouter paramètre secondaire
 map_edit_second_param,,Edit secondary parameter,Modifier paramètre secondaire
 map_rm_second_param,,Remove secondary parameter,Enlever paramètre secondaire
 map_edit_aes,,Edit map aesthetics,Modifier l'esthétique de la carte
-gen_waterInfo_info,,"This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations.<br><br>Please note that this is not a polished output, and is to be used strictly for informational purposes.<br>In particular, note that very little of the data underlying the trends calculated has been cleaned or certified as correct by a human.","Cette fonction est conçue pour faciliter le rapport des données hydrologiques en compilant des statistiques de base (années de relevés, mois d’exploitation, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples du niveau (pour les lacs) ou du débit pour tous les emplacements demandés.<br><br>Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives.<br>En particulier, veuillez noter que très peu des données sous-jacentes aux tendances calculées ont été nettoyées ou certifiées comme correctes par un humain."
+gen_waterInfo_info,,"This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations.<br><br>Please note that this is not a polished output and is to be used strictly for informational purposes.<br>In particular, note that very little of the data underlying the calculated trends has been cleaned or certified as correct by a human.","Cette fonction est conçue pour faciliter le rapport des données hydrologiques en compilant des statistiques de base (années de relevés, mois d’exploitation, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples du niveau (pour les lacs) ou du débit pour tous les emplacements demandés.<br><br>Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives.<br>En particulier, veuillez noter que très peu des données sous-jacentes aux tendances calculées ont été nettoyées ou certifiées comme correctes par un humain."
 gen_waterInfo_param_select,,One parameter or both,Un ou deux paramètres
 gen_waterInfo_param_select_one,,"One (flow where exists, else level)","Un (débit si existe, autrement niveau)"
 gen_waterInfo_param_select_both,,Both (flow and level where both exist),Deux (débit et niveau lorsque existent)
@@ -350,7 +354,8 @@ gen_generate_plots,,Generate plots,Générer les graphiques
 gen_waterInfo_ptype,,Min/max on single plot or separate,Min/max sur le même graphique ou séparé
 gen_waterInfo_ptype_combine,,Single,même
 separate,,Separate,séparés
-gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations.<br><br>Please note that this is not a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (ÉEN) et de la densité pour tous les emplacements demandés.<br><br>Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
+gen_wqReport_info,,"This function allows you to create a water quality report by selecting locations, parameters, and dates. Results can be compared to guideline or criteria values present in the AquaCache database.<br><br>Please note that this is an experiemental product. Always check the validity of results and guideline/criteria values before using them for decision-making.","Cette fonction vous permet de créer un rapport sur la qualité de l’eau en sélectionnant des emplacements, des paramètres et des dates. Les résultats peuvent être comparés aux valeurs de référence ou aux critères présents dans la base de données AquaCache.<br><br>Veuillez noter qu’il s’agit d’un produit expérimental. Vérifiez toujours la validité des résultats et des valeurs de référence/critères avant de les utiliser pour la prise de décision."
+gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations.<br><br>Please note that this is not a polished output and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (ÉEN) et de la densité pour tous les emplacements demandés.<br><br>Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
 gen_snowInfo_inactive,,Include inactive locations,Inclure les emplacements inactifs
 gen_snowInfo_complete,,Complete years only,Années complètes seulement
 gen_snowInfo_ptype,,Combined or separate plots,Graphiques séparés ou combinés
@@ -405,7 +410,7 @@ licence_title,,Using data from this application,Utilisation des données de l'ap
 licence1,,"The data, reports, and plots generated from this application are licenced under the Government of Yukon's ","Les données, rapports et graphiques générés à l'aide de cette application sont régis par la "
 licence2,,Open Government Licence,licence ouverte du gouvernement du Yukon
 licence_url,,https://yukon.ca/en/your-government/open-government/open-government-licence-yukon,https://yukon.ca/fr/votre-gouvernement/gouvernement-ouvert/gouvernement-ouvert-licence-du-yukon
-licence3,,"Please note that some datasets provided through this application are sourced from external organizations (e.g., the Water Survey of Canada). Such data may be subject to their own licensing terms, which apply in addition to the Government of Yukon licence. Users are responsible for reviewing and complying with any applicable third-party licences.","Veuillez noter que certains jeux de données consultables à partir de l’application proviennent de sources externes (ex. Relevés hydrologiques du Canada). Par conséquent, ces données peuvent être assujetties à d’autres conditions, qui s’appliquent en plus de celles prévues par la licence du gouvernement du Yukon. Il incombe à l’utilisateur de prendre connaissance des licences de tiers applicables et de s’y conformer."
+licence3,,"Please note that some datasets provided through this application are sourced from external organizations (e.g., the Water Survey of Canada). Such data may be subject to their own licensing terms which apply in addition to the Government of Yukon licence. Users are responsible for reviewing and complying with any applicable third-party licences.","Veuillez noter que certains jeux de données consultables à partir de l’application proviennent de sources externes (ex. Relevés hydrologiques du Canada). Par conséquent, ces données peuvent être assujetties à d’autres conditions, qui s’appliquent en plus de celles prévues par la licence du gouvernement du Yukon. Il incombe à l’utilisateur de prendre connaissance des licences de tiers applicables et de s’y conformer."
 about_title2,title,About this application,À propos de l'application
 about_fun_facts_title,title,Fun facts,Quelques faits amusants
 about_fun_fact_timeseries,content,"We host %s timeseries with about %s measurements.","Notre base de données héberge %s séries temporelles qui illustrent environ %s mesures."
@@ -538,8 +543,8 @@ snowbull_deviation,,Deviation from Normal,Écart par rapport à la normale
 snowbull_values,,Values,Valeurs
 snowbull_swe,,Snow Water Equivalent,Équivalent en eau de la neige
 snowbull_swe_abbrev,,SWE,ÉEN
-snowbull_temperature,,Temperature,Températures
-snowbull_precipitation,,Precipitation,Précipitations
+temperature,,Temperature,Températures
+precipitation,,Precipitation,Précipitations
 snowbull_percentile,,Percentile,Percentile
 snowbull_details,,Map details,Détails de la carte
 app_version,,Current application version:,Version actuelle de l'application :
@@ -553,7 +558,7 @@ snowbull_no_snow,,No snow (median is zero),Pas de neige (médiane historique ég
 snowbull_some_snow,,"Snow present (median is zero)","Neige présente (médiane historique égale à zéro)"
 snowbull_no_data,,No data,Aucune donnée
 snowbull_percentile_suffix,,th,ème
-snowbull_snow_survey,,Snow survey,Relevé nivométrique
+snow_survey,,Snow survey,Relevé nivométrique
 snowbull_snow_pillow,,Snow pillow,Coussin à neige
 snowbull_swe_basin,,Basin average SWE,ÉEN moyen du bassin
 snowbull_normal,,Normal,Normal
@@ -629,3 +634,288 @@ remove,Remove button,Remove,Retirer
 showing_first,Showing first label,Showing first,Affichage des premiers
 selected_samples_lc,Selected samples lowercase,selected samples,échantillons sélectionnés
 disc_select_samples_from_table,Discrete plot browse plot validation,Please select one or more samples from the table.,Sélectionnez un ou plusieurs échantillons du tableau.
+report_date,EQWin water quality report date,Report date,Date du rapport
+report_date_range,AquaCache water quality report date range,Report date range,Période du rapport
+workbook_layout,AquaCache report workbook organization,Workbook layout,Organisation du classeur
+wq_workbook_by_date,Workbook layout with one worksheet per date,Locations in columns and parameters in rows; one worksheet per report date (or sample date in a range),Stations en colonnes et paramètres en lignes; une feuille par date du rapport (ou date d'échantillonnage pour une période)
+wq_workbook_by_location,Workbook layout with one worksheet per location,Parameters in rows and report dates or samples in columns; one worksheet per location,Paramètres en lignes et dates du rapport ou échantillons en colonnes; une feuille par station
+wq_workbook_by_parameter,Workbook layout with one worksheet per parameter,Locations in rows and report dates or samples in columns; one worksheet per parameter,Stations en lignes et dates du rapport ou échantillons en colonnes; une feuille par paramètre
+wq_date_match_window,Days allowed around each target date,Look for data within this many days of each target date,Rechercher des données dans cet intervalle autour de chaque date cible
+wq_date_match_window_help,How closest-date sample matching works,For each target date and station use the closest eligible sample within this many days. A sample may be reused for nearby target dates and appear more than once in the workbook.,Pour chaque date cible et station utiliser l'échantillon admissible le plus proche dans cet intervalle. Un même échantillon peut être réutilisé pour des dates cibles rapprochées et apparaître plusieurs fois dans le classeur.
+location_groups,EQWin location group choice,Location groups,Groupes de stations
+parameter_groups,EQWin parameter group choice,Parameter groups,Groupes de paramètres
+wq_station_standards,Apply station-specific standards checkbox,Apply station-specific standards,Appliquer les normes propres à chaque station
+data_source,Water quality report data source,Data source,Source des données
+aquacache,AquaCache data source label,AquaCache,AquaCache
+wq_sd_threshold,Optional standard deviation threshold,Standard deviation threshold; leave blank to skip outlier screening,Seuil d'écart-type; laisser vide pour ne pas rechercher les valeurs aberrantes
+wq_sd_start,Start date for standard deviation baseline,Start date for standard deviation calculation,Date de début du calcul de l'écart-type
+wq_sd_end,End date for standard deviation baseline,End date for standard deviation calculation,Date de fin du calcul de l'écart-type
+wq_sd_day_range,Day of year filter for standard deviation baseline,Select the day-of-year range; the year is ignored,Sélectionner la période de jours de l'année; l'année est ignorée
+wq_standard_help,Explanation of optional guideline fields,<p><i><b>Optional:</b> Select standards or guidelines to apply. General standards appear as an additional report column with values for each parameter. Station-specific standards appear as notes for each station. Values that exceed a standard or guideline are highlighted in red and include a note.</i></p>,<p><i><b>Facultatif :</b> Sélectionnez les normes ou recommandations à appliquer. Les normes générales apparaissent dans une colonne supplémentaire du rapport avec une valeur pour chaque paramètre. Les normes propres à une station apparaissent en note pour chaque station. Les valeurs qui dépassent une norme ou une recommandation sont surlignées en rouge et accompagnées d'une note.</i></p>
+wq_sd_help,Explanation of optional outlier screening,<p><i><b>Optional:</b> Set a standard deviation threshold to flag potential outliers. The mean and standard deviation are calculated from earlier measurements when available. <b>This calculation can add substantial time to report generation.</b></i></p>,<p><i><b>Facultatif :</b> Définissez un seuil d'écart-type pour signaler les valeurs potentiellement aberrantes. La moyenne et l'écart-type sont calculés à partir des mesures antérieures lorsqu'elles sont disponibles. <b>Ce calcul peut augmenter considérablement le temps de production du rapport.</b></i></p>
+wq_loading_guidelines,Loading message while AquaCache guidelines load,Loading AquaCache guidelines…,Chargement des recommandations AquaCache…
+wq_select_guidelines,Optional AquaCache guideline selector,Select AquaCache guidelines to apply (optional),Sélectionner les recommandations AquaCache à appliquer (facultatif)
+wq_validation_title,Water quality report validation dialog title,Water quality report: check the selections,Rapport sur la qualité de l'eau : vérifier les sélections
+wq_validation_intro,Water quality report validation dialog introduction,Correct the following items before generating the report:,Corrigez les éléments suivants avant de produire le rapport :
+wq_err_select_configured_eqwin,Error when no configured EQWin database selected,Select a configured EQWin database.,Sélectionnez une base de données EQWin configurée.
+wq_err_aquacache_date_range,Invalid AquaCache report date range,"Choose valid start and end dates, with the start date on or before the end date.","Choisissez des dates de début et de fin valides, avec une date de début antérieure ou égale à la date de fin."
+wq_err_aquacache_layout,Invalid AquaCache workbook layout,Choose a valid AquaCache workbook layout.,Choisissez une organisation de classeur AquaCache valide.
+wq_err_report_date,Invalid report date,Provide a valid report date.,Indiquez une date de rapport valide.
+wq_err_date_match_days,Invalid number of days for closest-date matching,Days around each target date must be a non-negative whole number.,Le nombre de jours autour de chaque date cible doit être un entier positif ou nul.
+wq_err_sd_threshold,Invalid standard deviation threshold,The standard deviation threshold must be greater than zero.,Le seuil d'écart-type doit être supérieur à zéro.
+wq_err_sd_dates,Invalid standard deviation calculation dates,The standard deviation start date must be on or before its end date.,La date de début du calcul de l'écart-type doit précéder ou être égale à la date de fin.
+wq_err_sd_day_range,Invalid standard deviation day of year range,Provide a valid day-of-year range for the standard deviation filter.,Indiquez une période de jours de l'année valide pour le filtre d'écart-type.
+wq_err_aquacache_loading,AquaCache report choices not loaded,AquaCache choices are still loading. Please wait and try again.,Les choix AquaCache sont en cours de chargement. Veuillez patienter et réessayer.
+wq_err_aquacache_location_required,AquaCache location selection required,Select at least one AquaCache location.,Sélectionnez au moins une station AquaCache.
+wq_err_aquacache_location_invalid,Invalid AquaCache location selection,One or more selected AquaCache locations are invalid.,Une ou plusieurs stations AquaCache sélectionnées ne sont pas valides.
+wq_err_aquacache_parameter_required,AquaCache parameter selection required,Select at least one AquaCache parameter.,Sélectionnez au moins un paramètre AquaCache.
+wq_err_aquacache_parameter_invalid,Invalid AquaCache parameter selection,One or more selected AquaCache parameters are invalid.,Un ou plusieurs paramètres AquaCache sélectionnés ne sont pas valides.
+wq_err_aquacache_guideline_invalid,Invalid AquaCache guideline selection,One or more selected AquaCache guidelines are invalid.,Une ou plusieurs recommandations AquaCache sélectionnées ne sont pas valides.
+wq_err_no_eqwin_database,No configured EQWin database available,No configured EQWin database is available.,Aucune base de données EQWin configurée n'est disponible.
+wq_err_select_valid_eqwin,EQWin database selection required,Select a valid EQWin database.,Sélectionnez une base de données EQWin valide.
+wq_err_select_available_eqwin,Selected EQWin database unavailable,Select an available configured EQWin database.,Sélectionnez une base de données EQWin configurée et accessible.
+wq_err_resolve_eqwin_source,EQWin source resolution error prefix,Could not resolve the selected EQWin database:,Impossible de résoudre la base de données EQWin sélectionnée :
+wq_err_eqwin_loading,EQWin report choices not loaded,EQWin selections are still loading. Please wait and try again.,Les choix EQWin sont en cours de chargement. Veuillez patienter et réessayer.
+wq_err_station_required,EQWin station selection required,Select at least one station or switch to location groups.,Sélectionnez au moins une station ou choisissez les groupes de stations.
+wq_err_station_invalid,Invalid EQWin station selection,One or more selected stations are invalid.,Une ou plusieurs stations sélectionnées ne sont pas valides.
+wq_err_location_group_required,EQWin location group selection required,Select a location group.,Sélectionnez un groupe de stations.
+wq_err_location_group_invalid,Invalid EQWin location group selection,The selected location group is invalid.,Le groupe de stations sélectionné n'est pas valide.
+wq_err_location_filter_mode,EQWin location filter choice required,Choose whether to filter by stations or by location groups.,Choisissez si le filtre doit porter sur les stations ou les groupes de stations.
+wq_err_parameter_required,EQWin parameter selection required,Select at least one parameter or switch to parameter groups.,Sélectionnez au moins un paramètre ou choisissez les groupes de paramètres.
+wq_err_parameter_invalid,Invalid EQWin parameter selection,One or more selected parameters are invalid.,Un ou plusieurs paramètres sélectionnés ne sont pas valides.
+wq_err_parameter_group_required,EQWin parameter group selection required,Select a parameter group.,Sélectionnez un groupe de paramètres.
+wq_err_parameter_group_invalid,Invalid EQWin parameter group selection,The selected parameter group is invalid.,Le groupe de paramètres sélectionné n'est pas valide.
+wq_err_parameter_filter_mode,EQWin parameter filter choice required,Choose whether to filter by parameters or by parameter groups.,Choisissez si le filtre doit porter sur les paramètres ou les groupes de paramètres.
+wq_err_standard_invalid,Invalid EQWin standard selection,One or more selected standards are invalid.,Une ou plusieurs normes sélectionnées ne sont pas valides.
+wq_err_load_aquacache_choices,Error prefix for loading AquaCache report choices,Unable to load AquaCache report choices:,Impossible de charger les choix de rapport AquaCache :
+wq_err_load_eqwin_choices,Error prefix for loading EQWin report choices,Unable to load EQWin report choices:,Impossible de charger les choix de rapport EQWin :
+wq_err_no_report_files,Worker error when report generation creates no files,No files were generated for the report.,Aucun fichier n'a été produit pour le rapport.
+wq_err_multiple_report_files,Worker error when multiple report files match,Multiple report files were generated where only one was expected.,Plusieurs fichiers de rapport ont été produits alors qu'un seul était attendu.
+wq_err_expected_report_file,Worker error when report generation creates unexpected files,Expected a single generated report file.,Un seul fichier de rapport était attendu.
+wq_report_sample_reuse_one,AquaCache warning for one reused sample,Closest-date matching reused one sample across target dates.,La correspondance par date la plus proche a réutilisé un échantillon pour plusieurs dates cibles.
+wq_report_sample_reuse_many,AquaCache warning for multiple reused samples,Closest-date matching reused %s samples across target dates.,La correspondance par date la plus proche a réutilisé %s échantillons pour plusieurs dates cibles.
+wq_report_reuse_worksheets,AquaCache warning about repeated worksheet values,The reused sample may appear in multiple worksheets.,L'échantillon réutilisé peut apparaître dans plusieurs feuilles du classeur.
+wq_report_reuse_date_columns,AquaCache warning about repeated date column values,The reused sample may appear in multiple date columns.,L'échantillon réutilisé peut apparaître dans plusieurs colonnes de dates.
+wq_report_filename,Downloaded water quality report file name,Water quality report for %s issued %s.xlsx,Rapport sur la qualité de l'eau du %s produit le %s.xlsx
+wq_err_generating_prefix,Water quality report generation error prefix,Error generating water quality report:,Erreur lors de la production du rapport sur la qualité de l'eau :
+wq_err_download_missing,Generated water quality report file missing,The report was generated but its output file could not be found for download.,Le rapport a été produit mais son fichier de sortie est introuvable pour le téléchargement.
+wq_err_download_source_missing,Water quality report source file missing,The generated report file could not be found for download.,Le fichier du rapport produit est introuvable pour le téléchargement.
+wq_err_download_copy,Water quality report copy failure,Unable to copy the generated report to the download location.,Impossible de copier le rapport produit vers l'emplacement de téléchargement.
+report_validation_intro,Introduction to report validation dialogs,Correct the following items before continuing:,Corrigez les éléments suivants avant de continuer :
+report_location_invalid,Invalid selected report locations,One or more selected locations are invalid.,Une ou plusieurs stations sélectionnées ne sont pas valides.
+report_end_date_invalid,Invalid report end date,Provide a valid end date.,Indiquez une date de fin valide.
+report_plot_type_required,Required report plot type,Select a plot type or turn off plot generation.,Sélectionnez un type de graphique ou désactivez la génération des graphiques.
+report_error_no_files,Report worker error when it produces no files,No files were generated for the report.,Aucun fichier n'a été produit pour le rapport.
+report_error_multiple_files,Report worker error when multiple files match,Multiple report files were generated where only one was expected.,Plusieurs fichiers de rapport ont été produits alors qu'un seul était attendu.
+report_error_single_file_expected,Report worker error when one file was expected,Expected a single generated report file.,Un seul fichier de rapport était attendu.
+report_download_archive_missing,Generated report archive missing,The report was generated but its archive could not be found for download.,Le rapport a été produit mais son archive est introuvable pour le téléchargement.
+report_download_file_missing,Generated report file missing,The report was generated but its output file could not be found for download.,Le rapport a été produit mais son fichier de sortie est introuvable pour le téléchargement.
+report_download_source_missing,Report download source missing,The generated report file could not be found for download.,Le fichier du rapport produit est introuvable pour le téléchargement.
+report_download_copy_failed,Report download copy failed,Unable to copy the generated report to the download location.,Impossible de copier le rapport produit vers l'emplacement de téléchargement.
+water_info_validation_title,Water quantity report validation dialog title,Water level and flow report: check the selections,Rapport sur le niveau et le débit d'eau : vérifier les sélections
+water_info_parameter_required,Water level and flow parameter choice required,Select whether to report water level and flow or only one of them.,Choisissez de produire un rapport sur le niveau et le débit d'eau ou sur un seul de ces paramètres.
+water_info_location_required,Water level and flow location choice required,Select at least one station or choose All locations.,Sélectionnez au moins une station ou choisissez Toutes les stations.
+water_info_low_flow_months_required,Water level and flow low-flow months required,Select at least one month for the low-flow period.,Sélectionnez au moins un mois pour la période de faibles débits.
+water_info_high_flow_months_required,Water level and flow high-flow months required,Select at least one month for the high-flow period.,Sélectionnez au moins un mois pour la période de forts débits.
+water_info_missing_data_range,Water level and flow allowed missing data range,Allowed missing data must be a number from 1 to 100.,La proportion de données manquantes doit être un nombre de 1 à 100.
+water_info_filename,Water level and flow report download filename,Water level and flow report issued %s.zip,Rapport sur le niveau et le débit d'eau produit le %s.zip
+water_info_error_prefix,Water level and flow report generation error prefix,Error generating the water level and flow report:,Erreur lors de la production du rapport sur le niveau et le débit d'eau :
+snow_info_validation_title,Snow information report validation dialog title,Snowpack report: check the selections,Rapport sur le manteau neigeux : vérifier les sélections
+snow_info_location_required,Snow information location choice required,Select at least one snow survey station or choose All locations.,Sélectionnez au moins une station de mesure de la neige ou choisissez Toutes les stations.
+snow_info_filename,Snow information report download filename,Snowpack report issued %s.zip,Rapport sur le manteau neigeux produit le %s.zip
+snow_info_error_prefix,Snow information report generation error prefix,Error generating the snowpack report:,Erreur lors de la production du rapport sur le manteau neigeux :
+snow_bulletin_validation_title,Snow bulletin report validation dialog title,Snow bulletin: check the selections,Bulletin nivologique : vérifier les sélections
+snow_bulletin_output_required,Snow bulletin output mode required,Choose whether to create the bulletin statistics or the bulletin document.,Choisissez de produire les statistiques du bulletin ou le document du bulletin.
+snow_bulletin_year_invalid,Invalid year in the snow bulletin report,Select a valid year.,Sélectionnez une année valide.
+snow_bulletin_month_invalid,Invalid spring month in the snow bulletin report,Select a valid spring month.,Sélectionnez un mois de printemps valide.
+snow_bulletin_basin_required,Snow bulletin basin choice required,Select at least one basin or choose All.,Sélectionnez au moins un bassin ou choisissez Tous.
+snow_bulletin_language_required,Snow bulletin document language required,Select a report language.,Sélectionnez la langue du rapport.
+snow_bulletin_precip_period_required,Snow bulletin precipitation comparison period required,Select a precipitation comparison period.,Sélectionnez une période de comparaison des précipitations.
+snow_bulletin_cddf_period_required,Snow bulletin CDDF comparison period required,Select a comparison period for cumulative degree days of frost.,Sélectionnez une période de comparaison des degrés-jours cumulés de gel.
+snow_bulletin_scale_range,Snow bulletin plot scale range,Plot scale must be a number from 0.5 to 3.,"L'échelle des graphiques doit être un nombre de 0,5 à 3."
+snow_bulletin_stats_filename,Snow bulletin statistics download filename,Snow bulletin statistics issued %s.zip,Statistiques du bulletin nivologique produites le %s.zip
+snow_bulletin_filename,Snow bulletin document download filename,Snow bulletin issued %s.docx,Bulletin nivologique produit le %s.docx
+snow_bulletin_error_prefix,Snow bulletin generation error prefix,Error generating the snow bulletin:,Erreur lors de la production du bulletin nivologique :
+water_temp_highlight_range,Water temperature report highlighted date range,Highlight range,Période mise en évidence
+water_temp_recent_year,Water temperature report latest year shortcut,Highlight the most recent year,Mettre en évidence l'année la plus récente
+water_temp_thresholds,Water temperature report temperature thresholds,Temperature thresholds,Seuils de température
+water_temp_plot_description,Water temperature report plot key description,Plot description,Description du graphique
+water_temp_plot_highlighted_mean,Water temperature report highlighted mean legend,Blue line: mean temperature during the highlighted period,Ligne bleue : température moyenne pendant la période mise en évidence
+water_temp_plot_baseline_mean,Water temperature report baseline mean legend,Grey line: mean temperature outside the highlighted period,Ligne grise : température moyenne hors de la période mise en évidence
+water_temp_plot_baseline_range,Water temperature report baseline range legend,Grey band: temperature range outside the highlighted period,Bande grise : plage de températures hors de la période mise en évidence
+water_temp_create_figures,Water temperature report plot creation button,Create report figures,Créer les graphiques du rapport
+water_temp_creating_figures,Water temperature report plot creation busy label,Creating figures…,Création des graphiques…
+water_temp_report_figures,Water temperature report figures heading,Report figures,Graphiques du rapport
+generate_report,Water temperature report generation button,Generate report,Produire le rapport
+water_temp_selected_site,Fallback site name in water temperature report,Selected station,Station sélectionnée
+water_temp_report_bundle,Water temperature report bundle filename suffix,Water temperature report,rapport de température de l'eau
+water_temp_no_data,Water temperature report has no data for the selection,No water temperature data were found for the selected time series and date range.,Aucune donnée de température de l'eau n'a été trouvée pour la série chronologique et la période sélectionnées.
+water_temp_daily_mean,Water temperature report daily mean plot title,Daily mean temperature,Température moyenne quotidienne
+water_temp_daily_max,Water temperature report daily maximum plot title,Daily maximum temperature,Température maximale quotidienne
+water_temp_seven_day_max,Water temperature report seven day rolling maximum plot title,Seven-day rolling average of daily maximum temperature,Moyenne mobile sur sept jours de la température maximale quotidienne
+temperature_c,Water temperature report plot vertical axis,Temperature (°C),Température (°C)
+water_temp_timeseries_required,Water temperature report requires a selected time series,Select a water temperature time series from the table before creating report figures.,Sélectionnez une série chronologique de température de l'eau dans le tableau avant de créer les graphiques du rapport.
+water_temp_date_range_invalid,Invalid water temperature report date range,Provide a valid report date range.,Indiquez une période de rapport valide.
+water_temp_highlight_range_invalid,Invalid water temperature highlighted date range,Provide a valid highlight date range.,Indiquez une période valide pour la mise en évidence.
+water_temp_highlight_within_report,Water temperature highlight range must be within report dates,The highlighted date range must fall within the report date range.,La période mise en évidence doit être comprise dans la période du rapport.
+water_temp_validation_title,Water temperature figure validation dialog title,Water temperature figures: check the selections,Graphiques de température de l'eau : vérifier les sélections
+water_temp_plot_error_prefix,Water temperature plot generation error prefix,Error creating water temperature figures:,Erreur lors de la création des graphiques de température de l'eau :
+water_temp_report_error_prefix,Water temperature report generation error prefix,Error generating the water temperature report:,Erreur lors de la production du rapport de température de l'eau :
+water_temp_template_missing,Water temperature report template is missing,The water temperature report template could not be found.,Le modèle du rapport de température de l'eau est introuvable.
+water_temp_template_stage_error,Water temperature report template staging failed,Unable to prepare the water temperature report template.,Impossible de préparer le modèle du rapport de température de l'eau.
+flood_main,Main flood dashboard controls,Dashboard controls,Paramètres du tableau de bord
+advanced_settings,Advanced flood dashboard controls,Advanced settings,Paramètres avancés
+community,Community selection,Community,Collectivité
+flood_community_help,Community control help,Select the community whose stations and summary data are shown.,Sélectionnez la collectivité dont les stations et les données sommaires seront affichées.
+flood_layout,Dashboard panel layout,Panel layout,Disposition des panneaux
+flood_layout_help,Dashboard panel layout help,Choose a compact two-column layout or a single column.,Choisissez une disposition compacte sur deux colonnes ou sur une seule colonne.
+flood_layout_compact,Compact dashboard layout,Compact,Compacte
+flood_layout_single_column,Single-column dashboard layout,Single column,Une colonne
+flood_past_weeks,Number of weeks before reference time,Weeks before reference time,Semaines avant l'heure de référence
+flood_past_weeks_help,Past time window help,Number of weeks shown before the reference time.,Nombre de semaines affichées avant l'heure de référence.
+reference_time,Dashboard reference time,Reference time,Heure de référence
+flood_reference_time_help,Reference time control help,Use a past reference time to review conditions as they appeared then.,Choisissez une heure passée pour examiner les conditions telles qu'elles étaient à ce moment.
+flood_future_weeks,Number of weeks after reference time,Weeks after reference time,Semaines après l'heure de référence
+flood_future_weeks_help,Future time window help,Number of weeks shown after the reference time.,Nombre de semaines affichées après l'heure de référence.
+flood_export,Dashboard report export control,Export report,Exporter le rapport
+flood_parameter_help,Dashboard parameter selector help,Choose the water or snow variable to summarize and plot.,Choisissez la variable sur l'eau ou la neige à résumer et à représenter.
+flood_parameter_placeholder,Dashboard parameter selector placeholder,Select a parameter,Sélectionnez un paramètre
+water_level,Water level parameter choice,Water level,Niveau d'eau
+water_flow,Water flow parameter choice,Water flow,Débit d'eau
+air_temperature,Air temperature parameter choice,Air temperature,Température de l'air
+flood_parameter_fdd,Freezing degree days parameter choice,Freezing degree days (FDD),Degrés-jours de gel (FDD)
+flood_parameter_ddt,Thawing degree days parameter choice,Thawing degree days (DDT),Degrés-jours de dégel (DDT)
+flood_parameter_swe_pillow,Snow pillow water equivalent parameter choice,Snow water equivalent (snow pillow),Équivalent en eau de la neige (coussin nivométrique)
+flood_parameter_depth_pillow,Snow pillow snow depth parameter choice,Snow depth (snow pillow),Épaisseur de neige (coussin nivométrique)
+flood_parameter_swe_survey,Snow survey water equivalent parameter choice,Snow water equivalent (survey),Équivalent en eau de la neige (mesure sur le terrain)
+flood_parameter_depth_survey,Snow survey snow depth parameter choice,Snow depth (survey),Épaisseur de neige (mesure sur le terrain)
+flood_historical_traces,Historical data traces selector,Historical traces,Tracés historiques
+flood_primary_historical_help,Primary historical traces help,Select years to overlay on the primary station plot.,Sélectionnez les années à superposer au graphique de la station principale.
+flood_secondary_historical_help,Secondary historical traces help,Select years to overlay on the secondary station plot.,Sélectionnez les années à superposer au graphique de la station secondaire.
+flood_years_placeholder,Historical years selector placeholder,Select years,Sélectionnez des années
+station,Station selector,Station,Station
+flood_primary_station_help,Primary station selector help,Select the station for the primary plot and summary.,Sélectionnez la station du graphique et du résumé principaux.
+flood_secondary_station_help,Secondary station selector help,Select an optional station for a second variable.,Sélectionnez une station facultative pour afficher une deuxième variable.
+flood_station_placeholder,Station selector placeholder,Select a station,Sélectionnez une station
+flood_summary_mode,Summary table mode selector,Summary view,Vue du résumé
+flood_summary_mode_help,Summary table mode help,Choose a recent summary or a comparison with recent or historical conditions.,Choisissez un résumé récent ou une comparaison avec les conditions récentes ou historiques.
+flood_summary_relative,Recent conditions summary,Recent conditions,Conditions récentes
+flood_summary_changes,Recent changes summary,Changes over recent periods,Variations au cours des périodes récentes
+flood_summary_historical,Historical comparison summary,Compared with historical conditions,Comparaison avec les conditions historiques
+flood_summary_surveys,Snow survey summary,Snow surveys,Relevés nivométriques
+flood_mode_placeholder,Summary view selector placeholder,Select a summary view,Sélectionnez une vue du résumé
+flood_show_legend,Show plot legend,Show legend,Afficher la légende
+flood_show_legend_help,Plot legend help,Show or hide the legend for the station plot.,Afficher ou masquer la légende du graphique de la station.
+flood_label_traces,Label historical traces,Label traces,Étiqueter les tracés
+flood_label_traces_help,Historical trace labels help,Show the year beside each historical trace.,Afficher l'année à côté de chaque tracé historique.
+flood_filter_upstream,Show upstream gauges,Show upstream gauges,Afficher les stations en amont
+flood_filter_upstream_help,Upstream gauge filter help,Include upstream gauges identified by encoding 2 in the station choices.,Inclure dans les choix les stations en amont identifiées par le code 2.
+flood_precip_accumulation,Precipitation accumulation period,Accumulation period,Période d'accumulation
+flood_precip_accumulation_help,Precipitation accumulation help,Choose the rolling period used to calculate precipitation totals.,Choisissez la période mobile utilisée pour calculer les précipitations cumulées.
+flood_accumulation_placeholder,Precipitation accumulation selector placeholder,Select a period,Sélectionnez une période
+flood_accumulation_week,One-week precipitation accumulation,1 week,1 semaine
+flood_secondary_parameter,Secondary plot parameter selector,Second parameter,Deuxième paramètre
+flood_secondary_parameter_help,Secondary plot parameter help,Choose an optional second variable to plot alongside the primary variable.,Choisissez une deuxième variable facultative à tracer avec la variable principale.
+flood_summary,Station summary card heading,Station summary,Résumé des stations
+flood_station_map_heading,Station map card heading,Station map,Carte des stations
+flood_images,Community image series heading,Community images,Images de la collectivité
+flood_no_images,No image timestamp label,No images available,Aucune image disponible
+flood_image_location_help,Image series selector help,Select an image series by station.,Sélectionnez une série d'images par station.
+flood_previous_image_help,Previous image button help,Show the previous image in this series.,Afficher l'image précédente de cette série.
+flood_next_image_help,Next image button help,Show the next image in this series.,Afficher l'image suivante de cette série.
+flood_image_connection_unavailable,Image panel connection unavailable,Image series are unavailable because the database connection is not active.,Les séries d'images ne sont pas disponibles car la connexion à la base de données est inactive.
+flood_recent_images_unavailable,Recent images unavailable,No images are available for this station.,Aucune image n'est disponible pour cette station.
+flood_image_bytes_unavailable,Image content unavailable,The selected image content is unavailable.,Le contenu de l'image sélectionnée est indisponible.
+flood_image_render_error,Image could not be displayed,The selected image could not be displayed.,L'image sélectionnée n'a pas pu être affichée.
+flood_no_stations_available,No stations available,No stations are available for the selected community and parameter.,Aucune station n'est disponible pour la collectivité et le paramètre sélectionnés.
+flood_no_stations_for_filters,No stations match current filters,No stations match the selected filters.,Aucune station ne correspond aux filtres sélectionnés.
+flood_precipitation_display,Precipitation plot label with accumulation period,Precipitation total over %s,Précipitations cumulées sur %s
+flood_precipitation_axis,Precipitation plot vertical axis label,"Precipitation total over %s (mm)",Précipitations cumulées sur %s (mm)
+message,Summary table message column,Message,Message
+flood_col_last_reading,Summary table last reading time column,Last reading (UTC−7),Dernière lecture (UTC−7)
+flood_col_7_day,Seven-day precipitation total column,7-day total (mm),Total sur 7 jours (mm)
+flood_col_1_month,One-month precipitation total column,1-month total (mm),Total sur 1 mois (mm)
+flood_col_6_month,Six-month precipitation total column,6-month total (mm),Total sur 6 mois (mm)
+flood_col_data_age,Summary table data age column,Data age (h),Âge des données (h)
+flood_col_historical_median,Summary table historical median column,Historical median,Médiane historique
+flood_col_most_recent_month,Summary table latest month column,Most recent month,Mois le plus récent
+flood_col_most_recent_value,Summary table latest value column,Most recent value,Valeur la plus récente
+flood_col_mar_1,March first-day value column,Mar 1,1er mars
+flood_col_apr_1,April first-day value column,Apr 1,1er avril
+flood_col_may_1,May first-day value column,May 1,1er mai
+flood_col_latest,Latest summary value column,Latest,Plus récent
+flood_latest_sample,Fallback label when no March April or May value exists,Latest sample,Dernier échantillon
+flood_col_percentile,Summary percentile column,Percentile,Percentile
+flood_col_relative_historical,Relative-to-historical percentage column,Relative to historical (%),Par rapport à l'historique (%)
+flood_col_24_hour_pct,24-hour change percentage column,24-hour change (%),Variation sur 24 h (%)
+flood_col_48_hour_pct,48-hour change percentage column,48-hour change (%),Variation sur 48 h (%)
+flood_col_1_week_pct,One-week change percentage column,1-week change (%),Variation sur 1 semaine (%)
+flood_col_24_hour_change,24-hour change column,24-hour change,Variation sur 24 h
+flood_col_48_hour_change,48-hour change column,48-hour change,Variation sur 48 h
+flood_col_1_week_change,One-week change column,1-week change,Variation sur 1 semaine
+flood_no_data,Plot message when there are no observations for a station,No data are available for %s.,Aucune donnée n'est disponible pour %s.
+flood_no_plottable_data,Plot message when observations cannot be plotted,No plottable data are available for %s.,Aucune donnée exploitable n'est disponible pour %s.
+flood_plot_no_data,Plot title when a station has no observations,No data for %s (%s),Aucune donnée pour %s (%s)
+flood_observed,Observed plot trace name,Observed,Données observées
+flood_observed_hover,Observed plot hover label,Observed: %{y:.3f},Valeur observée : %{y:.3f}
+flood_observed_accumulation,Observed precipitation accumulation trace name,Observed %s accumulation,Précipitations cumulées observées sur %s
+flood_daily_observed,Daily observed plot trace name,Daily observed,Données journalières observées
+flood_low_label,Plot low-value annotation label,Low,Valeur basse
+flood_high_label,Plot high-value annotation label,High,Valeur haute
+flood_station_plot_title,Station plot panel title,Station plot,Graphique de la station
+flood_plot_stale,Message shown when plot inputs change,Plot inputs changed. Click Create plot to refresh.,Les paramètres du graphique ont changé. Cliquez sur Créer le graphique pour l'actualiser.
+flood_plot_choose,Initial station plot guidance,Choose parameters and stations then click Create plot.,Choisissez les paramètres et les stations puis cliquez sur Créer le graphique.
+flood_plot_no_selected_data,Plot message when the selected station and parameter have no data,No data are available for the selected station and parameter.,Aucune donnée n'est disponible pour la station et le paramètre sélectionnés.
+flood_table_no_data,Export message when a summary table has no rows,No table data are available.,Aucune donnée n'est disponible dans le tableau.
+flood_plots_no_data,Export message when plots cannot be generated,No plots are available for this parameter in the selected community.,Aucun graphique n'est disponible pour ce paramètre dans la collectivité sélectionnée.
+flood_images_no_data,Export message when no community image series exist,No image series are available for this community.,Aucune série d'images n'est disponible pour cette collectivité.
+flood_latest_image,Latest community image timestamp label,Latest image,Image la plus récente
+flood_report_title,HTML dashboard report title,Flood dashboard report,Rapport du tableau de bord des inondations
+flood_col_generated,HTML dashboard report generation timestamp label,Generated,Produit le
+flood_map,HTML dashboard report map heading,Map,Carte
+flood_no_map_data,HTML dashboard report missing map message,No map data are available for this community.,Aucune donnée cartographique n'est disponible pour cette collectivité.
+flood_col_table,HTML dashboard report table heading,Table,Tableau
+flood_map_legend,Station map legend heading,Legend,Légende
+flood_upstream_gauge,Station map upstream gauge category,Upstream gauge (encoding 2),Station en amont (code 2)
+hydrometric,Station map hydrometric station category,Hydrometric,Hydrométrique
+meteorological,Station map meteorological station category,Meteorological,Météorologique
+other,Station map other station category,Other,Autre
+flood_gauge_images,Station map gauge image series category,Gauge image series,Série d'images de la station
+flood_popup_no_parameters,Station map no supported parameter message,No supported parameters,Aucun paramètre pris en charge
+flood_popup_basin,Basin popup basin name label,Basin,Bassin versant
+flood_popup_station_name,Station popup station name label,Station name,Nom de la station
+flood_popup_image_station,Image popup station name label,Image station,Station d'images
+flood_popup_image_series_id,Image popup image series identifier label,Image series ID,Identifiant de la série d'images
+flood_unknown_station,Fallback name for station with no name,Unknown station,Station inconnue
+wq_report_dates,Multiple target dates for AquaCache report,Report dates,Dates du rapport
+wq_add_report_date,Add one selected target date,Add date,Ajouter la date
+wq_date_mode,Choose specific report dates or a range,Date selection,Mode de sélection des dates
+wq_date_mode_specific,Choose individual target dates,Select specific dates,Sélectionner des dates précises
+wq_date_mode_range,Choose a continuous date interval,Select a date range,Sélectionner une période
+wq_report_range_start,Inclusive date-range start,Start date,Date de début
+wq_report_range_end,Inclusive date-range end,End date,Date de fin
+wq_date_approx_mode,Choose shared or per-date matching window,Date matching window,Marge de correspondance des dates
+wq_date_approx_shared,Shared date matching window,Use one value for all dates,Utiliser une valeur pour toutes les dates
+wq_date_approx_per_date,Per-date matching window,Set a value for each date,Définir une valeur pour chaque date
+wq_date_approx_for_date,Per-date date matching window,Days around %s,Jours autour du %s
+wq_matrix_states,Matrix state selector,Matrix state(s),État(s) de la matrice
+wq_err_aquacache_dates,Invalid AquaCache report date selection,Select one or more valid AquaCache report dates.,Sélectionnez une ou plusieurs dates valides pour le rapport AquaCache.
+wq_err_matrix_state_invalid,Invalid matrix-state selection,One or more selected matrix states are invalid.,Un ou plusieurs états de matrice sélectionnés ne sont pas valides.
+wq_err_sample_fraction_invalid,Invalid sample-fraction selection,One or more selected sample fractions are invalid.,Une ou plusieurs fractions d'échantillon sélectionnées ne sont pas valides.
+wq_tooltip_data_source,Data-source selector help,Choose AquaCache for YGwater database data or EQWin to use a configured EQWin database file.,Choisissez AquaCache pour les données de la base YGwater ou EQWin pour utiliser un fichier de base de données EQWin configuré.
+wq_tooltip_eqwin_source,EQWin database selector help,Select the configured EQWin database file to use for this report.,Sélectionnez le fichier de base de données EQWin configuré à utiliser pour ce rapport.
+wq_tooltip_report_date_eq,EQWin target-date help,Choose the target date for the EQWin report. Data may come from a nearby sample within the matching window.,Choisissez la date cible du rapport EQWin. Les données peuvent provenir d'un échantillon voisin dans la marge de correspondance.
+wq_tooltip_report_date_ac,AquaCache target-date help,Choose an individual target date then click Add date. Add each date you want in the report; this is not a date range.,Choisissez une date cible puis cliquez sur Ajouter la date. Ajoutez chaque date à inclure dans le rapport; il ne s'agit pas d'une période.
+wq_tooltip_date_mode,Date-selection mode help,"Choose individual target dates or an inclusive date range. Range mode includes every eligible sample collected between the start and end dates. Each sample gets its own column; days without samples add no columns. The date matching window does not apply.","Choisissez des dates cibles précises ou une période inclusive. Le mode période inclut chaque échantillon admissible prélevé entre les dates de début et de fin. Chaque échantillon a sa propre colonne; les jours sans échantillon n'ajoutent aucune colonne. La marge de correspondance ne s'applique pas."
+wq_tooltip_report_range,Inclusive date-range help,"Choose the first and last dates to include. Both dates are included. Every eligible sample in the interval gets its own column, including multiple samples collected on the same day.","Choisissez les première et dernière dates à inclure. Les deux dates sont incluses. Chaque échantillon admissible de la période a sa propre colonne, y compris plusieurs échantillons prélevés le même jour."
+wq_date_not_added_warning,Reminder for AquaCache target date,This date is not in your report yet. Click Add date to include it.,Cette date n'est pas encore dans votre rapport. Cliquez sur Ajouter la date pour l'inclure.
+wq_tooltip_add_report_date,Add-date button help,Add the selected Report date to Report dates. You can add several dates; duplicates are ignored.,Ajoutez la date du rapport sélectionnée aux dates du rapport. Vous pouvez ajouter plusieurs dates; les doublons sont ignorés.
+wq_tooltip_report_dates,Report-dates selector help,These are the target dates included in the AquaCache report. Remove a date with its x; the dates do not form a continuous range.,Ces dates cibles sont incluses dans le rapport AquaCache. Supprimez une date avec son x; les dates ne forment pas une période continue.
+wq_tooltip_date_approx_mode,Date-matching mode help,Use one matching window for every report date or set a different window for each date.,Utilisez la même marge de correspondance pour toutes les dates du rapport ou définissez une marge différente pour chaque date.
+wq_tooltip_date_match_window,Date-matching window help,Number of days before or after each target date to search. The closest sample date with results matching the selected parameters and sample filters is used. Enter 0 to require an exact date.,Nombre de jours avant ou après chaque date cible où rechercher des données. La date d'échantillon la plus proche avec des résultats correspondant aux paramètres et filtres d'échantillon sélectionnés est utilisée. Saisissez 0 pour exiger une date exacte.
+wq_tooltip_workbook_layout,Workbook-layout selector help,"Choose whether each worksheet covers one date, one location, or one parameter. For a date range, each data column represents one sample; multiple samples from the same day have separate columns.","Choisissez si chaque feuille porte sur une date, un emplacement ou un paramètre. Pour une période, chaque colonne de données représente un échantillon; plusieurs échantillons du même jour ont des colonnes distinctes."
+wq_tooltip_locations,Location selector help,Select one or more locations to include in the report.,Sélectionnez un ou plusieurs emplacements à inclure dans le rapport.
+wq_tooltip_parameters,Parameter selector help,Choose parameters to include. Choices match results at the sample dates the report will use and update with your matrix-state and sample-fraction selections.,Choisissez les paramètres à inclure. Les choix correspondent aux résultats des dates d'échantillon utilisées par le rapport et sont mis à jour selon les matrices et fractions sélectionnées.
+wq_tooltip_matrix_states,Matrix-state selector help,Limit results to selected sample matrices such as water or sediment. Choices are limited by the selected parameters and sample fractions; leave blank to include all available matrices.,"Limitez les résultats aux matrices sélectionnées, comme l'eau ou les sédiments. Les choix sont filtrés selon les paramètres et les fractions sélectionnés; laissez vide pour inclure toutes les matrices disponibles."
+wq_tooltip_sample_fractions,Sample-fraction selector help,Limit results to selected fractions such as dissolved or total. Choices are limited by the selected parameters and matrix states; leave blank to include all available fractions.,"Limitez les résultats aux fractions sélectionnées, comme dissoute ou totale. Les choix sont filtrés selon les paramètres et les matrices sélectionnés; laissez vide pour inclure toutes les fractions disponibles."
+wq_tooltip_guidelines,Guideline selector help,"Choose the applicable guidelines to include in the workbook. The choices depend on the selected dates, locations, parameters, and sample filters.","Choisissez les recommandations applicables à inclure dans le classeur. Les choix dépendent des dates, emplacements, paramètres, et filtres d'échantillon sélectionnés."

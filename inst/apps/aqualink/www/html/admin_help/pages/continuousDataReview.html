@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review and edit timeseries data help</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; margin: 2rem auto; max-width: 900px; padding: 0 1rem; color: #222; }
+    h1, h2 { color: #244c5a; }
+    h2 { margin-top: 1.6rem; }
+    .note { background: #eef6f7; border-left: 4px solid #07899a; padding: 0.75rem 1rem; }
+    li { margin: 0.35rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Review and edit timeseries data</h1>
+  <p>Use this page to inspect a continuous timeseries and add or update its grades, approvals, qualifiers, and corrections.</p>
+
+  <h2>Choose a timeseries and view its data</h2>
+  <ol>
+    <li>Select a row in <strong>Timeseries selection</strong>.</li>
+    <li>Open <strong>Review data and choose a date range</strong> to see the plot. The plot starts at the latest year available for that timeseries.</li>
+    <li>Use the plot toolbar to zoom or pan. Choose <strong>Show latest year</strong> or <strong>Show full timeseries</strong> to change the plot view. These buttons do not set review dates or dates saved with a record.</li>
+  </ol>
+  <p class="note"><strong>Review dates and record dates have different jobs.</strong> The optional review start and end dates filter the list of records that overlap a period and shade that period on the plot. They do not set dates on a grade, approval, qualifier, or correction.</p>
+
+  <h2>Find records for a period</h2>
+  <p>Enter both review dates to list grades, approvals, qualifiers, and corrections that overlap that interval. You can enter the dates directly, pick them from the plot, drag across the plot to choose both, or use the snap table to line them up with an existing record, field visit, or instrument event. Choose <strong>Clear review range</strong> to remove the filter; the plot returns to the latest year.</p>
+  <p>Times are shown in the selected input timezone. The database stores datetimes in UTC.</p>
+
+  <h2>Add or edit a record</h2>
+  <ol>
+    <li>In <strong>Manage grades, approvals, qualifiers, and corrections</strong>, choose the record type.</li>
+    <li>To edit an existing record, select its row in the table for the current type. Its saved values and start/end datetimes appear in the form.</li>
+    <li>Change only the fields you want to change. Leave the record start and end datetimes as shown when the time interval should stay the same.</li>
+    <li>To add a new record, enter its start and end datetimes in <strong>Dates saved with this record</strong>. You can copy a valid review range into these fields, then adjust either date before saving.</li>
+    <li>Choose <strong>Add</strong> or <strong>Update</strong> to save. The button label shows which action will occur. Use <strong>Clear selected record</strong> to leave edit mode.</li>
+    <li>After a successful save, the form returns to add mode. To edit that record again, select its row from the records table.</li>
+  </ol>
+
+  <h2>What happens when records overlap</h2>
+  <ul>
+    <li>Grades and approvals may replace overlapping records or adjust their date bounds. Review the listed records in the confirmation before applying the change.</li>
+    <li>Qualifiers may overlap; adding one does not remove another qualifier.</li>
+    <li>Corrections can stack. Each correction type has a priority, and corrections are applied in priority order. The confirmation lists existing corrections over the same dates and shows the selected type's priority.</li>
+  </ul>
+
+  <h2>Correction fields</h2>
+  <p>Choose a correction type to see its required fields. Labels describe the expected value, such as an offset, scaling percentage, time window, or equation. When editing, the form is filled with the saved correction values. Check the dates, type, values, and priority before applying the update.</p>
+</body>
+</html>
