@@ -222,7 +222,7 @@ constituents,,Constituents,Constituants
 yes,,Yes,Oui
 no,,No,Non
 active,,Active,Actif
-publicly_visible,,Publicly visible,Visible publiquement
+default_show,,Show by default,Afficher par défaut
 depth,,Depth,Profondeur
 path,,Path,Chemin
 alias,,Alias,Alias
@@ -597,7 +597,7 @@ four,Number word four,Four,Quatre
 disc_ac_guidelines,Discrete plot AquaCache guideline selector,Water quality guidelines,Lignes directrices de qualité de l'eau
 season,Season label,Season,Saison
 collection_method(s),Collection method selector,Collection method(s),Méthode(s) de prélèvement
-result_speciation(s),Result speciation selector,Result speciation(s),Spéciation(s) du résultat
+result_descriptor(s),Result descriptor selector,Result descriptor(s),Descripteur(s) du résultat
 sample_fraction(s),Sample fraction selector,Sample fraction(s),Fraction(s) de l'échantillon
 result_value_type(s),Result value type selector,Result value type(s),Type(s) de valeur du résultat
 result_type(s),Result type selector,Result type(s),Type(s) de résultat
@@ -919,3 +919,29 @@ wq_tooltip_parameters,Parameter selector help,Choose parameters to include. Choi
 wq_tooltip_matrix_states,Matrix-state selector help,Limit results to selected sample matrices such as water or sediment. Choices are limited by the selected parameters and sample fractions; leave blank to include all available matrices.,"Limitez les résultats aux matrices sélectionnées, comme l'eau ou les sédiments. Les choix sont filtrés selon les paramètres et les fractions sélectionnés; laissez vide pour inclure toutes les matrices disponibles."
 wq_tooltip_sample_fractions,Sample-fraction selector help,Limit results to selected fractions such as dissolved or total. Choices are limited by the selected parameters and matrix states; leave blank to include all available fractions.,"Limitez les résultats aux fractions sélectionnées, comme dissoute ou totale. Les choix sont filtrés selon les paramètres et les matrices sélectionnés; laissez vide pour inclure toutes les fractions disponibles."
 wq_tooltip_guidelines,Guideline selector help,"Choose the applicable guidelines to include in the workbook. The choices depend on the selected dates, locations, parameters, and sample filters.","Choisissez les recommandations applicables à inclure dans le classeur. Les choix dépendent des dates, emplacements, paramètres, et filtres d'échantillon sélectionnés."
+value_derivation_metadata_heading,Continuous aggregation metadata heading,Value derivation methods,Méthodes de dérivation des valeurs
+aggregation_metadata_load_error,Continuous aggregation metadata load warning,Could not load value derivation metadata.,Impossible de charger les métadonnées de dérivation des valeurs.
+aggregation_details_link,Link to value derivation details,see derivation details,voir les détails de dérivation
+aggregation_metadata_timeseries_id,Aggregation method timeseries ID,Timeseries ID,ID de la série temporelle
+aggregation_metadata_aggregation_method_id,Aggregation method ID,Method ID,ID de méthode
+aggregation_metadata_step_id,Aggregation operation ID,Operation ID,ID d'opération
+aggregation_metadata_applicable_from,Aggregation method start boundary,Applicable from (UTC),Applicable à partir du (UTC)
+aggregation_metadata_applicable_until,Aggregation method end boundary,Applicable until (exclusive; UTC),Applicable jusqu'au (exclusif; UTC)
+aggregation_metadata_source_name,Aggregation method source name,Source name,Nom de la source
+aggregation_metadata_source_reference,Aggregation method source reference,Source reference,Référence de la source
+aggregation_metadata_note,Aggregation method note,Method note,Note sur la méthode
+aggregation_metadata_stage_number,Aggregation calculation stage,Stage,Étape
+aggregation_metadata_operation_type,Aggregation operation type,Operation,Opération
+aggregation_metadata_aggregation_type,Aggregation type name,Aggregation type,Type d'agrégation
+aggregation_metadata_window_start_offset,Aggregation window start offset,Window start offset,Décalage de début de fenêtre
+aggregation_metadata_window_end_offset,Aggregation window end offset,Window end offset,Décalage de fin de fenêtre
+aggregation_metadata_evaluation_interval,Aggregation output interval,Evaluation interval,Intervalle d'évaluation
+aggregation_metadata_evaluation_anchor,Aggregation output anchor,Evaluation anchor,Ancrage d'évaluation
+aggregation_metadata_evaluation_timezone,Aggregation output timezone,Evaluation timezone,Fuseau horaire d'évaluation
+aggregation_metadata_expected_input_interval,Aggregation expected input interval,Expected input interval,Intervalle d'entrée attendu
+aggregation_metadata_input_weighting,Aggregation input weighting,Input weighting,Pondération des entrées
+aggregation_metadata_minimum_input_count,Aggregation minimum count,Minimum input count,Nombre minimal d'entrées
+aggregation_metadata_minimum_coverage,Aggregation minimum coverage,Minimum coverage,Couverture minimale
+aggregation_metadata_missing_data_policy,Aggregation missing data rule,Missing data policy,Règle pour les données manquantes
+aggregation_metadata_calculation_parameters,Aggregation calculation parameters,Calculation parameters,Paramètres de calcul
+aggregation_metadata_inputs,Aggregation operation input links,Inputs,Entrées

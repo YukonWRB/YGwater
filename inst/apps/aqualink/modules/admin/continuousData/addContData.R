@@ -543,7 +543,7 @@ addContData <- function(id, language) {
            md.timeseries_type_code,
            md.timeseries_type,
            ts.active,
-           ts.publicly_visible,
+           ts.default_show,
            ts.default_owner,
            md.sensor_priority,
            md.start_datetime,
@@ -618,7 +618,7 @@ addContData <- function(id, language) {
           md.timeseries_type_code,
           md.timeseries_type,
           ts.active,
-          ts.publicly_visible,
+          ts.default_show,
           md.sensor_priority,
           md.start_datetime,
           md.end_datetime,
@@ -680,7 +680,7 @@ addContData <- function(id, language) {
       df$parameter <- as.factor(df$parameter)
       df$timeseries_type <- as.factor(df$timeseries_type)
       df$active <- as.factor(df$active)
-      df$publicly_visible <- as.factor(df$publicly_visible)
+      df$default_show <- as.factor(df$default_show)
       df$sensor_priority <- as.factor(df$sensor_priority)
       df$default_owner <- as.factor(df$default_owner)
 
@@ -942,7 +942,7 @@ addContData <- function(id, language) {
       df$timeseries_type <- as.factor(df$timeseries_type)
       df$can_accept_data <- as.factor(df$can_accept_data)
       df$active <- as.factor(df$active)
-      df$publicly_visible <- as.factor(df$publicly_visible)
+      df$default_show <- as.factor(df$default_show)
       df$sensor_priority <- as.factor(df$sensor_priority)
 
       DT::datatable(

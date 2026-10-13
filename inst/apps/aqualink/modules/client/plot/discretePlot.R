@@ -516,7 +516,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       AC_result_types = cached$result_types,
       AC_sample_fractions = cached$sample_fractions,
       AC_result_value_types = cached$result_value_types,
-      AC_result_speciations = cached$result_speciations
+      AC_result_descriptors = cached$result_descriptors
     )
 
     browse_selected_sample_ids <- reactiveVal(numeric(0))
@@ -672,7 +672,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "sub_locations_AC",
         "sample_types_AC",
         "collection_methods_AC",
-        "result_speciations_AC",
+        "result_descriptors_AC",
         "sample_fractions_AC",
         "result_value_types_AC",
         "result_types_AC",
@@ -826,7 +826,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "SELECT DISTINCT",
         "s.sub_location_id, s.media_id, s.sample_type, s.collection_method,",
         "r.result_type, r.sample_fraction_id, r.result_value_type,",
-        "r.result_speciation_id",
+        "r.result_descriptor_id",
         "FROM discrete.samples AS s",
         "INNER JOIN discrete.results AS r ON s.sample_id = r.sample_id",
         ac_where(
@@ -1072,7 +1072,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "result_types",
         "sample_fractions",
         "result_value_types",
-        "result_speciations",
+        "result_descriptors",
         "include_blanks",
         "duplicate_action",
         "sample_ids",
@@ -1631,11 +1631,11 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "result_value_type",
         "result_value_type_id"
       )
-      result_speciations <- ac_option_rows(
+      result_descriptors <- ac_option_rows(
         scope,
-        moduleData$AC_result_speciations,
-        "result_speciation_id",
-        "result_speciation_id"
+        moduleData$AC_result_descriptors,
+        "result_descriptor_id",
+        "result_descriptor_id"
       )
 
       sub_loc_choices <- stats::setNames(
@@ -1662,9 +1662,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         result_value_types$result_value_type_id,
         titleCase(result_value_types$result_value_type, plot_lang)
       )
-      result_speciation_choices <- stats::setNames(
-        result_speciations$result_speciation_id,
-        result_speciations$result_speciation
+      result_descriptor_choices <- stats::setNames(
+        result_descriptors$result_descriptor_id,
+        result_descriptors$result_descriptor
       )
 
       blank_available <- any(
@@ -1700,10 +1700,10 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             input$collection_methods_AC
           ),
           ac_selectize(
-            "result_speciations_AC",
-            tr("result_speciation(s)", language$language),
-            result_speciation_choices,
-            input$result_speciations_AC
+            "result_descriptors_AC",
+            tr("result_descriptor(s)", language$language),
+            result_descriptor_choices,
+            input$result_descriptors_AC
           )
         )
       )
@@ -2466,7 +2466,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "sub_locations_AC",
         "sample_types_AC",
         "collection_methods_AC",
-        "result_speciations_AC",
+        "result_descriptors_AC",
         "sample_fractions_AC",
         "result_value_types_AC",
         "result_types_AC",
@@ -2749,7 +2749,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         result_types,
         sample_fractions,
         result_value_types,
-        result_speciations,
+        result_descriptors,
         include_blanks,
         duplicate_action,
         sample_ids,
@@ -2810,7 +2810,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 result_types = result_types,
                 sample_fractions = sample_fractions,
                 result_value_types = result_value_types,
-                result_speciations = result_speciations,
+                result_descriptors = result_descriptors,
                 include_blanks = include_blanks,
                 duplicate_action = duplicate_action,
                 sample_ids = sample_ids,
@@ -3007,7 +3007,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             result_types = NULL,
             sample_fractions = NULL,
             result_value_types = NULL,
-            result_speciations = NULL,
+            result_descriptors = NULL,
             include_blanks = TRUE,
             duplicate_action = "show",
             sample_ids = NULL,
@@ -3076,7 +3076,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             result_types = NULL,
             sample_fractions = NULL,
             result_value_types = NULL,
-            result_speciations = NULL,
+            result_descriptors = NULL,
             include_blanks = TRUE,
             duplicate_action = "show",
             sample_ids = NULL,
@@ -3270,12 +3270,12 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             } else {
               NULL
             },
-            result_speciations = if (use_guided_filters) {
+            result_descriptors = if (use_guided_filters) {
               keep_ac_ids(
-                input$result_speciations_AC,
-                moduleData$AC_result_speciations,
-                "result_speciation_id",
-                "result_speciation_id"
+                input$result_descriptors_AC,
+                moduleData$AC_result_descriptors,
+                "result_descriptor_id",
+                "result_descriptor_id"
               )
             } else {
               NULL

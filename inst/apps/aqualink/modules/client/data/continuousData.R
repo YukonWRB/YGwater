@@ -2784,6 +2784,21 @@ contData <- function(id, language, inputs) {
         # Get the data together
         selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
         selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
+        aggregation_windows <- data.table::data.table(
+          start_dt = as.POSIXct(
+            as.Date(input$modal_date_range[[1]]),
+            tz = "UTC"
+          ),
+          end_dt = as.POSIXct(
+            as.Date(input$modal_date_range[[2]]) + 1,
+            tz = "UTC"
+          )
+        )
+        aggregation_metadata <- YGwater:::fetch_timeseries_aggregation_metadata(
+          session$userData$AquaCache,
+          selected_tsids,
+          windows = aggregation_windows
+        )
 
         grade_expr <- if (language$abbrev == "fr") {
           "COALESCE(gt.grade_type_description_fr, gt.grade_type_description) AS cote"
@@ -2831,6 +2846,15 @@ contData <- function(id, language, inputs) {
             )
           ),
           timeseries_metadata = table_data()[input$tbl_rows_selected, ],
+          timeseries_aggregation_methods = as.data.frame(
+            aggregation_metadata$methods
+          ),
+          timeseries_aggregation_method_steps = as.data.frame(
+            aggregation_metadata$steps
+          ),
+          timeseries_aggregation_method_step_inputs = as.data.frame(
+            aggregation_metadata$inputs
+          ),
           daily_means_stats = dbGetQueryDT(
             session$userData$AquaCache,
             paste0(

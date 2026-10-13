@@ -66,6 +66,10 @@ addTimeseries <- function(id, language) {
 
     moduleData <- reactiveValues()
     selected_tsid <- reactiveVal(NULL)
+    aggregation_method_editor <- reactiveVal(NULL)
+    pending_aggregation_methods <- reactiveVal(list())
+    submitted_aggregation_methods <- reactiveVal(NULL)
+    aggregation_period_recalc_pending <- reactiveVal(NULL)
     instrument_association_cleared <- reactiveVal(FALSE)
     pending_default_owner_selection <- reactiveVal(character(0))
     pending_default_owner_new <- reactiveVal(NULL)
@@ -85,7 +89,790 @@ addTimeseries <- function(id, language) {
     source_test_state <- reactiveVal(list(status = "ready"))
 
     safe_text <- function(x) {
+      if (is.null(x) || length(x) == 0L) {
+        return("")
+      }
       ifelse(is.na(x), "", as.character(x))
+    }
+
+    aggregation_step_value <- function(step, field) {
+      value <- step[[field]]
+      if (is.null(value) || length(value) == 0L || is.na(value[[1L]])) {
+        return(NULL)
+      }
+      if (is.character(value)) {
+        value <- trimws(value[[1L]])
+        if (!nzchar(value)) {
+          return(NULL)
+        }
+      } else {
+        value <- value[[1L]]
+      }
+      value
+    }
+
+    aggregation_step_or <- function(step, field, default) {
+      value <- aggregation_step_value(step, field)
+      if (is.null(value)) default else value
+    }
+
+    aggregation_steps_to_json <- function(metadata, method_id) {
+      steps <- metadata$steps[
+        metadata$steps$aggregation_method_id == as.character(method_id),
+      ]
+      if (nrow(steps) == 0L) {
+        return("[]")
+      }
+
+      inputs <- metadata$inputs[
+        metadata$inputs$aggregation_method_id == as.character(method_id),
+      ]
+      step_keys <- stats::setNames(
+        paste0("step_", steps$step_id),
+        steps$step_id
+      )
+      step_json <- lapply(seq_len(nrow(steps)), function(i) {
+        step_id <- steps$step_id[[i]]
+        step_inputs <- inputs[inputs$step_id == step_id, , drop = FALSE]
+        input_json <- lapply(seq_len(nrow(step_inputs)), function(j) {
+          list(
+            step_key = unname(step_keys[[step_inputs$input_step_id[[j]]]]),
+            component_weight = as.numeric(step_inputs$component_weight[[j]])
+          )
+        })
+
+        list(
+          key = unname(step_keys[[step_id]]),
+          stage_number = as.integer(steps$stage_number[[i]]),
+          operation_type = steps$operation_type[[i]],
+          aggregation_type_id = as.integer(
+            steps$aggregation_type_id[[i]]
+          ),
+          window_start_offset = aggregation_step_value(
+            as.list(steps[i, , drop = FALSE]),
+            "window_start_offset"
+          ),
+          window_end_offset = aggregation_step_value(
+            as.list(steps[i, , drop = FALSE]),
+            "window_end_offset"
+          ),
+          evaluation_interval = aggregation_step_value(
+            as.list(steps[i, , drop = FALSE]),
+            "evaluation_interval"
+          ),
+          evaluation_anchor = aggregation_step_value(
+            as.list(steps[i, , drop = FALSE]),
+            "evaluation_anchor"
+          ),
+          evaluation_timezone = aggregation_step_value(
+            as.list(steps[i, , drop = FALSE]),
+            "evaluation_timezone"
+          ),
+          expected_input_interval = aggregation_step_value(
+            as.list(steps[i, , drop = FALSE]),
+            "expected_input_interval"
+          ),
+          input_weighting = steps$input_weighting[[i]],
+          minimum_input_count = aggregation_step_value(
+            as.list(steps[i, , drop = FALSE]),
+            "minimum_input_count"
+          ),
+          minimum_coverage = aggregation_step_value(
+            as.list(steps[i, , drop = FALSE]),
+            "minimum_coverage"
+          ),
+          missing_data_policy = steps$missing_data_policy[[i]],
+          calculation_parameters_json = steps$calculation_parameters[[i]],
+          inputs = input_json
+        )
+      })
+
+      as.character(jsonlite::toJSON(
+        step_json,
+        auto_unbox = TRUE,
+        pretty = TRUE,
+        null = "null",
+        na = "null"
+      ))
+    }
+
+    aggregation_datetime_input_value <- function(value) {
+      if (is.null(value) || !length(value) || is.na(value[[1L]])) {
+        return(NULL)
+      }
+      value <- value[[1L]]
+      if (inherits(value, "POSIXt")) {
+        if (is.infinite(as.numeric(value))) {
+          return(NULL)
+        }
+        return(as.POSIXct(value, tz = "UTC"))
+      }
+      value <- trimws(as.character(value))
+      if (!nzchar(value)) {
+        return(NULL)
+      }
+      if (grepl("^(infinity|-infinity)$", value, ignore.case = TRUE)) {
+        return(NULL)
+      }
+
+      formats <- c(
+        "%Y-%m-%dT%H:%M:%OSZ",
+        "%Y-%m-%dT%H:%M:%OS",
+        "%Y-%m-%d %H:%M:%OS",
+        "%Y-%m-%d"
+      )
+      for (format in formats) {
+        parsed <- as.POSIXct(value, format = format, tz = "UTC")
+        if (!is.na(parsed)) {
+          return(parsed)
+        }
+      }
+      NULL
+    }
+
+    aggregation_datetime_db_value <- function(value, unbounded, boundary) {
+      if (isTRUE(unbounded)) {
+        return(if (identical(boundary, "from")) "-infinity" else "infinity")
+      }
+      parsed <- aggregation_datetime_input_value(value)
+      if (is.null(parsed) || is.na(parsed)) {
+        stop("Enter a valid UTC date and time or select the unbounded option.")
+      }
+      parsed
+    }
+
+    aggregation_datetime_picker_value <- function(value) {
+      parsed <- aggregation_datetime_input_value(value)
+      if (is.null(parsed)) {
+        return(as.POSIXct(Sys.time(), tz = "UTC"))
+      }
+      parsed
+    }
+
+    aggregation_boundary_is_unbounded <- function(value, boundary) {
+      if (is.null(value) || !length(value) || is.na(value[[1L]])) {
+        return(FALSE)
+      }
+      if (inherits(value, "POSIXt") && is.infinite(as.numeric(value[[1L]]))) {
+        return(if (identical(boundary, "from")) {
+          as.numeric(value[[1L]]) < 0
+        } else {
+          as.numeric(value[[1L]]) > 0
+        })
+      }
+      sentinel <- if (identical(boundary, "from")) "-infinity" else "infinity"
+      identical(tolower(as.character(value[[1L]])), sentinel)
+    }
+
+    aggregation_boundary_epoch <- function(value, boundary) {
+      if (is.character(value) && identical(tolower(value[[1L]]), "-infinity")) {
+        return(-Inf)
+      }
+      if (is.character(value) && identical(tolower(value[[1L]]), "infinity")) {
+        return(Inf)
+      }
+      parsed <- aggregation_datetime_input_value(value)
+      if (is.null(parsed) || is.na(parsed)) {
+        stop("Enter valid UTC start and end date-times.")
+      }
+      as.numeric(parsed)
+    }
+
+    default_aggregation_method_period <- function(methods) {
+      if (is.list(methods) && "methods" %in% names(methods)) {
+        methods <- methods$methods
+      }
+      method_count <- if (is.data.frame(methods)) {
+        nrow(methods)
+      } else {
+        length(methods)
+      }
+      if (method_count == 0L) {
+        return(list(from = "-infinity", until = "infinity"))
+      }
+
+      last_until <- if (is.data.frame(methods)) {
+        methods$applicable_until[[method_count]]
+      } else {
+        methods[[method_count]]$applicable_until
+      }
+      last_until_is_infinite <- if (inherits(last_until, "POSIXt")) {
+        is.infinite(as.numeric(last_until[[1L]])) &&
+          as.numeric(last_until[[1L]]) > 0
+      } else {
+        identical(tolower(as.character(last_until)), "infinity")
+      }
+      if (last_until_is_infinite) {
+        return(list(from = as.POSIXct(Sys.time(), tz = "UTC"), until = "infinity"))
+      }
+
+      list(
+        from = aggregation_datetime_input_value(last_until),
+        until = "infinity"
+      )
+    }
+
+    default_aggregation_step <- function(
+      step_number,
+      aggregation_type_id,
+      key = paste0("new_step_", step_number)
+    ) {
+      list(
+        key = key,
+        stage_number = as.integer(step_number),
+        operation_type = "window_aggregate",
+        aggregation_type_id = as.integer(aggregation_type_id),
+        window_start_offset = "-1 day",
+        window_end_offset = "0 seconds",
+        evaluation_interval = NULL,
+        evaluation_anchor = NULL,
+        evaluation_timezone = NULL,
+        expected_input_interval = NULL,
+        input_weighting = "equal",
+        minimum_input_count = NULL,
+        minimum_coverage = NULL,
+        missing_data_policy = "ignore",
+        calculation_parameters_json = "{}",
+        inputs = list()
+      )
+    }
+
+    aggregation_method_form_defaults <- function(editor, method_id) {
+      if (identical(method_id, "__new__")) {
+        period <- default_aggregation_method_period(
+          if (identical(editor$mode, "add")) {
+            editor$pending_methods
+          } else {
+            editor$metadata
+          }
+        )
+        parent_aggregation_type <- nullable_integer(input$aggregation_type)
+        if (is.na(parent_aggregation_type)) {
+          parent_aggregation_type <- NA_integer_
+        }
+        return(list(
+          applicable_from = period$from,
+          applicable_until = period$until,
+          source_name = "",
+          source_reference = "",
+          note = "",
+          steps = list(default_aggregation_step(
+            1L,
+            parent_aggregation_type
+          ))
+        ))
+      }
+
+      if (identical(editor$mode, "add")) {
+        method_index <- match(
+          method_id,
+          vapply(editor$pending_methods, `[[`, character(1), "key")
+        )
+        if (is.na(method_index)) {
+          return(NULL)
+        }
+        return(editor$pending_methods[[method_index]])
+      }
+
+      method <- editor$metadata$methods[
+        editor$metadata$methods$aggregation_method_id == method_id,
+      ]
+      if (nrow(method) == 0L) {
+        return(NULL)
+      }
+      list(
+        key = method_id,
+        applicable_from = method$applicable_from[[1L]],
+        applicable_until = method$applicable_until[[1L]],
+        source_name = safe_text(method$source_name[[1L]]),
+        source_reference = safe_text(method$source_reference[[1L]]),
+        note = safe_text(method$note[[1L]]),
+        steps = aggregation_steps_from_json(
+          aggregation_steps_to_json(editor$metadata, method_id)
+        )
+      )
+    }
+
+    aggregation_step_input_id <- function(step_key, suffix) {
+      safe_key <- gsub("[^A-Za-z0-9_]", "_", step_key)
+      paste0("aggregation_step_", safe_key, "_", suffix)
+    }
+
+    aggregation_steps_from_json <- function(value) {
+      steps <- jsonlite::fromJSON(value, simplifyVector = FALSE)
+      if (!is.list(steps) || length(steps) == 0L) {
+        return(list())
+      }
+      steps
+    }
+
+    aggregation_step_drafts_from_input <- function(editor) {
+      steps <- editor$steps
+      for (i in seq_along(steps)) {
+        step <- steps[[i]]
+        key <- as.character(step$key)
+        read_input <- function(field) {
+          input[[aggregation_step_input_id(key, field)]]
+        }
+        step$stage_number <- nullable_integer(read_input("stage_number"))
+        step$operation_type <- nullable_text(read_input("operation_type"))
+        step$aggregation_type_id <- nullable_integer(
+          read_input("aggregation_type_id")
+        )
+        for (field in c(
+          "window_start_offset", "window_end_offset", "evaluation_interval",
+          "evaluation_anchor", "evaluation_timezone",
+          "expected_input_interval"
+        )) {
+          step[[field]] <- nullable_text(read_input(field))
+        }
+        if (identical(step$operation_type, "arithmetic_mean")) {
+          step$window_start_offset <- NA_character_
+          step$window_end_offset <- NA_character_
+        }
+        step$input_weighting <- aggregation_step_or(
+          list(input_weighting = read_input("input_weighting")),
+          "input_weighting",
+          "equal"
+        )
+        step$minimum_input_count <- nullable_integer(
+          read_input("minimum_input_count")
+        )
+        step$minimum_coverage <- nullable_numeric(
+          read_input("minimum_coverage")
+        )
+        step$missing_data_policy <- aggregation_step_or(
+          list(missing_data_policy = read_input("missing_data_policy")),
+          "missing_data_policy",
+          "ignore"
+        )
+        step$calculation_parameters_json <- nullable_text(
+          read_input("calculation_parameters_json")
+        )
+        if (is.na(step$calculation_parameters_json)) {
+          step$calculation_parameters_json <- "{}"
+        }
+
+        step_inputs <- list()
+        if (i > 1L) {
+          for (j in seq_len(i - 1L)) {
+            previous_key <- as.character(steps[[j]]$key)
+            use_input <- input[[aggregation_step_input_id(
+              key,
+              paste0("use_", gsub("[^A-Za-z0-9_]", "_", previous_key))
+            )]]
+            if (!isTRUE(use_input)) {
+              next
+            }
+            weight <- nullable_numeric(input[[aggregation_step_input_id(
+              key,
+              paste0("weight_", gsub("[^A-Za-z0-9_]", "_", previous_key))
+            )]])
+            if (is.na(weight)) {
+              weight <- 1
+            }
+            step_inputs[[length(step_inputs) + 1L]] <- list(
+              step_key = previous_key,
+              component_weight = weight
+            )
+          }
+        }
+        step$inputs <- step_inputs
+        steps[[i]] <- step
+      }
+      steps
+    }
+
+    aggregation_step_fields_ui <- function(editor) {
+      steps <- editor$steps
+      if (length(steps) == 0L) {
+        return(tags$p("Add at least one calculation step.", class = "text-muted"))
+      }
+      aggregation_choices <- stats::setNames(
+        as.character(moduleData$aggregation_types$aggregation_type_id),
+        moduleData$aggregation_types$aggregation_type
+      )
+      operation_choices <- c(
+        "Window aggregate" = "window_aggregate",
+        "Arithmetic mean" = "arithmetic_mean"
+      )
+      timezone_names <- unique(OlsonNames())
+      timezone_choices <- stats::setNames(
+        c("", timezone_names),
+        c("Method default", timezone_names)
+      )
+
+      tagList(
+        fluidRow(
+          column(
+            width = 6,
+            actionButton(
+              ns("add_aggregation_step"),
+              "Add calculation step",
+              icon = icon("plus")
+            )
+          ),
+          column(
+            width = 8,
+            selectInput(
+              ns("remove_aggregation_step_key"),
+              "Remove step",
+              choices = stats::setNames(
+                vapply(steps, `[[`, character(1), "key"),
+                paste("Step", seq_along(steps))
+              )
+            )
+          ),
+          column(
+            width = 4,
+            actionButton(
+              ns("remove_aggregation_step"),
+              "Remove",
+              icon = icon("trash")
+            )
+          )
+        ),
+        lapply(seq_along(steps), function(i) {
+          step <- steps[[i]]
+          key <- as.character(step$key)
+          step_id <- function(field) ns(aggregation_step_input_id(key, field))
+          current_inputs <- vapply(
+            step$inputs,
+            function(link) as.character(link$step_key),
+            character(1)
+          )
+          step_card <- tagList(
+            tags$hr(),
+            tags$h5(paste("Step", i)),
+            fluidRow(
+              column(
+                width = 2,
+                numericInput(
+                  step_id("stage_number"),
+                  "Stage",
+                  value = step$stage_number,
+                  min = 1,
+                  step = 1
+                )
+              ),
+              column(
+                width = 5,
+                selectInput(
+                  step_id("operation_type"),
+                  "Operation",
+                  choices = operation_choices,
+                  selected = step$operation_type
+                )
+              ),
+              column(
+                width = 5,
+                selectInput(
+                  step_id("aggregation_type_id"),
+                  "Output aggregation type",
+                  choices = aggregation_choices,
+                  selected = as.character(step$aggregation_type_id)
+                )
+              )
+            ),
+            conditionalPanel(
+              condition = sprintf(
+                "input['%s'] == 'window_aggregate'",
+                step_id("operation_type")
+              ),
+              fluidRow(
+                column(
+                  width = 6,
+                  textInput(
+                    step_id("window_start_offset"),
+                    "Window start offset",
+                    value = safe_text(step$window_start_offset),
+                    placeholder = "-1 day"
+                  )
+                ),
+                column(
+                  width = 6,
+                  textInput(
+                    step_id("window_end_offset"),
+                    "Window end offset",
+                    value = safe_text(step$window_end_offset),
+                    placeholder = "0 seconds"
+                  )
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                width = 4,
+                textInput(
+                  step_id("evaluation_interval"),
+                  "Evaluation interval",
+                  value = safe_text(step$evaluation_interval),
+                  placeholder = "1 day"
+                )
+              ),
+              column(
+                width = 4,
+                textInput(
+                  step_id("evaluation_anchor"),
+                  "Evaluation anchor (UTC)",
+                  value = safe_text(step$evaluation_anchor),
+                  placeholder = "1970-01-02 06:00:00"
+                )
+              ),
+              column(
+                width = 4,
+                selectizeInput(
+                  step_id("evaluation_timezone"),
+                  "Evaluation timezone",
+                  choices = timezone_choices,
+                  selected = if (is.null(step$evaluation_timezone)) {
+                    ""
+                  } else {
+                    step$evaluation_timezone
+                  },
+                  options = list(create = FALSE, allowEmptyOption = TRUE)
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                width = 4,
+                textInput(
+                  step_id("expected_input_interval"),
+                  "Expected input interval",
+                  value = safe_text(step$expected_input_interval),
+                  placeholder = "1 hour"
+                )
+              ),
+              column(
+                width = 4,
+                selectInput(
+                  step_id("input_weighting"),
+                  "Input weighting",
+                  choices = c("Equal" = "equal", "Duration weighted" = "duration_weighted"),
+                  selected = step$input_weighting
+                )
+              ),
+              column(
+                width = 4,
+                selectInput(
+                  step_id("missing_data_policy"),
+                  "Missing data policy",
+                  choices = c(
+                    "Ignore missing values" = "ignore",
+                    "Propagate missing values" = "propagate",
+                    "Require complete inputs" = "require_complete"
+                  ),
+                  selected = step$missing_data_policy
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                width = 6,
+                numericInput(
+                  step_id("minimum_input_count"),
+                  "Minimum input count (optional)",
+                  value = if (is.null(step$minimum_input_count)) {
+                    NA
+                  } else {
+                    as.numeric(step$minimum_input_count)
+                  },
+                  min = 1,
+                  step = 1
+                )
+              ),
+              column(
+                width = 6,
+                numericInput(
+                  step_id("minimum_coverage"),
+                  "Minimum coverage from 0 to 1 (optional)",
+                  value = if (is.null(step$minimum_coverage)) {
+                    NA
+                  } else {
+                    as.numeric(step$minimum_coverage)
+                  },
+                  min = 0,
+                  max = 1,
+                  step = 0.05
+                )
+              )
+            )
+          )
+
+          if (i > 1L) {
+            input_rows <- lapply(seq_len(i - 1L), function(j) {
+              previous_key <- as.character(steps[[j]]$key)
+              safe_previous_key <- gsub("[^A-Za-z0-9_]", "_", previous_key)
+              selected_link <- previous_key %in% current_inputs
+              previous_weight <- vapply(
+                step$inputs,
+                function(link) {
+                  if (identical(as.character(link$step_key), previous_key)) {
+                    if (is.null(link$component_weight)) {
+                      1
+                    } else {
+                      as.numeric(link$component_weight)
+                    }
+                  } else {
+                    NA_real_
+                  }
+                },
+                numeric(1)
+              )
+              previous_weight <- previous_weight[!is.na(previous_weight)]
+              fluidRow(
+                column(
+                  width = 6,
+                  checkboxInput(
+                    step_id(paste0("use_", safe_previous_key)),
+                    paste("Use Step", j, "as an input"),
+                    value = selected_link
+                  )
+                ),
+                column(
+                  width = 6,
+                  numericInput(
+                    step_id(paste0("weight_", safe_previous_key)),
+                    paste("Step", j, "component weight"),
+                    value = if (length(previous_weight)) {
+                      previous_weight[[1L]]
+                    } else {
+                      1
+                    },
+                    min = 0.000001,
+                    step = 0.1
+                  )
+                )
+              )
+            })
+            step_card <- tagList(
+              step_card,
+              tags$h6("Input links (choose earlier steps)"),
+              input_rows
+            )
+          }
+
+          tags$div(
+            class = "aggregation-step-editor",
+            step_card,
+            tags$details(
+              tags$summary("Advanced calculation parameters (JSON)"),
+              textAreaInput(
+                step_id("calculation_parameters_json"),
+                "Calculation parameters",
+                value = if (
+                  is.null(step$calculation_parameters_json) ||
+                    is.na(step$calculation_parameters_json)
+                ) {
+                  "{}"
+                } else {
+                  step$calculation_parameters_json
+                },
+                rows = 3,
+                width = "100%"
+              )
+            )
+          )
+        })
+      )
+    }
+
+    insert_aggregation_method_draft <- function(con, timeseries_id, method) {
+      method_id <- DBI::dbGetQuery(
+        con,
+        paste(
+          "INSERT INTO continuous.timeseries_aggregation_methods (",
+          "timeseries_id, applicable_from, applicable_until,",
+          "source_name, source_reference, note",
+          ") VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6)",
+          "RETURNING aggregation_method_id::text AS aggregation_method_id"
+        ),
+        params = list(
+          as.integer(timeseries_id),
+          method$applicable_from,
+          method$applicable_until,
+          method$source_name,
+          method$source_reference,
+          method$note
+        )
+      )$aggregation_method_id[[1L]]
+
+      steps <- method$steps
+      step_ids <- stats::setNames(character(length(steps)), vapply(
+        steps,
+        function(step) as.character(step$key),
+        character(1)
+      ))
+      for (i in seq_along(steps)) {
+        step <- steps[[i]]
+        parameters_json <- aggregation_step_or(
+          step,
+          "calculation_parameters_json",
+          "{}"
+        )
+        inserted_step <- DBI::dbGetQuery(
+          con,
+          paste(
+            "INSERT INTO continuous.timeseries_aggregation_method_steps (",
+            "aggregation_method_id, stage_number, operation_type,",
+            "aggregation_type_id, window_start_offset, window_end_offset,",
+            "evaluation_interval, evaluation_anchor, evaluation_timezone,",
+            "expected_input_interval, input_weighting, minimum_input_count,",
+            "minimum_coverage, missing_data_policy, calculation_parameters",
+            ") VALUES (",
+            "$1::bigint, $2, $3, $4, $5::interval, $6::interval,",
+            "$7::interval, $8::timestamp, $9, $10::interval,",
+            "$11, $12, $13, $14, $15::jsonb",
+            ") RETURNING step_id::text AS step_id"
+          ),
+          params = list(
+            method_id,
+            as.integer(step$stage_number),
+            as.character(step$operation_type),
+            as.integer(step$aggregation_type_id),
+            aggregation_step_value(step, "window_start_offset"),
+            aggregation_step_value(step, "window_end_offset"),
+            aggregation_step_value(step, "evaluation_interval"),
+            aggregation_step_value(step, "evaluation_anchor"),
+            nullable_text(aggregation_step_value(step, "evaluation_timezone")),
+            aggregation_step_value(step, "expected_input_interval"),
+            aggregation_step_or(step, "input_weighting", "equal"),
+            nullable_integer(aggregation_step_value(step, "minimum_input_count")),
+            nullable_numeric(aggregation_step_value(step, "minimum_coverage")),
+            aggregation_step_or(step, "missing_data_policy", "ignore"),
+            parameters_json
+          )
+        )
+        step_ids[[as.character(step$key)]] <- inserted_step$step_id[[1L]]
+      }
+
+      for (step in steps) {
+        step_inputs <- step$inputs
+        if (is.null(step_inputs) || length(step_inputs) == 0L) {
+          next
+        }
+        for (j in seq_along(step_inputs)) {
+          link <- step_inputs[[j]]
+          DBI::dbExecute(
+            con,
+            paste(
+              "INSERT INTO continuous.timeseries_aggregation_method_step_inputs (",
+              "aggregation_method_id, step_id, input_number, input_step_id,",
+              "component_weight",
+              ") VALUES ($1::bigint, $2::bigint, $3, $4::bigint, $5::numeric)"
+            ),
+            params = list(
+              method_id,
+              step_ids[[as.character(step$key)]],
+              as.integer(j),
+              step_ids[[as.character(link$step_key)]],
+              as.numeric(aggregation_step_or(link, "component_weight", 1))
+            )
+          )
+        }
+      }
+      invisible(method_id)
     }
 
     nullable_text <- function(x) {
@@ -2058,7 +2845,12 @@ addTimeseries <- function(id, language) {
           ns = ns,
           tags$div(
             class = "alert alert-info",
-            "Tip: if you add a new timeseries with a source_fx and appropriate arguments, data will automatically be fetched from the source when you click 'Add timeseries'. If you leave the source_fx blank, you can enter data manually or use other methods. Note that WSC timeseries will get daily mean measurements as well as realtime measurements as far back as exist."
+            "Tip: if you add a new timeseries with a source_fx and appropriate arguments,
+            data will automatically be fetched from the source when you click 'Add timeseries'.
+            If you leave the source_fx blank, you can enter data manually or use other methods.
+            Configure value derivation methods beside Aggregation type before saving the
+            timeseries. WSC timeseries will also get historical daily mean measurements as
+            well as the available realtime measurements."
           )
         ),
         fluidRow(
@@ -2188,23 +2980,26 @@ addTimeseries <- function(id, language) {
         ),
         splitLayout(
           cellWidths = c("50%", "50%"),
-          selectizeInput(
-            ns("aggregation_type"),
-            "Aggregation type",
-            choices = stats::setNames(
-              moduleData$aggregation_types$aggregation_type_id,
-              moduleData$aggregation_types$aggregation_type
-            ),
-            multiple = TRUE,
-            options = list(
-              maxItems = 1,
-              placeholder = 'Select aggregation type'
-            ),
-            width = "100%"
-          ) |>
-            tooltip(
-              "The aggregation type defines how the raw data is collected. For example, 'Instantaneous' means the data is collected at specific time points, while 'Mean' indicates that the data represents an average over the period between measurements. Choosing the correct aggregation type is crucial for accurate data analysis and interpretation."
-            ),
+          div(
+            selectizeInput(
+              ns("aggregation_type"),
+              "Aggregation type",
+              choices = stats::setNames(
+                moduleData$aggregation_types$aggregation_type_id,
+                moduleData$aggregation_types$aggregation_type
+              ),
+              multiple = TRUE,
+              options = list(
+                maxItems = 1,
+                placeholder = 'Select aggregation type'
+              ),
+              width = "100%"
+            ) |>
+              tooltip(
+                "The aggregation type defines how the raw data is collected. For example, 'Instantaneous' means the data is collected at specific time points, while 'Mean' indicates that the data represents an average over the period between measurements. Choosing the correct aggregation type is crucial for accurate data analysis and interpretation."
+              ),
+            uiOutput(ns("aggregation_method_button_ui"))
+          ),
           textInput(
             ns("record_rate"),
             "Rough record rate (5 minutes, 1 hour, 1 day, 1 week, etc.)",
@@ -4162,6 +4957,1115 @@ addTimeseries <- function(id, language) {
       shinyjs::runjs(sprintf("window.open('%s','_blank');", url))
     })
 
+    output$aggregation_method_button_ui <- renderUI({
+      selected_aggregation <- nullable_integer(input$aggregation_type)
+      aggregation_row <- if (!is.na(selected_aggregation)) {
+        moduleData$aggregation_types[
+          moduleData$aggregation_types$aggregation_type_id == selected_aggregation,
+          ,
+          drop = FALSE
+        ]
+      } else {
+        moduleData$aggregation_types[0, , drop = FALSE]
+      }
+      selected_name <- if (nrow(aggregation_row) == 1L) {
+        as.character(aggregation_row$aggregation_type[[1L]])
+      } else {
+        NA_character_
+      }
+      instant <- is.na(selected_name) ||
+        identical(tolower(trimws(selected_name)), "instantaneous")
+      no_selected_timeseries <- identical(input$mode, "modify") &&
+        is.na(nullable_integer(selected_tsid()))
+      disabled <- instant || no_selected_timeseries
+      pending_count <- length(pending_aggregation_methods())
+      label <- if (identical(input$mode, "add")) {
+        if (pending_count > 0L) {
+          paste0("Configure value derivation methods (", pending_count, " staged)")
+        } else {
+          "Configure value derivation methods"
+        }
+      } else {
+        "Manage value derivation methods"
+      }
+      tags$div(
+        style = "margin-top: 0.25rem;",
+        tagList(
+          actionButton(
+            ns("manage_aggregation_methods"),
+            label,
+            icon = icon("sliders"),
+            disabled = disabled
+          ),
+          if (identical(input$mode, "add") && pending_count > 0L) {
+            actionButton(
+              ns("clear_staged_aggregation_methods"),
+              "Clear staged methods",
+              class = "btn-link"
+            )
+          }
+        )
+      )
+    })
+
+    observeEvent(input$clear_staged_aggregation_methods, {
+      pending_aggregation_methods(list())
+      showNotification("Staged value derivation methods were cleared.", type = "message")
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$manage_aggregation_methods, {
+      mode <- as.character(input$mode)
+      timeseries_id <- nullable_integer(selected_tsid())
+      if (identical(mode, "modify") && is.na(timeseries_id)) {
+        showNotification(
+          "Select a timeseries before managing value derivation methods.",
+          type = "warning"
+        )
+        return()
+      }
+
+      if (identical(mode, "modify")) {
+        metadata <- tryCatch(
+          YGwater:::fetch_timeseries_aggregation_metadata(
+            session$userData$AquaCache,
+            timeseries_id
+          ),
+          error = function(e) NULL
+        )
+        if (is.null(metadata) || !isTRUE(metadata$available)) {
+          showNotification(
+            "Value derivation metadata is unavailable. Apply AquaCache Patch 65 first.",
+            type = "error",
+            duration = 10
+          )
+          return()
+        }
+        editor <- list(
+          mode = "modify",
+          timeseries_id = timeseries_id,
+          metadata = metadata,
+          pending_methods = list()
+        )
+        methods <- metadata$methods
+        method_labels <- if (nrow(methods) > 0L) {
+          paste(
+            methods$aggregation_method_id,
+            methods$applicable_from,
+            "to",
+            methods$applicable_until,
+            ifelse(is.na(methods$source_name), "", methods$source_name)
+          )
+        } else {
+          character(0)
+        }
+        method_choices <- c(
+          "Add a new method version" = "__new__",
+          stats::setNames(methods$aggregation_method_id, method_labels)
+        )
+        selected_method_id <- if (nrow(methods) > 0L) {
+          methods$aggregation_method_id[[nrow(methods)]]
+        } else {
+          "__new__"
+        }
+      } else {
+        metadata <- list(
+          available = TRUE,
+          methods = data.table::data.table(),
+          steps = data.table::data.table(),
+          inputs = data.table::data.table()
+        )
+        staged <- pending_aggregation_methods()
+        editor <- list(
+          mode = "add",
+          timeseries_id = NA_integer_,
+          metadata = metadata,
+          pending_methods = staged
+        )
+        staged_labels <- if (length(staged)) {
+          vapply(staged, function(method) {
+            paste(
+              method$key,
+              method$applicable_from,
+              "to",
+              method$applicable_until,
+              safe_text(method$source_name)
+            )
+          }, character(1))
+        } else {
+          character(0)
+        }
+        method_choices <- c(
+          "Add a new method version" = "__new__",
+          stats::setNames(
+            vapply(staged, `[[`, character(1), "key"),
+            staged_labels
+          )
+        )
+        selected_method_id <- "__new__"
+      }
+
+      form <- aggregation_method_form_defaults(editor, selected_method_id)
+      editor$selected_method_id <- selected_method_id
+      editor$steps <- form$steps
+      aggregation_method_editor(editor)
+      from_unbounded <- aggregation_boundary_is_unbounded(
+        form$applicable_from,
+        "from"
+      )
+      until_unbounded <- aggregation_boundary_is_unbounded(
+        form$applicable_until,
+        "until"
+      )
+
+      showModal(modalDialog(
+        title = "Value derivation methods",
+        size = "xl",
+        easyClose = FALSE,
+        fluidRow(
+          column(
+            width = 8,
+            selectizeInput(
+              ns("aggregation_method_id"),
+              "Method version",
+              choices = method_choices,
+              selected = selected_method_id,
+              options = list(allowEmptyOption = FALSE)
+            )
+          ),
+          column(
+            width = 4,
+            actionButton(
+              ns("new_aggregation_method"),
+              "Add method version",
+              icon = icon("plus"),
+              style = "margin-top: 1.8rem;"
+            )
+          )
+        ),
+        fluidRow(
+          column(
+            width = 6,
+            checkboxInput(
+              ns("aggregation_from_unbounded"),
+              "No start limit (-infinity)",
+              value = from_unbounded
+            ),
+            shinyWidgets::airDatepickerInput(
+              ns("aggregation_applicable_from"),
+              "Applicable from (UTC; inclusive)",
+              value = aggregation_datetime_picker_value(
+                form$applicable_from
+              ),
+              timepicker = TRUE,
+              update_on = "change",
+              tz = "UTC",
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 1,
+                timeFormat = "HH:mm"
+              )
+            )
+          ),
+          column(
+            width = 6,
+            checkboxInput(
+              ns("aggregation_until_unbounded"),
+              "No end limit (+infinity)",
+              value = until_unbounded
+            ),
+            shinyWidgets::airDatepickerInput(
+              ns("aggregation_applicable_until"),
+              "Applicable until (UTC; exclusive)",
+              value = aggregation_datetime_picker_value(
+                form$applicable_until
+              ),
+              timepicker = TRUE,
+              update_on = "change",
+              tz = "UTC",
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 1,
+                timeFormat = "HH:mm"
+              )
+            )
+          )
+        ),
+        fluidRow(
+          column(
+            width = 6,
+            textInput(
+              ns("aggregation_source_name"),
+              "Source name",
+              value = safe_text(form$source_name)
+            )
+          ),
+          column(
+            width = 6,
+            textInput(
+              ns("aggregation_source_reference"),
+              "Source reference",
+              value = safe_text(form$source_reference)
+            )
+          )
+        ),
+        textAreaInput(
+          ns("aggregation_method_note"),
+          "Notes",
+          value = safe_text(form$note),
+          rows = 2,
+          width = "100%"
+        ),
+        tags$p(
+          "Add ordered steps below. Stage 1 reads source values; later stages can use earlier steps. The final step's aggregation type must match the timeseries.",
+          class = "text-muted"
+        ),
+        uiOutput(ns("aggregation_steps_editor_ui")),
+        tags$p(
+          "Applicability uses an inclusive start and exclusive end. Leave either limit open when it has no boundary. Versions for one timeseries cannot overlap.",
+          class = "text-muted"
+        ),
+        footer = tagList(
+          actionButton(
+            ns("save_aggregation_method"),
+            if (identical(mode, "add")) "Stage method for new timeseries" else "Save method",
+            icon = icon("save")
+          ),
+          modalButton("Close")
+        )
+      ))
+    })
+
+    output$aggregation_steps_editor_ui <- renderUI({
+      editor <- aggregation_method_editor()
+      req(editor)
+      aggregation_step_fields_ui(editor)
+    })
+
+    observeEvent(input$new_aggregation_method, {
+      updateSelectizeInput(
+        session,
+        "aggregation_method_id",
+        selected = "__new__"
+      )
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$add_aggregation_step, {
+      editor <- aggregation_method_editor()
+      if (is.null(editor)) {
+        return()
+      }
+      editor$steps <- aggregation_step_drafts_from_input(editor)
+      used_keys <- vapply(editor$steps, `[[`, character(1), "key")
+      next_number <- 1L
+      new_key <- paste0("new_step_", next_number)
+      while (new_key %in% used_keys) {
+        next_number <- next_number + 1L
+        new_key <- paste0("new_step_", next_number)
+      }
+      current_stages <- suppressWarnings(as.integer(vapply(
+        editor$steps,
+        function(step) as.character(step$stage_number),
+        character(1)
+      )))
+      new_stage <- max(c(0L, current_stages), na.rm = TRUE) + 1L
+      editor$steps[[length(editor$steps) + 1L]] <- default_aggregation_step(
+        new_stage,
+        nullable_integer(input$aggregation_type),
+        key = new_key
+      )
+      aggregation_method_editor(editor)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$remove_aggregation_step, {
+      editor <- aggregation_method_editor()
+      key_to_remove <- as.character(input$remove_aggregation_step_key)
+      if (is.null(editor)) {
+        return()
+      }
+      if (length(key_to_remove) != 1L || is.na(key_to_remove) || !nzchar(key_to_remove)) {
+        return()
+      }
+      editor$steps <- aggregation_step_drafts_from_input(editor)
+      editor$steps <- Filter(
+        function(step) !identical(as.character(step$key), key_to_remove),
+        editor$steps
+      )
+      for (i in seq_along(editor$steps)) {
+        editor$steps[[i]]$inputs <- Filter(
+          function(link) !identical(as.character(link$step_key), key_to_remove),
+          editor$steps[[i]]$inputs
+        )
+      }
+      aggregation_method_editor(editor)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$aggregation_method_id, {
+      editor <- aggregation_method_editor()
+      if (is.null(editor) || is.null(input$aggregation_method_id)) {
+        return()
+      }
+
+      method_id <- as.character(input$aggregation_method_id)
+      form <- aggregation_method_form_defaults(editor, method_id)
+      if (is.null(form)) {
+        return()
+      }
+
+      editor$selected_method_id <- method_id
+      editor$steps <- form$steps
+      aggregation_method_editor(editor)
+      updateCheckboxInput(
+        session,
+        "aggregation_from_unbounded",
+        value = aggregation_boundary_is_unbounded(
+          form$applicable_from,
+          "from"
+        )
+      )
+      updateCheckboxInput(
+        session,
+        "aggregation_until_unbounded",
+        value = aggregation_boundary_is_unbounded(
+          form$applicable_until,
+          "until"
+        )
+      )
+      shinyWidgets::updateAirDateInput(
+        session,
+        "aggregation_applicable_from",
+        value = aggregation_datetime_picker_value(form$applicable_from),
+        tz = "UTC"
+      )
+      shinyWidgets::updateAirDateInput(
+        session,
+        "aggregation_applicable_until",
+        value = aggregation_datetime_picker_value(form$applicable_until),
+        tz = "UTC"
+      )
+      updateTextInput(
+        session,
+        "aggregation_source_name",
+        value = safe_text(form$source_name)
+      )
+      updateTextInput(
+        session,
+        "aggregation_source_reference",
+        value = safe_text(form$source_reference)
+      )
+      updateTextAreaInput(
+        session,
+        "aggregation_method_note",
+        value = safe_text(form$note)
+      )
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$save_aggregation_method, {
+      editor <- aggregation_method_editor()
+      if (is.null(editor)) {
+        return()
+      }
+
+      save_error <- tryCatch({
+        method_from <- aggregation_datetime_db_value(
+          input$aggregation_applicable_from,
+          isTRUE(input$aggregation_from_unbounded),
+          "from"
+        )
+        method_until <- aggregation_datetime_db_value(
+          input$aggregation_applicable_until,
+          isTRUE(input$aggregation_until_unbounded),
+          "until"
+        )
+        if (aggregation_boundary_epoch(method_from, "from") >=
+            aggregation_boundary_epoch(method_until, "until")) {
+          stop("The method start must be earlier than its exclusive end.")
+        }
+
+        input_steps <- aggregation_step_drafts_from_input(editor)
+        json_text <- as.character(jsonlite::toJSON(
+          input_steps,
+          auto_unbox = TRUE,
+          pretty = TRUE,
+          null = "null",
+          na = "null"
+        ))
+        if (!startsWith(json_text, "[") || !jsonlite::validate(json_text)) {
+          stop("Enter the calculation steps using the fields shown.")
+        }
+        steps <- jsonlite::fromJSON(json_text, simplifyVector = FALSE)
+        if (!is.list(steps) || length(steps) == 0L) {
+          stop("An aggregation method needs at least one calculation step.")
+        }
+
+        allowed_fields <- c(
+          "key", "stage_number", "operation_type", "aggregation_type_id",
+          "window_start_offset", "window_end_offset", "evaluation_interval",
+          "evaluation_anchor", "evaluation_timezone",
+          "expected_input_interval", "input_weighting", "minimum_input_count",
+          "minimum_coverage", "missing_data_policy",
+          "calculation_parameters_json", "inputs"
+        )
+        step_keys <- character(length(steps))
+        stage_numbers <- integer(length(steps))
+        aggregation_type_ids <- integer(length(steps))
+        for (i in seq_along(steps)) {
+          step <- steps[[i]]
+          if (
+            !is.list(step) ||
+              is.null(names(step)) ||
+              length(setdiff(names(step), allowed_fields)) > 0L
+          ) {
+            stop("Each step must be an object using the documented fields only.")
+          }
+          key_value <- aggregation_step_value(step, "key")
+          stage_value <- aggregation_step_value(step, "stage_number")
+          aggregation_type_value <- aggregation_step_value(
+            step,
+            "aggregation_type_id"
+          )
+          operation_type <- aggregation_step_value(step, "operation_type")
+          if (
+            is.null(key_value) || is.null(stage_value) ||
+              is.null(aggregation_type_value) || is.null(operation_type)
+          ) {
+            stop("Every step needs key, stage_number, operation_type, and aggregation_type_id.")
+          }
+          step_keys[[i]] <- as.character(key_value)
+          stage_numbers[[i]] <- suppressWarnings(as.integer(
+            stage_value
+          ))
+          aggregation_type_ids[[i]] <- suppressWarnings(as.integer(
+            aggregation_type_value
+          ))
+          if (
+            is.na(step_keys[[i]]) ||
+              !nzchar(trimws(step_keys[[i]])) ||
+              is.na(stage_numbers[[i]]) ||
+              stage_numbers[[i]] < 1L ||
+              is.na(aggregation_type_ids[[i]]) ||
+              !operation_type %in% c("window_aggregate", "arithmetic_mean")
+          ) {
+            stop("Every step needs a unique key, positive stage number, recognized operation, and aggregation type ID.")
+          }
+          if (!aggregation_type_ids[[i]] %in% as.integer(
+            moduleData$aggregation_types$aggregation_type_id
+          )) {
+            stop("A step uses an unknown aggregation_type_id.")
+          }
+
+          parameters_json <- aggregation_step_value(
+            step,
+            "calculation_parameters_json"
+          )
+          if (is.null(parameters_json)) {
+            parameters_json <- "{}"
+          }
+          parameters_json <- trimws(as.character(parameters_json))
+          if (
+            !startsWith(parameters_json, "{") ||
+              !jsonlite::validate(parameters_json)
+          ) {
+            stop("calculation_parameters_json must contain a valid JSON object.")
+          }
+          step$calculation_parameters_json <- parameters_json
+          steps[[i]] <- step
+
+          window_start <- aggregation_step_value(
+            step,
+            "window_start_offset"
+          )
+          window_end <- aggregation_step_value(step, "window_end_offset")
+          if (
+            operation_type == "window_aggregate" &&
+              (is.null(window_start) || is.null(window_end))
+          ) {
+            stop("Window aggregation steps need window_start_offset and window_end_offset.")
+          }
+          if (
+            operation_type == "arithmetic_mean" &&
+              (!is.null(window_start) || !is.null(window_end))
+          ) {
+            stop("Arithmetic mean steps cannot set window offsets.")
+          }
+        }
+        if (anyDuplicated(step_keys)) {
+          stop("Step keys must be unique.")
+        }
+        if (!identical(sort(unique(stage_numbers)), seq_len(max(stage_numbers)))) {
+          stop("Stage numbers must be contiguous starting at 1.")
+        }
+
+        referenced_keys <- character(0)
+        for (i in seq_along(steps)) {
+          step_inputs <- steps[[i]]$inputs
+          if (is.null(step_inputs)) {
+            step_inputs <- list()
+          }
+          if (!is.list(step_inputs)) {
+            stop("Each step's inputs must be a JSON array.")
+          }
+          input_keys <- character(length(step_inputs))
+          for (j in seq_along(step_inputs)) {
+            input <- step_inputs[[j]]
+            if (
+              !is.list(input) || is.null(names(input)) ||
+                length(setdiff(names(input), c("step_key", "component_weight"))) > 0L
+            ) {
+              stop("Each input must be an object with step_key and optional component_weight.")
+            }
+            input_key_value <- aggregation_step_value(
+              input,
+              "step_key"
+            )
+            if (is.null(input_key_value)) {
+              stop("Each input needs a step_key.")
+            }
+            input_key <- as.character(input_key_value)
+            weight <- suppressWarnings(as.numeric(
+              aggregation_step_or(input, "component_weight", 1)
+            ))
+            input_index <- match(input_key, step_keys)
+            if (
+              is.na(input_index) ||
+                stage_numbers[[input_index]] >= stage_numbers[[i]] ||
+                is.na(weight) || weight <= 0
+            ) {
+              stop("Each input must reference an earlier step and use a positive component_weight.")
+            }
+            input_keys[[j]] <- input_key
+          }
+          if (anyDuplicated(input_keys)) {
+            stop("A step cannot use the same input more than once.")
+          }
+          if (stage_numbers[[i]] > 1L && length(step_inputs) == 0L) {
+            stop("Steps after stage 1 must reference earlier step outputs.")
+          }
+          if (
+            steps[[i]]$operation_type == "arithmetic_mean" &&
+              length(step_inputs) < 2L
+          ) {
+            stop("Arithmetic mean steps need at least two inputs.")
+          }
+          referenced_keys <- c(referenced_keys, input_keys)
+        }
+        terminal <- which(!step_keys %in% referenced_keys)
+        parent_aggregation_type_id <- if (identical(editor$mode, "add")) {
+          nullable_integer(input$aggregation_type)
+        } else {
+          parent <- moduleData$timeseries[
+            moduleData$timeseries$timeseries_id == editor$timeseries_id,
+          ]
+          if (nrow(parent) == 1L) {
+            as.integer(parent$aggregation_type_id[[1L]])
+          } else {
+            NA_integer_
+          }
+        }
+        if (
+          is.na(parent_aggregation_type_id) ||
+            length(terminal) != 1L ||
+            aggregation_type_ids[[terminal[[1L]]]] !=
+              parent_aggregation_type_id
+        ) {
+          stop("The calculation graph must have one final output matching the timeseries aggregation type.")
+        }
+
+        aggregation_type_row <- moduleData$aggregation_types[
+          moduleData$aggregation_types$aggregation_type_id ==
+            parent_aggregation_type_id,
+          ,
+          drop = FALSE
+        ]
+        if (
+          nrow(aggregation_type_row) == 0L ||
+            identical(
+              tolower(trimws(aggregation_type_row$aggregation_type[[1L]])),
+              "instantaneous"
+            )
+        ) {
+          stop("Instantaneous timeseries cannot have value derivation methods.")
+        }
+
+        selected_method_id <- as.character(input$aggregation_method_id)
+        if (identical(editor$mode, "add")) {
+          staged_methods <- editor$pending_methods
+          existing_index <- if (identical(selected_method_id, "__new__")) {
+            NA_integer_
+          } else {
+            match(
+              selected_method_id,
+              vapply(staged_methods, `[[`, character(1), "key")
+            )
+          }
+          method_key <- if (is.na(existing_index)) {
+            number <- 1L
+            candidate <- paste0("draft_method_", number)
+            existing_keys <- vapply(staged_methods, `[[`, character(1), "key")
+            while (candidate %in% existing_keys) {
+              number <- number + 1L
+              candidate <- paste0("draft_method_", number)
+            }
+            candidate
+          } else {
+            selected_method_id
+          }
+          method_draft <- list(
+            key = method_key,
+            applicable_from = method_from,
+            applicable_until = method_until,
+            source_name = nullable_text(input$aggregation_source_name),
+            source_reference = nullable_text(input$aggregation_source_reference),
+            note = nullable_text(input$aggregation_method_note),
+            steps = steps
+          )
+          if (!is.na(existing_index)) {
+            staged_methods[[existing_index]] <- method_draft
+          } else {
+            staged_methods[[length(staged_methods) + 1L]] <- method_draft
+          }
+
+          method_epochs <- lapply(staged_methods, function(method) {
+            c(
+              aggregation_boundary_epoch(method$applicable_from, "from"),
+              aggregation_boundary_epoch(method$applicable_until, "until")
+            )
+          })
+          for (i in seq_along(method_epochs)) {
+            for (j in seq_along(method_epochs)) {
+              if (i < j &&
+                  method_epochs[[i]][[1L]] < method_epochs[[j]][[2L]] &&
+                  method_epochs[[j]][[1L]] < method_epochs[[i]][[2L]]) {
+                stop("Method versions for a timeseries cannot overlap. Adjust their UTC boundaries.")
+              }
+            }
+          }
+          pending_aggregation_methods(staged_methods)
+          removeModal()
+          showNotification(
+            "Value derivation method staged; it will be saved with the new timeseries.",
+            type = "message",
+            duration = 8
+          )
+          return()
+        }
+
+        con <- session$userData$AquaCache
+        DBI::dbWithTransaction(con, {
+          existing_step_ids <- character(0)
+          existing_inputs <- data.table::data.table(
+            aggregation_method_id = character(),
+            step_id = character(),
+            input_number = integer(),
+            input_step_id = character(),
+            component_weight = character()
+          )
+          if (identical(selected_method_id, "__new__")) {
+            method_id <- DBI::dbGetQuery(
+              con,
+              paste(
+                "INSERT INTO continuous.timeseries_aggregation_methods (",
+                "timeseries_id, applicable_from, applicable_until,",
+                "source_name, source_reference, note",
+                ") VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6)",
+                "RETURNING aggregation_method_id::text AS aggregation_method_id"
+              ),
+              params = list(
+                editor$timeseries_id,
+                method_from,
+                method_until,
+                nullable_text(input$aggregation_source_name),
+                nullable_text(input$aggregation_source_reference),
+                nullable_text(input$aggregation_method_note)
+              )
+            )$aggregation_method_id[[1L]]
+          } else {
+            method_id <- selected_method_id
+            updated <- DBI::dbExecute(
+              con,
+              paste(
+                "UPDATE continuous.timeseries_aggregation_methods",
+                "SET applicable_from = $1::timestamptz,",
+                "applicable_until = $2::timestamptz, source_name = $3,",
+                "source_reference = $4, note = $5",
+                "WHERE aggregation_method_id = $6::bigint",
+                "AND timeseries_id = $7"
+              ),
+              params = list(
+                method_from,
+                method_until,
+                nullable_text(input$aggregation_source_name),
+                nullable_text(input$aggregation_source_reference),
+                nullable_text(input$aggregation_method_note),
+                method_id,
+                editor$timeseries_id
+              )
+            )
+            if (updated != 1L) {
+              stop("The selected aggregation method no longer exists for this timeseries.")
+            }
+            existing_steps <- editor$metadata$steps[
+              editor$metadata$steps$aggregation_method_id == method_id,
+            ]
+            existing_step_ids <- stats::setNames(
+              existing_steps$step_id,
+              paste0("step_", existing_steps$step_id)
+            )
+            existing_inputs <- editor$metadata$inputs[
+              editor$metadata$inputs$aggregation_method_id == method_id,
+            ]
+          }
+
+          step_ids <- stats::setNames(character(length(steps)), step_keys)
+          for (i in seq_along(steps)) {
+            step <- steps[[i]]
+            operation_type <- as.character(step$operation_type)
+            parameters_json <- as.character(
+              step$calculation_parameters_json
+            )
+            step_parameters <- list(
+                stage_numbers[[i]],
+                operation_type,
+                aggregation_type_ids[[i]],
+                aggregation_step_value(step, "window_start_offset"),
+                aggregation_step_value(step, "window_end_offset"),
+                aggregation_step_value(step, "evaluation_interval"),
+                aggregation_step_value(step, "evaluation_anchor"),
+                nullable_text(aggregation_step_value(
+                  step,
+                  "evaluation_timezone"
+                )),
+                aggregation_step_value(step, "expected_input_interval"),
+                aggregation_step_or(step, "input_weighting", "equal"),
+                nullable_integer(aggregation_step_value(
+                  step,
+                  "minimum_input_count"
+                )),
+                nullable_numeric(aggregation_step_value(
+                  step,
+                  "minimum_coverage"
+                )),
+                aggregation_step_or(step, "missing_data_policy", "ignore"),
+                parameters_json
+            )
+            existing_step_id <- if (step_keys[[i]] %in% names(existing_step_ids)) {
+              unname(existing_step_ids[[step_keys[[i]]]])
+            } else {
+              NULL
+            }
+            if (is.null(existing_step_id)) {
+              inserted_step <- DBI::dbGetQuery(
+                con,
+                paste(
+                  "INSERT INTO continuous.timeseries_aggregation_method_steps (",
+                  "aggregation_method_id, stage_number, operation_type,",
+                  "aggregation_type_id, window_start_offset,",
+                  "window_end_offset, evaluation_interval, evaluation_anchor,",
+                  "evaluation_timezone, expected_input_interval,",
+                  "input_weighting, minimum_input_count, minimum_coverage,",
+                  "missing_data_policy, calculation_parameters",
+                  ") VALUES (",
+                  "$1::bigint, $2, $3, $4, $5::interval, $6::interval,",
+                  "$7::interval, $8::timestamp, $9, $10::interval,",
+                  "$11, $12, $13, $14, $15::jsonb",
+                  ") RETURNING step_id::text AS step_id"
+                ),
+                params = c(list(method_id), step_parameters)
+              )
+              step_ids[[step_keys[[i]]]] <- inserted_step$step_id[[1L]]
+            } else {
+              DBI::dbExecute(
+                con,
+                paste(
+                  "UPDATE continuous.timeseries_aggregation_method_steps SET",
+                  "stage_number = $1, operation_type = $2,",
+                  "aggregation_type_id = $3, window_start_offset = $4::interval,",
+                  "window_end_offset = $5::interval, evaluation_interval = $6::interval,",
+                  "evaluation_anchor = $7::timestamp, evaluation_timezone = $8,",
+                  "expected_input_interval = $9::interval, input_weighting = $10,",
+                  "minimum_input_count = $11, minimum_coverage = $12,",
+                  "missing_data_policy = $13, calculation_parameters = $14::jsonb",
+                  "WHERE aggregation_method_id = $15::bigint AND step_id = $16::bigint"
+                ),
+                params = c(
+                  step_parameters,
+                  list(method_id, existing_step_id)
+                )
+              )
+              step_ids[[step_keys[[i]]]] <- as.character(existing_step_id)
+            }
+          }
+
+          removed_step_ids <- setdiff(
+            unname(existing_step_ids),
+            unname(step_ids)
+          )
+          for (step_id in removed_step_ids) {
+            DBI::dbExecute(
+              con,
+              paste(
+                "DELETE FROM continuous.timeseries_aggregation_method_steps",
+                "WHERE aggregation_method_id = $1::bigint",
+                "AND step_id = $2::bigint"
+              ),
+              params = list(method_id, step_id)
+            )
+          }
+
+          desired_inputs <- list()
+          for (i in seq_along(steps)) {
+            step_inputs <- steps[[i]]$inputs
+            if (is.null(step_inputs) || length(step_inputs) == 0L) {
+              next
+            }
+            for (j in seq_along(step_inputs)) {
+              input <- step_inputs[[j]]
+              desired_inputs[[length(desired_inputs) + 1L]] <- list(
+                step_id = step_ids[[step_keys[[i]]]],
+                input_number = as.integer(j),
+                input_step_id = step_ids[[as.character(input$step_key)]],
+                component_weight = as.numeric(aggregation_step_or(
+                  input,
+                  "component_weight",
+                  1
+                ))
+              )
+            }
+          }
+          desired_inputs <- if (length(desired_inputs) > 0L) {
+            data.table::rbindlist(desired_inputs)
+          } else {
+            data.table::data.table(
+              step_id = character(),
+              input_number = integer(),
+              input_step_id = character(),
+              component_weight = numeric()
+            )
+          }
+          desired_inputs[, input_key := paste(step_id, input_number, sep = "|")]
+          existing_inputs[, input_key := paste(
+            step_id,
+            input_number,
+            sep = "|"
+          )]
+
+          for (i in seq_len(nrow(desired_inputs))) {
+            desired <- desired_inputs[i]
+            existing_index <- match(
+              desired$input_key[[1L]],
+              existing_inputs$input_key
+            )
+            if (!is.na(existing_index)) {
+              existing <- existing_inputs[existing_index]
+              unchanged <- identical(
+                as.character(existing$input_step_id[[1L]]),
+                as.character(desired$input_step_id[[1L]])
+              ) && isTRUE(all.equal(
+                as.numeric(existing$component_weight[[1L]]),
+                as.numeric(desired$component_weight[[1L]])
+              ))
+              if (unchanged) {
+                next
+              }
+              updated <- DBI::dbExecute(
+                con,
+                paste(
+                  "UPDATE continuous.timeseries_aggregation_method_step_inputs",
+                  "SET input_step_id = $1::bigint, component_weight = $2::numeric",
+                  "WHERE aggregation_method_id = $3::bigint",
+                  "AND step_id = $4::bigint AND input_number = $5"
+                ),
+                params = list(
+                  desired$input_step_id[[1L]],
+                  desired$component_weight[[1L]],
+                  method_id,
+                  desired$step_id[[1L]],
+                  desired$input_number[[1L]]
+                )
+              )
+              if (updated == 1L) {
+                next
+              }
+            }
+
+            DBI::dbExecute(
+              con,
+              paste(
+                "INSERT INTO continuous.timeseries_aggregation_method_step_inputs (",
+                "aggregation_method_id, step_id, input_number,",
+                "input_step_id, component_weight",
+                ") VALUES ($1::bigint, $2::bigint, $3, $4::bigint, $5::numeric)"
+              ),
+              params = list(
+                method_id,
+                desired_inputs$step_id[[i]],
+                desired_inputs$input_number[[i]],
+                desired_inputs$input_step_id[[i]],
+                desired_inputs$component_weight[[i]]
+              )
+            )
+          }
+
+          removed_input_keys <- setdiff(
+            existing_inputs$input_key,
+            desired_inputs$input_key
+          )
+          for (input_key in removed_input_keys) {
+            existing <- existing_inputs[existing_inputs$input_key == input_key, ]
+            DBI::dbExecute(
+              con,
+              paste(
+                "DELETE FROM continuous.timeseries_aggregation_method_step_inputs",
+                "WHERE aggregation_method_id = $1::bigint",
+                "AND step_id = $2::bigint AND input_number = $3"
+              ),
+              params = list(
+                method_id,
+                existing$step_id[[1L]],
+                existing$input_number[[1L]]
+              )
+            )
+          }
+        })
+
+        NULL
+      }, error = function(e) e)
+
+      if (inherits(save_error, "error")) {
+        showNotification(
+          paste("Could not save value derivation method:", conditionMessage(save_error)),
+          type = "error",
+          duration = 12
+        )
+        return()
+      }
+
+      removeModal()
+      aggregation_period_recalc_pending(editor$timeseries_id)
+      showModal(modalDialog(
+        title = "Recalculate existing measurement periods?",
+        tags$p(
+          "The value derivation method was saved. You can now back-correct",
+          tags$code("measurements_continuous.period"),
+          "for existing measurements covered by its applicable dates. For a window step, the period is the window duration. For an arithmetic mean, it is inferred only when all leaf window durations match.",
+          "Measurements outside resolvable method periods will be left unchanged."
+        ),
+        footer = tagList(
+          actionButton(
+            ns("recalculate_aggregation_periods"),
+            "Recalculate periods",
+            icon = icon("rotate")
+          ),
+          actionButton(
+            ns("leave_aggregation_periods"),
+            "Leave periods unchanged",
+            class = "btn-default"
+          )
+        ),
+        easyClose = FALSE
+      ))
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$leave_aggregation_periods, {
+      aggregation_period_recalc_pending(NULL)
+      removeModal()
+      showNotification(
+        "Value derivation method saved. Existing measurement periods were left unchanged.",
+        type = "message"
+      )
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$recalculate_aggregation_periods, {
+      timeseries_id <- aggregation_period_recalc_pending()
+      if (is.null(timeseries_id)) {
+        removeModal()
+        return()
+      }
+
+      con <- session$userData$AquaCache
+      recalculated_rows <- tryCatch(
+        DBI::dbWithTransaction(con, {
+          DBI::dbExecute(
+            con,
+            paste(
+              "WITH terminal_steps AS (",
+              "  SELECT step.aggregation_method_id, step.operation_type,",
+              "    step.window_start_offset, step.window_end_offset",
+              "  FROM continuous.timeseries_aggregation_method_steps step",
+              "  WHERE NOT EXISTS (",
+              "    SELECT 1 FROM continuous.timeseries_aggregation_method_step_inputs input",
+              "    WHERE input.aggregation_method_id = step.aggregation_method_id",
+              "      AND input.input_step_id = step.step_id",
+              "  )",
+              "), leaf_periods AS (",
+              "  SELECT step.aggregation_method_id,",
+              "    count(*) FILTER (WHERE leaf_period.period IS NULL) AS unresolved_period_count,",
+              "    count(DISTINCT leaf_period.period) AS period_count,",
+              "    min(leaf_period.period) AS period",
+              "  FROM continuous.timeseries_aggregation_method_steps step",
+              "  CROSS JOIN LATERAL (",
+              "    SELECT CASE WHEN step.window_start_offset IS NOT NULL",
+              "      AND step.window_end_offset IS NOT NULL",
+              "      THEN step.window_end_offset - step.window_start_offset END AS period",
+              "  ) leaf_period",
+              "  WHERE NOT EXISTS (",
+              "    SELECT 1 FROM continuous.timeseries_aggregation_method_step_inputs input",
+              "    WHERE input.aggregation_method_id = step.aggregation_method_id",
+              "      AND input.step_id = step.step_id",
+              "  )",
+              "  GROUP BY step.aggregation_method_id",
+              "), resolved_periods AS (",
+              "  SELECT method.timeseries_id, method.applicable_from,",
+              "    method.applicable_until, CASE",
+              "      WHEN terminal.operation_type = 'window_aggregate'",
+              "        AND terminal.window_start_offset IS NOT NULL",
+              "        AND terminal.window_end_offset IS NOT NULL",
+              "      THEN terminal.window_end_offset - terminal.window_start_offset",
+              "      WHEN terminal.operation_type = 'arithmetic_mean'",
+              "        AND leaves.unresolved_period_count = 0",
+              "        AND leaves.period_count = 1 THEN leaves.period END AS period",
+              "  FROM continuous.timeseries_aggregation_methods method",
+              "  LEFT JOIN terminal_steps terminal USING (aggregation_method_id)",
+              "  LEFT JOIN leaf_periods leaves USING (aggregation_method_id)",
+              ")",
+              "UPDATE continuous.measurements_continuous measurement",
+              "SET period = assignment.period",
+              "FROM resolved_periods assignment",
+              "WHERE assignment.timeseries_id = $1",
+              "  AND assignment.period > INTERVAL '0'",
+              "  AND measurement.timeseries_id = assignment.timeseries_id",
+              "  AND measurement.datetime >= assignment.applicable_from",
+              "  AND measurement.datetime < assignment.applicable_until",
+              "  AND measurement.period IS DISTINCT FROM assignment.period"
+            ),
+            params = list(as.integer(timeseries_id))
+          )
+        }),
+        error = function(e) e
+      )
+
+      aggregation_period_recalc_pending(NULL)
+      removeModal()
+      if (inherits(recalculated_rows, "error")) {
+        showNotification(
+          paste(
+            "The value derivation method was saved, but measurement-period recalculation failed:",
+            conditionMessage(recalculated_rows)
+          ),
+          type = "error",
+          duration = 12
+        )
+        return()
+      }
+
+      showNotification(
+        paste(
+          "Value derivation method saved. Recalculated measurement periods for",
+          recalculated_rows,
+          "existing row(s)."
+        ),
+        type = "message",
+        duration = 8
+      )
+    }, ignoreInit = TRUE)
+
     # Observe row selection and update inputs accordingly
     observeEvent(input$ts_table_rows_selected, {
       sel <- input$ts_table_rows_selected
@@ -4725,7 +6629,8 @@ addTimeseries <- function(id, language) {
         instrument_deployment,
         data,
         share_with,
-        default_corrections
+        default_corrections,
+        aggregation_methods
       ) {
         promises::future_promise(seed = TRUE, expr = {
           con <- NULL
@@ -4820,6 +6725,16 @@ addTimeseries <- function(id, language) {
               }
 
               new_timeseries_id <- new_timeseries[1, 1]
+
+              if (length(aggregation_methods) > 0L) {
+                for (method in aggregation_methods) {
+                  insert_aggregation_method_draft(
+                    con,
+                    new_timeseries_id,
+                    method
+                  )
+                }
+              }
 
               if (nrow(source_assignments) > 0L) {
                 for (row_idx in seq_len(nrow(source_assignments))) {
@@ -5074,6 +6989,74 @@ addTimeseries <- function(id, language) {
         return()
       }
 
+      methods_to_save <- pending_aggregation_methods()
+      if (length(methods_to_save) > 0L) {
+        parent_aggregation_type_id <- nullable_integer(input$aggregation_type)
+        parent_aggregation_type <- if (is.na(parent_aggregation_type_id)) {
+          moduleData$aggregation_types[0, , drop = FALSE]
+        } else {
+          moduleData$aggregation_types[
+            moduleData$aggregation_types$aggregation_type_id ==
+              parent_aggregation_type_id,
+            ,
+            drop = FALSE
+          ]
+        }
+        if (
+          nrow(parent_aggregation_type) != 1L ||
+            identical(
+              tolower(trimws(parent_aggregation_type$aggregation_type[[1L]])),
+              "instantaneous"
+            )
+        ) {
+          showNotification(
+            "Instantaneous timeseries cannot have value derivation methods.",
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+
+        methods_match_aggregation <- vapply(methods_to_save, function(method) {
+          steps <- method$steps
+          if (!is.list(steps) || length(steps) == 0L) {
+            return(FALSE)
+          }
+          step_keys <- vapply(
+            steps,
+            function(step) as.character(step$key),
+            character(1)
+          )
+          referenced_keys <- unlist(lapply(steps, function(step) {
+            links <- step$inputs
+            if (is.null(links) || length(links) == 0L) {
+              return(character(0))
+            }
+            vapply(links, function(link) as.character(link$step_key), character(1))
+          }), use.names = FALSE)
+          terminal <- which(!step_keys %in% referenced_keys)
+          length(terminal) == 1L &&
+            identical(
+              suppressWarnings(as.integer(
+                steps[[terminal[[1L]]]]$aggregation_type_id
+              )),
+              parent_aggregation_type_id
+            )
+        }, logical(1))
+        if (!all(methods_match_aggregation)) {
+          showNotification(
+            paste(
+              "Each staged method must end with the aggregation type",
+              "currently selected. Reopen the methods to adjust them, or",
+              "clear the staged methods before saving."
+            ),
+            type = "error",
+            duration = 10
+          )
+          return()
+        }
+      }
+
       if (current_z_has_input() && is.na(current_z_value())) {
         showNotification(
           "Elevation/depth must be numeric.",
@@ -5194,6 +7177,7 @@ addTimeseries <- function(id, language) {
           fetch_source
         )
       }
+      submitted_aggregation_methods(methods_to_save)
       addNewTimeseries$invoke(
         config = session$userData$config,
         loc = input$location,
@@ -5215,7 +7199,8 @@ addTimeseries <- function(id, language) {
         instrument_deployment = input$instrument_deployment,
         data = reactiveValuesToList(moduleData),
         share_with = input$share_with,
-        default_corrections = default_corrections
+        default_corrections = default_corrections,
+        aggregation_methods = methods_to_save
       )
     })
 
@@ -5237,6 +7222,7 @@ addTimeseries <- function(id, language) {
         return()
       }
       if (identical(result$status, "error")) {
+        submitted_aggregation_methods(NULL)
         showNotification(result$message, type = "error", duration = 10)
         return()
       }
@@ -5265,6 +7251,15 @@ addTimeseries <- function(id, language) {
           duration = 15
         )
       }
+
+      submitted_methods <- submitted_aggregation_methods()
+      if (
+        !is.null(submitted_methods) &&
+          identical(pending_aggregation_methods(), submitted_methods)
+      ) {
+        pending_aggregation_methods(list())
+      }
+      submitted_aggregation_methods(NULL)
 
       getModuleData()
       pending_transmission_mapping(NULL)

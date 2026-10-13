@@ -293,6 +293,7 @@ test_that("API measurement SQL limits rows before metadata range joins", {
       fixed = TRUE
     )
     expect_false(grepl("FROM measurement_rows m", block, fixed = TRUE))
+    expect_false(grepl("publicly_visible|default_show|include_private", block))
   }
 })
 
@@ -345,6 +346,27 @@ test_that("API measurement modifiedSince includes related range changes", {
   }
 })
 
+test_that("API timeseries listings include default_show without filtering by it", {
+  for (route_file in c(
+    v2_route_file(),
+    system.file("plumber/v1.R", package = "YGwater")
+  )) {
+    lines <- readLines(route_file, warn = FALSE)
+    route_start <- grep(
+      "^#\\* @get\\s+/timeseries\\s*$",
+      lines
+    )[[1L]]
+    next_route <- grep("^#\\* @get\\s+", lines)
+    route_end <- next_route[next_route > route_start][[1L]] - 1L
+    block <- paste(lines[route_start:route_end], collapse = "\n")
+
+    expect_match(block, "ts.default_show", fixed = TRUE)
+    expect_length(gregexpr("default_show", block, fixed = TRUE)[[1L]], 1L)
+    expect_false(grepl("publicly_visible", block, fixed = TRUE))
+    expect_false(grepl("default_show = TRUE", block, fixed = TRUE))
+  }
+})
+
 test_that("API daily measurement routes expose timezone and optional stats", {
   for (route_file in c(
     v2_route_file(),
@@ -374,8 +396,8 @@ test_that("API daily measurement routes expose timezone and optional stats", {
     expect_match(block, "m.doy_count", fixed = TRUE)
     expect_match(block, "percent_historic_range_30yr", fixed = TRUE)
     expect_match(block, "doy_count_30yr", fixed = TRUE)
-    expect_match(block, "m.created >= $4 OR m.modified >= $4", fixed = TRUE)
-    expect_match(block, "AND ($3::boolean OR publicly_visible)", fixed = TRUE)
+    expect_match(block, "m.created >= $3 OR m.modified >= $3", fixed = TRUE)
+    expect_false(grepl("publicly_visible|default_show|include_private", block))
   }
 })
 
@@ -532,7 +554,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV and JSON", {
     "timeseries_type",
     "timeseries_type_description",
     "last_new_data",
-    "publicly_visible",
+    "default_show",
     "active",
     "default_owner_organization_id",
     "default_owner",

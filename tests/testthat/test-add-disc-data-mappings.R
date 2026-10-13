@@ -165,7 +165,7 @@ test_that("mapping conversion and offset are applied once", {
       result_type = 2L,
       sample_fraction_id = 5L,
       result_value_type = 1L,
-      result_speciation_id = NA_integer_,
+      result_descriptor_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
       result_offset = 0.5
@@ -214,7 +214,7 @@ test_that("source-specific result-flag mappings use typed detection limits", {
       result_type = 2L,
       sample_fraction_id = 5L,
       result_value_type = 1L,
-      result_speciation_id = NA_integer_,
+      result_descriptor_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
       result_offset = 0
@@ -542,9 +542,9 @@ test_that("mapped-result preview uses source text and lookup labels", {
       result_value_type_id = 1L,
       result_value_type = "Measured"
     ),
-    result_speciations = data.frame(
-      result_speciation_id = integer(),
-      result_speciation = character()
+    result_descriptors = data.frame(
+      result_descriptor_id = integer(),
+      result_descriptor = character()
     ),
     matrix_states = data.frame(
       matrix_state_id = 1L,

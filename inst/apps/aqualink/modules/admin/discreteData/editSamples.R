@@ -770,7 +770,7 @@ editSamples <- function(id, language) {
           NA_real_
         },
         result_value_type = integer_input("result_value_type"),
-        result_speciation_id = integer_input("result_speciation"),
+        result_descriptor_id = integer_input("result_descriptor"),
         protocol_method = integer_input("result_protocol_method"),
         laboratory = integer_input("result_laboratory"),
         analysis_datetime = scalar_utc_datetime(input$result_analysis_datetime),
@@ -907,12 +907,12 @@ editSamples <- function(id, language) {
       isTRUE(row$sample_fraction[[1]])
     }
 
-    parameter_requires_speciation <- function(parameter_id) {
+    parameter_requires_descriptor <- function(parameter_id) {
       row <- selected_parameter_row(parameter_id)
-      if (is.null(row) || !"result_speciation" %in% names(row)) {
+      if (is.null(row) || !"result_descriptor" %in% names(row)) {
         return(FALSE)
       }
-      isTRUE(row$result_speciation[[1]])
+      isTRUE(row$result_descriptor[[1]])
     }
 
     supported_matrix_state_ids <- function(parameter_id) {
@@ -956,7 +956,7 @@ editSamples <- function(id, language) {
       parameter_id = integer_input("result_parameter"),
       selected_matrix_state = integer_input("result_matrix_state"),
       selected_fraction = integer_input("result_sample_fraction"),
-      selected_speciation = integer_input("result_speciation")
+      selected_descriptor = integer_input("result_descriptor")
     ) {
       matrix_choices <- matrix_state_choices_for_parameter(parameter_id)
       if (
@@ -999,20 +999,20 @@ editSamples <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "result_speciation",
+        "result_descriptor",
         choices = result_lookup_choices(
-          moduleData$result_speciations,
-          "result_speciation_id",
-          "result_speciation"
+          moduleData$result_descriptors,
+          "result_descriptor_id",
+          "result_descriptor"
         ),
-        selected = if (is.na(selected_speciation)) {
+        selected = if (is.na(selected_descriptor)) {
           character(0)
         } else {
-          as.character(selected_speciation)
+          as.character(selected_descriptor)
         },
         options = list(
           maxItems = 1,
-          placeholder = if (parameter_requires_speciation(parameter_id)) {
+          placeholder = if (parameter_requires_descriptor(parameter_id)) {
             "Required for selected parameter"
           } else {
             "Optional"
@@ -1064,8 +1064,8 @@ editSamples <- function(id, language) {
           r.result_condition_value,
           r.result_value_type,
           rvt.result_value_type AS result_value_type_name,
-          r.result_speciation_id,
-          rs.result_speciation,
+          r.result_descriptor_id,
+          rs.result_descriptor,
           r.protocol_method,
           pm.protocol_name,
           r.laboratory,
@@ -1104,8 +1104,8 @@ editSamples <- function(id, language) {
           ON r.result_condition = rc.result_condition_id
         LEFT JOIN discrete.result_value_types rvt
           ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN discrete.result_speciations rs
-          ON r.result_speciation_id = rs.result_speciation_id
+        LEFT JOIN discrete.result_descriptors rs
+          ON r.result_descriptor_id = rs.result_descriptor_id
         LEFT JOIN discrete.protocols_methods pm
           ON r.protocol_method = pm.protocol_id
         LEFT JOIN discrete.laboratories lab
@@ -1467,19 +1467,19 @@ editSamples <- function(id, language) {
           column(
             4,
             selectizeInput(
-              ns("result_speciation"),
-              "Speciation",
+              ns("result_descriptor"),
+              "Descriptor",
               choices = result_lookup_choices(
-                moduleData$result_speciations,
-                "result_speciation_id",
-                "result_speciation"
+                moduleData$result_descriptors,
+                "result_descriptor_id",
+                "result_descriptor"
               ),
-              selected = selected_value("result_speciation_id"),
+              selected = selected_value("result_descriptor_id"),
               multiple = TRUE,
               options = list(
                 maxItems = 1,
                 placeholder = if (
-                  parameter_requires_speciation(selected_parameter)
+                  parameter_requires_descriptor(selected_parameter)
                 ) {
                   "Required for selected parameter"
                 } else {
@@ -1622,7 +1622,7 @@ editSamples <- function(id, language) {
           parameter_id = integer_input("result_parameter"),
           selected_matrix_state = integer_input("result_matrix_state"),
           selected_fraction = integer_input("result_sample_fraction"),
-          selected_speciation = integer_input("result_speciation")
+          selected_descriptor = integer_input("result_descriptor")
         )
       },
       ignoreInit = TRUE
@@ -1980,7 +1980,7 @@ editSamples <- function(id, language) {
         SELECT
           p.parameter_id,
           p.param_name,
-          p.result_speciation,
+          p.result_descriptor,
           p.sample_fraction,
           ul.unit_name AS units_liquid,
           us.unit_name AS units_solid,
@@ -2016,9 +2016,9 @@ editSamples <- function(id, language) {
         con,
         "SELECT result_value_type_id, result_value_type FROM discrete.result_value_types ORDER BY result_value_type ASC"
       )
-      moduleData$result_speciations <- DBI::dbGetQuery(
+      moduleData$result_descriptors <- DBI::dbGetQuery(
         con,
-        "SELECT result_speciation_id, result_speciation FROM discrete.result_speciations ORDER BY result_speciation ASC"
+        "SELECT result_descriptor_id, result_descriptor FROM discrete.result_descriptors ORDER BY result_descriptor ASC"
       )
       moduleData$protocols_methods <- DBI::dbGetQuery(
         con,
@@ -2125,7 +2125,7 @@ editSamples <- function(id, language) {
         moduleData$sample_fractions,
         moduleData$result_conditions,
         moduleData$result_value_types,
-        moduleData$result_speciations,
+        moduleData$result_descriptors,
         moduleData$protocols_methods,
         moduleData$laboratories,
         moduleData$matrix_states
@@ -2879,7 +2879,7 @@ editSamples <- function(id, language) {
           condition = results$result_condition_name,
           value_type = results$result_value_type_name,
           fraction = results$sample_fraction,
-          speciation = results$result_speciation,
+          descriptor = results$result_descriptor,
           matrix_state = results$matrix_state_name,
           laboratory = results$laboratory_name,
           lab_report_no = results$lab_report_no,
@@ -3055,11 +3055,11 @@ editSamples <- function(id, language) {
         return()
       }
       if (
-        parameter_requires_speciation(form$parameter_id) &&
-          is.na(form$result_speciation_id)
+        parameter_requires_descriptor(form$parameter_id) &&
+          is.na(form$result_descriptor_id)
       ) {
         showNotification(
-          "Speciation is required for the selected parameter.",
+          "Descriptor is required for the selected parameter.",
           type = "error"
         )
         return()
@@ -3073,7 +3073,7 @@ editSamples <- function(id, language) {
         form$result_condition,
         form$result_condition_value,
         form$result_value_type,
-        form$result_speciation_id,
+        form$result_descriptor_id,
         form$protocol_method,
         form$laboratory,
         form$analysis_datetime,
@@ -3100,7 +3100,7 @@ editSamples <- function(id, language) {
             result_condition,
             result_condition_value,
             result_value_type,
-            result_speciation_id,
+            result_descriptor_id,
             protocol_method,
             laboratory,
             analysis_datetime,
@@ -3154,7 +3154,7 @@ editSamples <- function(id, language) {
             result_condition = $5,
             result_condition_value = $6,
             result_value_type = $7,
-            result_speciation_id = $8,
+            result_descriptor_id = $8,
             protocol_method = $9,
             laboratory = $10,
             analysis_datetime = $11,

@@ -109,7 +109,7 @@ and location. If this selects one sample for multiple dates, the function
 warns and reports the reuse count; each result detail row includes both its
 requested and actual sample dates. Optional matrix-state and sample-fraction
 filters are applied when finding the closest eligible sample, then retained
-in the report matrix and result details. Result speciation is shown in the
+in the report matrix and result details. Result descriptor is shown in the
 report whenever it is recorded for a measurement. Matrix rows also
 distinguish result type, so field and laboratory measurements of the same
 parameter and sample remain separate. When \code{date_range} is

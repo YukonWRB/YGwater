@@ -1861,7 +1861,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         SELECT
           md.*,
           ts.active,
-          ts.publicly_visible,
+          ts.default_show,
           c.expression_sql
         FROM ",
           metadata_view,
@@ -1932,7 +1932,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           d.reuse_member_values,
           md.*,
           ts.active,
-          ts.publicly_visible
+          ts.default_show
         FROM dependency_tree AS d
         INNER JOIN ",
           metadata_view,
@@ -1967,7 +1967,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           tr("expression_sql", language$language),
           tr("constituent_count", language$language),
           tr("active", language$language),
-          tr("publicly_visible", language$language)
+          tr("default_show", language$language)
         ),
         value = c(
           format_compound_detail_value(parent$timeseries_id),
@@ -1976,7 +1976,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           format_compound_detail_value(parent$expression_sql),
           as.character(nrow(details$members)),
           format_compound_detail_value(parent$active),
-          format_compound_detail_value(parent$publicly_visible)
+          format_compound_detail_value(parent$default_show)
         ),
         stringsAsFactors = FALSE,
         check.names = FALSE
@@ -2033,8 +2033,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           format_compound_detail_value,
           character(1)
         ),
-        publicly_visible = vapply(
-          members$publicly_visible,
+        default_show = vapply(
+          members$default_show,
           format_compound_detail_value,
           character(1)
         ),
@@ -2375,7 +2375,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           tr("record_rate", language$language),
           tr("sensor_priority", language$language),
           tr("active", language$language),
-          tr("publicly_visible", language$language),
+          tr("default_show", language$language),
           tr("start_datetime_utc", language$language),
           tr("end_datetime_utc", language$language),
           tr("note", language$language)
@@ -5031,6 +5031,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
     pending_plot_request <- reactiveVal(NULL)
     completed_plot_request <- reactiveVal(NULL)
     plot_notes <- reactiveVal(NULL)
+    plot_aggregation_metadata <- reactiveVal(NULL)
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
@@ -5062,6 +5063,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       adaptiveState$payload <- NULL
       historic_stats_caption(NULL)
       plot_notes(NULL)
+      plot_aggregation_metadata(NULL)
       request <- plot_request()
       pending_plot_request(request)
       long_ts_plot$invoke(request)
@@ -5103,6 +5105,21 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         }
       )
       plot_notes(notes)
+      aggregation_metadata <- tryCatch(
+        YGwater:::fetch_timeseries_aggregation_metadata(
+          session$userData$AquaCache,
+          completed_request$timeseries_ids,
+          windows = YGwater:::continuous_plot_note_windows(completed_request)
+        ),
+        error = function(e) {
+          showNotification(
+            tr("aggregation_metadata_load_error", language$language),
+            type = "warning"
+          )
+          NULL
+        }
+      )
+      plot_aggregation_metadata(aggregation_metadata)
 
       if (identical(result$mode, "adaptive_plot")) {
         if (!is.null(result$warning) && nzchar(result$warning)) {
@@ -5315,10 +5332,39 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
     output$timeseries_metadata_table <- DT::renderDataTable({
       metadata <- timeseries_metadata()
       req(metadata)
+
+      derivation_metadata <- aggregation_metadata_for_display()
+      has_derivation_details <- !is.null(derivation_metadata) &&
+        isTRUE(derivation_metadata$available) &&
+        nrow(derivation_metadata$methods) > 0L
+      aggregation_row <- which(
+        metadata$attribute == tr("aggregation", language$language)
+      )
+      metadata$attribute <- htmltools::htmlEscape(
+        as.character(metadata$attribute)
+      )
+      metadata$value <- htmltools::htmlEscape(as.character(metadata$value))
+      if (has_derivation_details && length(aggregation_row) == 1L) {
+        details_link <- htmltools::tags$a(
+          tr("aggregation_details_link", language$language),
+          href = "#",
+          onclick = sprintf(
+            "Shiny.setInputValue('%s', Date.now(), {priority: 'event'}); return false;",
+            ns("show_aggregation_method_details")
+          )
+        )
+        metadata$value[[aggregation_row]] <- paste0(
+          metadata$value[[aggregation_row]],
+          " (",
+          as.character(details_link),
+          ")"
+        )
+      }
       DT::datatable(
         metadata,
         rownames = FALSE,
         selection = "none",
+        escape = FALSE,
         options = list(
           dom = "t",
           pageLength = 10,
@@ -5351,6 +5397,138 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         )
       )
     })
+
+    aggregation_metadata_for_display <- reactive({
+      request <- completed_plot_request()
+      timeseries_id <- metadata_timeseries_id()
+      metadata <- plot_aggregation_metadata()
+      if (
+        is.null(request) || is.null(timeseries_id) ||
+          !length(timeseries_id) || is.na(timeseries_id[[1L]]) ||
+          is.null(metadata)
+      ) {
+        return(NULL)
+      }
+
+      timeseries_id <- as.integer(timeseries_id[[1L]])
+      methods <- metadata$methods[
+        metadata$methods$timeseries_id == timeseries_id,
+      ]
+      method_ids <- methods$aggregation_method_id
+      list(
+        available = metadata$available,
+        methods = methods,
+        steps = metadata$steps[
+          metadata$steps$aggregation_method_id %in% method_ids,
+        ],
+        inputs = metadata$inputs[
+          metadata$inputs$aggregation_method_id %in% method_ids,
+        ]
+      )
+    })
+
+    output$aggregation_method_metadata_table <- DT::renderDataTable({
+      metadata <- aggregation_metadata_for_display()
+      req(metadata, isTRUE(metadata$available), nrow(metadata$methods) > 0L)
+      display <- YGwater:::continuous_aggregation_method_display_table(metadata)
+      display_columns <- c(
+        "timeseries_id",
+        "aggregation_method_id",
+        "step_id",
+        "applicable_from",
+        "applicable_until",
+        "source_name",
+        "source_reference",
+        "note",
+        "stage_number",
+        "operation_type",
+        "aggregation_type",
+        "window_start_offset",
+        "window_end_offset",
+        "evaluation_interval",
+        "evaluation_anchor",
+        "evaluation_timezone",
+        "expected_input_interval",
+        "input_weighting",
+        "minimum_input_count",
+        "minimum_coverage",
+        "missing_data_policy",
+        "calculation_parameters",
+        "inputs"
+      )
+      display_columns <- display_columns[
+        display_columns %in% names(display)
+      ]
+      display <- display[, display_columns, with = FALSE]
+      data.table::setnames(display, display_columns, vapply(
+        display_columns,
+        function(column) {
+          tr(paste0("aggregation_metadata_", column), language$language)
+        },
+        character(1)
+      ))
+
+      DT::datatable(
+        display,
+        rownames = FALSE,
+        selection = "none",
+        class = "compact stripe",
+        options = list(
+          dom = "t",
+          pageLength = 10,
+          ordering = FALSE,
+          searching = FALSE,
+          scrollX = TRUE,
+          scrollCollapse = TRUE,
+          autoWidth = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {
+             var api = this.api();
+             $(api.table().node()).css({
+              'font-size': '75%',
+              'white-space': 'nowrap'
+             });
+             $(api.table().header()).css({
+              'font-size': '80%',
+              'white-space': 'nowrap'
+             });
+             $(api.table().body()).css({
+              'font-size': '70%',
+              'white-space': 'nowrap'
+             });
+             api.columns.adjust();
+            }"
+          ),
+          language = list(
+            zeroRecords = tr("tbl_zero", language$language)
+          )
+        )
+      )
+    })
+
+    observeEvent(input$show_aggregation_method_details, {
+      metadata <- aggregation_metadata_for_display()
+      if (
+        is.null(metadata) || !isTRUE(metadata$available) ||
+          nrow(metadata$methods) == 0L
+      ) {
+        return()
+      }
+
+      showModal(modalDialog(
+        title = tr("value_derivation_metadata_heading", language$language),
+        tags$div(
+          style = "width: 100%; max-width: 100%; overflow-x: auto;",
+          DT::DTOutput(
+            ns("aggregation_method_metadata_table"),
+            width = "100%"
+          )
+        ),
+        footer = modalButton(tr("close", language$language)),
+        easyClose = TRUE,
+        size = "xl"
+      ))
+    }, ignoreInit = TRUE)
 
     output$timeseries_ownership_table <- DT::renderDataTable({
       ownership <- timeseries_ownership()
@@ -5588,7 +5766,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             out = out,
             module_data = moduleData,
             language = language,
-            notes = isolate(plot_notes())
+            notes = isolate(plot_notes()),
+            aggregation_metadata = isolate(plot_aggregation_metadata())
           ),
           file
         )

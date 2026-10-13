@@ -155,16 +155,16 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
         uiOutput(ns("parameter_unit_status")),
         shinyjs::hidden(
           div(
-            id = ns("result_speciation_section"),
+            id = ns("result_descriptor_section"),
             selectizeInput(
-              ns("result_speciation"),
-              "Result speciation",
+              ns("result_descriptor"),
+              "Result descriptor",
               choices = NULL,
               width = "100%",
               selected = character(0),
               multiple = TRUE,
               options = single_selectize_options(
-                "Leave empty to apply to all speciations"
+                "Leave empty to apply to all descriptors"
               )
             )
           )
@@ -178,7 +178,7 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
           multiple = TRUE,
           options = list(placeholder = "Leave empty to apply to all fractions")
         ),
-        uiOutput(ns("fraction_speciation_applicability_note")),
+        uiOutput(ns("fraction_descriptor_applicability_note")),
         selectizeInput(
           ns("media_type"),
           "Guideline media types",
@@ -967,7 +967,7 @@ addGuidelines <- function(id, language) {
       "parameter_id",
       "matrix_state_id",
       "sample_fraction_id",
-      "result_speciation_id",
+      "result_descriptor_id",
       "result_type",
       "result_type_preference",
       "aggregate_method",
@@ -1140,11 +1140,11 @@ addGuidelines <- function(id, language) {
         "sample_fraction"
       )
     }
-    speciation_choices <- function() {
+    descriptor_choices <- function() {
       choice_values(
-        moduleData$result_speciations,
-        "result_speciation_id",
-        "result_speciation"
+        moduleData$result_descriptors,
+        "result_descriptor_id",
+        "result_descriptor"
       )
     }
     result_type_choices <- function() {
@@ -1365,7 +1365,7 @@ addGuidelines <- function(id, language) {
         params = list(parameter_id, matrix_state_id)
       )
     }
-    parameter_requires_speciation <- function(parameter_id) {
+    parameter_requires_descriptor <- function(parameter_id) {
       if (is_hardness_helper_choice(parameter_id)) {
         return(FALSE)
       }
@@ -1374,7 +1374,7 @@ addGuidelines <- function(id, language) {
         is.na(parameter_id) ||
           is.null(moduleData$parameters) ||
           !nrow(moduleData$parameters) ||
-          !"result_speciation" %in% names(moduleData$parameters)
+          !"result_descriptor" %in% names(moduleData$parameters)
       ) {
         return(FALSE)
       }
@@ -1383,7 +1383,7 @@ addGuidelines <- function(id, language) {
         ,
         drop = FALSE
       ]
-      nrow(row) && isTRUE(row$result_speciation[[1]])
+      nrow(row) && isTRUE(row$result_descriptor[[1]])
     }
     parameter_requires_fraction <- function(parameter_id) {
       if (is_hardness_helper_choice(parameter_id)) {
@@ -1422,18 +1422,18 @@ addGuidelines <- function(id, language) {
       ]
       nrow(row) && isTRUE(row[[column]][[1]])
     }
-    update_result_speciation_visibility <- function(
+    update_result_descriptor_visibility <- function(
       parameter_id = input$parameter_id
     ) {
-      if (parameter_requires_speciation(parameter_id)) {
-        shinyjs::show(id = "result_speciation_section", anim = FALSE)
+      if (parameter_requires_descriptor(parameter_id)) {
+        shinyjs::show(id = "result_descriptor_section", anim = FALSE)
       } else {
         updateSelectizeInput(
           session,
-          "result_speciation",
+          "result_descriptor",
           selected = character(0)
         )
-        shinyjs::hide(id = "result_speciation_section", anim = FALSE)
+        shinyjs::hide(id = "result_descriptor_section", anim = FALSE)
       }
     }
     blank_rule_input_rows <- function(n = 1L) {
@@ -1444,7 +1444,7 @@ addGuidelines <- function(id, language) {
         parameter_id = rep(NA_integer_, n),
         matrix_state_id = rep(NA_integer_, n),
         sample_fraction_id = rep(NA_integer_, n),
-        result_speciation_id = rep(NA_integer_, n),
+        result_descriptor_id = rep(NA_integer_, n),
         result_type = rep(NA_integer_, n),
         result_type_preference = rep("", n),
         aggregate_method = rep("single", n),
@@ -1530,13 +1530,13 @@ addGuidelines <- function(id, language) {
         } else {
           integer_or_na(input[[rule_input_id("sample_fraction", i)]])
         }
-        result_speciation_id <- if (
+        result_descriptor_id <- if (
           identical(input_source, "hardness_helper") ||
-            !parameter_requires_speciation(parameter_choice)
+            !parameter_requires_descriptor(parameter_choice)
         ) {
           NA_integer_
         } else {
-          integer_or_na(input[[rule_input_id("speciation", i)]])
+          integer_or_na(input[[rule_input_id("descriptor", i)]])
         }
         input_name <- default_rule_input_name(parameter_id, input_source)
         input_code <- default_rule_input_code(
@@ -1551,7 +1551,7 @@ addGuidelines <- function(id, language) {
           parameter_id = parameter_id,
           matrix_state_id = matrix_state_id,
           sample_fraction_id = sample_fraction_id,
-          result_speciation_id = result_speciation_id,
+          result_descriptor_id = result_descriptor_id,
           result_type = NA_integer_,
           result_type_preference = collapse_id_vector(
             input[[rule_input_id("result_type_preference", i)]]
@@ -1634,7 +1634,7 @@ addGuidelines <- function(id, language) {
                 public.get_parameter_unit_name(g.parameter_id, g.matrix_state_id) AS units,
                 ms.matrix_state_name AS matrix_state, fr.fractions, mt.media_types,
                 loc.locations,
-                rs.result_speciation AS speciation, g.comparison_operator_code,
+                rs.result_descriptor AS descriptor, g.comparison_operator_code,
                 gj.jurisdiction_name AS jurisdiction,
                 gpg.protection_goal_name AS protection_goal,
                 ged.exposure_duration_name AS exposure_duration,
@@ -1642,7 +1642,7 @@ addGuidelines <- function(id, language) {
                 g.valid_from, g.valid_to, g.review_status, g.active,
                 COALESCE(rule_summary.rule_count, 0) AS rule_count,
                 rule_summary.rules, g.publisher_id, g.series_id, g.parameter_id,
-                g.matrix_state_id, g.result_speciation_id, fr.fraction_ids,
+                g.matrix_state_id, g.result_descriptor_id, fr.fraction_ids,
                 mt.media_ids, loc.location_ids, g.reference, g.general_notes, g.applicability_notes,
                 gjl.jurisdiction_level_name AS jurisdiction_level,
                 g.jurisdiction_id,
@@ -1660,7 +1660,7 @@ addGuidelines <- function(id, language) {
          LEFT JOIN criteria.guideline_averaging_periods gap ON gap.averaging_period_id = g.averaging_period_id
          JOIN public.parameters p ON p.parameter_id = g.parameter_id
          LEFT JOIN public.matrix_states ms ON ms.matrix_state_id = g.matrix_state_id
-         LEFT JOIN discrete.result_speciations rs ON rs.result_speciation_id = g.result_speciation_id
+         LEFT JOIN discrete.result_descriptors rs ON rs.result_descriptor_id = g.result_descriptor_id
          LEFT JOIN rule_summary ON rule_summary.guideline_id = g.guideline_id
          LEFT JOIN fr ON fr.guideline_id = g.guideline_id
          LEFT JOIN mt ON mt.guideline_id = g.guideline_id
@@ -1702,7 +1702,7 @@ addGuidelines <- function(id, language) {
                 p.units_solid, us.unit_name AS unit_solid_name,
                 p.units_gas, ug.unit_name AS unit_gas_name,
                 p.units_na, una.unit_name AS unit_na_name,
-                p.result_speciation, p.sample_fraction
+                p.result_descriptor, p.sample_fraction
          FROM public.parameters p
          LEFT JOIN public.units ul ON ul.unit_id = p.units_liquid
          LEFT JOIN public.units us ON us.unit_id = p.units_solid
@@ -1720,9 +1720,9 @@ addGuidelines <- function(id, language) {
         con,
         "SELECT sample_fraction_id, sample_fraction FROM discrete.sample_fractions ORDER BY sample_fraction"
       )
-      moduleData$result_speciations <- DBI::dbGetQuery(
+      moduleData$result_descriptors <- DBI::dbGetQuery(
         con,
-        "SELECT result_speciation_id, result_speciation FROM discrete.result_speciations ORDER BY result_speciation"
+        "SELECT result_descriptor_id, result_descriptor FROM discrete.result_descriptors ORDER BY result_descriptor"
       )
       moduleData$result_types <- DBI::dbGetQuery(
         con,
@@ -1807,11 +1807,11 @@ addGuidelines <- function(id, language) {
         )
         updateSelectizeInput(
           session,
-          "result_speciation",
+          "result_descriptor",
           choices = choice_values(
-            moduleData$result_speciations,
-            "result_speciation_id",
-            "result_speciation"
+            moduleData$result_descriptors,
+            "result_descriptor_id",
+            "result_descriptor"
           ),
           selected = selected,
           server = TRUE
@@ -1940,7 +1940,7 @@ addGuidelines <- function(id, language) {
       function() {
         update_choices(clear = TRUE)
         set_rule_input_rows(blank_rule_input_rows(1L))
-        update_result_speciation_visibility(character(0))
+        update_result_descriptor_visibility(character(0))
         updateTextAreaInput(
           session,
           "coefficients_text",
@@ -2367,12 +2367,12 @@ addGuidelines <- function(id, language) {
               4,
               shinyjs::hidden(
                 div(
-                  id = ns(rule_input_id("speciation_section", i)),
+                  id = ns(rule_input_id("descriptor_section", i)),
                   selectizeInput(
-                    ns(rule_input_id("speciation", i)),
-                    "Speciation",
-                    choices = choices_with_any(speciation_choices()),
-                    selected = selected_or_empty(row$result_speciation_id),
+                    ns(rule_input_id("descriptor", i)),
+                    "Descriptor",
+                    choices = choices_with_any(descriptor_choices()),
+                    selected = selected_or_empty(row$result_descriptor_id),
                     multiple = TRUE,
                     options = selectize_single_options,
                     width = "100%"
@@ -2563,29 +2563,29 @@ addGuidelines <- function(id, language) {
     observeEvent(
       input$parameter_id,
       {
-        update_result_speciation_visibility(input$parameter_id)
+        update_result_descriptor_visibility(input$parameter_id)
       },
       ignoreInit = FALSE
     )
 
-    output$fraction_speciation_applicability_note <- renderUI({
+    output$fraction_descriptor_applicability_note <- renderUI({
       parameter_id <- integer_or_na(input$parameter_id)
       if (is.na(parameter_id)) {
         return(tags$small(
           class = "text-muted",
-          "Leaving guideline fractions empty applies the guideline to all fractions, including results where fraction is empty. Leaving result speciation empty applies the guideline to all speciations, including results where speciation is empty."
+          "Leaving guideline fractions empty applies the guideline to all fractions, including results where fraction is empty. Leaving result descriptor empty applies the guideline to all descriptors, including results where descriptor is empty."
         ))
       }
 
       fraction_required <- parameter_flag_value(parameter_id, "sample_fraction")
-      speciation_required <- parameter_flag_value(
+      descriptor_required <- parameter_flag_value(
         parameter_id,
-        "result_speciation"
+        "result_descriptor"
       )
 
       notes <- c(
         "Leave guideline fractions empty unless the source guideline applies only to named fractions. Empty means all fractions, including results where fraction is empty.",
-        "Leave result speciation empty unless the source guideline applies only to a named speciation. Empty means all speciations, including results where speciation is empty."
+        "Leave result descriptor empty unless the source guideline applies only to a named descriptor. Empty means all descriptors, including results where descriptor is empty."
       )
       if (!fraction_required) {
         notes <- c(
@@ -2593,10 +2593,10 @@ addGuidelines <- function(id, language) {
           "This parameter is not marked as requiring sample fraction in public.parameters, so results for it commonly have no fraction."
         )
       }
-      if (!speciation_required) {
+      if (!descriptor_required) {
         notes <- c(
           notes,
-          "This parameter is not marked as requiring result speciation in public.parameters, so results for it commonly have no speciation."
+          "This parameter is not marked as requiring result descriptor in public.parameters, so results for it commonly have no descriptor."
         )
       }
 
@@ -2628,19 +2628,19 @@ addGuidelines <- function(id, language) {
           )
           shinyjs::hide(id = rule_input_id("fraction_section", i), anim = FALSE)
         }
-        if (parameter_requires_speciation(parameter_id)) {
+        if (parameter_requires_descriptor(parameter_id)) {
           shinyjs::show(
-            id = rule_input_id("speciation_section", i),
+            id = rule_input_id("descriptor_section", i),
             anim = FALSE
           )
         } else {
           updateSelectizeInput(
             session,
-            rule_input_id("speciation", i),
+            rule_input_id("descriptor", i),
             selected = character(0)
           )
           shinyjs::hide(
-            id = rule_input_id("speciation_section", i),
+            id = rule_input_id("descriptor_section", i),
             anim = FALSE
           )
         }
@@ -2719,7 +2719,7 @@ addGuidelines <- function(id, language) {
                 COALESCE(gri.input_source, 'sample_result') AS input_source,
                 gri.parameter_id,
                 gri.matrix_state_id, gri.sample_fraction_id,
-                gri.result_speciation_id, gri.result_type,
+                gri.result_descriptor_id, gri.result_type,
                 array_to_string(gri.result_type_preference, ',') AS result_type_preference,
                 gri.aggregate_method, gri.required, gri.allow_condition_value,
                 gri.lower_calibrated_bound,
@@ -2904,7 +2904,7 @@ addGuidelines <- function(id, language) {
       updateSelectizeInput(session, "matrix_state", selected = character(0))
       updateSelectizeInput(
         session,
-        "result_speciation",
+        "result_descriptor",
         selected = character(0)
       )
       updateSelectizeInput(session, "sample_fraction", selected = character(0))
@@ -2962,7 +2962,7 @@ addGuidelines <- function(id, language) {
         value = empty_table_text(narrative_cols)
       )
       update_formula_sql("")
-      update_result_speciation_visibility(character(0))
+      update_result_descriptor_visibility(character(0))
     }
 
     load_form <- function(guideline_id) {
@@ -3023,20 +3023,20 @@ addGuidelines <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "result_speciation",
+        "result_descriptor",
         choices = choice_values(
-          moduleData$result_speciations,
-          "result_speciation_id",
-          "result_speciation"
+          moduleData$result_descriptors,
+          "result_descriptor_id",
+          "result_descriptor"
         ),
-        selected = if (is.na(g$result_speciation_id[[1]])) {
+        selected = if (is.na(g$result_descriptor_id[[1]])) {
           character(0)
         } else {
-          as.character(g$result_speciation_id[[1]])
+          as.character(g$result_descriptor_id[[1]])
         },
         server = TRUE
       )
-      update_result_speciation_visibility(g$parameter_id[[1]])
+      update_result_descriptor_visibility(g$parameter_id[[1]])
       updateSelectizeInput(
         session,
         "sample_fraction",
@@ -3348,14 +3348,14 @@ addGuidelines <- function(id, language) {
         NA_integer_
       }
     }
-    find_speciation_id <- function(pattern) {
+    find_descriptor_id <- function(pattern) {
       hits <- grep(
         pattern,
-        moduleData$result_speciations$result_speciation,
+        moduleData$result_descriptors$result_descriptor,
         ignore.case = TRUE
       )
       if (length(hits)) {
-        moduleData$result_speciations$result_speciation_id[[hits[[1]]]]
+        moduleData$result_descriptors$result_descriptor_id[[hits[[1]]]]
       } else {
         NA_integer_
       }
@@ -3435,9 +3435,9 @@ addGuidelines <- function(id, language) {
         df$sample_fraction_id[
           hardness_rows & is.na(df$sample_fraction_id)
         ] <- find_fraction_id("^total$")
-        df$result_speciation_id[
-          hardness_rows & is.na(df$result_speciation_id)
-        ] <- find_speciation_id("CaCO3|CaCO3 equivalent")
+        df$result_descriptor_id[
+          hardness_rows & is.na(df$result_descriptor_id)
+        ] <- find_descriptor_id("CaCO3|CaCO3 equivalent")
       }
       df
     }
@@ -3518,8 +3518,8 @@ addGuidelines <- function(id, language) {
         "  sample_fraction_id := ",
         null_or_int_sql(row$sample_fraction_id[[1]]),
         ",\n",
-        "  result_speciation_id := ",
-        null_or_int_sql(row$result_speciation_id[[1]]),
+        "  result_descriptor_id := ",
+        null_or_int_sql(row$result_descriptor_id[[1]]),
         "\n",
         ") AS ",
         input_code
@@ -3553,11 +3553,11 @@ addGuidelines <- function(id, language) {
               "NULL",
               integer_or_na(row$sample_fraction_id[[1]])
             ),
-            ", speciation ",
+            ", descriptor ",
             ifelse(
-              is.na(integer_or_na(row$result_speciation_id[[1]])),
+              is.na(integer_or_na(row$result_descriptor_id[[1]])),
               "NULL",
-              integer_or_na(row$result_speciation_id[[1]])
+              integer_or_na(row$result_descriptor_id[[1]])
             )
           )
           paste0(name, " [", code, "; ", meta, "]")
@@ -3639,7 +3639,7 @@ SELECT 0::numeric",
       sample_id := $1::INT,
       ***!parameter_id := xxx::INT!***,
       ***!sample_fraction_id := xxx::INT!***,
-      ***!result_speciation_id := xxx::INT!***
+      ***!result_descriptor_id := xxx::INT!***
     ) AS v1
 
     -- Add more sample inputs here if needed, separated by commas.
@@ -3658,7 +3658,7 @@ FROM vals",
     --     sample_id := $1::INT,
     --     ***!parameter_id := xxx::INT!***,
     --     ***!sample_fraction_id := xxx::INT!***,
-    --     ***!result_speciation_id := xxx::INT!***
+    --     ***!result_descriptor_id := xxx::INT!***
     --   ) AS v1
 )
 SELECT CASE
@@ -3975,7 +3975,7 @@ FROM vals",
     sql_ref_key <- function(
       parameter_id,
       sample_fraction_id,
-      result_speciation_id
+      result_descriptor_id
     ) {
       paste(
         ifelse(
@@ -3989,9 +3989,9 @@ FROM vals",
           as.character(as.integer(sample_fraction_id))
         ),
         ifelse(
-          is.na(result_speciation_id),
+          is.na(result_descriptor_id),
           "NULL",
-          as.character(as.integer(result_speciation_id))
+          as.character(as.integer(result_descriptor_id))
         ),
         sep = "|"
       )
@@ -4003,7 +4003,7 @@ FROM vals",
         parts[[1]],
         ", sample_fraction_id=",
         parts[[2]],
-        ", result_speciation_id=",
+        ", result_descriptor_id=",
         parts[[3]]
       )
     }
@@ -4028,7 +4028,7 @@ FROM vals",
             sql_ref_key(
               sql_arg_value(args, "parameter_id", 2L),
               sql_arg_value(args, "sample_fraction_id", 3L),
-              sql_arg_value(args, "result_speciation_id", 4L)
+              sql_arg_value(args, "result_descriptor_id", 4L)
             )
           },
           character(1)
@@ -4087,7 +4087,7 @@ FROM vals",
       declared_refs <- unique(sql_ref_key(
         declared_samples$parameter_id,
         declared_samples$sample_fraction_id,
-        declared_samples$result_speciation_id
+        declared_samples$result_descriptor_id
       ))
       declared_refs <- declared_refs[!grepl("^NULL\\|", declared_refs)]
 
@@ -4196,11 +4196,11 @@ FROM vals",
         }
         if (
           !is_helper &&
-            parameter_requires_speciation(df$parameter_id[i]) &&
-            is.na(integer_or_na(df$result_speciation_id[i]))
+            parameter_requires_descriptor(df$parameter_id[i]) &&
+            is.na(integer_or_na(df$result_descriptor_id[i]))
         ) {
           stop(
-            "Speciation is required for input '",
+            "Descriptor is required for input '",
             df$input_name[i],
             "'.",
             call. = FALSE
@@ -4211,7 +4211,7 @@ FROM vals",
           "INSERT INTO criteria.guideline_rule_inputs (
              rule_id, input_code, input_name, input_source,
              parameter_id, matrix_state_id, sample_fraction_id,
-             result_speciation_id, result_type, result_type_preference,
+             result_descriptor_id, result_type, result_type_preference,
              aggregate_method, required, allow_condition_value,
              lower_calibrated_bound, upper_calibrated_bound,
              bounds_action, note
@@ -4232,7 +4232,7 @@ FROM vals",
             integer_or_na(df$parameter_id[i]),
             integer_or_na(df$matrix_state_id[i]),
             integer_or_na(df$sample_fraction_id[i]),
-            integer_or_na(df$result_speciation_id[i]),
+            integer_or_na(df$result_descriptor_id[i]),
             integer_or_na(df$result_type[i]),
             text_value(df$result_type_preference[i]),
             text_default(df$aggregate_method[i], "single"),
@@ -4480,11 +4480,11 @@ FROM vals",
         }
         if (
           !is_helper &&
-            parameter_requires_speciation(df$parameter_id[i]) &&
-            is.na(integer_or_na(df$result_speciation_id[i]))
+            parameter_requires_descriptor(df$parameter_id[i]) &&
+            is.na(integer_or_na(df$result_descriptor_id[i]))
         ) {
           stop(
-            "Speciation is required for input '",
+            "Descriptor is required for input '",
             df$input_name[i],
             "'.",
             call. = FALSE
@@ -4558,7 +4558,7 @@ FROM vals",
         applicability_notes = text_or_na(input$applicability_notes),
         parameter_id = parameter_id,
         matrix_state_id = matrix_state_id,
-        result_speciation_id = integer_or_na(input$result_speciation),
+        result_descriptor_id = integer_or_na(input$result_descriptor),
         comparison_operator_code = operator,
         jurisdiction = input$jurisdiction,
         protection_goal = input$protection_goal,
@@ -4821,7 +4821,7 @@ FROM vals",
                   "INSERT INTO criteria.guideline_rule_inputs (
                      rule_id, input_code, input_name, input_source,
                      parameter_id, matrix_state_id, sample_fraction_id,
-                     result_speciation_id, result_type,
+                     result_descriptor_id, result_type,
                      result_type_preference, aggregate_method, required,
                      allow_condition_value, lower_calibrated_bound,
                      upper_calibrated_bound, bounds_action, note
@@ -4846,7 +4846,7 @@ FROM vals",
                     int_or_na(df$parameter_id[i]),
                     int_or_na(df$matrix_state_id[i]),
                     int_or_na(df$sample_fraction_id[i]),
-                    int_or_na(df$result_speciation_id[i]),
+                    int_or_na(df$result_descriptor_id[i]),
                     int_or_na(df$result_type[i]),
                     txt_value(df$result_type_preference[i]),
                     if (is_empty(df$aggregate_method[i])) {
@@ -4996,7 +4996,7 @@ FROM vals",
               req$applicability_notes,
               req$parameter_id,
               req$matrix_state_id,
-              req$result_speciation_id,
+              req$result_descriptor_id,
               req$comparison_operator_code,
               jurisdiction_id,
               protection_goal_id,
@@ -5020,7 +5020,7 @@ FROM vals",
                 "INSERT INTO criteria.guidelines (
                    guideline_code, guideline_name, publisher_id, series_id,
                    reference, general_notes, applicability_notes,
-                   parameter_id, matrix_state_id, result_speciation_id,
+                   parameter_id, matrix_state_id, result_descriptor_id,
                    comparison_operator_code, jurisdiction_id,
                    protection_goal_id, exposure_duration_id,
                    averaging_period_id, source_document_title, source_url,
@@ -5044,7 +5044,7 @@ FROM vals",
                      publisher_id = $3, series_id = $4, reference = $5,
                      general_notes = $6, applicability_notes = $7,
                      parameter_id = $8, matrix_state_id = $9,
-                     result_speciation_id = $10,
+                     result_descriptor_id = $10,
                      comparison_operator_code = $11, jurisdiction_id = $12,
                      protection_goal_id = $13, exposure_duration_id = $14,
                      averaging_period_id = $15,
@@ -5365,15 +5365,15 @@ FROM vals",
               "r.parameter_id = $1",
               "r.matrix_state_id = $2"
             )
-            result_speciation_id <- suppressWarnings(as.integer(
-              guideline_row$result_speciation_id[[1]]
+            result_descriptor_id <- suppressWarnings(as.integer(
+              guideline_row$result_descriptor_id[[1]]
             ))
-            if (!is.na(result_speciation_id)) {
-              params <- c(params, list(result_speciation_id))
+            if (!is.na(result_descriptor_id)) {
+              params <- c(params, list(result_descriptor_id))
               target_conditions <- c(
                 target_conditions,
                 paste0(
-                  "r.result_speciation_id IS NOT DISTINCT FROM $",
+                  "r.result_descriptor_id IS NOT DISTINCT FROM $",
                   length(params)
                 )
               )
@@ -5584,15 +5584,15 @@ FROM vals",
                 "r.parameter_id = $2",
                 "r.matrix_state_id = $3"
               )
-              result_speciation_id <- int_or_na(
-                guideline_row$result_speciation_id[[1]]
+              result_descriptor_id <- int_or_na(
+                guideline_row$result_descriptor_id[[1]]
               )
-              if (!is.na(result_speciation_id)) {
-                params <- c(params, list(result_speciation_id))
+              if (!is.na(result_descriptor_id)) {
+                params <- c(params, list(result_descriptor_id))
                 conditions <- c(
                   conditions,
                   paste0(
-                    "r.result_speciation_id IS NOT DISTINCT FROM $",
+                    "r.result_descriptor_id IS NOT DISTINCT FROM $",
                     length(params)
                   )
                 )
@@ -5628,7 +5628,7 @@ FROM vals",
               parameter_id,
               matrix_state_id,
               sample_fraction_id,
-              result_speciation_id,
+              result_descriptor_id,
               value,
               result_type_id,
               analysis_datetime
@@ -5643,13 +5643,13 @@ FROM vals",
                 "INSERT INTO discrete.results (
                    sample_id, result_type, parameter_id, sample_fraction_id,
                    result, result_condition, result_condition_value,
-                   result_value_type, result_speciation_id,
+                   result_value_type, result_descriptor_id,
                    analysis_datetime, share_with, no_source_update, matrix_state_id
                  )
                  VALUES (
                    ?sample_id, ?result_type_id, ?parameter_id,
                    ?sample_fraction_id, ?value, NULL, NULL,
-                   ?result_value_type_id, ?result_speciation_id,
+                   ?result_value_type_id, ?result_descriptor_id,
                    CAST(?analysis_datetime AS timestamptz),
                    ARRAY['public_reader'], false, ?matrix_state_id
                  )
@@ -5660,7 +5660,7 @@ FROM vals",
                 sample_fraction_id = sample_fraction_id,
                 value = value,
                 result_value_type_id = actual_value_type_id(),
-                result_speciation_id = result_speciation_id,
+                result_descriptor_id = result_descriptor_id,
                 analysis_datetime = analysis_datetime,
                 matrix_state_id = matrix_state_id
               )
@@ -5852,8 +5852,8 @@ FROM vals",
               parameter_id = as.integer(guideline_row$parameter_id[[1]]),
               matrix_state_id = as.integer(guideline_row$matrix_state_id[[1]]),
               sample_fraction_id = first_id(guideline_row$fraction_ids[[1]]),
-              result_speciation_id = int_or_na(
-                guideline_row$result_speciation_id[[1]]
+              result_descriptor_id = int_or_na(
+                guideline_row$result_descriptor_id[[1]]
               ),
               value = req$target_value,
               result_type_id = NA_integer_,
@@ -5873,7 +5873,7 @@ FROM vals",
                   parameter_id = input_results$parameter_id[[i]],
                   matrix_state_id = input_results$matrix_state_id[[i]],
                   sample_fraction_id = input_results$sample_fraction_id[[i]],
-                  result_speciation_id = input_results$result_speciation_id[[
+                  result_descriptor_id = input_results$result_descriptor_id[[
                     i
                   ]],
                   value = input_results$value[[i]],

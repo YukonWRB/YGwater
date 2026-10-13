@@ -34,7 +34,7 @@
 #' @param result_types Optional AquaCache result type ids or names to include.
 #' @param sample_fractions Optional AquaCache sample fraction ids or names to include, for example total or dissolved.
 #' @param result_value_types Optional AquaCache result value type ids or names to include, for example Actual or Calculated.
-#' @param result_speciations Optional AquaCache result speciation ids or names to include.
+#' @param result_descriptors Optional AquaCache result descriptor ids or names to include.
 #' @param include_blanks Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.
 #' @param duplicate_action How AquaCache duplicate/replicate samples should be
 #'   handled. One of `"show"`, `"hide"`, or `"average"`. Averaging uses active
@@ -90,7 +90,7 @@ plotDiscrete <- function(
   result_types = NULL,
   sample_fractions = NULL,
   result_value_types = NULL,
-  result_speciations = NULL,
+  result_descriptors = NULL,
   include_blanks = TRUE,
   duplicate_action = c("show", "hide", "average"),
   sample_ids = NULL,
@@ -132,7 +132,7 @@ plotDiscrete <- function(
   # result_types = NULL
   # sample_fractions = NULL
   # result_value_types = NULL
-  # result_speciations = NULL
+  # result_descriptors = NULL
   # include_blanks = TRUE
   # duplicate_action = "show"
   # sample_ids = NULL
@@ -218,7 +218,7 @@ plotDiscrete <- function(
       result_types = result_types,
       sample_fractions = sample_fractions,
       result_value_types = result_value_types,
-      result_speciations = result_speciations
+      result_descriptors = result_descriptors
     )
     if (any(vapply(ac_args, Negate(is.null), logical(1)))) {
       warning(
@@ -300,7 +300,7 @@ plotDiscrete <- function(
   }
 
   # Create a data.frame to hold the plotting data. EQWin and aquacache fill this list in differently, but the end result is the same to pass on to the plotting portion.
-  # 'data' should contain columns named location, location_name, parameter, datetime, result, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by aquacache) are sample_type, collection_method, sample_fraction, result_speciation.
+  # 'data' should contain columns named location, location_name, parameter, datetime, result, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by aquacache) are sample_type, collection_method, sample_fraction, result_descriptor.
   data <- data.frame()
 
   collapse_unique <- function(x) {
@@ -551,7 +551,7 @@ plotDiscrete <- function(
           c("datetime", "target_datetime")
         },
         "sample_fraction",
-        "result_speciation",
+        "result_descriptor",
         "result_type",
         "result_value_type",
         "matrix_state",
@@ -1576,9 +1576,9 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "rvt.result_value_type"
       ),
       selected_value_clause(
-        result_speciations,
-        "r.result_speciation_id",
-        "rs.result_speciation"
+        result_descriptors,
+        "r.result_descriptor_id",
+        "rs.result_descriptor"
       )
     )
     if (!isTRUE(include_blanks)) {
@@ -1660,13 +1660,13 @@ ORDER BY ag.result_id, ag.guideline_id;"
          r.result_condition_value,
          r.result_value_type AS result_value_type_id,
          r.sample_fraction_id,
-         r.result_speciation_id,
+         r.result_descriptor_id,
          r.matrix_state_id,
          rt.result_type,
          rc.result_condition AS result_condition_label,
          rvt.result_value_type,
          sf.sample_fraction,
-         rs.result_speciation,
+         rs.result_descriptor,
          ms.matrix_state_name AS matrix_state,
          s.location_id,
          sl.sub_location_name,
@@ -1766,8 +1766,8 @@ ORDER BY ag.result_id, ag.guideline_id;"
          ON r.result_condition = rc.result_condition_id
        LEFT JOIN discrete.sample_fractions AS sf
          ON r.sample_fraction_id = sf.sample_fraction_id
-       LEFT JOIN discrete.result_speciations AS rs
-         ON r.result_speciation_id = rs.result_speciation_id
+       LEFT JOIN discrete.result_descriptors AS rs
+         ON r.result_descriptor_id = rs.result_descriptor_id
        LEFT JOIN discrete.result_value_types AS rvt
          ON r.result_value_type = rvt.result_value_type_id
        LEFT JOIN public.matrix_states AS ms
@@ -1865,7 +1865,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_speciation",
+        "result_descriptor",
         "result_value_type",
         "matrix_state",
         "grade_type_description_fr",
@@ -1903,7 +1903,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_speciation",
+        "result_descriptor",
         "result_value_type",
         "matrix_state",
         "grade_type_description",
@@ -1942,7 +1942,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_speciation",
+        "result_descriptor",
         "result_value_type",
         "matrix_state",
         "grade_type_description",
@@ -1980,7 +1980,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_speciation",
+        "result_descriptor",
         "result_value_type",
         "matrix_state",
         "grade_type_description",
@@ -2169,11 +2169,11 @@ ORDER BY ag.result_id, ag.guideline_id;"
           df$sample_fraction <- titleCase(df$sample_fraction, lang)
         }
       }
-      speciation <- FALSE
-      if ("result_speciation" %in% names(df)) {
-        if (any(!is.na(df$result_speciation))) {
-          speciation <- TRUE
-          df$result_speciation <- titleCase(df$result_speciation, lang)
+      descriptor <- FALSE
+      if ("result_descriptor" %in% names(df)) {
+        if (any(!is.na(df$result_descriptor))) {
+          descriptor <- TRUE
+          df$result_descriptor <- titleCase(df$result_descriptor, lang)
         }
       }
       has_result_type <- FALSE
@@ -2303,7 +2303,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
           if (has_media) paste("<br>Media:", media_type),
           if (has_result_type) paste("<br>Result type:", result_type),
           if (fraction) paste("<br>Sample fraction:", sample_fraction), # Sample fraction if provided
-          if (speciation) paste("<br>Result speciation:", result_speciation), # Result speciation if provided
+          if (descriptor) paste("<br>Result descriptor:", result_descriptor), # Result descriptor if provided
           if (has_result_value_type) {
             paste("<br>Result value type:", result_value_type)
           },
@@ -2380,7 +2380,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
             if (has_media) paste("<br>Media:", media_type),
             if (has_result_type) paste("<br>Result type:", result_type),
             if (fraction) paste("<br>Sample fraction:", sample_fraction), # Sample fraction if provided
-            if (speciation) paste("<br>Result speciation:", result_speciation), # Result speciation if provided
+            if (descriptor) paste("<br>Result descriptor:", result_descriptor), # Result descriptor if provided
             if (has_result_value_type) {
               paste("<br>Result value type:", result_value_type)
             },

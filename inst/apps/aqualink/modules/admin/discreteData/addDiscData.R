@@ -42,7 +42,7 @@ addDiscData_empty_table <- function() {
     matrix_state_id = integer(),
     sample_fraction_id = integer(),
     result_value_type = integer(),
-    result_speciation_id = integer(),
+    result_descriptor_id = integer(),
     source_result_text = character(),
     source_result = numeric(),
     source_result_condition = integer(),
@@ -190,7 +190,7 @@ addDiscData_merge_preview_edits <- function(recalculated, current, previous) {
       "matrix_state_id",
       "sample_fraction_id",
       "result_value_type",
-      "result_speciation_id",
+      "result_descriptor_id",
       "result",
       "result_condition",
       "result_condition_value",
@@ -359,7 +359,7 @@ addDiscData_profile_column_specs <- function(parser_family) {
       parameter_name_column = c("Parameter name column", "integer"),
       parameter_code_column = c("Parameter code column", "integer"),
       unit_column = c("Unit column", "integer"),
-      first_sample_column = c("First sample column", "integer")
+      first_sample_column = c("First sample row", "integer")
     ))
   }
   specs <- list(
@@ -491,6 +491,16 @@ addDiscData_present <- function(x) {
   !is.na(x) & nzchar(trimws(as.character(x)))
 }
 
+addDiscData_optional_text <- function(x) {
+  value <- as.character(x)
+  value[!addDiscData_present(value)] <- NA_character_
+  value
+}
+
+addDiscData_optional_num <- function(x) {
+  suppressWarnings(as.numeric(addDiscData_optional_text(x)))
+}
+
 addDiscData_share_choices <- function(con, relation) {
   groups <- tryCatch(
     DBI::dbGetQuery(
@@ -614,13 +624,16 @@ addDiscData_as_date <- function(x) {
 
 addDiscData_datetime <- function(date, time = NA, tz = "America/Whitehorse") {
   parsed_date <- addDiscData_as_date(date)
-  if (all(is.na(parsed_date))) {
-    return(as.POSIXct(
-      rep(NA_real_, length(parsed_date)),
-      origin = "1970-01-01",
-      tz = "UTC"
-    ))
+  parsed <- as.POSIXct(
+    rep(NA_real_, length(parsed_date)),
+    origin = "1970-01-01",
+    tz = "UTC"
+  )
+  date_present <- !is.na(parsed_date)
+  if (!any(date_present)) {
+    return(parsed)
   }
+
   embedded_time <- rep("00:00:00", length(parsed_date))
   if (inherits(date, "POSIXt")) {
     embedded_time <- format(date, "%H:%M:%S", tz = "UTC")
@@ -634,7 +647,11 @@ addDiscData_datetime <- function(date, time = NA, tz = "America/Whitehorse") {
     )
   }
 
+  if (is.null(time) || !length(time)) {
+    time <- NA
+  }
   time <- rep_len(time, length(parsed_date))
+  missing_time <- !addDiscData_present(time)
   if (inherits(time, "POSIXt")) {
     time <- format(time, "%H:%M:%S", tz = "UTC")
   } else if (is.numeric(time)) {
@@ -648,9 +665,13 @@ addDiscData_datetime <- function(date, time = NA, tz = "America/Whitehorse") {
   } else {
     time <- trimws(as.character(time))
   }
-  missing_time <- !addDiscData_present(time)
   time[missing_time] <- embedded_time[missing_time]
-  value <- paste(format(parsed_date, "%Y-%m-%d"), time)
+  # Keep blank dates as NA instead of forming invalid "NA 00:00:00" strings.
+  value <- rep(NA_character_, length(parsed_date))
+  value[date_present] <- paste(
+    format(parsed_date[date_present], "%Y-%m-%d"),
+    time[date_present]
+  )
   tz <- trimws(as.character(tz[[1]]))
   offset_match <- regexec("^UTC([+-])(\\d{2}):(\\d{2})$", tz)
   offset_parts <- regmatches(tz, offset_match)[[1]]
@@ -662,8 +683,8 @@ addDiscData_datetime <- function(date, time = NA, tz = "America/Whitehorse") {
       (as.integer(offset_parts[[3]]) * 60L + as.integer(offset_parts[[4]]))
     parse_tz <- "UTC"
   }
-  parsed <- suppressWarnings(as.POSIXct(
-    value,
+  parsed[date_present] <- suppressWarnings(as.POSIXct(
+    value[date_present],
     tz = parse_tz,
     tryFormats = c(
       "%Y-%m-%d %H:%M:%S",
@@ -743,6 +764,20 @@ addDiscData_common_rows <- function(
   analysis_datetime = NA,
   source_row_number = NA_integer_
 ) {
+  source_location_name <- addDiscData_optional_text(source_location_name)
+  source_sample_id <- addDiscData_optional_text(source_sample_id)
+  source_parameter_code <- addDiscData_optional_text(source_parameter_code)
+  source_parameter_name <- addDiscData_optional_text(source_parameter_name)
+  source_unit <- addDiscData_optional_text(source_unit)
+  result_flag <- addDiscData_optional_text(result_flag)
+  result_flag_column <- addDiscData_optional_text(result_flag_column)
+  method_detection_limit <- addDiscData_optional_num(method_detection_limit)
+  reporting_detection_limit <- addDiscData_optional_num(
+    reporting_detection_limit
+  )
+  lab_report_no <- addDiscData_optional_text(lab_report_no)
+  note <- addDiscData_optional_text(note)
+
   defaults <- addDiscData_defaults(profile)
   tz <- profile$timezone[[1]]
   if (!addDiscData_present(tz)) {
@@ -798,19 +833,15 @@ addDiscData_common_rows <- function(
     matrix_state_id = defaults$matrix_state_id,
     sample_fraction_id = NA_integer_,
     result_value_type = defaults$result_value_type,
-    result_speciation_id = NA_integer_,
+    result_descriptor_id = NA_integer_,
     source_result_text = as.character(result_raw),
     source_result = parsed_result$result,
     source_result_condition = parsed_result$result_condition,
     source_result_condition_value = parsed_result$result_condition_value,
     source_result_flag = as.character(result_flag),
     source_result_flag_column = as.character(result_flag_column),
-    source_method_detection_limit = suppressWarnings(as.numeric(
-      method_detection_limit
-    )),
-    source_reporting_detection_limit = suppressWarnings(as.numeric(
-      reporting_detection_limit
-    )),
+    source_method_detection_limit = method_detection_limit,
+    source_reporting_detection_limit = reporting_detection_limit,
     result = parsed_result$result,
     result_condition = parsed_result$result_condition,
     result_condition_value = parsed_result$result_condition_value,
@@ -883,10 +914,18 @@ addDiscData_excel_sheet <- function(path, profile) {
 addDiscData_parse_als_eqwin <- function(path, profile) {
   cmap <- profile$column_map[[1]]
   sheet <- addDiscData_excel_sheet(path, profile)
+  header_row <- addDiscData_int(
+    addDiscData_profile_value(profile, "header_row", 1L),
+    1L
+  )
+  if (is.na(header_row) || header_row < 1L) {
+    stop("The column header row must be 1 or greater.", call. = FALSE)
+  }
   x <- readxl::read_excel(
     path,
     sheet = sheet,
     col_names = TRUE,
+    skip = header_row - 1L,
     .name_repair = "minimal"
   ) |>
     as.data.frame(check.names = FALSE)
@@ -919,7 +958,7 @@ addDiscData_parse_als_eqwin <- function(path, profile) {
     ),
     note = addDiscData_col(x, cmap$result_comment),
     analysis_datetime = addDiscData_col(x, cmap$analysis_datetime),
-    source_row_number = seq_len(nrow(x)) + 1L
+    source_row_number = seq_len(nrow(x)) + header_row
   )
   out[addDiscData_present(out$source_parameter_code), , drop = FALSE]
 }
@@ -1492,9 +1531,9 @@ addDiscData_apply_mappings <- function(rows, con, profile_code = NULL) {
         hit$result_value_type[[1]],
         rows$result_value_type[[i]]
       )
-      rows$result_speciation_id[[
+      rows$result_descriptor_id[[
         i
-      ]] <- addDiscData_int(hit$result_speciation_id[[1]])
+      ]] <- addDiscData_int(hit$result_descriptor_id[[1]])
       rows$matrix_state_id[[i]] <- addDiscData_int(
         hit$matrix_state_id[[1]],
         rows$matrix_state_id[[i]]
@@ -1568,7 +1607,7 @@ addDiscData_upsert_mapping <- function(
   result_type,
   sample_fraction_id,
   result_value_type,
-  result_speciation_id,
+  result_descriptor_id,
   matrix_state_id,
   conversion,
   result_offset,
@@ -1582,7 +1621,7 @@ addDiscData_upsert_mapping <- function(
     result_type = as.integer(result_type),
     sample_fraction_id = as.integer(sample_fraction_id),
     result_value_type = as.integer(result_value_type),
-    result_speciation_id = as.integer(result_speciation_id),
+    result_descriptor_id = as.integer(result_descriptor_id),
     matrix_state_id = as.integer(matrix_state_id),
     conversion = as.numeric(conversion),
     result_offset = as.numeric(result_offset),
@@ -1633,7 +1672,7 @@ addDiscData_run_mapping_save <- function(request) {
             result_type = request$result_type,
             sample_fraction_id = request$sample_fraction_id,
             result_value_type = request$result_value_type,
-            result_speciation_id = request$result_speciation_id,
+            result_descriptor_id = request$result_descriptor_id,
             matrix_state_id = request$matrix_state_id,
             conversion = request$conversion,
             result_offset = request$result_offset,
@@ -2255,7 +2294,7 @@ addDiscData_run_upload <- function(request) {
              result_condition,
              result_condition_value,
              result_value_type,
-             result_speciation_id,
+             result_descriptor_id,
              laboratory,
              analysis_datetime,
              lab_report_no,
@@ -2279,7 +2318,7 @@ addDiscData_run_upload <- function(request) {
             addDiscData_int(df$result_condition[[j]]),
             addDiscData_num(df$result_condition_value[[j]]),
             addDiscData_int(df$result_value_type[[j]]),
-            addDiscData_int(df$result_speciation_id[[j]]),
+            addDiscData_int(df$result_descriptor_id[[j]]),
             addDiscData_int(df$laboratory[[j]]),
             if (is.na(df$analysis_datetime[[j]])) {
               as.POSIXct(NA)
@@ -2352,7 +2391,7 @@ addDiscData_run_upload <- function(request) {
           "matrix_state_id",
           "sample_fraction_id",
           "result_value_type",
-          "result_speciation_id",
+          "result_descriptor_id",
           "result",
           "result_condition",
           "result_condition_value",
@@ -2551,7 +2590,7 @@ addDiscData_result_display <- function(
   result_conditions,
   sample_fractions,
   result_value_types,
-  result_speciations,
+  result_descriptors,
   matrix_states,
   laboratories,
   media,
@@ -2654,11 +2693,11 @@ addDiscData_result_display <- function(
       "result_value_type_id",
       "result_value_type"
     ),
-    Speciation = addDiscData_lookup_label(
-      rows$result_speciation_id,
-      result_speciations,
-      "result_speciation_id",
-      "result_speciation"
+    Descriptor = addDiscData_lookup_label(
+      rows$result_descriptor_id,
+      result_descriptors,
+      "result_descriptor_id",
+      "result_descriptor"
     ),
     Matrix = addDiscData_lookup_label(
       rows$matrix_state_id,
@@ -2733,7 +2772,7 @@ addDiscData_result_edit_columns <- function() {
     "Result type" = "result_type",
     "Sample fraction" = "sample_fraction_id",
     "Value type" = "result_value_type",
-    "Speciation" = "result_speciation_id",
+    "Descriptor" = "result_descriptor_id",
     "Matrix" = "matrix_state_id",
     "Protocol" = "protocol_method",
     "Laboratory" = "laboratory",
@@ -3039,8 +3078,8 @@ addDiscDataUI <- function(id) {
                   column(
                     2,
                     selectizeInput(
-                      ns("manual_speciation"),
-                      "Speciation",
+                      ns("manual_descriptor"),
+                      "Descriptor",
                       choices = NULL,
                       multiple = TRUE,
                       options = list(
@@ -3406,8 +3445,8 @@ addDiscDataUI <- function(id) {
                 column(
                   3,
                   selectizeInput(
-                    ns("manage_speciation"),
-                    "Result speciation",
+                    ns("manage_descriptor"),
+                    "Result descriptor",
                     choices = NULL
                   )
                 ),
@@ -3423,7 +3462,7 @@ addDiscDataUI <- function(id) {
                 )
               ),
               helpText(
-                "A sample fraction or speciation is required when the selected AquaCache parameter requires it."
+                "A sample fraction or descriptor is required when the selected AquaCache parameter requires it."
               ),
               fluidRow(
                 column(
@@ -3932,7 +3971,7 @@ addDiscData <- function(id, language) {
         "SELECT p.parameter_id,
                 p.param_name,
                 p.sample_fraction,
-                p.result_speciation,
+                p.result_descriptor,
                 ul.unit_name AS unit_liquid,
                 us.unit_name AS unit_solid,
                 ug.unit_name AS unit_gas,
@@ -3989,11 +4028,11 @@ addDiscData <- function(id, language) {
          FROM discrete.result_value_types
         ORDER BY result_value_type"
     )
-    result_speciations <- DBI::dbGetQuery(
+    result_descriptors <- DBI::dbGetQuery(
       con,
-      "SELECT result_speciation_id, result_speciation
-         FROM discrete.result_speciations
-        ORDER BY result_speciation"
+      "SELECT result_descriptor_id, result_descriptor
+         FROM discrete.result_descriptors
+        ORDER BY result_descriptor"
     )
     sample_qualifiers <- DBI::dbGetQuery(
       con,
@@ -4211,10 +4250,10 @@ addDiscData <- function(id, language) {
     )
     updateSelectizeInput(
       session,
-      "manual_speciation",
+      "manual_descriptor",
       choices = stats::setNames(
-        result_speciations$result_speciation_id,
-        result_speciations$result_speciation
+        result_descriptors$result_descriptor_id,
+        result_descriptors$result_descriptor
       )
     )
     parameter_requirement <- function(parameter_id, requirement) {
@@ -4233,7 +4272,7 @@ addDiscData <- function(id, language) {
     validate_parameter_mapping_descriptors <- function(
       parameter_id,
       sample_fraction_id,
-      result_speciation_id
+      result_descriptor_id
     ) {
       parameter_id <- addDiscData_int(parameter_id)
       if (
@@ -4252,11 +4291,11 @@ addDiscData <- function(id, language) {
         )
       }
       if (
-        parameter_requirement(parameter_id, "result_speciation") &&
-          is.na(addDiscData_int(result_speciation_id))
+        parameter_requirement(parameter_id, "result_descriptor") &&
+          is.na(addDiscData_int(result_descriptor_id))
       ) {
         stop(
-          "Speciation is required for the selected parameter.",
+          "Descriptor is required for the selected parameter.",
           call. = FALSE
         )
       }
@@ -4268,7 +4307,7 @@ addDiscData <- function(id, language) {
         parameter_id <- addDiscData_int(input$manual_parameter)
         if (is.na(parameter_id)) {
           fraction_placeholder <- "Select a parameter first"
-          speciation_placeholder <- "Select a parameter first"
+          descriptor_placeholder <- "Select a parameter first"
         } else {
           fraction_placeholder <- if (
             parameter_requirement(
@@ -4280,10 +4319,10 @@ addDiscData <- function(id, language) {
           } else {
             "Optional"
           }
-          speciation_placeholder <- if (
+          descriptor_placeholder <- if (
             parameter_requirement(
               parameter_id,
-              "result_speciation"
+              "result_descriptor"
             )
           ) {
             "Required for selected parameter"
@@ -4298,8 +4337,8 @@ addDiscData <- function(id, language) {
         )
         updateSelectizeInput(
           session,
-          "manual_speciation",
-          options = list(placeholder = speciation_placeholder)
+          "manual_descriptor",
+          options = list(placeholder = descriptor_placeholder)
         )
       },
       ignoreInit = FALSE
@@ -4786,78 +4825,82 @@ addDiscData <- function(id, language) {
       apply_mapping_save_result(location_mapping_save_task$result())
     })
 
-    observeEvent(location_create_task$result(), {
-      result <- location_create_task$result()
-      if (!isTRUE(result$ok)) {
-        showNotification(
-          paste("Creating locations failed:", result$message),
-          type = "error"
-        )
-        return()
-      }
+    observeEvent(
+      location_create_task$result(),
+      {
+        result <- location_create_task$result()
+        if (!isTRUE(result$ok)) {
+          showNotification(
+            paste("Creating locations failed:", result$message),
+            type = "error"
+          )
+          return()
+        }
 
-      mapping_revision(mapping_revision() + 1L)
-      locations(read_locations())
-      update_location_selectize()
-      refresh_error <- tryCatch(
-        {
-          if (
-            isTRUE(refresh_current_preview(
-              result$profile,
-              preserve_edits = TRUE
-            ))
-          ) {
-            NULL
-          } else {
-            "The locations and mappings were saved. Preview the file again to apply them."
-          }
-        },
-        error = function(e) e$message
-      )
-      summary_rows <- lapply(seq_len(nrow(result$added)), function(i) {
-        tags$tr(
-          tags$td(result$added$name[[i]]),
-          tags$td(result$added$location_code[[i]])
+        mapping_revision(mapping_revision() + 1L)
+        locations(read_locations())
+        update_location_selectize()
+        refresh_error <- tryCatch(
+          {
+            if (
+              isTRUE(refresh_current_preview(
+                result$profile,
+                preserve_edits = TRUE
+              ))
+            ) {
+              NULL
+            } else {
+              "The locations and mappings were saved. Preview the file again to apply them."
+            }
+          },
+          error = function(e) e$message
         )
-      })
-      showModal(modalDialog(
-        title = "New locations created",
-        tags$p(
-          "Location codes are generated automatically. Elevations are fetched from web services when a usable value is available."
-        ),
-        tags$table(
-          class = "table table-sm",
-          tags$thead(tags$tr(
-            tags$th("Location name"),
-            tags$th("Location code")
-          )),
-          tags$tbody(summary_rows)
-        ),
-        if (any(result$elevation_fallback)) {
+        summary_rows <- lapply(seq_len(nrow(result$added)), function(i) {
+          tags$tr(
+            tags$td(result$added$name[[i]]),
+            tags$td(result$added$location_code[[i]])
+          )
+        })
+        showModal(modalDialog(
+          title = "New locations created",
           tags$p(
-            class = "text-warning",
-            paste0(
-              "Elevation services could not provide an elevation for ",
-              paste(result$names[result$elevation_fallback], collapse = ", "),
-              ". Elevation was set to 0 m using the assumed datum. Review these locations under Locations -> Add/modify locations."
+            "Location codes are generated automatically. Elevations are fetched from web services when a usable value is available."
+          ),
+          tags$table(
+            class = "table table-sm",
+            tags$thead(tags$tr(
+              tags$th("Location name"),
+              tags$th("Location code")
+            )),
+            tags$tbody(summary_rows)
+          ),
+          if (any(result$elevation_fallback)) {
+            tags$p(
+              class = "text-warning",
+              paste0(
+                "Elevation services could not provide an elevation for ",
+                paste(result$names[result$elevation_fallback], collapse = ", "),
+                ". Elevation was set to 0 m using the assumed datum. Review these locations under Locations -> Add/modify locations."
+              )
             )
-          )
-        },
-        if (is.null(refresh_error)) {
-          tags$p("The new source mappings are ready in this preview.")
-        } else {
+          },
+          if (is.null(refresh_error)) {
+            tags$p("The new source mappings are ready in this preview.")
+          } else {
+            tags$p(
+              class = "text-warning",
+              paste("The locations were created, but:", refresh_error)
+            )
+          },
           tags$p(
-            class = "text-warning",
-            paste("The locations were created, but:", refresh_error)
-          )
-        },
-        tags$p(
-          "For further changes, go to Locations -> Add/modify locations."
-        ),
-        easyClose = TRUE,
-        footer = modalButton("Close")
-      ))
-    }, ignoreInit = TRUE)
+            "For further changes, go to Locations -> Add/modify locations."
+          ),
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$file,
@@ -5186,17 +5229,10 @@ addDiscData <- function(id, language) {
             4,
             selectInput(
               ns("new_profile_parser_family"),
-              tags$span(
-                "Workbook layout",
-                title = paste(
-                  "Choose the layout that matches the worksheet. Long table: one result per row. ",
-                  "Transposed table: each sample is a column and each analyte is a row. ",
-                  "XLR Detailed Report: the lab's standard detailed report export."
-                )
-              ),
+              "Workbook layout",
               choices = c(
                 "Long table — one result per row" = "long",
-                "Transposed table — one sample per column" = "transposed",
+                "Transposed table — one sample per column, one row per analyte" = "transposed",
                 "XLR Detailed Report — lab export" = "xlr"
               ),
               selected = if (copy || edit) {
@@ -5226,6 +5262,24 @@ addDiscData <- function(id, language) {
               "This offset is used to convert the workbook's sample times to UTC. Yukon local time is UTC-07:00."
             )
           )
+        ),
+        fluidRow(
+          column(
+            4,
+            numericInput(
+              ns("new_profile_header_row"),
+              "Column header row (long-table layout)",
+              value = addDiscData_int(
+                addDiscData_profile_value(profile, "header_row", 1L),
+                1L
+              ),
+              min = 1,
+              step = 1
+            )
+          )
+        ),
+        helpText(
+          "For long-table workbooks, this row contains the column headings; rows above it are skipped. Row 1 is the default."
         ),
         helpText(
           "Choose the layout from the worksheet's shape, not from the lab name. ",
@@ -5323,6 +5377,17 @@ addDiscData <- function(id, language) {
           )
           if (!(parser_family %in% c("long", "transposed", "xlr"))) {
             stop("Select a supported workbook layout.")
+          }
+          header_row_default <- addDiscData_int(
+            addDiscData_profile_value(profile, "header_row", 1L),
+            1L
+          )
+          header_row <- addDiscData_int(
+            input$new_profile_header_row,
+            header_row_default
+          )
+          if (is.na(header_row) || header_row < 1L) {
+            stop("Column header row must be 1 or greater.")
           }
           column_map <- addDiscData_profile_column_map(
             input,
@@ -5435,7 +5500,7 @@ addDiscData <- function(id, language) {
                 ""
               )),
               sheet_index = addDiscData_profile_value(profile, "sheet_index"),
-              header_row = addDiscData_profile_value(profile, "header_row", 1L),
+              header_row = header_row,
               units_row = addDiscData_profile_value(profile, "units_row"),
               parameter_row = addDiscData_profile_value(
                 profile,
@@ -5484,7 +5549,7 @@ addDiscData <- function(id, language) {
                   "matrix_state_id",
                   "sample_fraction_id",
                   "result_value_type",
-                  "result_speciation_id",
+                  "result_descriptor_id",
                   "protocol_method",
                   "laboratory",
                   "analysis_datetime"
@@ -5680,12 +5745,12 @@ addDiscData <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "manage_speciation",
+        "manage_descriptor",
         choices = c(
           "None" = "",
           stats::setNames(
-            as.character(result_speciations$result_speciation_id),
-            result_speciations$result_speciation
+            as.character(result_descriptors$result_descriptor_id),
+            result_descriptors$result_descriptor
           )
         ),
         selected = ""
@@ -6024,11 +6089,11 @@ addDiscData <- function(id, language) {
           )
           updateSelectizeInput(
             session,
-            "manage_speciation",
-            selected = if (is.na(row$result_speciation_id[[1]])) {
+            "manage_descriptor",
+            selected = if (is.na(row$result_descriptor_id[[1]])) {
               ""
             } else {
-              as.character(row$result_speciation_id[[1]])
+              as.character(row$result_descriptor_id[[1]])
             }
           )
           updateNumericInput(session, "manage_priority", value = priority)
@@ -6136,7 +6201,7 @@ addDiscData <- function(id, language) {
       updateSelectizeInput(session, "manage_matrix_state", selected = "1")
       updateSelectizeInput(session, "manage_sample_fraction", selected = "")
       updateSelectizeInput(session, "manage_value_type", selected = "1")
-      updateSelectizeInput(session, "manage_speciation", selected = "")
+      updateSelectizeInput(session, "manage_descriptor", selected = "")
       updateNumericInput(session, "manage_priority", value = 50)
       updateNumericInput(session, "manage_conversion", value = 1)
       updateNumericInput(session, "manage_result_offset", value = 0)
@@ -6205,11 +6270,11 @@ addDiscData <- function(id, language) {
           stop("Choose an AquaCache parameter.")
         }
         sample_fraction_id <- addDiscData_int(input$manage_sample_fraction)
-        result_speciation_id <- addDiscData_int(input$manage_speciation)
+        result_descriptor_id <- addDiscData_int(input$manage_descriptor)
         validate_parameter_mapping_descriptors(
           parameter_id,
           sample_fraction_id,
-          result_speciation_id
+          result_descriptor_id
         )
         conversion <- addDiscData_num(input$manage_conversion, 1)
         result_offset <- addDiscData_num(input$manage_result_offset, 0)
@@ -6228,7 +6293,7 @@ addDiscData <- function(id, language) {
             result_type = addDiscData_int(input$manage_result_type, 2L),
             sample_fraction_id = sample_fraction_id,
             result_value_type = addDiscData_int(input$manage_value_type, 1L),
-            result_speciation_id = result_speciation_id,
+            result_descriptor_id = result_descriptor_id,
             matrix_state_id = addDiscData_int(input$manage_matrix_state, 1L),
             conversion = conversion,
             result_offset = result_offset,
@@ -6927,7 +6992,10 @@ addDiscData <- function(id, language) {
         )
         if (inherits(group_share_with, "error")) {
           showNotification(
-            paste("Invalid sample-group sharing selection:", group_share_with$message),
+            paste(
+              "Invalid sample-group sharing selection:",
+              group_share_with$message
+            ),
             type = "error"
           )
           return()
@@ -7156,10 +7224,11 @@ addDiscData <- function(id, language) {
         location_changed <- !identical(
           location_id,
           addDiscData_int(existing$location_id[[1]])
-        ) || !identical(
-          sub_location_id,
-          addDiscData_int(existing$sub_location_id[[1]])
-        )
+        ) ||
+          !identical(
+            sub_location_id,
+            addDiscData_int(existing$sub_location_id[[1]])
+          )
         data$df$location_mapping_status[ix] <- if (is_blank_sample) {
           "blank sample; location not required"
         } else if (location_changed) {
@@ -7261,11 +7330,11 @@ addDiscData <- function(id, language) {
         return()
       }
       if (
-        parameter_requirement(input$manual_parameter, "result_speciation") &&
-          is.na(addDiscData_int(input$manual_speciation))
+        parameter_requirement(input$manual_parameter, "result_descriptor") &&
+          is.na(addDiscData_int(input$manual_descriptor))
       ) {
         showNotification(
-          "Speciation is required for the selected parameter.",
+          "Descriptor is required for the selected parameter.",
           type = "error"
         )
         return()
@@ -7315,7 +7384,7 @@ addDiscData <- function(id, language) {
         input$manual_result_value_type,
         1L
       )
-      row$result_speciation_id <- addDiscData_int(input$manual_speciation)
+      row$result_descriptor_id <- addDiscData_int(input$manual_descriptor)
       row$protocol_method <- addDiscData_int(input$manual_protocol)
       row$laboratory <- if (is_field_result_type(row$result_type)) {
         NA_integer_
@@ -8105,9 +8174,9 @@ addDiscData <- function(id, language) {
           df$result_value_type,
           result_value_types$result_value_type_id
         )
-        speciation_index <- match(
-          df$result_speciation_id,
-          result_speciations$result_speciation_id
+        descriptor_index <- match(
+          df$result_descriptor_id,
+          result_descriptors$result_descriptor_id
         )
         matrix_index <- match(df$matrix_state_id, matrix_states$matrix_state_id)
         source_parameter_label <- ifelse(
@@ -8138,7 +8207,7 @@ addDiscData <- function(id, language) {
           Offset = df$result_offset,
           `Result type` = result_types$result_type[result_type_index],
           `Value type` = result_value_types$result_value_type[value_type_index],
-          Speciation = result_speciations$result_speciation[speciation_index],
+          Descriptor = result_descriptors$result_descriptor[descriptor_index],
           Matrix = matrix_states$matrix_state_name[matrix_index],
           Status = df$mapping_status,
           check.names = FALSE
@@ -8169,7 +8238,7 @@ addDiscData <- function(id, language) {
             "Offset",
             "Result type",
             "Value type",
-            "Speciation",
+            "Descriptor",
             "Matrix"
           )
         )
@@ -8286,18 +8355,18 @@ addDiscData <- function(id, language) {
           column(
             4,
             selectizeInput(
-              ns("mapping_result_speciation"),
-              "Result speciation",
+              ns("mapping_result_descriptor"),
+              "Result descriptor",
               choices = optional_choices(
-                result_speciations$result_speciation_id,
-                result_speciations$result_speciation
+                result_descriptors$result_descriptor_id,
+                result_descriptors$result_descriptor
               ),
-              selected = selected_value(row$result_speciation_id[[1]])
+              selected = selected_value(row$result_descriptor_id[[1]])
             )
           )
         ),
         helpText(
-          "A sample fraction or speciation is required when the selected AquaCache parameter requires it."
+          "A sample fraction or descriptor is required when the selected AquaCache parameter requires it."
         ),
         fluidRow(
           column(
@@ -8363,13 +8432,13 @@ addDiscData <- function(id, language) {
           sample_fraction_id <- addDiscData_int(
             input$mapping_sample_fraction
           )
-          result_speciation_id <- addDiscData_int(
-            input$mapping_result_speciation
+          result_descriptor_id <- addDiscData_int(
+            input$mapping_result_descriptor
           )
           validate_parameter_mapping_descriptors(
             parameter_id,
             sample_fraction_id,
-            result_speciation_id
+            result_descriptor_id
           )
           conversion <- addDiscData_num(input$mapping_conversion)
           result_offset <- addDiscData_num(input$mapping_result_offset)
@@ -8391,7 +8460,7 @@ addDiscData <- function(id, language) {
               input$mapping_result_value_type,
               1L
             ),
-            result_speciation_id = result_speciation_id,
+            result_descriptor_id = result_descriptor_id,
             matrix_state_id = addDiscData_int(input$mapping_matrix_state, 1L),
             conversion = conversion,
             result_offset = result_offset
@@ -9768,7 +9837,7 @@ addDiscData <- function(id, language) {
         result_conditions = result_conditions,
         sample_fractions = sample_fractions,
         result_value_types = result_value_types,
-        result_speciations = result_speciations,
+        result_descriptors = result_descriptors,
         matrix_states = matrix_states,
         laboratories = laboratories,
         media = media,
@@ -9841,7 +9910,7 @@ addDiscData <- function(id, language) {
             "Sample fraction",
             "Result type",
             "Value type",
-            "Speciation",
+            "Descriptor",
             "Matrix",
             "Laboratory",
             "Protocol",
@@ -9925,7 +9994,7 @@ addDiscData <- function(id, language) {
             "result_type",
             "sample_fraction_id",
             "result_value_type",
-            "result_speciation_id",
+            "result_descriptor_id",
             "matrix_state_id",
             "protocol_method",
             "laboratory",
@@ -9938,7 +10007,7 @@ addDiscData <- function(id, language) {
           result_type = result_types,
           sample_fraction_id = sample_fractions,
           result_value_type = result_value_types,
-          result_speciation_id = result_speciations,
+          result_descriptor_id = result_descriptors,
           matrix_state_id = matrix_states,
           protocol_method = protocols_methods,
           laboratory = laboratories,
@@ -9950,7 +10019,7 @@ addDiscData <- function(id, language) {
           result_type = "result_type_id",
           sample_fraction_id = "sample_fraction_id",
           result_value_type = "result_value_type_id",
-          result_speciation_id = "result_speciation_id",
+          result_descriptor_id = "result_descriptor_id",
           matrix_state_id = "matrix_state_id",
           protocol_method = "protocol_id",
           laboratory = "lab_id",
@@ -9962,7 +10031,7 @@ addDiscData <- function(id, language) {
           result_type = "result_type",
           sample_fraction_id = "sample_fraction",
           result_value_type = "result_value_type",
-          result_speciation_id = "result_speciation",
+          result_descriptor_id = "result_descriptor",
           matrix_state_id = "matrix_state_name",
           protocol_method = "protocol_name",
           laboratory = "lab_name",
@@ -10015,15 +10084,15 @@ addDiscData <- function(id, language) {
         return()
       }
       if (
-        identical(source_column, "result_speciation_id") &&
+        identical(source_column, "result_descriptor_id") &&
           is.na(new_value) &&
           parameter_requirement(
             data$df$parameter_id[[target_row]],
-            "result_speciation"
+            "result_descriptor"
           )
       ) {
         showNotification(
-          "Speciation is required for this parameter.",
+          "Descriptor is required for this parameter.",
           type = "error"
         )
         return()
@@ -10150,17 +10219,17 @@ addDiscData <- function(id, language) {
           call. = FALSE
         )
       }
-      needs_speciation <- vapply(
+      needs_descriptor <- vapply(
         df$parameter_id,
         parameter_requirement,
         logical(1),
-        requirement = "result_speciation"
+        requirement = "result_descriptor"
       )
-      missing_speciation <- needs_speciation & is.na(df$result_speciation_id)
-      if (any(missing_speciation)) {
+      missing_descriptor <- needs_descriptor & is.na(df$result_descriptor_id)
+      if (any(missing_descriptor)) {
         stop(
-          "Speciation is required for the parameter in result row(s): ",
-          paste(which(missing_speciation), collapse = ", "),
+          "Descriptor is required for the parameter in result row(s): ",
+          paste(which(missing_descriptor), collapse = ", "),
           call. = FALSE
         )
       }

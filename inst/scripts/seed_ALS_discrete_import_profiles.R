@@ -169,7 +169,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     sample_fraction = NA_integer_,
     sample_fraction_AC = NA_integer_,
     result_value_type = 1L,
-    result_speciation_id = NA_integer_,
+    result_descriptor_id = NA_integer_,
     conversion = 1,
     result_offset = 0,
     FLAG_notes_combined = NA_character_
@@ -203,10 +203,10 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     con,
     "SELECT result_value_type_id FROM discrete.result_value_types;"
   )$result_value_type_id
-  valid_result_speciations <- DBI::dbGetQuery(
+  valid_result_descriptors <- DBI::dbGetQuery(
     con,
-    "SELECT result_speciation_id FROM discrete.result_speciations;"
-  )$result_speciation_id
+    "SELECT result_descriptor_id FROM discrete.result_descriptors;"
+  )$result_descriptor_id
 
   resolved <- vector("list", nrow(key))
   for (i in seq_len(nrow(key))) {
@@ -228,9 +228,9 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     if (!(result_value_type %in% valid_result_value_types)) {
       result_value_type <- 1L
     }
-    result_speciation_id <- scalar_int(key$result_speciation_id[[i]])
-    if (!is.na(result_speciation_id) && !(result_speciation_id %in% valid_result_speciations)) {
-      result_speciation_id <- NA_integer_
+    result_descriptor_id <- scalar_int(key$result_descriptor_id[[i]])
+    if (!is.na(result_descriptor_id) && !(result_descriptor_id %in% valid_result_descriptors)) {
+      result_descriptor_id <- NA_integer_
     }
 
     resolved[[i]] <- data.frame(
@@ -240,7 +240,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
       result_type = scalar_int(key$result_type[[i]], 2L),
       sample_fraction_id = sample_fraction_id,
       result_value_type = result_value_type,
-      result_speciation_id = result_speciation_id,
+      result_descriptor_id = result_descriptor_id,
       matrix_state_id = scalar_int(key$matrix_state[[i]], 1L),
       conversion = scalar_num(key$conversion[[i]], 1),
       result_offset = scalar_num(key$result_offset[[i]], 0),
@@ -327,7 +327,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
       result_type,
       sample_fraction_id,
       result_value_type,
-      result_speciation_id,
+      result_descriptor_id,
       matrix_state_id,
       conversion = 1,
       result_offset = 0,
@@ -387,7 +387,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
           NA_integer_
         },
         result_value_type = 1L,
-        result_speciation_id = NA_integer_,
+        result_descriptor_id = NA_integer_,
         matrix_state_id = 1L,
         conversion = 1,
         result_offset = 0,
@@ -458,7 +458,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     result_type = 2L,
     sample_fraction_id = dissolved_fraction[[1]],
     result_value_type = 1L,
-    result_speciation_id = NA_integer_,
+    result_descriptor_id = NA_integer_,
     matrix_state_id = 1L,
     conversion = 1,
     result_offset = 0,
@@ -505,7 +505,7 @@ profile_definitions <- function() {
     "matrix_state_id",
     "sample_fraction_id",
     "result_value_type",
-    "result_speciation_id",
+    "result_descriptor_id",
     "laboratory",
     "analysis_datetime"
   )

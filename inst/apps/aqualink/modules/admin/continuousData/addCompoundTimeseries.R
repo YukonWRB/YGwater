@@ -403,7 +403,7 @@ addCompoundTimeseries <- function(id, language) {
           "ts.parameter_id, ts.matrix_state_id, ts.aggregation_type_id,",
           "ts.sensor_priority,",
           "ts.share_with, ts.note,",
-          "ts.publicly_visible,",
+          "ts.default_show,",
           "ts.timeseries_type",
           "FROM continuous.timeseries ts",
           "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
@@ -419,7 +419,7 @@ addCompoundTimeseries <- function(id, language) {
           "md.aggregation_type, md.recording_rate, md.sensor_priority,",
           "md.start_datetime, md.end_datetime, md.last_new_data,",
           "md.timeseries_type_code, md.timeseries_type,",
-          "ts.active, ts.publicly_visible",
+          "ts.active, ts.default_show",
           "FROM continuous.timeseries_metadata_en md",
           "INNER JOIN continuous.timeseries ts",
           "ON md.timeseries_id = ts.timeseries_id",
@@ -742,8 +742,8 @@ addCompoundTimeseries <- function(id, language) {
           width = "100%"
         ),
         checkboxInput(
-          ns("publicly_visible"),
-          "Publicly visible",
+          ns("default_show"),
+          "Show by default",
           value = TRUE
         ),
         accordion(
@@ -924,7 +924,7 @@ addCompoundTimeseries <- function(id, language) {
       }
 
       df$timeseries_type <- as.factor(df$timeseries_type)
-      df$publicly_visible <- as.factor(df$publicly_visible)
+      df$default_show <- as.factor(df$default_show)
       df$sensor_priority <- as.factor(df$sensor_priority)
       df$active <- NULL
 
@@ -1420,7 +1420,7 @@ addCompoundTimeseries <- function(id, language) {
       updateSelectizeInput(session, "aggregation_type", selected = character(0))
       updateSelectizeInput(session, "sensor_priority", selected = 1)
       updateSelectizeInput(session, "share_with", selected = "public_reader")
-      updateCheckboxInput(session, "publicly_visible", value = TRUE)
+      updateCheckboxInput(session, "default_show", value = TRUE)
       updateTextAreaInput(session, "expression_sql", value = "")
       updateTextAreaInput(session, "note", value = "")
       clear_member_inputs()
@@ -1512,8 +1512,8 @@ addCompoundTimeseries <- function(id, language) {
       )
       updateCheckboxInput(
         session,
-        "publicly_visible",
-        value = isTRUE(details$publicly_visible[[1]])
+        "default_show",
+        value = isTRUE(details$default_show[[1]])
       )
       updateTextAreaInput(
         session,
@@ -1591,7 +1591,7 @@ addCompoundTimeseries <- function(id, language) {
         sensor_priority = nullable_integer(input$sensor_priority),
         aggregation_type_id = nullable_integer(input$aggregation_type),
         share_with = share_with_to_array(input$share_with),
-        publicly_visible = isTRUE(input$publicly_visible),
+        default_show = isTRUE(input$default_show),
         expression_sql = nullable_text(input$expression_sql),
         note = nullable_text(input$note),
         members = member_rows()
@@ -1626,7 +1626,7 @@ addCompoundTimeseries <- function(id, language) {
             "location_id, sub_location_id, timezone_daily_calc, z_id,",
             "parameter_id, media_id, matrix_state_id, sensor_priority,",
             "aggregation_type_id, share_with, note, active,",
-            "sync_remote, publicly_visible, timeseries_type",
+            "sync_remote, default_show, timeseries_type",
             ") VALUES (",
             "$1, $2, $3, $4, $5, $6, $7, $8, $9,",
             "$10, $11, TRUE, FALSE, $12, 'compound'",
@@ -1648,7 +1648,7 @@ addCompoundTimeseries <- function(id, language) {
             req$aggregation_type_id,
             req$share_with,
             if (is.na(req$note)) NA_character_ else req$note,
-            req$publicly_visible
+            req$default_show
           )
         )[[1]])
       } else {
@@ -1676,7 +1676,7 @@ addCompoundTimeseries <- function(id, language) {
             "default_owner = NULL,",
             "default_data_sharing_agreement_id = NULL,",
             "share_with = $10, note = $11, active = TRUE,",
-            "sync_remote = FALSE, publicly_visible = $12,",
+            "sync_remote = FALSE, default_show = $12,",
             "modified = CURRENT_TIMESTAMP, modified_by = CURRENT_USER",
             "WHERE timeseries_id = $13"
           ),
@@ -1696,7 +1696,7 @@ addCompoundTimeseries <- function(id, language) {
             req$aggregation_type_id,
             req$share_with,
             if (is.na(req$note)) NA_character_ else req$note,
-            req$publicly_visible,
+            req$default_show,
             req$timeseries_id
           )
         )

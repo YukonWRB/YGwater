@@ -37,7 +37,7 @@ plotDiscrete(
   result_types = NULL,
   sample_fractions = NULL,
   result_value_types = NULL,
-  result_speciations = NULL,
+  result_descriptors = NULL,
   include_blanks = TRUE,
   duplicate_action = c("show", "hide", "average"),
   sample_ids = NULL,
@@ -114,7 +114,7 @@ plotDiscrete(
 
 \item{result_value_types}{Optional AquaCache result value type ids or names to include, for example Actual or Calculated.}
 
-\item{result_speciations}{Optional AquaCache result speciation ids or names to include.}
+\item{result_descriptors}{Optional AquaCache result descriptor ids or names to include.}
 
 \item{include_blanks}{Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.}
 

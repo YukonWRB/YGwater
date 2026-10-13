@@ -324,7 +324,7 @@ visit <- function(id, language) {
         "SELECT p.parameter_id,
                 p.param_name,
                 p.sample_fraction,
-                p.result_speciation,
+                p.result_descriptor,
                 u.unit_name AS unit_liquid
            FROM public.parameters AS p
            LEFT JOIN public.units AS u
@@ -378,11 +378,11 @@ visit <- function(id, language) {
            FROM discrete.sample_fractions
           ORDER BY sample_fraction"
       )
-      moduleData$result_speciations <- DBI::dbGetQuery(
+      moduleData$result_descriptors <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT result_speciation_id, result_speciation
-           FROM discrete.result_speciations
-          ORDER BY result_speciation"
+        "SELECT result_descriptor_id, result_descriptor
+           FROM discrete.result_descriptors
+          ORDER BY result_descriptor"
       )
       moduleData$protocols_methods <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -1100,12 +1100,12 @@ visit <- function(id, language) {
           column(
             6,
             selectInput(
-              ns("field_result_speciation"),
-              "Result speciation",
+              ns("field_result_descriptor"),
+              "Result descriptor",
               choices = field_id_choices(
-                moduleData$result_speciations,
-                "result_speciation_id",
-                "result_speciation",
+                moduleData$result_descriptors,
+                "result_descriptor_id",
+                "result_descriptor",
                 include_blank = TRUE
               ),
               selected = ""
@@ -1327,7 +1327,7 @@ visit <- function(id, language) {
         condition_value <- NA_real_
       }
       sample_fraction_id <- scalar_id(input$field_sample_fraction)
-      result_speciation_id <- scalar_id(input$field_result_speciation)
+      result_descriptor_id <- scalar_id(input$field_result_descriptor)
       parameter <- moduleData$parameters[parameter_index, , drop = FALSE]
       if (
         isTRUE(as.logical(parameter$sample_fraction[[1]])) &&
@@ -1336,10 +1336,10 @@ visit <- function(id, language) {
         stop("Choose the required sample fraction.", call. = FALSE)
       }
       if (
-        isTRUE(as.logical(parameter$result_speciation[[1]])) &&
-          is.na(result_speciation_id)
+        isTRUE(as.logical(parameter$result_descriptor[[1]])) &&
+          is.na(result_descriptor_id)
       ) {
-        stop("Choose the required result speciation.", call. = FALSE)
+        stop("Choose the required result descriptor.", call. = FALSE)
       }
       measurement_datetime <- scalar_utc_datetime(input$field_result_datetime)
       result <- data.frame(
@@ -1351,7 +1351,7 @@ visit <- function(id, language) {
         result_condition = result_condition,
         result_condition_value = condition_value,
         result_value_type = result_value_type,
-        result_speciation_id = result_speciation_id,
+        result_descriptor_id = result_descriptor_id,
         laboratory = NA_integer_,
         analysis_datetime = measurement_datetime,
         lab_report_no = NA_character_,
@@ -1391,9 +1391,9 @@ visit <- function(id, language) {
         results$sample_fraction_id,
         moduleData$sample_fractions$sample_fraction_id
       )
-      speciation_index <- match(
-        results$result_speciation_id,
-        moduleData$result_speciations$result_speciation_id
+      descriptor_index <- match(
+        results$result_descriptor_id,
+        moduleData$result_descriptors$result_descriptor_id
       )
       value_label <- ifelse(
         is.na(results$result),
@@ -1404,7 +1404,7 @@ visit <- function(id, language) {
         Parameter = moduleData$parameters$param_name[parameter_index],
         Result = value_label,
         `Sample fraction` = moduleData$sample_fractions$sample_fraction[fraction_index],
-        Speciation = moduleData$result_speciations$result_speciation[speciation_index],
+        Descriptor = moduleData$result_descriptors$result_descriptor[descriptor_index],
         `Measurement time (UTC)` = format(
           as.POSIXct(results$analysis_datetime, tz = "UTC"),
           "%Y-%m-%d %H:%M",
@@ -1433,7 +1433,7 @@ visit <- function(id, language) {
             "protocol_method",
             "sample_fraction_id",
             "result_value_type",
-            "result_speciation_id",
+            "result_descriptor_id",
             "analysis_datetime"
           )
           make_keys <- function(rows) {
@@ -1457,7 +1457,7 @@ visit <- function(id, language) {
         updateSelectInput(session, "field_result_condition", selected = "")
         updateNumericInput(session, "field_result_condition_value", value = NA_real_)
         updateSelectInput(session, "field_sample_fraction", selected = "")
-        updateSelectInput(session, "field_result_speciation", selected = "")
+        updateSelectInput(session, "field_result_descriptor", selected = "")
         updateTextAreaInput(session, "field_result_note", value = "")
         showNotification("Measurement added to the sample preview.", type = "message")
       }, error = function(e) {
@@ -1769,7 +1769,7 @@ visit <- function(id, language) {
                result_condition,
                result_condition_value,
                result_value_type,
-               result_speciation_id,
+               result_descriptor_id,
                laboratory,
                analysis_datetime,
                lab_report_no,
@@ -1795,7 +1795,7 @@ visit <- function(id, language) {
               as.integer(result$result_condition[[1]]),
               as.numeric(result$result_condition_value[[1]]),
               as.integer(result$result_value_type[[1]]),
-              as.integer(result$result_speciation_id[[1]]),
+              as.integer(result$result_descriptor_id[[1]]),
               as.integer(result$laboratory[[1]]),
               as.POSIXct(result$analysis_datetime[[1]], tz = "UTC"),
               as.character(result$lab_report_no[[1]]),

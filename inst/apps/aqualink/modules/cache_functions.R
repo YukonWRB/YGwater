@@ -459,11 +459,11 @@ disc_plot_module_data <- function(con, env = .GlobalEnv) {
            FROM discrete.result_value_types
            ORDER BY result_value_type ASC;"
         ),
-        result_speciations = DBI::dbGetQuery(
+        result_descriptors = DBI::dbGetQuery(
           con,
-          "SELECT result_speciation_id, result_speciation
-           FROM discrete.result_speciations
-           ORDER BY result_speciation ASC;"
+          "SELECT result_descriptor_id, result_descriptor
+           FROM discrete.result_descriptors
+           ORDER BY result_descriptor ASC;"
         )
       )
     },

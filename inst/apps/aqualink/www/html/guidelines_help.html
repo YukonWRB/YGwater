@@ -64,7 +64,7 @@
       </tr>
       <tr>
         <td><code>discrete.get_sample_val(...)</code></td>
-        <td>Fetches a sample result by parameter, fraction, and optional speciation.</td>
+        <td>Fetches a sample result by parameter, fraction, and optional descriptor.</td>
         <td><code>discrete.get_sample_val(sample_id := $1::integer, parameter_id := 1190::integer, sample_fraction_id := NULL::integer)</code></td>
       </tr>
     </tbody>
@@ -97,7 +97,7 @@ FROM vals</code></pre>
   <h2>Multiple Sample Inputs</h2>
   <p>
     SQL scalar rules can combine several inputs. Keep parameter, fraction, and
-    speciation IDs explicit so the stored rule remains reproducible.
+    descriptor IDs explicit so the stored rule remains reproducible.
   </p>
   <pre><code>WITH vals AS (
   SELECT
@@ -106,7 +106,7 @@ FROM vals</code></pre>
       sample_id := $1::integer,
       parameter_id := 538::integer,
       sample_fraction_id := 2::integer,
-      result_speciation_id := NULL::integer
+      result_descriptor_id := NULL::integer
     ) AS doc_mg_l
 )
 SELECT CASE

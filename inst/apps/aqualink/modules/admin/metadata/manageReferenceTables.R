@@ -556,8 +556,8 @@ reference_table_configs <- function() {
         ),
         reference_text_field("cas_number", "CAS number"),
         reference_checkbox_field(
-          "result_speciation",
-          "Result speciation required"
+          "result_descriptor",
+          "Result descriptor required"
         ),
         reference_checkbox_field(
           "sample_fraction",
