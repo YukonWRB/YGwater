@@ -97,7 +97,7 @@ FROM vals</code></pre>
   <h2>Multiple Sample Inputs</h2>
   <p>
     SQL scalar rules can combine several inputs. Keep parameter, fraction, and
-    descriptor IDs explicit so the stored rule remains reproducible.
+    reporting basis and chemical identity explicit so the stored rule remains reproducible.
   </p>
   <pre><code>WITH vals AS (
   SELECT
@@ -106,7 +106,13 @@ FROM vals</code></pre>
       sample_id := $1::integer,
       parameter_id := 538::integer,
       sample_fraction_id := 2::integer,
-      result_descriptor_id := NULL::integer
+      reporting_basis_id := NULL::integer,
+      result_speciation_id := NULL::integer,
+      result_target_id := NULL::integer,
+      endpoint_mode := NULL::text,
+      endpoint_ph := NULL::numeric,
+      analysis_conditions := '{}'::jsonb,
+      matrix_state_id := 1::integer
     ) AS doc_mg_l
 )
 SELECT CASE
@@ -115,6 +121,16 @@ SELECT CASE
 END
 FROM vals</code></pre>
 
+  <p>
+    Reporting basis (for example, as N or as CaCO3), chemical form, analyzed
+    material, endpoint, and analysis conditions define distinct measurements.
+    The sample accessor matches these fields exactly. Supply the matrix-state ID
+    from the catalogue, especially when a parameter has units in more than one state. Missing chemistry does not
+    mean all species or any endpoint. A fixed endpoint requires its pH; dry/wet
+    mass and gas reference conditions belong in the analysis-conditions object.
+    Match every selector to the declared Rule input. The hardness helper returns
+    liquid-sample hardness in mg/L as CaCO3 and rejects incompatible expressions.
+  </p>
   <h2>Testing SQL Scalar Rules</h2>
   <p>
     The Shiny tester can evaluate a saved guideline against either an existing

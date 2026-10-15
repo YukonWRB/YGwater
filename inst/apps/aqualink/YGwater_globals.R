@@ -247,6 +247,10 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
+      "apps/aqualink/modules/admin/discreteData/importSetup.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/aqualink/modules/admin/discreteData/editSamples.R",
       package = "YGwater"
     ))

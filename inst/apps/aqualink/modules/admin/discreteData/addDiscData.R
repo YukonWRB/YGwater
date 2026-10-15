@@ -42,7 +42,12 @@ addDiscData_empty_table <- function() {
     matrix_state_id = integer(),
     sample_fraction_id = integer(),
     result_value_type = integer(),
-    result_descriptor_id = integer(),
+    reporting_basis_id = integer(),
+    result_speciation_id = integer(),
+    result_target_id = integer(),
+    endpoint_mode = character(),
+    endpoint_ph = numeric(),
+    analysis_conditions = character(),
     source_result_text = character(),
     source_result = numeric(),
     source_result_condition = integer(),
@@ -190,7 +195,12 @@ addDiscData_merge_preview_edits <- function(recalculated, current, previous) {
       "matrix_state_id",
       "sample_fraction_id",
       "result_value_type",
-      "result_descriptor_id",
+      "reporting_basis_id",
+      "result_speciation_id",
+      "result_target_id",
+      "endpoint_mode",
+      "endpoint_ph",
+      "analysis_conditions",
       "result",
       "result_condition",
       "result_condition_value",
@@ -359,7 +369,7 @@ addDiscData_profile_column_specs <- function(parser_family) {
       parameter_name_column = c("Parameter name column", "integer"),
       parameter_code_column = c("Parameter code column", "integer"),
       unit_column = c("Unit column", "integer"),
-      first_sample_column = c("First sample row", "integer")
+      first_sample_column = c("First sample column", "integer")
     ))
   }
   specs <- list(
@@ -736,7 +746,15 @@ addDiscData_defaults <- function(profile) {
     result_type = addDiscData_int(defaults$result_type, 2L),
     matrix_state_id = addDiscData_int(defaults$matrix_state_id, 1L),
     result_value_type = addDiscData_int(defaults$result_value_type, 1L),
-    laboratory = addDiscData_int(defaults$laboratory, 2L),
+    reporting_basis_id = addDiscData_int(defaults$reporting_basis_id),
+    result_speciation_id = addDiscData_int(defaults$result_speciation_id),
+    result_target_id = addDiscData_int(defaults$result_target_id),
+    endpoint_mode = addDiscData_first(defaults$endpoint_mode, NA_character_),
+    endpoint_ph = addDiscData_num(defaults$endpoint_ph),
+    analysis_conditions = AquaCache::normalizeAnalysisConditions(
+      defaults$analysis_conditions
+    ),
+    laboratory = addDiscData_int(defaults$laboratory),
     grade_type_id = addDiscData_int(defaults$grade_type_id),
     approval_type_id = addDiscData_int(defaults$approval_type_id),
     sample_no_source_update = isTRUE(defaults$sample_no_source_update),
@@ -833,7 +851,12 @@ addDiscData_common_rows <- function(
     matrix_state_id = defaults$matrix_state_id,
     sample_fraction_id = NA_integer_,
     result_value_type = defaults$result_value_type,
-    result_descriptor_id = NA_integer_,
+    reporting_basis_id = defaults$reporting_basis_id,
+    result_speciation_id = defaults$result_speciation_id,
+    result_target_id = defaults$result_target_id,
+    endpoint_mode = defaults$endpoint_mode,
+    endpoint_ph = defaults$endpoint_ph,
+    analysis_conditions = defaults$analysis_conditions,
     source_result_text = as.character(result_raw),
     source_result = parsed_result$result,
     source_result_condition = parsed_result$result_condition,
@@ -1531,9 +1554,32 @@ addDiscData_apply_mappings <- function(rows, con, profile_code = NULL) {
         hit$result_value_type[[1]],
         rows$result_value_type[[i]]
       )
-      rows$result_descriptor_id[[
+      rows$reporting_basis_id[[
         i
-      ]] <- addDiscData_int(hit$result_descriptor_id[[1]])
+      ]] <- addDiscData_int(
+        hit$reporting_basis_id[[1]],
+        rows$reporting_basis_id[[i]]
+      )
+      for (field in c(
+        "result_speciation_id",
+        "result_target_id",
+        "endpoint_mode",
+        "endpoint_ph",
+        "analysis_conditions"
+      )) {
+        if (field %in% names(hit)) {
+          value <- hit[[field]][[1]]
+          if (field == "analysis_conditions") {
+            if (
+              !identical(AquaCache::normalizeAnalysisConditions(value), "{}")
+            ) {
+              rows[[field]][[i]] <- value
+            }
+          } else if (!is.na(value)) {
+            rows[[field]][[i]] <- value
+          }
+        }
+      }
       rows$matrix_state_id[[i]] <- addDiscData_int(
         hit$matrix_state_id[[1]],
         rows$matrix_state_id[[i]]
@@ -1607,12 +1653,13 @@ addDiscData_upsert_mapping <- function(
   result_type,
   sample_fraction_id,
   result_value_type,
-  result_descriptor_id,
+  reporting_basis_id,
   matrix_state_id,
   conversion,
   result_offset,
   note,
-  profile_code = NULL
+  profile_code = NULL,
+  chemistry = list()
 ) {
   mappings <- data.frame(
     parameter_code = as.character(parameter_code),
@@ -1621,7 +1668,7 @@ addDiscData_upsert_mapping <- function(
     result_type = as.integer(result_type),
     sample_fraction_id = as.integer(sample_fraction_id),
     result_value_type = as.integer(result_value_type),
-    result_descriptor_id = as.integer(result_descriptor_id),
+    reporting_basis_id = as.integer(reporting_basis_id),
     matrix_state_id = as.integer(matrix_state_id),
     conversion = as.numeric(conversion),
     result_offset = as.numeric(result_offset),
@@ -1629,6 +1676,23 @@ addDiscData_upsert_mapping <- function(
     active = TRUE,
     note = as.character(note),
     stringsAsFactors = FALSE
+  )
+  defaults <- list(
+    result_speciation_id = NA_integer_,
+    result_target_id = NA_integer_,
+    endpoint_mode = NA_character_,
+    endpoint_ph = NA_real_,
+    analysis_conditions = "{}"
+  )
+  if (is.null(chemistry)) {
+    chemistry <- list()
+  }
+  mappings <- cbind(
+    mappings,
+    as.data.frame(
+      utils::modifyList(defaults, chemistry),
+      stringsAsFactors = FALSE
+    )
   )
   AquaCache::upsertImportParameterMappings(
     con = con,
@@ -1672,12 +1736,13 @@ addDiscData_run_mapping_save <- function(request) {
             result_type = request$result_type,
             sample_fraction_id = request$sample_fraction_id,
             result_value_type = request$result_value_type,
-            result_descriptor_id = request$result_descriptor_id,
+            reporting_basis_id = request$reporting_basis_id,
             matrix_state_id = request$matrix_state_id,
             conversion = request$conversion,
             result_offset = request$result_offset,
             note = "Saved from YGwater add discrete data mapping editor.",
-            profile_code = request$profile$profile_code[[1]]
+            profile_code = request$profile$profile_code[[1]],
+            chemistry = request$chemistry
           )
         } else {
           AquaCache::upsertImportLocationMappings(
@@ -1863,7 +1928,65 @@ addDiscData_run_location_create <- function(request) {
   )
 }
 
+# Plan a partial upload without changing the preview. Unassigned workbook
+# results and explicitly skipped flags can be omitted; malformed mapped results
+# remain in the plan and must pass the ordinary scientific/sample validation.
+addDiscData_upload_plan <- function(rows) {
+  rows <- data.table::as.data.table(data.table::copy(rows))
+  file_rows <- addDiscData_present(rows$source_code) & rows$source_code != "YGwater-manual"
+  missing_parameter <- is.na(rows$parameter_id) | !addDiscData_present(rows$parameter_id)
+  shells <- rows$source_code %in% "YGwater-manual" & missing_parameter
+  skipped <- !shells & rows$result_flag_action %in% "skip_result"
+  unmapped <- !shells & !skipped & file_rows & missing_parameter
+  omitted <- skipped | unmapped
+  keep <- !shells & !omitted
+  reason <- rep(NA_character_, nrow(rows))
+  reason[unmapped] <- "No AquaCache parameter mapping"
+  reason[skipped] <- "Skipped by result-flag mapping"
+  omissions <- data.table::data.table(
+    source = rows$source_code[omitted],
+    parameter_code = rows$source_parameter_code[omitted],
+    parameter_name = rows$source_parameter_name[omitted],
+    unit = rows$source_unit[omitted], reason = reason[omitted]
+  )[, .(results = .N), by = c("source", "parameter_code", "parameter_name", "unit", "reason")]
+  data.table::setorderv(omissions, c("reason", "source", "parameter_code", "unit"))
+  sample_keys <- unique(as.character(rows$sample_key[!shells]))
+  included_keys <- unique(as.character(rows$sample_key[keep]))
+  omitted_keys <- setdiff(sample_keys, included_keys)
+  omitted_samples <- unique(rows[sample_key %in% omitted_keys,
+    .(sample_key, source_code, source_sample_id)])
+  list(
+    df = as.data.frame(rows[keep]), omissions = as.data.frame(omissions),
+    total_results = sum(!shells), included_results = sum(keep),
+    omitted_results = sum(omitted), unmapped_results = sum(unmapped),
+    flag_skipped_results = sum(skipped), total_samples = length(sample_keys),
+    included_samples = length(included_keys), omitted_samples = as.data.frame(omitted_samples)
+  )
+}
+
+# Capture both mapping scopes so a preview cannot be uploaded against a newer
+# published revision. Drafts may be previewed while editing, but publication is
+# an explicit reviewed action in Import setup.
+addDiscData_mapping_snapshot <- function(con, profile, lock = FALSE) {
+  if (isTRUE(lock)) {
+    source_id <- profile$import_source_id[[1]]
+    for (scope in c("source", as.character(profile$import_profile_id[[1]]))) {
+      DBI::dbGetQuery(con, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+        params = list(paste(source_id, scope, sep = ":")))
+    }
+  }
+  DBI::dbGetQuery(con, "SELECT import_mapping_set_id, import_profile_id, status, version
+    FROM discrete.import_mapping_sets
+    WHERE import_source_id=$1 AND (import_profile_id IS NULL OR import_profile_id=$2)
+      AND status IN ('published','draft') ORDER BY import_mapping_set_id",
+    params = list(profile$import_source_id[[1]], profile$import_profile_id[[1]]))
+}
+
 addDiscData_run_upload <- function(request) {
+  if (!is.null(request$upload_coverage) && request$upload_coverage$omitted_result_rows > 0L &&
+      !isTRUE(request$partial_upload_acknowledged)) {
+    return(list(ok = FALSE, message = "Acknowledge the omitted workbook results before uploading."))
+  }
   config <- request$config
   con <- YGwater::AquaConnect(
     name = config$dbName,
@@ -2150,15 +2273,13 @@ addDiscData_run_upload <- function(request) {
         run_source_code <- import_sources$source_code[
           match(run_source_ids[[1]], import_sources$import_source_id)
         ]
-        AquaCache::publishImportMappings(
-          con = con,
-          source_code = run_source_code
-        )
-        AquaCache::publishImportMappings(
-          con = con,
-          source_code = run_source_code,
-          profile_code = profile$profile_code[[1]]
-        )
+        snapshot <- addDiscData_mapping_snapshot(con, profile, lock = TRUE)
+        if (any(snapshot$status == "draft")) {
+          stop("Review and publish the source and workbook drafts in Import setup, then preview the workbook again.")
+        }
+        if (is.null(request$mapping_snapshot) || !identical(snapshot, request$mapping_snapshot)) {
+          stop("The published mappings changed after this preview. Preview the workbook again before uploading.")
+        }
         import_run_id <- AquaCache::createImportRun(
           con = con,
           import_source_id = run_source_ids[[1]],
@@ -2167,10 +2288,11 @@ addDiscData_run_upload <- function(request) {
           adapter_version = as.character(utils::packageVersion("YGwater")),
           source_file_name = request$file$name,
           source_file_size = request$file$size,
-          summary = list(
+          summary = c(list(
             source_rows = length(unique(df$source_row_number)),
             result_rows = nrow(df)
-          ),
+          ), request$upload_coverage,
+            list(partial_upload_acknowledged = isTRUE(request$partial_upload_acknowledged))),
           note = "Created by the YGwater discrete-data import workflow."
         )
       }
@@ -2294,7 +2416,7 @@ addDiscData_run_upload <- function(request) {
              result_condition,
              result_condition_value,
              result_value_type,
-             result_descriptor_id,
+             reporting_basis_id,
              laboratory,
              analysis_datetime,
              lab_report_no,
@@ -2303,10 +2425,10 @@ addDiscData_run_upload <- function(request) {
              approval_type_id,
              matrix_state_id,
              no_source_update,
-             note
+             note, result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions
            ) VALUES (
              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-             $14, $15, $16, $17, $18, $19
+             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb
            ) RETURNING result_id",
           params = list(
             sid,
@@ -2318,7 +2440,7 @@ addDiscData_run_upload <- function(request) {
             addDiscData_int(df$result_condition[[j]]),
             addDiscData_num(df$result_condition_value[[j]]),
             addDiscData_int(df$result_value_type[[j]]),
-            addDiscData_int(df$result_descriptor_id[[j]]),
+            addDiscData_int(df$reporting_basis_id[[j]]),
             addDiscData_int(df$laboratory[[j]]),
             if (is.na(df$analysis_datetime[[j]])) {
               as.POSIXct(NA)
@@ -2339,7 +2461,12 @@ addDiscData_run_upload <- function(request) {
             addDiscData_int(df$approval_type_id[[j]]),
             as.integer(df$matrix_state_id[[j]]),
             isTRUE(df$result_no_source_update[[j]]),
-            df$note[[j]]
+            df$note[[j]],
+            addDiscData_int(df$result_speciation_id[[j]]),
+            addDiscData_int(df$result_target_id[[j]]),
+            addDiscData_optional_text(df$endpoint_mode[[j]]),
+            addDiscData_num(df$endpoint_ph[[j]]),
+            AquaCache::normalizeAnalysisConditions(df$analysis_conditions[[j]])
           )
         )$result_id[[1]]
         inserted_results <- inserted_results + 1L
@@ -2391,7 +2518,7 @@ addDiscData_run_upload <- function(request) {
           "matrix_state_id",
           "sample_fraction_id",
           "result_value_type",
-          "result_descriptor_id",
+          "reporting_basis_id",
           "result",
           "result_condition",
           "result_condition_value",
@@ -2445,10 +2572,11 @@ addDiscData_run_upload <- function(request) {
           con = con,
           import_run_id = import_run_id,
           status = "committed",
-          summary = list(
+          summary = c(list(
             samples = inserted_samples,
             results = inserted_results
-          ),
+          ), request$upload_coverage,
+            list(partial_upload_acknowledged = isTRUE(request$partial_upload_acknowledged))),
           validation_summary = list(committed = inserted_results, errors = 0L)
         )
       }
@@ -2590,7 +2718,7 @@ addDiscData_result_display <- function(
   result_conditions,
   sample_fractions,
   result_value_types,
-  result_descriptors,
+  reporting_bases,
   matrix_states,
   laboratories,
   media,
@@ -2693,11 +2821,11 @@ addDiscData_result_display <- function(
       "result_value_type_id",
       "result_value_type"
     ),
-    Descriptor = addDiscData_lookup_label(
-      rows$result_descriptor_id,
-      result_descriptors,
-      "result_descriptor_id",
-      "result_descriptor"
+    `Reporting basis` = addDiscData_lookup_label(
+      rows$reporting_basis_id,
+      reporting_bases,
+      "reporting_basis_id",
+      "reporting_basis"
     ),
     Matrix = addDiscData_lookup_label(
       rows$matrix_state_id,
@@ -2772,7 +2900,12 @@ addDiscData_result_edit_columns <- function() {
     "Result type" = "result_type",
     "Sample fraction" = "sample_fraction_id",
     "Value type" = "result_value_type",
-    "Descriptor" = "result_descriptor_id",
+    "Reporting basis" = "reporting_basis_id",
+    "Chemical form" = "result_speciation_id",
+    "Analytical target" = "result_target_id",
+    "Endpoint mode" = "endpoint_mode",
+    "Endpoint pH" = "endpoint_ph",
+    "Analysis conditions" = "analysis_conditions",
     "Matrix" = "matrix_state_id",
     "Protocol" = "protocol_method",
     "Laboratory" = "laboratory",
@@ -2924,7 +3057,7 @@ addDiscDataUI <- function(id) {
                       style = "padding-top: 25px;",
                       actionButton(
                         ns("open_import_setup"),
-                        "Manage formats and mappings"
+                        "Open Import setup"
                       )
                     )
                   )
@@ -2940,7 +3073,7 @@ addDiscDataUI <- function(id) {
                   ns = ns,
                   tags$h5("Map source parameter names and units to AquaCache"),
                   helpText(
-                    "After previewing, select any item that needs a mapping, choose what it means in AquaCache, then save it. These preview edits are staged for this workbook format and published when the upload succeeds. Use Manage import formats and mappings to create or edit mappings outside an upload and publish them immediately."
+                    "After previewing, select any item that needs a mapping, choose what it means in AquaCache, then save it. These preview edits are staged for this workbook format and published when the upload succeeds. Use Discrete data → Import setup to repair draft mappings outside an upload, then publish the completed scope."
                   ),
                   checkboxInput(
                     ns("show_all_mappings"),
@@ -3045,7 +3178,7 @@ addDiscDataUI <- function(id) {
                   )
                 ),
 
-                # WIP
+                uiOutput(ns("manual_chemistry")),
                 fluidRow(
                   column(
                     3,
@@ -3079,7 +3212,7 @@ addDiscDataUI <- function(id) {
                     2,
                     selectizeInput(
                       ns("manual_descriptor"),
-                      "Descriptor",
+                      "Reporting basis",
                       choices = NULL,
                       multiple = TRUE,
                       options = list(
@@ -3245,6 +3378,7 @@ addDiscDataUI <- function(id) {
             "Additional documents to attach (optional)",
             multiple = TRUE
           ),
+          uiOutput(ns("upload_coverage")),
           bslib::input_task_button(
             ns("upload"),
             "Upload to AquaCache",
@@ -3286,401 +3420,6 @@ addDiscDataUI <- function(id) {
             "Create locations and map source names",
             label_busy = "Creating new locations..."
           )
-        ),
-        tabPanel(
-          "Manage import formats and mappings",
-          value = "manage_import_setup",
-          helpText(
-            "Create or edit workbook formats and manage parameter, location, and result-flag mappings here. You can use this page without selecting a file. Saved mappings are published immediately and applied to future uploads. Profile-specific mappings take precedence over source-wide mappings. If a matching file is already previewed, its preview is refreshed while retaining your edits."
-          ),
-          fluidRow(
-            column(
-              6,
-              selectizeInput(
-                ns("manage_import_profile"),
-                "Workbook format",
-                choices = NULL,
-                options = list(placeholder = "Select a workbook format")
-              )
-            ),
-            column(
-              4,
-              tags$div(
-                style = "padding-top: 25px;",
-                actionButton(
-                  ns("new_import_profile"),
-                  "Create new format"
-                )
-              )
-            ),
-            column(
-              4,
-              tags$div(
-                style = "padding-top: 25px;",
-                actionButton(
-                  ns("copy_import_profile"),
-                  "Copy selected format"
-                )
-              )
-            ),
-            column(
-              4,
-              tags$div(
-                style = "padding-top: 25px;",
-                actionButton(
-                  ns("edit_import_profile"),
-                  "Edit selected format"
-                )
-              )
-            )
-          ),
-          uiOutput(ns("manage_import_profile_status")),
-          tags$hr(),
-          fluidRow(
-            column(
-              4,
-              selectInput(
-                ns("manage_mapping_type"),
-                "Mapping type",
-                choices = c(
-                  "Parameter" = "parameter",
-                  "Location" = "location",
-                  "Result flag" = "result_flag"
-                )
-              )
-            ),
-            column(
-              4,
-              checkboxInput(
-                ns("manage_show_inactive"),
-                "Include inactive mappings",
-                value = TRUE
-              )
-            ),
-            column(
-              4,
-              tags$div(
-                style = "padding-top: 25px;",
-                actionButton(ns("manage_new_mapping"), "Create mapping")
-              )
-            )
-          ),
-          DT::DTOutput(ns("manage_mapping_table")),
-          uiOutput(ns("manage_mapping_permissions")),
-          conditionalPanel(
-            condition = "input.manage_mapping_type == 'parameter'",
-            ns = ns,
-            wellPanel(
-              tags$h5("Parameter mapping"),
-              fluidRow(
-                column(
-                  4,
-                  textInput(
-                    ns("manage_parameter_code"),
-                    "Source parameter code"
-                  )
-                ),
-                column(
-                  4,
-                  textInput(
-                    ns("manage_parameter_unit"),
-                    "Source unit (optional)"
-                  )
-                ),
-                column(
-                  4,
-                  selectInput(
-                    ns("manage_mapping_scope"),
-                    "Applies to",
-                    choices = c(
-                      "This workbook format" = "profile",
-                      "All formats for this source" = "source"
-                    )
-                  )
-                )
-              ),
-              fluidRow(
-                column(
-                  4,
-                  selectizeInput(
-                    ns("manage_parameter_id"),
-                    "AquaCache parameter",
-                    choices = NULL
-                  )
-                ),
-                column(
-                  4,
-                  selectizeInput(
-                    ns("manage_result_type"),
-                    "Result type",
-                    choices = NULL
-                  )
-                ),
-                column(
-                  4,
-                  selectizeInput(
-                    ns("manage_matrix_state"),
-                    "Matrix state",
-                    choices = NULL
-                  )
-                )
-              ),
-              fluidRow(
-                column(
-                  3,
-                  selectizeInput(
-                    ns("manage_sample_fraction"),
-                    "Sample fraction",
-                    choices = NULL
-                  )
-                ),
-                column(
-                  3,
-                  selectizeInput(
-                    ns("manage_value_type"),
-                    "Result value type",
-                    choices = NULL
-                  )
-                ),
-                column(
-                  3,
-                  selectizeInput(
-                    ns("manage_descriptor"),
-                    "Result descriptor",
-                    choices = NULL
-                  )
-                ),
-                column(
-                  3,
-                  numericInput(
-                    ns("manage_priority"),
-                    "Priority",
-                    value = 50,
-                    min = 1,
-                    step = 1
-                  )
-                )
-              ),
-              helpText(
-                "A sample fraction or descriptor is required when the selected AquaCache parameter requires it."
-              ),
-              fluidRow(
-                column(
-                  3,
-                  numericInput(
-                    ns("manage_conversion"),
-                    "Conversion multiplier",
-                    value = 1
-                  )
-                ),
-                column(
-                  3,
-                  numericInput(
-                    ns("manage_result_offset"),
-                    "Result offset",
-                    value = 0
-                  )
-                ),
-                column(
-                  3,
-                  checkboxInput(ns("manage_active"), "Active", value = TRUE)
-                )
-              ),
-              textAreaInput(
-                ns("manage_mapping_note"),
-                "Mapping note",
-                rows = 2
-              ),
-              actionButton(
-                ns("manage_save_parameter_mapping"),
-                "Save parameter mapping"
-              )
-            )
-          ),
-          conditionalPanel(
-            condition = "input.manage_mapping_type == 'location'",
-            ns = ns,
-            wellPanel(
-              tags$h5("Location mapping"),
-              fluidRow(
-                column(
-                  4,
-                  textInput(ns("manage_location_code"), "Source location code")
-                ),
-                column(
-                  4,
-                  textInput(
-                    ns("manage_location_name"),
-                    "Source location name (optional)"
-                  )
-                ),
-                column(
-                  4,
-                  selectInput(
-                    ns("manage_location_scope"),
-                    "Applies to",
-                    choices = c(
-                      "This workbook format" = "profile",
-                      "All formats for this source" = "source"
-                    )
-                  )
-                )
-              ),
-              fluidRow(
-                column(
-                  6,
-                  selectizeInput(
-                    ns("manage_location_id"),
-                    "AquaCache location",
-                    choices = NULL
-                  )
-                ),
-                column(
-                  6,
-                  selectizeInput(
-                    ns("manage_sub_location_id"),
-                    "Sub-location (optional)",
-                    choices = NULL
-                  )
-                )
-              ),
-              fluidRow(
-                column(
-                  3,
-                  numericInput(
-                    ns("manage_location_priority"),
-                    "Priority",
-                    value = 50,
-                    min = 1,
-                    step = 1
-                  )
-                ),
-                column(
-                  3,
-                  checkboxInput(
-                    ns("manage_location_active"),
-                    "Active",
-                    value = TRUE
-                  )
-                )
-              ),
-              textAreaInput(
-                ns("manage_location_note"),
-                "Mapping note",
-                rows = 2
-              ),
-              actionButton(
-                ns("manage_save_location_mapping"),
-                "Save location mapping"
-              )
-            )
-          ),
-          conditionalPanel(
-            condition = "input.manage_mapping_type == 'result_flag'",
-            ns = ns,
-            wellPanel(
-              tags$h5("Result-flag mapping"),
-              fluidRow(
-                column(
-                  4,
-                  textInput(
-                    ns("manage_flag_column"),
-                    "Source flag column (optional)"
-                  )
-                ),
-                column(
-                  4,
-                  textInput(ns("manage_flag_value"), "Source flag value")
-                ),
-                column(
-                  4,
-                  selectInput(
-                    ns("manage_flag_scope"),
-                    "Applies to",
-                    choices = c(
-                      "This workbook format" = "profile",
-                      "All formats for this source" = "source"
-                    )
-                  )
-                )
-              ),
-              fluidRow(
-                column(
-                  4,
-                  selectInput(
-                    ns("manage_flag_action"),
-                    "When this flag appears",
-                    choices = c(
-                      "Keep the result" = "keep_result",
-                      "Keep flag and clear numeric result" = "set_result_null",
-                      "Skip this result during import" = "skip_result",
-                      "Reject the result row" = "reject_row",
-                      "Add a note only" = "note_only"
-                    )
-                  )
-                ),
-                column(
-                  4,
-                  selectInput(
-                    ns("manage_flag_condition"),
-                    "Result condition (optional)",
-                    choices = NULL
-                  )
-                ),
-                column(
-                  4,
-                  selectInput(
-                    ns("manage_flag_threshold_source"),
-                    "Condition value from",
-                    choices = c(
-                      "None" = "none",
-                      "Result" = "result",
-                      "Method detection limit" = "method_detection_limit",
-                      "Reporting detection limit" = "reporting_detection_limit",
-                      "Enter a value" = "literal"
-                    )
-                  )
-                )
-              ),
-              fluidRow(
-                column(
-                  4,
-                  numericInput(
-                    ns("manage_flag_threshold"),
-                    "Literal condition value",
-                    value = NA_real_
-                  )
-                ),
-                column(
-                  4,
-                  numericInput(
-                    ns("manage_flag_priority"),
-                    "Priority",
-                    value = 50,
-                    min = 1,
-                    step = 1
-                  )
-                ),
-                column(
-                  4,
-                  checkboxInput(
-                    ns("manage_flag_active"),
-                    "Active",
-                    value = TRUE
-                  )
-                )
-              ),
-              textInput(
-                ns("manage_flag_note_template"),
-                "Optional note to add"
-              ),
-              textAreaInput(ns("manage_flag_note"), "Mapping note", rows = 2),
-              actionButton(
-                ns("manage_save_flag_mapping"),
-                "Save result-flag mapping"
-              )
-            )
-          )
         )
       )
     )
@@ -3720,11 +3459,7 @@ addDiscData <- function(id, language) {
     )
     import_profiles <- reactiveVal(addDiscData_empty_profiles())
     profile_load_error <- reactiveVal(NULL)
-    new_profile_template <- reactiveVal(NULL)
-    new_profile_mode <- reactiveVal("create")
     mapping_revision <- reactiveVal(0L)
-    manage_mapping_selected <- reactiveVal(NULL)
-    manage_mapping_error <- reactiveVal(NULL)
 
     con <- session$userData$AquaCache
     read_observers <- function() {
@@ -3823,60 +3558,6 @@ addDiscData <- function(id, language) {
       },
       ignoreInit = TRUE
     )
-    profile_permissions <- tryCatch(
-      DBI::dbGetQuery(
-        con,
-        "SELECT
-           has_table_privilege(
-             current_user,
-             'discrete.import_profiles',
-             'INSERT'
-           ) AND has_table_privilege(
-             current_user,
-             'discrete.import_profiles',
-             'UPDATE'
-           ) AS can_write_profiles,
-           has_table_privilege(
-             current_user,
-             'discrete.import_sources',
-             'INSERT'
-           ) AND has_table_privilege(
-             current_user,
-             'discrete.import_sources',
-             'UPDATE'
-           ) AS can_write_sources,
-           has_sequence_privilege(
-             current_user,
-             pg_get_serial_sequence(
-               'discrete.import_profiles',
-               'import_profile_id'
-             ),
-             'USAGE'
-           ) AS can_use_profile_sequence,
-           has_sequence_privilege(
-             current_user,
-             pg_get_serial_sequence(
-               'discrete.import_sources',
-               'import_source_id'
-             ),
-             'USAGE'
-           ) AS can_use_source_sequence;"
-      ),
-      error = function(e) {
-        data.frame(
-          can_write_profiles = FALSE,
-          can_write_sources = FALSE,
-          can_use_profile_sequence = FALSE,
-          can_use_source_sequence = FALSE
-        )
-      }
-    )
-    can_manage_profiles <- isTRUE(profile_permissions$can_write_profiles[[
-      1
-    ]]) &&
-      isTRUE(profile_permissions$can_write_sources[[1]]) &&
-      isTRUE(profile_permissions$can_use_profile_sequence[[1]]) &&
-      isTRUE(profile_permissions$can_use_source_sequence[[1]])
     mapping_permissions <- tryCatch(
       DBI::dbGetQuery(
         con,
@@ -3905,12 +3586,6 @@ addDiscData <- function(id, language) {
       error = function(e) data.frame(can_write_mappings = FALSE)
     )
     can_manage_mappings <- isTRUE(mapping_permissions$can_write_mappings[[1]])
-    clear_manager_mapping_selection <- function() {
-      manage_mapping_selected(NULL)
-      proxy <- DT::dataTableProxy("manage_mapping_table", session = session)
-      try(DT::selectRows(proxy, NULL), silent = TRUE)
-      invisible(NULL)
-    }
     check_results <- DBI::dbGetQuery(
       con,
       "SELECT has_table_privilege(current_user, 'discrete.results', 'INSERT') AS can_insert"
@@ -3971,7 +3646,7 @@ addDiscData <- function(id, language) {
         "SELECT p.parameter_id,
                 p.param_name,
                 p.sample_fraction,
-                p.result_descriptor,
+                p.reporting_basis, p.result_speciation, p.result_target, p.endpoint, to_jsonb(p.analysis_conditions_required_keys) AS analysis_conditions_required_keys, p.analysis_conditions_required_keys_by_matrix,
                 ul.unit_name AS unit_liquid,
                 us.unit_name AS unit_solid,
                 ug.unit_name AS unit_gas,
@@ -4028,12 +3703,16 @@ addDiscData <- function(id, language) {
          FROM discrete.result_value_types
         ORDER BY result_value_type"
     )
-    result_descriptors <- DBI::dbGetQuery(
+    reporting_bases <- DBI::dbGetQuery(
       con,
-      "SELECT result_descriptor_id, result_descriptor
-         FROM discrete.result_descriptors
-        ORDER BY result_descriptor"
+      "SELECT reporting_basis_id, reporting_basis
+         FROM discrete.reporting_bases
+        ORDER BY reporting_basis"
     )
+    chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(con)
+    output$manual_chemistry <- renderUI({
+      YGwater:::chemistry_metadata_ui(ns, "manual_chem_", chemistry_catalogues)
+    })
     sample_qualifiers <- DBI::dbGetQuery(
       con,
       "SELECT qualifier_type_id, qualifier_type_description
@@ -4252,8 +3931,8 @@ addDiscData <- function(id, language) {
       session,
       "manual_descriptor",
       choices = stats::setNames(
-        result_descriptors$result_descriptor_id,
-        result_descriptors$result_descriptor
+        reporting_bases$reporting_basis_id,
+        reporting_bases$reporting_basis
       )
     )
     parameter_requirement <- function(parameter_id, requirement) {
@@ -4272,33 +3951,28 @@ addDiscData <- function(id, language) {
     validate_parameter_mapping_descriptors <- function(
       parameter_id,
       sample_fraction_id,
-      result_descriptor_id
+      reporting_basis_id,
+      chemistry = list(),
+      matrix_state_id = 1L
     ) {
-      parameter_id <- addDiscData_int(parameter_id)
-      if (
-        is.na(parameter_id) ||
-          !parameter_id %in% params()$parameter_id
-      ) {
-        stop("Choose a valid AquaCache parameter.", call. = FALSE)
-      }
-      if (
-        parameter_requirement(parameter_id, "sample_fraction") &&
-          is.na(addDiscData_int(sample_fraction_id))
-      ) {
-        stop(
-          "Sample fraction is required for the selected parameter.",
-          call. = FALSE
-        )
-      }
-      if (
-        parameter_requirement(parameter_id, "result_descriptor") &&
-          is.na(addDiscData_int(result_descriptor_id))
-      ) {
-        stop(
-          "Descriptor is required for the selected parameter.",
-          call. = FALSE
-        )
-      }
+      row <- as.data.frame(
+        c(
+          list(
+            parameter_id = parameter_id,
+            sample_fraction_id = sample_fraction_id,
+            reporting_basis_id = reporting_basis_id,
+            matrix_state_id = matrix_state_id
+          ),
+          chemistry
+        ),
+        stringsAsFactors = FALSE
+      )
+      AquaCache::validateResultChemistry(
+        NULL,
+        row,
+        parameters = params(),
+        matrix_states = matrix_states
+      )
       invisible(TRUE)
     }
     observeEvent(
@@ -4322,7 +3996,7 @@ addDiscData <- function(id, language) {
           descriptor_placeholder <- if (
             parameter_requirement(
               parameter_id,
-              "result_descriptor"
+              "reporting_basis"
             )
           ) {
             "Required for selected parameter"
@@ -4515,75 +4189,31 @@ addDiscData <- function(id, language) {
         choices = choices,
         selected = selected
       )
-      updateSelectizeInput(
-        session,
-        "manage_import_profile",
-        choices = choices,
-        selected = selected
-      )
     }
     reload_profiles()
+    if (is.null(session$userData$import_setup_revision)) session$userData$import_setup_revision <- reactiveVal(0L)
+    observeEvent(session$userData$import_setup_revision(), {
+      reload_profiles(selected = isolate(input$import_profile))
+      mapping_revision(mapping_revision() + 1L)
+      if (!is.null(data$preview_profile_key)) data$preview_is_stale <- TRUE
+    }, ignoreInit = TRUE)
 
     output$import_profile_status <- renderUI({
       error <- profile_load_error()
       if (!is.null(error)) {
         return(tags$div(class = "alert alert-danger", error))
       }
-      if (!can_manage_profiles) {
-        return(tags$div(
-          class = "text-muted",
-          "Your database role can use workbook formats but cannot create or edit them. Ask an administrator to grant profile-management access."
-        ))
-      }
       if (!nrow(import_profiles())) {
         return(tags$div(
           class = "alert alert-warning",
-          "No workbook formats are saved yet. Use Manage import formats and mappings to create one."
+          "No workbook formats are saved yet. Use Discrete data → Import setup to create one."
         ))
       }
       NULL
     })
 
-    if (!can_manage_profiles) {
-      shinyjs::disable("new_import_profile")
-      shinyjs::disable("copy_import_profile")
-      shinyjs::disable("edit_import_profile")
-    }
-    if (!can_manage_mappings) {
-      shinyjs::disable("manage_new_mapping")
-      shinyjs::disable("manage_save_parameter_mapping")
-      shinyjs::disable("manage_save_location_mapping")
-      shinyjs::disable("manage_save_flag_mapping")
-    }
-    observeEvent(
-      input$import_profile,
-      {
-        if (!identical(input$manage_import_profile, input$import_profile)) {
-          updateSelectizeInput(
-            session,
-            "manage_import_profile",
-            selected = input$import_profile
-          )
-        }
-      },
-      ignoreInit = TRUE
-    )
-    observeEvent(
-      input$manage_import_profile,
-      {
-        if (!identical(input$import_profile, input$manage_import_profile)) {
-          updateSelectizeInput(
-            session,
-            "import_profile",
-            selected = input$manage_import_profile
-          )
-        }
-        clear_manager_mapping_selection()
-      },
-      ignoreInit = TRUE
-    )
     observeEvent(input$open_import_setup, {
-      updateTabsetPanel(session, "workflow_tabs", "manage_import_setup")
+      outputs$change_tab <- "importSetup"
     })
     observe({
       updateSelectizeInput(
@@ -4702,6 +4332,7 @@ addDiscData <- function(id, language) {
       if (is.null(parsed)) {
         parsed <- addDiscData_parse_upload(path, profile)
       }
+      snapshot <- addDiscData_mapping_snapshot(con, profile)
       location_mappings <- AquaCache::getImportLocationMappings(
         con = con,
         source_code = profile$source_code[[1]],
@@ -4721,6 +4352,10 @@ addDiscData <- function(id, language) {
         profile_code = profile$profile_code[[1]]
       )
       parsed <- parsed[names(addDiscData_empty_table())]
+      if (!identical(snapshot, addDiscData_mapping_snapshot(con, profile))) {
+        stop("The mapping revision changed while preparing the preview. Preview the workbook again.")
+      }
+      data$preview_mapping_snapshot <- snapshot
       data$df <- if (preserve_edits) {
         addDiscData_merge_preview_edits(
           parsed,
@@ -4784,6 +4419,7 @@ addDiscData <- function(id, language) {
           )
           data$preview_base <- result$parsed
           data$preview_profile_key <- request$profile_key
+          data$preview_mapping_snapshot <- addDiscData_mapping_snapshot(con, request$profile)
           data$preview_is_stale <- FALSE
           refreshed <- TRUE
         } else if (!is.null(data$preview_profile_key)) {
@@ -4806,6 +4442,7 @@ addDiscData <- function(id, language) {
           "but the selected workbook changed before refresh completed."
         )
       }
+      message <- paste(message, "Review and publish the draft in Import setup before uploading.")
       showNotification(
         message,
         type = if (refreshed || !request$refresh_preview) {
@@ -4949,1567 +4586,6 @@ addDiscData <- function(id, language) {
       },
       ignoreInit = TRUE
     )
-
-    output$new_profile_mapping_fields <- renderUI({
-      parser_family <- addDiscData_first(
-        input$new_profile_parser_family,
-        "long"
-      )
-      specs <- addDiscData_profile_column_specs(parser_family)
-      profile <- new_profile_template()
-      column_map <- addDiscData_profile_value(profile, "column_map", list())
-      fields <- lapply(names(specs), function(name) {
-        value <- column_map[[name]]
-        control <- if (identical(specs[[name]][[2]], "integer")) {
-          numericInput(
-            ns(paste0("new_profile_col_", name)),
-            specs[[name]][[1]],
-            value = addDiscData_int(value),
-            min = 1,
-            step = 1
-          )
-        } else {
-          textInput(
-            ns(paste0("new_profile_col_", name)),
-            specs[[name]][[1]],
-            value = addDiscData_first(value, "")
-          )
-        }
-        column(6, control)
-      })
-      tagList(
-        tags$h5(
-          if (identical(parser_family, "transposed")) {
-            "Source rows and columns"
-          } else {
-            "Source columns and layout"
-          }
-        ),
-        helpText(
-          if (identical(parser_family, "transposed")) {
-            "Enter the worksheet row number (starting at 1) for each sample detail. Enter the worksheet column number (starting at 1) for the parameter name, code, unit, and first sample."
-          } else {
-            "Enter each column heading exactly as it appears in the worksheet."
-          }
-        ),
-        do.call(fluidRow, fields)
-      )
-    })
-
-    output$new_profile_default_fields <- renderUI({
-      profile <- new_profile_template()
-      defaults <- if (is.null(profile)) {
-        list(
-          media_id = 1L,
-          collection_method = 27L,
-          sample_type = 34L,
-          owner = 1L,
-          result_type = 2L,
-          matrix_state_id = 1L,
-          result_value_type = 1L,
-          laboratory = 2L
-        )
-      } else {
-        addDiscData_defaults(profile)
-      }
-      tagList(
-        tags$h5("Imported data defaults"),
-        helpText(
-          "These values fill fields that are not supplied by the workbook. They remain editable in the preview."
-        ),
-        fluidRow(
-          column(
-            4,
-            selectizeInput(
-              ns("new_profile_default_media"),
-              "Media",
-              choices = stats::setNames(media$media_id, media$media_type),
-              selected = defaults$media_id
-            )
-          ),
-          column(
-            4,
-            selectizeInput(
-              ns("new_profile_default_method"),
-              "Collection method",
-              choices = stats::setNames(
-                collection_methods$collection_method_id,
-                collection_methods$collection_method
-              ),
-              selected = defaults$collection_method
-            )
-          ),
-          column(
-            4,
-            selectizeInput(
-              ns("new_profile_default_sample_type"),
-              "Sample type",
-              choices = stats::setNames(
-                sample_types$sample_type_id,
-                sample_types$sample_type
-              ),
-              selected = defaults$sample_type
-            )
-          )
-        ),
-        fluidRow(
-          column(
-            4,
-            selectizeInput(
-              ns("new_profile_default_owner"),
-              "Owner",
-              choices = stats::setNames(
-                organizations$organization_id,
-                organizations$name
-              ),
-              selected = defaults$owner
-            )
-          ),
-          column(
-            4,
-            selectizeInput(
-              ns("new_profile_default_lab"),
-              "Laboratory",
-              choices = stats::setNames(
-                laboratories$lab_id,
-                laboratories$lab_name
-              ),
-              selected = defaults$laboratory
-            )
-          ),
-          column(
-            4,
-            selectizeInput(
-              ns("new_profile_default_result_type"),
-              "Result type",
-              choices = stats::setNames(
-                result_types$result_type_id,
-                result_types$result_type
-              ),
-              selected = defaults$result_type
-            )
-          )
-        ),
-        fluidRow(
-          column(
-            6,
-            selectizeInput(
-              ns("new_profile_default_matrix"),
-              "Matrix state",
-              choices = stats::setNames(
-                matrix_states$matrix_state_id,
-                matrix_states$matrix_state_name
-              ),
-              selected = defaults$matrix_state_id
-            )
-          ),
-          column(
-            6,
-            selectizeInput(
-              ns("new_profile_default_value_type"),
-              "Result value type",
-              choices = stats::setNames(
-                result_value_types$result_value_type_id,
-                result_value_types$result_value_type
-              ),
-              selected = defaults$result_value_type
-            )
-          )
-        )
-      )
-    })
-
-    open_profile_editor <- function(mode = "create") {
-      mode <- match.arg(mode, c("create", "copy", "edit"))
-      edit <- identical(mode, "edit")
-      copy <- identical(mode, "copy")
-      if (!can_manage_profiles) {
-        showNotification(
-          "Your database role cannot modify import profiles.",
-          type = "error"
-        )
-        return()
-      }
-      profiles <- import_profiles()
-      selected_key <- addDiscData_first(input$manage_import_profile, "")
-      selected_row <- which(profiles$profile_key == selected_key)
-      profile <- if (!identical(mode, "create") && length(selected_row) == 1L) {
-        profiles[selected_row, , drop = FALSE]
-      } else {
-        NULL
-      }
-      if (!identical(mode, "create") && is.null(profile)) {
-        showNotification("Select a workbook format first.", type = "warning")
-        return()
-      }
-      timezone_choices <- input_timezone_choices()
-      profile_timezone <- addDiscData_profile_value(profile, "timezone")
-      if (
-        is.null(profile_timezone) ||
-          !length(profile_timezone) ||
-          is.na(profile_timezone[[1]]) ||
-          !nzchar(profile_timezone[[1]]) ||
-          !(profile_timezone[[1]] %in% timezone_choices)
-      ) {
-        profile_timezone <- default_input_timezone()
-      }
-      new_profile_template(profile)
-      new_profile_mode(mode)
-      suggested_code <- if (edit) {
-        profile$profile_code[[1]]
-      } else if (copy) {
-        paste0(profile$profile_code[[1]], "_copy")
-      } else {
-        ""
-      }
-      showModal(modalDialog(
-        title = if (edit) {
-          "Edit workbook format"
-        } else if (copy) {
-          "Create a copy of this workbook format"
-        } else {
-          "Create workbook format"
-        },
-        helpText(
-          if (edit) {
-            "Changes are saved to this workbook format and will be used by future previews. If its file is already previewed, YGwater will refresh the preview and retain your edits. The source and format codes identify the saved format; create a copy if you need different codes."
-          } else if (copy) {
-            "This creates a new workbook format using the selected format's layout and defaults as a starting point. Give the copy a new code."
-          } else {
-            "Describe how the workbook is arranged. Saving creates a new format that will be available in the workbook selector."
-          }
-        ),
-        helpText(
-          "Use a short, stable code for the lab and this workbook format. For example: ALS and tatchun_samples."
-        ),
-        fluidRow(
-          column(
-            4,
-            textInput(
-              ns("new_profile_source_code"),
-              "Lab/source short code",
-              value = addDiscData_profile_value(profile, "source_code", "")
-            )
-          ),
-          column(
-            8,
-            textInput(
-              ns("new_profile_source_name"),
-              "Lab/source name",
-              value = addDiscData_profile_value(profile, "source_name", "")
-            )
-          )
-        ),
-        fluidRow(
-          column(
-            4,
-            textInput(
-              ns("new_profile_code"),
-              "Workbook format code",
-              value = suggested_code
-            )
-          ),
-          column(
-            8,
-            textInput(
-              ns("new_profile_name"),
-              "Workbook format name",
-              value = if (copy) {
-                paste(profile$profile_name[[1]], "copy")
-              } else if (edit) {
-                profile$profile_name[[1]]
-              } else {
-                ""
-              }
-            )
-          )
-        ),
-        fluidRow(
-          column(
-            4,
-            selectInput(
-              ns("new_profile_parser_family"),
-              "Workbook layout",
-              choices = c(
-                "Long table — one result per row" = "long",
-                "Transposed table — one sample per column, one row per analyte" = "transposed",
-                "XLR Detailed Report — lab export" = "xlr"
-              ),
-              selected = if (copy || edit) {
-                addDiscData_parser_family(profile)
-              } else {
-                "long"
-              }
-            )
-          ),
-          column(
-            4,
-            textInput(
-              ns("new_profile_sheet"),
-              "Worksheet name (optional)",
-              value = addDiscData_profile_value(profile, "sheet_name", "")
-            )
-          ),
-          column(
-            4,
-            selectizeInput(
-              ns("new_profile_timezone"),
-              "Sample time zone (UTC offset)",
-              choices = timezone_choices,
-              selected = profile_timezone
-            ),
-            helpText(
-              "This offset is used to convert the workbook's sample times to UTC. Yukon local time is UTC-07:00."
-            )
-          )
-        ),
-        fluidRow(
-          column(
-            4,
-            numericInput(
-              ns("new_profile_header_row"),
-              "Column header row (long-table layout)",
-              value = addDiscData_int(
-                addDiscData_profile_value(profile, "header_row", 1L),
-                1L
-              ),
-              min = 1,
-              step = 1
-            )
-          )
-        ),
-        helpText(
-          "For long-table workbooks, this row contains the column headings; rows above it are skipped. Row 1 is the default."
-        ),
-        helpText(
-          "Choose the layout from the worksheet's shape, not from the lab name. ",
-          tags$a(
-            "Open the visual workbook layout guide",
-            href = "html/discrete-workbook-layouts.html",
-            target = "_blank",
-            rel = "noopener noreferrer"
-          )
-        ),
-        uiOutput(ns("new_profile_mapping_fields")),
-        uiOutput(ns("new_profile_default_fields")),
-        textAreaInput(
-          ns("new_profile_description"),
-          "Description",
-          value = addDiscData_profile_value(
-            profile,
-            "profile_description",
-            ""
-          )
-        ),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(
-            ns("save_import_profile"),
-            if (edit) "Save workbook format" else "Create workbook format"
-          )
-        ),
-        size = "l",
-        easyClose = FALSE
-      ))
-    }
-    observeEvent(input$new_import_profile, open_profile_editor("create"))
-    observeEvent(input$copy_import_profile, open_profile_editor("copy"))
-    observeEvent(input$edit_import_profile, open_profile_editor("edit"))
-
-    observeEvent(input$save_import_profile, {
-      tryCatch(
-        {
-          profile <- new_profile_template()
-          source_code <- toupper(trimws(addDiscData_first(
-            input$new_profile_source_code,
-            ""
-          )))
-          source_name <- trimws(addDiscData_first(
-            input$new_profile_source_name,
-            ""
-          ))
-          profile_code <- tolower(trimws(addDiscData_first(
-            input$new_profile_code,
-            ""
-          )))
-          profile_name <- trimws(addDiscData_first(input$new_profile_name, ""))
-          profile_mode <- new_profile_mode()
-          if (!grepl("^[a-z0-9][a-z0-9_]*$", profile_code)) {
-            stop(
-              "Workbook format code can contain lowercase letters, numbers, and underscores only."
-            )
-          }
-          if (
-            !nzchar(source_code) ||
-              !nzchar(source_name) ||
-              !nzchar(profile_name)
-          ) {
-            stop("Source code, source name, and profile name are required.")
-          }
-          new_profile_key <- addDiscData_profile_key(source_code, profile_code)
-          original_profile_key <- if (identical(profile_mode, "edit")) {
-            addDiscData_profile_key(
-              addDiscData_profile_value(profile, "source_code", ""),
-              addDiscData_profile_value(profile, "profile_code", "")
-            )
-          } else {
-            character()
-          }
-          if (
-            identical(profile_mode, "edit") &&
-              !identical(new_profile_key, original_profile_key)
-          ) {
-            stop(
-              "The source and format codes identify this saved format. Create a copy to use different codes."
-            )
-          }
-          if (
-            !identical(profile_mode, "edit") &&
-              new_profile_key %in% import_profiles()$profile_key
-          ) {
-            stop(
-              "That lab/source already has a workbook format with this code."
-            )
-          }
-          parser_family <- addDiscData_first(
-            input$new_profile_parser_family,
-            "long"
-          )
-          if (!(parser_family %in% c("long", "transposed", "xlr"))) {
-            stop("Select a supported workbook layout.")
-          }
-          header_row_default <- addDiscData_int(
-            addDiscData_profile_value(profile, "header_row", 1L),
-            1L
-          )
-          header_row <- addDiscData_int(
-            input$new_profile_header_row,
-            header_row_default
-          )
-          if (is.na(header_row) || header_row < 1L) {
-            stop("Column header row must be 1 or greater.")
-          }
-          column_map <- addDiscData_profile_column_map(
-            input,
-            parser_family
-          )
-          required_mapping_fields <- if (
-            identical(parser_family, "transposed")
-          ) {
-            c(
-              "lab_sample_row",
-              "station_code_row",
-              "sample_date_row",
-              "parameter_code_column",
-              "unit_column",
-              "first_sample_column"
-            )
-          } else if (identical(parser_family, "xlr")) {
-            c(
-              "station_code",
-              "sample_date",
-              "lab_sample_id",
-              "parameter_name",
-              "unit",
-              "result"
-            )
-          } else {
-            c(
-              "station_code",
-              "sample_date",
-              "lab_sample_id",
-              "parameter_code",
-              "unit",
-              "result"
-            )
-          }
-          missing_mapping_fields <- setdiff(
-            required_mapping_fields,
-            names(column_map)
-          )
-          if (length(missing_mapping_fields)) {
-            stop(
-              "Complete the required source layout fields: ",
-              paste(missing_mapping_fields, collapse = ", "),
-              "."
-            )
-          }
-          defaults <- list(
-            media_id = addDiscData_int(input$new_profile_default_media, 1L),
-            collection_method = addDiscData_int(
-              input$new_profile_default_method,
-              27L
-            ),
-            sample_type = addDiscData_int(
-              input$new_profile_default_sample_type,
-              34L
-            ),
-            owner = addDiscData_int(input$new_profile_default_owner, 1L),
-            result_type = addDiscData_int(
-              input$new_profile_default_result_type,
-              2L
-            ),
-            matrix_state_id = addDiscData_int(
-              input$new_profile_default_matrix,
-              1L
-            ),
-            result_value_type = addDiscData_int(
-              input$new_profile_default_value_type,
-              1L
-            ),
-            laboratory = addDiscData_int(input$new_profile_default_lab, 2L)
-          )
-          validation_rules <- addDiscData_profile_value(
-            profile,
-            "validation_rules",
-            list()
-          )
-          validation_rules$parser_family <- parser_family
-          DBI::dbWithTransaction(con, {
-            AquaCache::upsertImportProfile(
-              con = con,
-              source_code = source_code,
-              source_name = source_name,
-              source_description = addDiscData_profile_value(
-                profile,
-                "source_description"
-              ),
-              profile_code = profile_code,
-              profile_name = profile_name,
-              profile_description = trimws(addDiscData_first(
-                input$new_profile_description,
-                ""
-              )),
-              file_type = addDiscData_profile_value(
-                profile,
-                "file_type",
-                "xlsx"
-              ),
-              parser_type = if (identical(parser_family, "transposed")) {
-                "wide"
-              } else {
-                "long"
-              },
-              sheet_strategy = addDiscData_profile_value(
-                profile,
-                "sheet_strategy",
-                "name_or_first"
-              ),
-              sheet_name = trimws(addDiscData_first(
-                input$new_profile_sheet,
-                ""
-              )),
-              sheet_index = addDiscData_profile_value(profile, "sheet_index"),
-              header_row = header_row,
-              units_row = addDiscData_profile_value(profile, "units_row"),
-              parameter_row = addDiscData_profile_value(
-                profile,
-                "parameter_row"
-              ),
-              data_start_row = addDiscData_profile_value(
-                profile,
-                "data_start_row",
-                2L
-              ),
-              datetime_origin = addDiscData_profile_value(
-                profile,
-                "datetime_origin",
-                "excel_1900"
-              ),
-              timezone = addDiscData_first(
-                input$new_profile_timezone,
-                "America/Whitehorse"
-              ),
-              column_map = column_map,
-              wide_config = addDiscData_profile_value(
-                profile,
-                "wide_config",
-                list()
-              ),
-              defaults = defaults,
-              sample_identity = addDiscData_profile_value(
-                profile,
-                "sample_identity",
-                c(
-                  "location_id",
-                  "sub_location_id",
-                  "media_id",
-                  "z",
-                  "datetime",
-                  "sample_type",
-                  "collection_method"
-                )
-              ),
-              result_identity = addDiscData_profile_value(
-                profile,
-                "result_identity",
-                c(
-                  "result_type",
-                  "parameter_id",
-                  "matrix_state_id",
-                  "sample_fraction_id",
-                  "result_value_type",
-                  "result_descriptor_id",
-                  "protocol_method",
-                  "laboratory",
-                  "analysis_datetime"
-                )
-              ),
-              validation_rules = validation_rules,
-              active = if (identical(profile_mode, "edit")) {
-                isTRUE(addDiscData_profile_value(profile, "active", TRUE))
-              } else {
-                TRUE
-              },
-              note = "Created from YGwater add discrete data."
-            )
-          })
-          selected_after_save <- if (identical(profile_mode, "edit")) {
-            new_profile_key
-          } else {
-            addDiscData_first(input$import_profile, new_profile_key)
-          }
-          reload_profiles(selected = selected_after_save)
-          updated_profile <- import_profiles()[
-            import_profiles()$profile_key == new_profile_key,
-            ,
-            drop = FALSE
-          ]
-          preview_refresh_error <- NULL
-          if (
-            identical(data$preview_profile_key, new_profile_key) &&
-              nrow(updated_profile) &&
-              !is.null(data$raw_file_path) &&
-              identical(input$entry_mode, "file")
-          ) {
-            preview_refresh_error <- tryCatch(
-              {
-                refreshed <- refresh_current_preview(
-                  updated_profile,
-                  preserve_edits = TRUE
-                )
-                if (isTRUE(refreshed)) {
-                  NULL
-                } else {
-                  "The earlier upload is no longer available. Select it again and preview it."
-                }
-              },
-              error = function(e) e$message
-            )
-          }
-          new_profile_template(NULL)
-          removeModal()
-          showNotification(
-            if (!is.null(preview_refresh_error)) {
-              paste(
-                "Workbook format saved, but the current preview could not be refreshed:",
-                preview_refresh_error
-              )
-            } else if (identical(profile_mode, "edit")) {
-              "Workbook format updated."
-            } else {
-              "Workbook format created."
-            },
-            type = if (is.null(preview_refresh_error)) "message" else "warning"
-          )
-        },
-        error = function(e) {
-          showNotification(
-            paste("Saving workbook format failed:", e$message),
-            type = "error"
-          )
-        }
-      )
-    })
-
-    selected_manage_profile <- reactive({
-      profiles <- import_profiles()
-      req(nrow(profiles), input$manage_import_profile)
-      hit <- profiles[
-        profiles$profile_key == input$manage_import_profile,
-        ,
-        drop = FALSE
-      ]
-      validate(need(nrow(hit) == 1L, "Select a workbook format."))
-      hit
-    })
-    manager_text <- function(value, default = "") {
-      if (is.null(value) || !length(value) || is.na(value[[1]])) {
-        return(default)
-      }
-      as.character(value[[1]])
-    }
-
-    output$manage_import_profile_status <- renderUI({
-      error <- profile_load_error()
-      if (!is.null(error)) {
-        return(tags$div(class = "alert alert-danger", error))
-      }
-      if (!can_manage_profiles) {
-        return(tags$div(
-          class = "text-muted",
-          "Your database role can use workbook formats but cannot create or edit them."
-        ))
-      }
-      if (!nrow(import_profiles())) {
-        return(tags$div(
-          class = "alert alert-warning",
-          "No workbook formats are saved. Create one here before managing mappings."
-        ))
-      }
-      NULL
-    })
-
-    output$manage_mapping_permissions <- renderUI({
-      error <- manage_mapping_error()
-      if (!is.null(error)) {
-        return(tags$div(class = "alert alert-danger", error))
-      }
-      if (!can_manage_mappings) {
-        return(tags$div(
-          class = "text-muted",
-          "You can inspect saved mappings, but your database role cannot create or change them."
-        ))
-      }
-      NULL
-    })
-
-    observe({
-      has_profile <- nrow(import_profiles()) > 0L
-      if (can_manage_profiles && has_profile) {
-        shinyjs::enable("copy_import_profile")
-        shinyjs::enable("edit_import_profile")
-      } else {
-        shinyjs::disable("copy_import_profile")
-        shinyjs::disable("edit_import_profile")
-      }
-      if (can_manage_mappings && has_profile) {
-        shinyjs::enable("manage_new_mapping")
-        shinyjs::enable("manage_save_parameter_mapping")
-        shinyjs::enable("manage_save_location_mapping")
-        shinyjs::enable("manage_save_flag_mapping")
-      } else {
-        shinyjs::disable("manage_new_mapping")
-        shinyjs::disable("manage_save_parameter_mapping")
-        shinyjs::disable("manage_save_location_mapping")
-        shinyjs::disable("manage_save_flag_mapping")
-      }
-    })
-
-    observe({
-      parameter_rows <- params()
-      updateSelectizeInput(
-        session,
-        "manage_parameter_id",
-        choices = addDiscData_parameter_choices(parameter_rows),
-        selected = ""
-      )
-      updateSelectizeInput(
-        session,
-        "manage_result_type",
-        choices = stats::setNames(
-          as.character(result_types$result_type_id),
-          result_types$result_type
-        ),
-        selected = "2"
-      )
-      updateSelectizeInput(
-        session,
-        "manage_matrix_state",
-        choices = stats::setNames(
-          as.character(matrix_states$matrix_state_id),
-          matrix_states$matrix_state_name
-        ),
-        selected = "1"
-      )
-      updateSelectizeInput(
-        session,
-        "manage_sample_fraction",
-        choices = c(
-          "None" = "",
-          stats::setNames(
-            as.character(sample_fractions$sample_fraction_id),
-            sample_fractions$sample_fraction
-          )
-        ),
-        selected = ""
-      )
-      updateSelectizeInput(
-        session,
-        "manage_value_type",
-        choices = stats::setNames(
-          as.character(result_value_types$result_value_type_id),
-          result_value_types$result_value_type
-        ),
-        selected = "1"
-      )
-      updateSelectizeInput(
-        session,
-        "manage_descriptor",
-        choices = c(
-          "None" = "",
-          stats::setNames(
-            as.character(result_descriptors$result_descriptor_id),
-            result_descriptors$result_descriptor
-          )
-        ),
-        selected = ""
-      )
-      updateSelectInput(
-        session,
-        "manage_flag_condition",
-        choices = c(
-          "None" = "",
-          stats::setNames(
-            as.character(result_conditions$result_condition_id),
-            result_conditions$result_condition
-          )
-        )
-      )
-      updateSelectizeInput(
-        session,
-        "manage_location_id",
-        choices = addDiscData_location_choices(
-          locations(),
-          include_blank = TRUE
-        ),
-        selected = ""
-      )
-      updateSelectizeInput(
-        session,
-        "manage_sub_location_id",
-        choices = c("None" = ""),
-        selected = ""
-      )
-    })
-
-    observeEvent(
-      input$manage_location_id,
-      {
-        location_id <- addDiscData_int(input$manage_location_id)
-        available <- if (is.na(location_id)) {
-          sub_locations[FALSE, , drop = FALSE]
-        } else {
-          sub_locations[
-            sub_locations$location_id == location_id,
-            ,
-            drop = FALSE
-          ]
-        }
-        updateSelectizeInput(
-          session,
-          "manage_sub_location_id",
-          choices = c(
-            "None" = "",
-            stats::setNames(
-              as.character(available$sub_location_id),
-              available$sub_location_name
-            )
-          )
-        )
-      },
-      ignoreInit = TRUE
-    )
-
-    manage_mapping_rows <- reactive({
-      mapping_revision()
-      manage_mapping_error(NULL)
-      profile <- tryCatch(
-        selected_manage_profile(),
-        error = function(e) NULL
-      )
-      if (is.null(profile) || !nrow(profile)) {
-        return(data.frame())
-      }
-      rows <- tryCatch(
-        {
-          switch(
-            input$manage_mapping_type,
-            parameter = AquaCache::getImportParameterMappings(
-              con,
-              source_code = profile$source_code[[1]],
-              profile_code = profile$profile_code[[1]],
-              active = NULL,
-              include_draft = TRUE
-            ),
-            location = AquaCache::getImportLocationMappings(
-              con,
-              source_code = profile$source_code[[1]],
-              profile_code = profile$profile_code[[1]],
-              active = NULL,
-              include_draft = TRUE
-            ),
-            result_flag = AquaCache::getImportResultFlagMappings(
-              con,
-              source_code = profile$source_code[[1]],
-              profile_code = profile$profile_code[[1]],
-              active = NULL,
-              include_draft = TRUE
-            ),
-            data.frame()
-          )
-        },
-        error = function(e) {
-          manage_mapping_error(e$message)
-          data.frame()
-        }
-      )
-      if (!isTRUE(input$manage_show_inactive) && nrow(rows)) {
-        active <- as.logical(rows$active)
-        rows <- rows[!is.na(active) & active, , drop = FALSE]
-      }
-      rows
-    })
-
-    output$manage_mapping_table <- DT::renderDT(
-      {
-        rows <- manage_mapping_rows()
-        if (!nrow(rows)) {
-          message <- if (!is.null(manage_mapping_error())) {
-            "Mappings could not be loaded. See the message below."
-          } else {
-            "No mappings are saved for this workbook format yet."
-          }
-          return(DT::datatable(
-            data.frame(Message = message),
-            rownames = FALSE,
-            selection = "none",
-            options = list(
-              dom = "t"
-            )
-          ))
-        }
-
-        scope <- ifelse(
-          as.logical(rows$profile_specific),
-          "This workbook format",
-          "All formats for this source"
-        )
-        active <- ifelse(as.logical(rows$active), "Active", "Inactive")
-        if (identical(input$manage_mapping_type, "parameter")) {
-          source_match <- lapply(rows$source_match, function(value) {
-            tryCatch(
-              jsonlite::fromJSON(value, simplifyVector = FALSE),
-              error = function(e) list()
-            )
-          })
-          source_code <- vapply(
-            source_match,
-            function(value) {
-              as.character(addDiscData_first(
-                value$parameter_code,
-                addDiscData_first(value$input_param, "")
-              ))
-            },
-            character(1)
-          )
-          source_unit <- vapply(
-            source_match,
-            function(value) {
-              as.character(addDiscData_first(
-                value$unit,
-                addDiscData_first(value$input_unit, "")
-              ))
-            },
-            character(1)
-          )
-          parameter_index <- match(rows$parameter_id, params()$parameter_id)
-          summary <- data.frame(
-            Scope = scope,
-            `Source parameter code` = source_code,
-            `Source unit` = source_unit,
-            `AquaCache parameter` = params()$param_name[parameter_index],
-            Conversion = rows$conversion,
-            Offset = rows$result_offset,
-            Priority = rows$priority,
-            Status = active,
-            check.names = FALSE
-          )
-        } else if (identical(input$manage_mapping_type, "location")) {
-          location_index <- match(rows$location_id, locations()$location_id)
-          sublocation_index <- match(
-            rows$sub_location_id,
-            sub_locations$sub_location_id
-          )
-          summary <- data.frame(
-            Scope = scope,
-            `Source location code` = rows$source_location_code,
-            `Source location name` = rows$source_location_name,
-            `AquaCache location` = addDiscData_location_labels(locations())[
-              location_index
-            ],
-            `Sub-location` = sub_locations$sub_location_name[sublocation_index],
-            Priority = rows$priority,
-            Status = active,
-            check.names = FALSE
-          )
-        } else {
-          summary <- data.frame(
-            Scope = scope,
-            `Source flag column` = ifelse(
-              addDiscData_present(rows$source_flag_column),
-              rows$source_flag_column,
-              "Any column"
-            ),
-            `Source flag value` = rows$source_flag_value,
-            `Result condition` = rows$result_condition_name,
-            `Handling` = rows$result_action,
-            Priority = rows$priority,
-            Status = active,
-            check.names = FALSE
-          )
-        }
-        summary[is.na(summary)] <- ""
-        addDiscData_style_origin_columns(
-          DT::datatable(
-            summary,
-            rownames = FALSE,
-            selection = "single",
-            options = list(
-              pageLength = 10,
-              scrollX = TRUE,
-              initComplete = htmlwidgets::JS(
-                "function(settings, json) {",
-                "$(this.api().table().header()).css({'font-size': '90%'});",
-                "$(this.api().table().body()).css({'font-size': '80%'});",
-                "}"
-              )
-            )
-          ),
-          source_columns = if (
-            identical(input$manage_mapping_type, "parameter")
-          ) {
-            c("Source parameter code", "Source unit")
-          } else if (identical(input$manage_mapping_type, "location")) {
-            c("Source location code", "Source location name")
-          } else {
-            c("Source flag column", "Source flag value")
-          },
-          target_columns = if (
-            identical(input$manage_mapping_type, "parameter")
-          ) {
-            c(
-              "AquaCache parameter",
-              "Conversion",
-              "Offset"
-            )
-          } else if (identical(input$manage_mapping_type, "location")) {
-            c("AquaCache location", "Sub-location")
-          } else {
-            c("Result condition", "Handling")
-          }
-        )
-      },
-      server = FALSE
-    )
-
-    selected_manage_mapping <- reactive({
-      rows <- manage_mapping_rows()
-      selected <- input$manage_mapping_table_rows_selected
-      if (!nrow(rows) || length(selected) != 1L || selected > nrow(rows)) {
-        return(NULL)
-      }
-      rows[selected, , drop = FALSE]
-    })
-
-    observeEvent(
-      input$manage_mapping_type,
-      {
-        clear_manager_mapping_selection()
-      },
-      ignoreInit = TRUE
-    )
-
-    observeEvent(
-      input$manage_mapping_table_rows_selected,
-      {
-        row <- selected_manage_mapping()
-        if (is.null(row)) {
-          return()
-        }
-        manage_mapping_selected(row)
-        scope <- if (isTRUE(as.logical(row$profile_specific[[1]]))) {
-          "profile"
-        } else {
-          "source"
-        }
-        active <- isTRUE(as.logical(row$active[[1]]))
-        priority <- addDiscData_int(row$priority[[1]], 50L)
-        note <- manager_text(row$note[[1]])
-        if (identical(input$manage_mapping_type, "parameter")) {
-          source_match <- tryCatch(
-            jsonlite::fromJSON(row$source_match[[1]], simplifyVector = FALSE),
-            error = function(e) list()
-          )
-          updateTextInput(
-            session,
-            "manage_parameter_code",
-            value = manager_text(
-              source_match$parameter_code,
-              manager_text(source_match$input_param)
-            )
-          )
-          updateTextInput(
-            session,
-            "manage_parameter_unit",
-            value = manager_text(
-              source_match$unit,
-              manager_text(source_match$input_unit)
-            )
-          )
-          updateSelectInput(session, "manage_mapping_scope", selected = scope)
-          updateSelectizeInput(
-            session,
-            "manage_parameter_id",
-            selected = as.character(row$parameter_id[[1]])
-          )
-          updateSelectizeInput(
-            session,
-            "manage_result_type",
-            selected = as.character(row$result_type[[1]])
-          )
-          updateSelectizeInput(
-            session,
-            "manage_matrix_state",
-            selected = as.character(row$matrix_state_id[[1]])
-          )
-          updateSelectizeInput(
-            session,
-            "manage_sample_fraction",
-            selected = if (is.na(row$sample_fraction_id[[1]])) {
-              ""
-            } else {
-              as.character(row$sample_fraction_id[[1]])
-            }
-          )
-          updateSelectizeInput(
-            session,
-            "manage_value_type",
-            selected = as.character(row$result_value_type[[1]])
-          )
-          updateSelectizeInput(
-            session,
-            "manage_descriptor",
-            selected = if (is.na(row$result_descriptor_id[[1]])) {
-              ""
-            } else {
-              as.character(row$result_descriptor_id[[1]])
-            }
-          )
-          updateNumericInput(session, "manage_priority", value = priority)
-          updateNumericInput(
-            session,
-            "manage_conversion",
-            value = addDiscData_num(row$conversion[[1]], 1)
-          )
-          updateNumericInput(
-            session,
-            "manage_result_offset",
-            value = addDiscData_num(row$result_offset[[1]], 0)
-          )
-          updateCheckboxInput(session, "manage_active", value = active)
-          updateTextAreaInput(session, "manage_mapping_note", value = note)
-        } else if (identical(input$manage_mapping_type, "location")) {
-          updateTextInput(
-            session,
-            "manage_location_code",
-            value = row$source_location_code[[1]]
-          )
-          updateTextInput(
-            session,
-            "manage_location_name",
-            value = manager_text(row$source_location_name[[1]])
-          )
-          updateSelectInput(session, "manage_location_scope", selected = scope)
-          updateSelectizeInput(
-            session,
-            "manage_location_id",
-            selected = as.character(row$location_id[[1]])
-          )
-          updateSelectizeInput(
-            session,
-            "manage_sub_location_id",
-            selected = if (is.na(row$sub_location_id[[1]])) {
-              ""
-            } else {
-              as.character(row$sub_location_id[[1]])
-            }
-          )
-          updateNumericInput(
-            session,
-            "manage_location_priority",
-            value = priority
-          )
-          updateCheckboxInput(session, "manage_location_active", value = active)
-          updateTextAreaInput(session, "manage_location_note", value = note)
-        } else {
-          updateTextInput(
-            session,
-            "manage_flag_column",
-            value = manager_text(row$source_flag_column[[1]])
-          )
-          updateTextInput(
-            session,
-            "manage_flag_value",
-            value = row$source_flag_value[[1]]
-          )
-          updateSelectInput(session, "manage_flag_scope", selected = scope)
-          updateSelectInput(
-            session,
-            "manage_flag_action",
-            selected = row$result_action[[1]]
-          )
-          updateSelectInput(
-            session,
-            "manage_flag_condition",
-            selected = if (is.na(row$result_condition_id[[1]])) {
-              ""
-            } else {
-              as.character(row$result_condition_id[[1]])
-            }
-          )
-          updateSelectInput(
-            session,
-            "manage_flag_threshold_source",
-            selected = row$result_condition_value_source[[1]]
-          )
-          updateNumericInput(
-            session,
-            "manage_flag_threshold",
-            value = row$result_condition_value_literal[[1]]
-          )
-          updateNumericInput(session, "manage_flag_priority", value = priority)
-          updateCheckboxInput(session, "manage_flag_active", value = active)
-          updateTextInput(
-            session,
-            "manage_flag_note_template",
-            value = manager_text(row$note_template[[1]])
-          )
-          updateTextAreaInput(session, "manage_flag_note", value = note)
-        }
-      },
-      ignoreInit = TRUE
-    )
-
-    observeEvent(input$manage_new_mapping, {
-      clear_manager_mapping_selection()
-      updateTextInput(session, "manage_parameter_code", value = "")
-      updateTextInput(session, "manage_parameter_unit", value = "")
-      updateSelectInput(session, "manage_mapping_scope", selected = "profile")
-      updateSelectizeInput(session, "manage_parameter_id", selected = "")
-      updateSelectizeInput(session, "manage_result_type", selected = "2")
-      updateSelectizeInput(session, "manage_matrix_state", selected = "1")
-      updateSelectizeInput(session, "manage_sample_fraction", selected = "")
-      updateSelectizeInput(session, "manage_value_type", selected = "1")
-      updateSelectizeInput(session, "manage_descriptor", selected = "")
-      updateNumericInput(session, "manage_priority", value = 50)
-      updateNumericInput(session, "manage_conversion", value = 1)
-      updateNumericInput(session, "manage_result_offset", value = 0)
-      updateCheckboxInput(session, "manage_active", value = TRUE)
-      updateTextAreaInput(session, "manage_mapping_note", value = "")
-      updateTextInput(session, "manage_location_code", value = "")
-      updateTextInput(session, "manage_location_name", value = "")
-      updateSelectInput(session, "manage_location_scope", selected = "profile")
-      updateSelectizeInput(session, "manage_location_id", selected = "")
-      updateSelectizeInput(session, "manage_sub_location_id", selected = "")
-      updateNumericInput(session, "manage_location_priority", value = 50)
-      updateCheckboxInput(session, "manage_location_active", value = TRUE)
-      updateTextAreaInput(session, "manage_location_note", value = "")
-      updateTextInput(session, "manage_flag_column", value = "")
-      updateTextInput(session, "manage_flag_value", value = "")
-      updateSelectInput(session, "manage_flag_scope", selected = "profile")
-      updateSelectInput(session, "manage_flag_action", selected = "keep_result")
-      updateSelectInput(session, "manage_flag_condition", selected = "")
-      updateSelectInput(
-        session,
-        "manage_flag_threshold_source",
-        selected = "none"
-      )
-      updateNumericInput(session, "manage_flag_threshold", value = NA_real_)
-      updateNumericInput(session, "manage_flag_priority", value = 50)
-      updateCheckboxInput(session, "manage_flag_active", value = TRUE)
-      updateTextInput(session, "manage_flag_note_template", value = "")
-      updateTextAreaInput(session, "manage_flag_note", value = "")
-    })
-
-    save_manager_mapping <- function(kind) {
-      if (!can_manage_mappings) {
-        stop("Your database role cannot modify import mappings.")
-      }
-      profile <- selected_manage_profile()
-      selected <- manage_mapping_selected()
-      scope_input <- switch(
-        kind,
-        parameter = "manage_mapping_scope",
-        location = "manage_location_scope",
-        result_flag = "manage_flag_scope"
-      )
-      scope <- addDiscData_first(input[[scope_input]], "profile")
-      profile_code <- if (identical(scope, "profile")) {
-        profile$profile_code[[1]]
-      } else if (identical(scope, "source")) {
-        NULL
-      } else {
-        stop("Choose where this mapping should apply.")
-      }
-      source_name <- manager_text(
-        profile$source_name[[1]],
-        profile$source_code[[1]]
-      )
-      if (identical(kind, "parameter")) {
-        parameter_code <- trimws(addDiscData_first(
-          input$manage_parameter_code,
-          ""
-        ))
-        unit <- trimws(addDiscData_first(input$manage_parameter_unit, ""))
-        parameter_id <- addDiscData_int(input$manage_parameter_id)
-        if (!nzchar(parameter_code)) {
-          stop("Enter a source parameter code.")
-        }
-        if (is.na(parameter_id)) {
-          stop("Choose an AquaCache parameter.")
-        }
-        sample_fraction_id <- addDiscData_int(input$manage_sample_fraction)
-        result_descriptor_id <- addDiscData_int(input$manage_descriptor)
-        validate_parameter_mapping_descriptors(
-          parameter_id,
-          sample_fraction_id,
-          result_descriptor_id
-        )
-        conversion <- addDiscData_num(input$manage_conversion, 1)
-        result_offset <- addDiscData_num(input$manage_result_offset, 0)
-        if (!is.finite(conversion) || !is.finite(result_offset)) {
-          stop("Enter finite conversion and offset values.")
-        }
-        AquaCache::upsertImportParameterMappings(
-          con = con,
-          source_code = profile$source_code[[1]],
-          source_name = source_name,
-          profile_code = profile_code,
-          mappings = data.frame(
-            parameter_code = parameter_code,
-            unit = unit,
-            parameter_id = parameter_id,
-            result_type = addDiscData_int(input$manage_result_type, 2L),
-            sample_fraction_id = sample_fraction_id,
-            result_value_type = addDiscData_int(input$manage_value_type, 1L),
-            result_descriptor_id = result_descriptor_id,
-            matrix_state_id = addDiscData_int(input$manage_matrix_state, 1L),
-            conversion = conversion,
-            result_offset = result_offset,
-            priority = addDiscData_int(input$manage_priority, 50L),
-            active = isTRUE(input$manage_active),
-            note = addDiscData_first(input$manage_mapping_note, NA_character_),
-            stringsAsFactors = FALSE
-          ),
-          match_columns = c("parameter_code", "unit"),
-          publish = TRUE
-        )
-      } else if (identical(kind, "location")) {
-        location_code <- trimws(addDiscData_first(
-          input$manage_location_code,
-          ""
-        ))
-        location_id <- addDiscData_int(input$manage_location_id)
-        sub_location_id <- addDiscData_int(input$manage_sub_location_id)
-        if (!nzchar(location_code)) {
-          stop("Enter a source location code.")
-        }
-        if (is.na(location_id)) {
-          stop("Choose an AquaCache location.")
-        }
-        if (
-          !is.na(sub_location_id) &&
-            !any(
-              sub_locations$sub_location_id == sub_location_id &
-                sub_locations$location_id == location_id
-            )
-        ) {
-          stop("Choose a sub-location that belongs to the selected location.")
-        }
-        source_location_name <- trimws(addDiscData_first(
-          input$manage_location_name,
-          ""
-        ))
-        if (!nzchar(source_location_name)) {
-          source_location_name <- NA_character_
-        }
-        AquaCache::upsertImportLocationMappings(
-          con = con,
-          source_code = profile$source_code[[1]],
-          source_name = source_name,
-          profile_code = profile_code,
-          mappings = data.frame(
-            source_location_code = location_code,
-            source_location_name = source_location_name,
-            location_id = location_id,
-            sub_location_id = sub_location_id,
-            priority = addDiscData_int(input$manage_location_priority, 50L),
-            active = isTRUE(input$manage_location_active),
-            note = addDiscData_first(input$manage_location_note, NA_character_),
-            stringsAsFactors = FALSE
-          ),
-          publish = TRUE
-        )
-      } else {
-        flag_value <- trimws(addDiscData_first(input$manage_flag_value, ""))
-        if (!nzchar(flag_value)) {
-          stop("Enter a source result-flag value.")
-        }
-        threshold_source <- addDiscData_first(
-          input$manage_flag_threshold_source,
-          "none"
-        )
-        threshold <- if (identical(threshold_source, "literal")) {
-          addDiscData_num(input$manage_flag_threshold)
-        } else {
-          NA_real_
-        }
-        if (identical(threshold_source, "literal") && !is.finite(threshold)) {
-          stop("Enter a finite condition value.")
-        }
-        flag_column <- trimws(addDiscData_first(input$manage_flag_column, ""))
-        if (!nzchar(flag_column)) {
-          flag_column <- NA_character_
-        }
-        flag_note <- trimws(addDiscData_first(
-          input$manage_flag_note_template,
-          ""
-        ))
-        if (!nzchar(flag_note)) {
-          flag_note <- NA_character_
-        }
-        AquaCache::upsertImportResultFlagMappings(
-          con = con,
-          source_code = profile$source_code[[1]],
-          source_name = source_name,
-          profile_code = profile_code,
-          mappings = data.frame(
-            source_flag_column = flag_column,
-            source_flag_value = flag_value,
-            result_condition_id = addDiscData_int(input$manage_flag_condition),
-            result_condition_value_source = threshold_source,
-            result_condition_value_literal = threshold,
-            result_action = addDiscData_first(
-              input$manage_flag_action,
-              "keep_result"
-            ),
-            note_template = flag_note,
-            priority = addDiscData_int(input$manage_flag_priority, 50L),
-            active = isTRUE(input$manage_flag_active),
-            note = addDiscData_first(input$manage_flag_note, NA_character_),
-            stringsAsFactors = FALSE
-          ),
-          publish = TRUE
-        )
-      }
-
-      mapping_revision(mapping_revision() + 1L)
-      clear_manager_mapping_selection()
-      current_profile <- import_profiles()[
-        import_profiles()$profile_key == data$preview_profile_key,
-        ,
-        drop = FALSE
-      ]
-      applies_to_preview <- nrow(current_profile) &&
-        identical(current_profile$source_code[[1]], profile$source_code[[1]]) &&
-        (identical(scope, "source") ||
-          identical(
-            current_profile$profile_code[[1]],
-            profile$profile_code[[1]]
-          ))
-      preview_refresh_error <- NULL
-      if (isTRUE(applies_to_preview) && identical(input$entry_mode, "file")) {
-        preview_refresh_error <- tryCatch(
-          {
-            refreshed <- refresh_current_preview(
-              current_profile,
-              preserve_edits = TRUE
-            )
-            if (isTRUE(refreshed)) {
-              NULL
-            } else {
-              "The earlier upload is no longer available. Select it again and preview it."
-            }
-          },
-          error = function(e) e$message
-        )
-      }
-      preview_refresh_error
-    }
-
-    observeEvent(input$manage_save_parameter_mapping, {
-      tryCatch(
-        {
-          refresh_error <- save_manager_mapping("parameter")
-          showNotification(
-            if (is.null(refresh_error)) {
-              "Parameter mapping saved and published."
-            } else {
-              paste(
-                "Parameter mapping saved, but the current preview could not be refreshed:",
-                refresh_error
-              )
-            },
-            type = if (is.null(refresh_error)) "message" else "warning"
-          )
-        },
-        error = function(e) {
-          showNotification(
-            paste("Saving parameter mapping failed:", e$message),
-            type = "error"
-          )
-        }
-      )
-    })
-    observeEvent(input$manage_save_location_mapping, {
-      tryCatch(
-        {
-          refresh_error <- save_manager_mapping("location")
-          showNotification(
-            if (is.null(refresh_error)) {
-              "Location mapping saved and published."
-            } else {
-              paste(
-                "Location mapping saved, but the current preview could not be refreshed:",
-                refresh_error
-              )
-            },
-            type = if (is.null(refresh_error)) "message" else "warning"
-          )
-        },
-        error = function(e) {
-          showNotification(
-            paste("Saving location mapping failed:", e$message),
-            type = "error"
-          )
-        }
-      )
-    })
-    observeEvent(input$manage_save_flag_mapping, {
-      tryCatch(
-        {
-          refresh_error <- save_manager_mapping("result_flag")
-          showNotification(
-            if (is.null(refresh_error)) {
-              "Result-flag mapping saved and published."
-            } else {
-              paste(
-                "Result-flag mapping saved, but the current preview could not be refreshed:",
-                refresh_error
-              )
-            },
-            type = if (is.null(refresh_error)) "message" else "warning"
-          )
-        },
-        error = function(e) {
-          showNotification(
-            paste("Saving result-flag mapping failed:", e$message),
-            type = "error"
-          )
-        }
-      )
-    })
 
     observeEvent(input$preview_file, {
       req(input$file)
@@ -7330,11 +5406,11 @@ addDiscData <- function(id, language) {
         return()
       }
       if (
-        parameter_requirement(input$manual_parameter, "result_descriptor") &&
+        parameter_requirement(input$manual_parameter, "reporting_basis") &&
           is.na(addDiscData_int(input$manual_descriptor))
       ) {
         showNotification(
-          "Descriptor is required for the selected parameter.",
+          "Reporting basis is required for the selected parameter.",
           type = "error"
         )
         return()
@@ -7384,7 +5460,27 @@ addDiscData <- function(id, language) {
         input$manual_result_value_type,
         1L
       )
-      row$result_descriptor_id <- addDiscData_int(input$manual_descriptor)
+      row$reporting_basis_id <- addDiscData_int(input$manual_descriptor)
+      chemistry <- tryCatch(
+        YGwater:::chemistry_metadata_values(input, "manual_chem_"),
+        error = function(e) e
+      )
+      if (inherits(chemistry, "error")) {
+        showNotification(conditionMessage(chemistry), type = "error")
+        return()
+      }
+      row[names(chemistry)] <- chemistry
+      messages <- AquaCache::validateResultChemistry(
+        NULL,
+        row,
+        parameters = params(),
+        error = FALSE,
+        matrix_states = matrix_states
+      )
+      if (any(nzchar(messages))) {
+        showNotification(paste(messages, collapse = "; "), type = "error")
+        return()
+      }
       row$protocol_method <- addDiscData_int(input$manual_protocol)
       row$laboratory <- if (is_field_result_type(row$result_type)) {
         NA_integer_
@@ -8175,8 +6271,8 @@ addDiscData <- function(id, language) {
           result_value_types$result_value_type_id
         )
         descriptor_index <- match(
-          df$result_descriptor_id,
-          result_descriptors$result_descriptor_id
+          df$reporting_basis_id,
+          reporting_bases$reporting_basis_id
         )
         matrix_index <- match(df$matrix_state_id, matrix_states$matrix_state_id)
         source_parameter_label <- ifelse(
@@ -8207,7 +6303,18 @@ addDiscData <- function(id, language) {
           Offset = df$result_offset,
           `Result type` = result_types$result_type[result_type_index],
           `Value type` = result_value_types$result_value_type[value_type_index],
-          Descriptor = result_descriptors$result_descriptor[descriptor_index],
+          `Reporting basis` = reporting_bases$reporting_basis[descriptor_index],
+          `Chemical form` = chemistry_catalogues$result_speciations$result_speciation[match(
+            df$result_speciation_id,
+            chemistry_catalogues$result_speciations$result_speciation_id
+          )],
+          `Analytical target` = chemistry_catalogues$result_targets$result_target[match(
+            df$result_target_id,
+            chemistry_catalogues$result_targets$result_target_id
+          )],
+          `Endpoint mode` = df$endpoint_mode,
+          `Endpoint pH` = df$endpoint_ph,
+          `Analysis conditions` = df$analysis_conditions,
           Matrix = matrix_states$matrix_state_name[matrix_index],
           Status = df$mapping_status,
           check.names = FALSE
@@ -8238,7 +6345,7 @@ addDiscData <- function(id, language) {
             "Offset",
             "Result type",
             "Value type",
-            "Descriptor",
+            "Reporting basis",
             "Matrix"
           )
         )
@@ -8355,18 +6462,24 @@ addDiscData <- function(id, language) {
           column(
             4,
             selectizeInput(
-              ns("mapping_result_descriptor"),
-              "Result descriptor",
+              ns("mapping_reporting_basis"),
+              "Reporting basis",
               choices = optional_choices(
-                result_descriptors$result_descriptor_id,
-                result_descriptors$result_descriptor
+                reporting_bases$reporting_basis_id,
+                reporting_bases$reporting_basis
               ),
-              selected = selected_value(row$result_descriptor_id[[1]])
+              selected = selected_value(row$reporting_basis_id[[1]])
             )
           )
         ),
+        YGwater:::chemistry_metadata_ui(
+          ns,
+          "mapping_chem_",
+          chemistry_catalogues,
+          row
+        ),
         helpText(
-          "A sample fraction or descriptor is required when the selected AquaCache parameter requires it."
+          "Each analytical dimension is independently required by the selected parameter."
         ),
         fluidRow(
           column(
@@ -8432,13 +6545,19 @@ addDiscData <- function(id, language) {
           sample_fraction_id <- addDiscData_int(
             input$mapping_sample_fraction
           )
-          result_descriptor_id <- addDiscData_int(
-            input$mapping_result_descriptor
+          reporting_basis_id <- addDiscData_int(
+            input$mapping_reporting_basis
+          )
+          chemistry <- YGwater:::chemistry_metadata_values(
+            input,
+            "mapping_chem_"
           )
           validate_parameter_mapping_descriptors(
             parameter_id,
             sample_fraction_id,
-            result_descriptor_id
+            reporting_basis_id,
+            chemistry,
+            addDiscData_int(input$mapping_matrix_state, 1L)
           )
           conversion <- addDiscData_num(input$mapping_conversion)
           result_offset <- addDiscData_num(input$mapping_result_offset)
@@ -8460,7 +6579,8 @@ addDiscData <- function(id, language) {
               input$mapping_result_value_type,
               1L
             ),
-            result_descriptor_id = result_descriptor_id,
+            reporting_basis_id = reporting_basis_id,
+            chemistry = chemistry,
             matrix_state_id = addDiscData_int(input$mapping_matrix_state, 1L),
             conversion = conversion,
             result_offset = result_offset
@@ -9837,7 +7957,7 @@ addDiscData <- function(id, language) {
         result_conditions = result_conditions,
         sample_fractions = sample_fractions,
         result_value_types = result_value_types,
-        result_descriptors = result_descriptors,
+        reporting_bases = reporting_bases,
         matrix_states = matrix_states,
         laboratories = laboratories,
         media = media,
@@ -9910,7 +8030,7 @@ addDiscData <- function(id, language) {
             "Sample fraction",
             "Result type",
             "Value type",
-            "Descriptor",
+            "Reporting basis",
             "Matrix",
             "Laboratory",
             "Protocol",
@@ -9974,13 +8094,15 @@ addDiscData <- function(id, language) {
           }
           new_value <- result_conditions$result_condition_id[[hit[[1]]]]
         }
-      } else if (source_column %in% c("result", "result_condition_value")) {
+      } else if (
+        source_column %in% c("result", "result_condition_value", "endpoint_ph")
+      ) {
         new_value <- if (nzchar(value)) {
           suppressWarnings(as.numeric(value))
         } else {
           NA_real_
         }
-        if (nzchar(value) && is.na(new_value)) {
+        if (nzchar(value) && (is.na(new_value) || !is.finite(new_value))) {
           showNotification(
             "Enter a numeric value or leave the cell blank.",
             type = "error"
@@ -9994,7 +8116,9 @@ addDiscData <- function(id, language) {
             "result_type",
             "sample_fraction_id",
             "result_value_type",
-            "result_descriptor_id",
+            "reporting_basis_id",
+            "result_speciation_id",
+            "result_target_id",
             "matrix_state_id",
             "protocol_method",
             "laboratory",
@@ -10007,7 +8131,9 @@ addDiscData <- function(id, language) {
           result_type = result_types,
           sample_fraction_id = sample_fractions,
           result_value_type = result_value_types,
-          result_descriptor_id = result_descriptors,
+          reporting_basis_id = reporting_bases,
+          result_speciation_id = chemistry_catalogues$result_speciations,
+          result_target_id = chemistry_catalogues$result_targets,
           matrix_state_id = matrix_states,
           protocol_method = protocols_methods,
           laboratory = laboratories,
@@ -10019,7 +8145,9 @@ addDiscData <- function(id, language) {
           result_type = "result_type_id",
           sample_fraction_id = "sample_fraction_id",
           result_value_type = "result_value_type_id",
-          result_descriptor_id = "result_descriptor_id",
+          reporting_basis_id = "reporting_basis_id",
+          result_speciation_id = "result_speciation_id",
+          result_target_id = "result_target_id",
           matrix_state_id = "matrix_state_id",
           protocol_method = "protocol_id",
           laboratory = "lab_id",
@@ -10031,7 +8159,9 @@ addDiscData <- function(id, language) {
           result_type = "result_type",
           sample_fraction_id = "sample_fraction",
           result_value_type = "result_value_type",
-          result_descriptor_id = "result_descriptor",
+          reporting_basis_id = "reporting_basis",
+          result_speciation_id = "result_speciation",
+          result_target_id = "result_target",
           matrix_state_id = "matrix_state_name",
           protocol_method = "protocol_name",
           laboratory = "lab_name",
@@ -10084,15 +8214,15 @@ addDiscData <- function(id, language) {
         return()
       }
       if (
-        identical(source_column, "result_descriptor_id") &&
+        identical(source_column, "reporting_basis_id") &&
           is.na(new_value) &&
           parameter_requirement(
             data$df$parameter_id[[target_row]],
-            "result_descriptor"
+            "reporting_basis"
           )
       ) {
         showNotification(
-          "Descriptor is required for this parameter.",
+          "Reporting basis is required for this parameter.",
           type = "error"
         )
         return()
@@ -10223,136 +8353,225 @@ addDiscData <- function(id, language) {
         df$parameter_id,
         parameter_requirement,
         logical(1),
-        requirement = "result_descriptor"
+        requirement = "reporting_basis"
       )
-      missing_descriptor <- needs_descriptor & is.na(df$result_descriptor_id)
+      missing_descriptor <- needs_descriptor & is.na(df$reporting_basis_id)
       if (any(missing_descriptor)) {
         stop(
-          "Descriptor is required for the parameter in result row(s): ",
+          "Reporting basis is required for the parameter in result row(s): ",
           paste(which(missing_descriptor), collapse = ", "),
           call. = FALSE
         )
       }
+      AquaCache::validateResultChemistry(
+        NULL,
+        df,
+        parameters = params(),
+        matrix_states = matrix_states
+      )
       invisible(TRUE)
     }
 
-    observeEvent(input$upload, {
-      request <- tryCatch(
-        {
-          df <- data$df
-          manual_sample_shells <- df$source_code == "YGwater-manual" &
-            is.na(df$parameter_id)
-          df <- df[!manual_sample_shells, , drop = FALSE]
-          skipped <- which(df$result_flag_action == "skip_result")
-          if (length(skipped)) {
-            df <- df[-skipped, , drop = FALSE]
-          }
-          if (
-            identical(input$entry_mode, "file") &&
-              isTRUE(data$preview_is_stale)
-          ) {
-            stop(
-              "The selected file or workbook format changed after this preview. Preview the file again before uploading.",
-              call. = FALSE
-            )
-          }
-          validate_upload_rows(df)
-          has_groups <- any(!is.na(df$sample_group_id))
-          if (has_groups && !isTRUE(check_groups$can_assign_group[[1]])) {
-            stop(
-              "You do not have permission to assign samples to groups.",
-              call. = FALSE
-            )
-          }
-          observer_state <- sample_observer_map()
-          sample_keys <- unique(as.character(df$sample_key))
-          has_observers <- any(vapply(
-            sample_keys,
-            function(key) length(observer_state[[key]]) > 0L,
-            logical(1)
-          ))
-          if (
-            has_observers &&
-              !isTRUE(observer_permissions$can_assign_observers[[1]])
-          ) {
-            stop(
-              "Your database role cannot assign sample observers.",
-              call. = FALSE
-            )
-          }
-          sample_share_state <- sample_share_map()
-          sample_keys <- unique(as.character(df$sample_key))
-          sample_keys <- sample_keys[!is.na(sample_keys) & nzchar(sample_keys)]
-          sample_share_with <- lapply(sample_keys, function(key) {
-            addDiscData_share_selection(
-              sample_share_state[[key]],
-              sample_share_choices
-            )
-          })
-          names(sample_share_with) <- sample_keys
-          file <- if (is.null(input$file)) {
-            NULL
-          } else {
-            list(
-              name = input$file$name[[1]],
-              datapath = input$file$datapath[[1]],
-              size = input$file$size[[1]]
-            )
-          }
-          attachments <- if (is.null(input$attach_docs)) {
-            list()
-          } else {
-            lapply(seq_len(nrow(input$attach_docs)), function(i) {
-              list(
-                name = input$attach_docs$name[[i]],
-                datapath = input$attach_docs$datapath[[i]]
-              )
-            })
-          }
-          profile <- if (
-            any(df$source_code != "YGwater-manual", na.rm = TRUE)
-          ) {
-            selected_profile()
-          } else {
-            NULL
-          }
-          list(
-            df = df,
-            config = session$userData$config,
-            file = file,
-            attachments = attachments,
-            profile = profile,
-            field_visit_id = addDiscData_int(input$field_visit_id),
-            sample_qualifiers = sample_qualifier_map(),
-            sample_observers = sample_observer_map(),
-            sample_share_with = sample_share_with,
-            locations = locations(),
-            sub_locations = sub_locations
-          )
-        },
-        error = function(e) e
-      )
-      if (inherits(request, "error")) {
-        showNotification(
-          paste("Upload could not start:", conditionMessage(request)),
-          type = "error"
+    upload_plan <- reactive(addDiscData_upload_plan(data$df))
+    pending_partial_upload <- reactiveVal(NULL)
+
+    output$upload_coverage <- renderUI({
+      plan <- upload_plan()
+      if (!plan$omitted_results) return(NULL)
+      tags$div(class = "alert alert-warning",
+        tags$strong(sprintf("%s of %s results are ready for validation; %s will be omitted.",
+          plan$included_results, plan$total_results, plan$omitted_results)),
+        tags$p(sprintf("%s have no parameter mapping; %s are excluded by result-flag mappings.",
+          plan$unmapped_results, plan$flag_skipped_results)),
+        tags$p("Upload requires acknowledgement of these omissions. Included results must still pass validation."))
+    })
+
+    output$upload_omissions <- DT::renderDT({
+      pending <- pending_partial_upload()
+      req(!is.null(pending))
+      display <- pending$plan$omissions
+      names(display) <- c("Source", "Source parameter code", "Source parameter", "Source unit", "Reason", "Results omitted")
+      DT::datatable(display, rownames = FALSE, selection = "none",
+        options = list(pageLength = 5, lengthChange = FALSE, scrollX = TRUE))
+    }, server = FALSE)
+
+    prepare_upload_request <- function() {
+      plan <- upload_plan()
+      df <- plan$df
+      if (!nrow(df)) {
+        stop("No results are ready to upload. Map at least one source parameter and check any result-flag exclusions.",
+          call. = FALSE)
+      }
+      if (
+        identical(input$entry_mode, "file") &&
+          isTRUE(data$preview_is_stale)
+      ) {
+        stop(
+          "The selected file or workbook format changed after this preview. Preview the file again before uploading.",
+          call. = FALSE
         )
+      }
+      if (any(df$source_code != "YGwater-manual", na.rm = TRUE)) {
+        snapshot <- addDiscData_mapping_snapshot(con, selected_profile())
+        if (any(snapshot$status == "draft")) {
+          stop("Review and publish the source and workbook drafts in Import setup, then preview the workbook again.", call. = FALSE)
+        }
+        if (!identical(snapshot, data$preview_mapping_snapshot)) {
+          stop("The published mappings changed after this preview. Preview the workbook again before uploading.", call. = FALSE)
+        }
+      }
+      validate_upload_rows(df)
+      has_groups <- any(!is.na(df$sample_group_id))
+      if (has_groups && !isTRUE(check_groups$can_assign_group[[1]])) {
+        stop(
+          "You do not have permission to assign samples to groups.",
+          call. = FALSE
+        )
+      }
+      observer_state <- sample_observer_map()
+      sample_keys <- unique(as.character(df$sample_key))
+      has_observers <- any(vapply(
+        sample_keys,
+        function(key) length(observer_state[[key]]) > 0L,
+        logical(1)
+      ))
+      if (
+        has_observers &&
+          !isTRUE(observer_permissions$can_assign_observers[[1]])
+      ) {
+        stop(
+          "Your database role cannot assign sample observers.",
+          call. = FALSE
+        )
+      }
+      sample_share_state <- sample_share_map()
+      sample_keys <- unique(as.character(df$sample_key))
+      sample_keys <- sample_keys[!is.na(sample_keys) & nzchar(sample_keys)]
+      sample_share_with <- lapply(sample_keys, function(key) {
+        addDiscData_share_selection(
+          sample_share_state[[key]],
+          sample_share_choices
+        )
+      })
+      names(sample_share_with) <- sample_keys
+      file <- if (is.null(input$file)) {
+        NULL
+      } else {
+        list(
+          name = input$file$name[[1]],
+          datapath = input$file$datapath[[1]],
+          size = input$file$size[[1]]
+        )
+      }
+      attachments <- if (is.null(input$attach_docs)) {
+        list()
+      } else {
+        lapply(seq_len(nrow(input$attach_docs)), function(i) {
+          list(
+            name = input$attach_docs$name[[i]],
+            datapath = input$attach_docs$datapath[[i]]
+          )
+        })
+      }
+      profile <- if (
+        any(df$source_code != "YGwater-manual", na.rm = TRUE)
+      ) {
+        selected_profile()
+      } else {
+        NULL
+      }
+      request <- list(
+        df = data.table::copy(df),
+        config = session$userData$config,
+        file = file,
+        attachments = attachments,
+        profile = profile,
+        field_visit_id = addDiscData_int(input$field_visit_id),
+        sample_qualifiers = sample_qualifier_map(),
+        sample_observers = sample_observer_map(),
+        sample_share_with = sample_share_with,
+        locations = locations(),
+        sub_locations = sub_locations,
+        upload_coverage = list(source_result_rows = plan$total_results,
+          omitted_result_rows = plan$omitted_results,
+          unmapped_result_rows = plan$unmapped_results,
+          flag_skipped_result_rows = plan$flag_skipped_results,
+          source_samples = plan$total_samples, uploaded_samples = plan$included_samples,
+          omitted_parameters = plan$omissions, omitted_samples = plan$omitted_samples),
+        partial_upload_acknowledged = FALSE,
+        mapping_snapshot = if (is.null(profile)) NULL else data$preview_mapping_snapshot
+      )
+      list(request = request, plan = plan)
+    }
+
+    start_upload <- function(request) {
+      tryCatch(upload_task$invoke(request), error = function(e) {
+        showNotification(paste("Upload could not start:", conditionMessage(e)), type = "error")
+      })
+    }
+
+    observeEvent(input$upload, {
+      pending <- tryCatch(prepare_upload_request(), error = function(e) e)
+      if (inherits(pending, "error")) {
+        showNotification(paste("Upload could not start:", conditionMessage(pending)), type = "error")
         return()
       }
-
-      invoke_error <- tryCatch(
-        {
-          upload_task$invoke(request)
-          NULL
-        },
-        error = function(e) e
-      )
-      if (inherits(invoke_error, "error")) {
-        showNotification(
-          paste("Upload could not start:", conditionMessage(invoke_error)),
-          type = "error"
-        )
+      if (!pending$plan$omitted_results) {
+        start_upload(pending$request)
+        return()
       }
+      pending_partial_upload(pending)
+      plan <- pending$plan
+      showModal(modalDialog(title = "Confirm partial workbook upload", size = "l", easyClose = FALSE,
+        tags$p(sprintf("Upload %s of %s results across %s of %s samples.",
+          plan$included_results, plan$total_results, plan$included_samples, plan$total_samples)),
+        tags$p(class = "text-danger", sprintf("%s results will not be uploaded.", plan$omitted_results)),
+        if (nrow(plan$omitted_samples)) tags$p(sprintf("Samples with no included results will not be created: %s.",
+          paste(ifelse(addDiscData_present(plan$omitted_samples$source_sample_id),
+            plan$omitted_samples$source_sample_id, plan$omitted_samples$sample_key), collapse = ", "))),
+        tags$p("The original workbook will still be attached to the imported samples."),
+        DT::DTOutput(session$ns("upload_omissions")),
+        checkboxInput(session$ns("acknowledge_partial_upload"), sprintf(
+          "I understand that %s of %s results will not be uploaded.", plan$omitted_results, plan$total_results), FALSE),
+        footer = tagList(actionButton(session$ns("cancel_partial_upload"), "Cancel"),
+          shinyjs::disabled(actionButton(session$ns("confirm_partial_upload"),
+            sprintf("Upload these %s results", plan$included_results), class = "btn-primary")))))
+      # Reset the controls on every opening, including a cancelled dialog.
+      updateCheckboxInput(session, "acknowledge_partial_upload", value = FALSE)
+      shinyjs::disable("confirm_partial_upload")
+    })
+
+    observeEvent(input$acknowledge_partial_upload, {
+      shinyjs::toggleState("confirm_partial_upload", condition = isTRUE(input$acknowledge_partial_upload))
+    })
+
+    observeEvent(input$cancel_partial_upload, {
+      pending_partial_upload(NULL)
+      removeModal()
+    })
+
+    observeEvent(input$confirm_partial_upload, {
+      pending <- pending_partial_upload()
+      req(!is.null(pending))
+      if (!isTRUE(input$acknowledge_partial_upload)) {
+        showNotification("Acknowledge the omitted results before uploading.", type = "error")
+        return()
+      }
+      # Recheck the exact approved snapshot, including group/observer/sharing
+      # assignments. A change while this dialog is open requires fresh consent.
+      current <- tryCatch(prepare_upload_request(), error = function(e) e)
+      if (inherits(current, "error") || !identical(current, pending)) {
+        pending_partial_upload(NULL)
+        removeModal()
+        showNotification(if (inherits(current, "error")) conditionMessage(current) else
+          "The preview or upload settings changed. Review the upload again before confirming.", type = "error")
+        return()
+      }
+      request <- pending$request
+      request$partial_upload_acknowledged <- TRUE
+      pending_partial_upload(NULL)
+      removeModal()
+      start_upload(request)
     })
 
     observeEvent(upload_task$result(), {

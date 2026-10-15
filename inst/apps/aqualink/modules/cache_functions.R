@@ -383,19 +383,25 @@ disc_plot_cache_signature <- function(con) {
     disc_plot_table_signature(con, "samples", "sample_id"),
     disc_plot_table_signature(con, "results", "result_id")
   )
-  paste(
-    apply(sig, 1, function(row) paste(row, collapse = "=")),
-    collapse = ";"
-  )
+  metadata <- DBI::dbGetQuery(con,
+    "SELECT string_agg(name || ':' || rows || ':' || stamp, ';' ORDER BY name) AS signature FROM (
+       SELECT 'parameters' AS name, count(*)::text AS rows,
+         COALESCE(max(COALESCE(modified, created))::text, '') AS stamp FROM public.parameters
+       UNION ALL SELECT 'reporting_bases', count(*)::text, COALESCE(max(COALESCE(modified, created))::text, '') FROM discrete.reporting_bases
+       UNION ALL SELECT 'result_speciations', count(*)::text, COALESCE(max(COALESCE(modified, created))::text, '') FROM discrete.result_speciations
+       UNION ALL SELECT 'result_targets', count(*)::text, COALESCE(max(COALESCE(modified, created))::text, '') FROM discrete.result_targets
+     ) reference")$signature[[1]]
+  paste(c(apply(sig, 1, function(row) paste(row, collapse = "=")), metadata), collapse = ";")
 }
 
 
 disc_plot_module_data <- function(con, env = .GlobalEnv) {
-  key <- "disc_plot_module_data"
+  key <- "disc_plot_module_data_chemistry65"
   get_cached(
     key = key,
     env = env,
     fetch_fun = function() {
+      chemistry <- YGwater:::chemistry_metadata_catalogues(con)
       list(
         cache_signature = disc_plot_cache_signature(con),
         locs = DBI::dbGetQuery(
@@ -459,12 +465,14 @@ disc_plot_module_data <- function(con, env = .GlobalEnv) {
            FROM discrete.result_value_types
            ORDER BY result_value_type ASC;"
         ),
-        result_descriptors = DBI::dbGetQuery(
+        reporting_bases = DBI::dbGetQuery(
           con,
-          "SELECT result_descriptor_id, result_descriptor
-           FROM discrete.result_descriptors
-           ORDER BY result_descriptor ASC;"
-        )
+          "SELECT *
+           FROM discrete.reporting_bases
+           ORDER BY reporting_basis ASC;"
+        ),
+        result_speciations = chemistry$result_speciations,
+        result_targets = chemistry$result_targets
       )
     },
     check_fun = function() {

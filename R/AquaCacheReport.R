@@ -12,8 +12,9 @@
 #' warns and reports the reuse count; each result detail row includes both its
 #' requested and actual sample dates. Optional matrix-state and sample-fraction
 #' filters are applied when finding the closest eligible sample, then retained
-#' in the report matrix and result details. Result descriptor is shown in the
-#' report whenever it is recorded for a measurement. Matrix rows also
+#' in the report matrix and result details. Reporting basis, chemical form,
+#' analytical target, endpoint, and analysis conditions distinguish report rows
+#' whenever recorded for a measurement. Matrix rows also
 #' distinguish result type, so field and laboratory measurements of the same
 #' parameter and sample remain separate. When `date_range` is
 #' supplied, all eligible samples collected in the inclusive interval are
@@ -41,8 +42,8 @@
 #' @param sd_multiplier Optional number of sample standard deviations from the
 #'   mean used to flag unusually high or low results. Only numeric result values
 #'   are used; censored and missing results are excluded. Groups are calculated
-#'   separately by location, parameter, matrix, fraction, descriptor, and result
-#'   type.
+#'   separately by location, parameter, matrix, fraction, reporting basis,
+#'   chemical form, analytical target, endpoint, analysis conditions, and result type.
 #' @param sd_start Optional first date included in the SD calculation.
 #' @param sd_end Optional last date included in the SD calculation.
 #' @param sd_day_of_year Optional day-of-year values included in the SD
@@ -370,7 +371,9 @@ AquaCacheReport <- function(
     "  s.sample_type AS sample_type_id, st.sample_type, s.collection_method AS collection_method_id,\n",
     "  cm.collection_method, r.parameter_id, p.param_name, p.param_name_fr,\n",
     "  r.matrix_state_id, ms.matrix_state_name AS matrix_state,\n",
-    "  r.sample_fraction_id, sf.sample_fraction, r.result_descriptor_id, rs.result_descriptor,\n",
+    "  r.sample_fraction_id, sf.sample_fraction, r.reporting_basis_id, rs.reporting_basis,\n",
+    "  r.result_speciation_id, spec.result_speciation, r.result_target_id, target.result_target,\n",
+    "  r.endpoint_mode, r.endpoint_ph, r.analysis_conditions, r.analysis_conditions_key,\n",
     "  r.result_type AS result_type_id, rt.result_type,\n",
     "  r.result_value_type AS result_value_type_id, rvt.result_value_type,\n",
     "  r.result, r.result_condition, rc.result_condition AS result_condition_label,\n",
@@ -389,7 +392,9 @@ AquaCacheReport <- function(
     "LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
     "LEFT JOIN discrete.collection_methods cm ON cm.collection_method_id = s.collection_method\n",
     "LEFT JOIN discrete.sample_fractions sf ON sf.sample_fraction_id = r.sample_fraction_id\n",
-    "LEFT JOIN discrete.result_descriptors rs ON rs.result_descriptor_id = r.result_descriptor_id\n",
+    "LEFT JOIN discrete.reporting_bases rs ON rs.reporting_basis_id = r.reporting_basis_id\n",
+    "LEFT JOIN discrete.result_speciations spec ON spec.result_speciation_id = r.result_speciation_id\n",
+    "LEFT JOIN discrete.result_targets target ON target.result_target_id = r.result_target_id\n",
     "LEFT JOIN discrete.result_types rt ON rt.result_type_id = r.result_type\n",
     "LEFT JOIN discrete.result_value_types rvt ON rvt.result_value_type_id = r.result_value_type\n",
     "LEFT JOIN discrete.result_conditions rc ON rc.result_condition_id = r.result_condition\n",
@@ -500,7 +505,9 @@ AquaCacheReport <- function(
         "  g.parent_guideline_code, gp.publisher_name, gs.series_name,\n",
         "  g.parameter_id, p.param_name AS parameter_name,\n",
         "  g.matrix_state_id, ms.matrix_state_code, ms.matrix_state_name,\n",
-        "  g.result_descriptor_id, rs.result_descriptor,\n",
+        "  g.reporting_basis_id, rs.reporting_basis,\n",
+        "  g.result_speciation_id, spec.result_speciation, g.result_target_id, target.result_target,\n",
+        "  g.endpoint_mode, g.endpoint_ph, g.analysis_conditions,\n",
         "  g.comparison_operator_code, op.operator_symbol, op.operator_name,\n",
         "  op.description AS comparison_description, gj.jurisdiction_name AS jurisdiction,\n",
         "  gpg.protection_goal_name AS protection_goal,\n",
@@ -530,7 +537,9 @@ AquaCacheReport <- function(
         "LEFT JOIN criteria.guideline_series gs ON gs.series_id = g.series_id\n",
         "LEFT JOIN public.parameters p ON p.parameter_id = g.parameter_id\n",
         "LEFT JOIN public.matrix_states ms ON ms.matrix_state_id = g.matrix_state_id\n",
-        "LEFT JOIN discrete.result_descriptors rs ON rs.result_descriptor_id = g.result_descriptor_id\n",
+        "LEFT JOIN discrete.reporting_bases rs ON rs.reporting_basis_id = g.reporting_basis_id\n",
+        "LEFT JOIN discrete.result_speciations spec ON spec.result_speciation_id = g.result_speciation_id\n",
+        "LEFT JOIN discrete.result_targets target ON target.result_target_id = g.result_target_id\n",
         "LEFT JOIN criteria.guideline_comparison_operators op ON op.operator_code = g.comparison_operator_code\n",
         "LEFT JOIN criteria.guideline_jurisdictions gj ON gj.jurisdiction_id = g.jurisdiction_id\n",
         "LEFT JOIN criteria.guideline_protection_goals gpg ON gpg.protection_goal_id = g.protection_goal_id\n",
@@ -577,6 +586,7 @@ AquaCacheReport <- function(
       "  g.source_document_title, g.source_page, g.source_table, g.source_section,\n",
       "  g.valid_from, g.valid_to, g.review_status, g.active,\n",
       "  g.general_notes, g.applicability_notes, gr.algorithm_code,\n",
+      "  g.reporting_basis_id, g.result_speciation_id, g.result_target_id, g.endpoint_mode, g.endpoint_ph, g.analysis_conditions,\n",
       "  ga.algorithm_name, ga.description AS algorithm_description, gr.fixed_value,\n",
       "  gr.formula_sql, gr.min_output_value, gr.max_output_value,\n",
       "  gr.rounding_method, gr.rounding_digits, gr.missing_input_policy,\n",
@@ -620,8 +630,11 @@ AquaCacheReport <- function(
       "    'input_source', gri.input_source, 'parameter_id', gri.parameter_id,\n",
       "    'parameter_name', ip.param_name, 'matrix_state_id', gri.matrix_state_id,\n",
       "    'matrix_state', ims.matrix_state_name, 'sample_fraction_id', gri.sample_fraction_id,\n",
-      "    'sample_fraction', isf.sample_fraction, 'result_descriptor_id', gri.result_descriptor_id,\n",
-      "    'result_descriptor', irs.result_descriptor, 'result_type_id', gri.result_type,\n",
+      "    'sample_fraction', isf.sample_fraction, 'reporting_basis_id', gri.reporting_basis_id,\n",
+      "    'reporting_basis', irs.reporting_basis, 'result_type_id', gri.result_type,\n",
+      "    'result_speciation_id', gri.result_speciation_id, 'result_speciation', isp.result_speciation,\n",
+      "    'result_target_id', gri.result_target_id, 'result_target', itg.result_target,\n",
+      "    'endpoint_mode', gri.endpoint_mode, 'endpoint_ph', gri.endpoint_ph, 'analysis_conditions', gri.analysis_conditions,\n",
       "    'result_type', irt.result_type, 'result_type_preference', gri.result_type_preference,\n",
       "    'input_search_scope', gri.search_scope, 'aggregate_method', gri.aggregate_method,\n",
       "    'allow_condition_value', gri.allow_condition_value,\n",
@@ -633,7 +646,9 @@ AquaCacheReport <- function(
       "  LEFT JOIN public.parameters ip ON ip.parameter_id = gri.parameter_id\n",
       "  LEFT JOIN public.matrix_states ims ON ims.matrix_state_id = gri.matrix_state_id\n",
       "  LEFT JOIN discrete.sample_fractions isf ON isf.sample_fraction_id = gri.sample_fraction_id\n",
-      "  LEFT JOIN discrete.result_descriptors irs ON irs.result_descriptor_id = gri.result_descriptor_id\n",
+      "  LEFT JOIN discrete.reporting_bases irs ON irs.reporting_basis_id = gri.reporting_basis_id\n",
+      "  LEFT JOIN discrete.result_speciations isp ON isp.result_speciation_id = gri.result_speciation_id\n",
+      "  LEFT JOIN discrete.result_targets itg ON itg.result_target_id = gri.result_target_id\n",
       "  LEFT JOIN discrete.result_types irt ON irt.result_type_id = gri.result_type\n",
       "  WHERE gri.rule_id = gr.rule_id\n",
       ") inputs ON TRUE\n",
@@ -661,7 +676,7 @@ AquaCacheReport <- function(
   results$result_row_key <- do.call(paste, c(
     lapply(results[c(
       "parameter_id", "matrix_state_id", "sample_fraction_id",
-      "result_descriptor_id", "units"
+      chemistry_identity_columns(), "units"
     )], function(x) {
       value <- as.character(x)
       value[is.na(value)] <- "<NA>"
@@ -764,7 +779,8 @@ AquaCacheReport <- function(
       con,
       paste0(
         "SELECT s.location_id, r.parameter_id, r.matrix_state_id,\n",
-        "  r.sample_fraction_id, r.result_descriptor_id,\n",
+        "  r.sample_fraction_id, r.reporting_basis_id, r.result_speciation_id, r.result_target_id,\n",
+        "  r.endpoint_mode, r.endpoint_ph, r.analysis_conditions_key,\n",
         "  r.result_type AS result_type_id, r.result AS result\n",
         "FROM discrete.results r\n",
         "JOIN discrete.samples s ON s.sample_id = r.sample_id\n",
@@ -775,7 +791,7 @@ AquaCacheReport <- function(
     )
     key_columns <- c(
       "location_id", "parameter_id", "matrix_state_id",
-      "sample_fraction_id", "result_descriptor_id", "result_type_id"
+      "sample_fraction_id", chemistry_identity_columns(), "result_type_id"
     )
     if (nrow(sd_history)) {
       sd_dt <- data.table::as.data.table(sd_history)
@@ -825,11 +841,13 @@ AquaCacheReport <- function(
     results$guideline_assessments <- ""
   }
 
+  results$analytical_identity <- chemistry_result_labels(results)
+
   # Keep distinct result types on separate matrix rows so field and laboratory
   # measurements from the same sample are not combined into one cell.
   param_key_columns <- c(
     "parameter_id", "matrix_state_id", "sample_fraction_id",
-    "result_descriptor_id", "units", "result_type_id"
+    chemistry_identity_columns(), "units", "result_type_id"
   )
   make_matrix_key <- function(x, columns) do.call(paste, c(
     lapply(x[columns], function(value) {
@@ -841,13 +859,13 @@ AquaCacheReport <- function(
   ))
   all_param_groups <- unique(results[c(
     param_key_columns, "parameter_label", "matrix_label",
-    "sample_fraction", "result_descriptor", "result_type"
+    "sample_fraction", "reporting_basis", "analytical_identity", "result_type"
   )])
   all_param_groups <- all_param_groups[order(
     match(all_param_groups$parameter_id, parameter_ids),
     all_param_groups$matrix_state_id,
     all_param_groups$sample_fraction_id,
-    all_param_groups$result_descriptor_id,
+    all_param_groups$reporting_basis_id,
     all_param_groups$result_type_id,
     na.last = TRUE
   ), , drop = FALSE]
@@ -935,7 +953,12 @@ AquaCacheReport <- function(
     Parameter = results$parameter_label,
     Matrix = results$matrix_state,
     `Sample fraction` = results$sample_fraction,
-    Descriptor = results$result_descriptor,
+    `Reporting basis` = results$reporting_basis,
+    `Chemical form` = results$result_speciation,
+    `Analytical target` = results$result_target,
+    `Endpoint mode` = results$endpoint_mode,
+    `Endpoint pH` = results$endpoint_ph,
+    `Analysis conditions` = results$analysis_conditions,
     Unit = results$units,
     `Numeric result` = results$result,
     `Result display` = results$result_display,
@@ -1039,14 +1062,14 @@ AquaCacheReport <- function(
       row_results <- results[results$parameter_id == tab$id, , drop = FALSE]
       row_groups <- unique(row_results[c(
         "location_id", "location", "location_label", "parameter_id",
-        "matrix_state_id", "sample_fraction_id", "result_descriptor_id",
+        "matrix_state_id", "sample_fraction_id", chemistry_identity_columns(),
         "units", "result_type_id", "matrix_label", "sample_fraction",
-        "result_descriptor", "result_type"
+        "reporting_basis", "analytical_identity", "result_type"
       )])
       row_groups <- row_groups[order(
         match(row_groups$location_id, location_ids),
         row_groups$matrix_state_id, row_groups$sample_fraction_id,
-        row_groups$result_descriptor_id, row_groups$result_type_id,
+        row_groups$reporting_basis_id, row_groups$result_type_id,
         na.last = TRUE
       ), , drop = FALSE]
       row_groups$row_key <- make_matrix_key(row_groups, param_key_columns)
@@ -1150,7 +1173,7 @@ AquaCacheReport <- function(
         Unit = row_groups$units,
         Matrix = row_groups$matrix_label,
         `Sample fraction` = row_groups$sample_fraction,
-        Descriptor = row_groups$result_descriptor,
+        `Analytical identity` = row_groups$analytical_identity,
         `Result type` = row_groups$result_type,
         check.names = FALSE,
         stringsAsFactors = FALSE
@@ -1181,7 +1204,7 @@ AquaCacheReport <- function(
       matrix_report$Unit <- row_groups$units
       matrix_report$Matrix <- row_groups$matrix_label
       matrix_report$`Sample fraction` <- row_groups$sample_fraction
-      matrix_report$Descriptor <- row_groups$result_descriptor
+      matrix_report$`Analytical identity` <- row_groups$analytical_identity
       matrix_report$`Result type` <- row_groups$result_type
     }
     for (header in date_headers) {

@@ -123,6 +123,7 @@ app_server <- function(input, output, session) {
     "imputeMissing",
     "continuousDataReview",
     "addDiscData",
+    "importSetup",
     "editSamples",
     "addGuidelines",
     "addSampleSeries",
@@ -200,6 +201,7 @@ app_server <- function(input, output, session) {
     "editBoreholesWells",
     "manageBoreholeDocuments",
     "addDiscData",
+    "importSetup",
     "addContData",
     "manageInstruments",
     "manageSensors",
@@ -1086,6 +1088,7 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$addDiscData,
+          session$userData$admin_privs$importSetup,
           session$userData$admin_privs$editSamples,
           session$userData$admin_privs$addSampleSeries,
           session$userData$admin_privs$syncDisc,
@@ -1093,6 +1096,9 @@ app_server <- function(input, output, session) {
         )
       ) {
         nav_show(id = "navbar", target = "discreteDataTasks")
+        if (!isTRUE(session$userData$admin_privs$importSetup)) {
+          nav_hide(id = "navbar", target = "importSetup")
+        }
         if (!isTRUE(session$userData$admin_privs$addDiscData)) {
           nav_hide(id = "navbar", target = "addDiscData")
         }
@@ -1756,6 +1762,7 @@ app_server <- function(input, output, session) {
     ui_loaded$addCompoundTimeseries <- FALSE
 
     ui_loaded$addDiscData <- FALSE
+    ui_loaded$importSetup <- FALSE
     ui_loaded$editSamples <- FALSE
     ui_loaded$addGuidelines <- FALSE
     ui_loaded$addSampleSeries <- FALSE
@@ -1845,6 +1852,7 @@ app_server <- function(input, output, session) {
     "imputeMissing",
     "continuousDataReview",
     "addDiscData",
+    "importSetup",
     "editSamples",
     "addSampleSeries",
     "addGuidelines",
@@ -2691,7 +2699,7 @@ app_server <- function(input, output, session) {
           FROM pg_catalog.pg_class c
           JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
           WHERE c.relkind IN ('r','p','v','m','f')
-            AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field', 'spatial')
+            AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field', 'spatial', 'information')
         )
         SELECT t.schema,
                t.table_name,
@@ -3414,6 +3422,13 @@ WHERE rolname = current_user;"
           "continuousDataReview",
           language = languageSelection
         ) # Call the server
+      }
+    }
+    if (input$navbar == "importSetup") {
+      if (!ui_loaded$importSetup) {
+        output$importSetup_ui <- renderUI(importSetupUI("importSetup"))
+        ui_loaded$importSetup <- TRUE
+        importSetup("importSetup", language = languageSelection)
       }
     }
     if (input$navbar == "addDiscData") {

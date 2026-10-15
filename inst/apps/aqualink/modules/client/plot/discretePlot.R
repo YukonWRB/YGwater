@@ -516,7 +516,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       AC_result_types = cached$result_types,
       AC_sample_fractions = cached$sample_fractions,
       AC_result_value_types = cached$result_value_types,
-      AC_result_descriptors = cached$result_descriptors
+      AC_reporting_bases = cached$reporting_bases,
+      AC_result_speciations = cached$result_speciations, AC_result_targets = cached$result_targets
     )
 
     browse_selected_sample_ids <- reactiveVal(numeric(0))
@@ -672,7 +673,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "sub_locations_AC",
         "sample_types_AC",
         "collection_methods_AC",
-        "result_descriptors_AC",
+        "reporting_bases_AC", "result_speciations_AC", "result_targets_AC", "endpoint_modes_AC", "endpoint_ph_AC",
         "sample_fractions_AC",
         "result_value_types_AC",
         "result_types_AC",
@@ -826,7 +827,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "SELECT DISTINCT",
         "s.sub_location_id, s.media_id, s.sample_type, s.collection_method,",
         "r.result_type, r.sample_fraction_id, r.result_value_type,",
-        "r.result_descriptor_id",
+        "r.reporting_basis_id, r.result_speciation_id, r.result_target_id, r.endpoint_mode, r.endpoint_ph, r.analysis_conditions::text",
         "FROM discrete.samples AS s",
         "INNER JOIN discrete.results AS r ON s.sample_id = r.sample_id",
         ac_where(
@@ -1072,7 +1073,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "result_types",
         "sample_fractions",
         "result_value_types",
-        "result_descriptors",
+        "reporting_bases", "result_speciations", "result_targets", "endpoint_modes", "endpoint_ph", "analysis_conditions",
         "include_blanks",
         "duplicate_action",
         "sample_ids",
@@ -1092,7 +1093,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       candidates <- candidates[file.exists(candidates)]
       for (path in candidates) {
         root <- dirname(dirname(path))
-        for (helper in c("titleCase.R", "utils.R", "AquaConnect.R")) {
+        for (helper in c("titleCase.R", "utils.R", "AquaConnect.R", "chemistry_metadata.R")) {
           helper_path <- file.path(root, "R", helper)
           if (file.exists(helper_path)) {
             source(helper_path, local = .GlobalEnv)
@@ -1631,11 +1632,11 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "result_value_type",
         "result_value_type_id"
       )
-      result_descriptors <- ac_option_rows(
+      reporting_bases <- ac_option_rows(
         scope,
-        moduleData$AC_result_descriptors,
-        "result_descriptor_id",
-        "result_descriptor_id"
+        moduleData$AC_reporting_bases,
+        "reporting_basis_id",
+        "reporting_basis_id"
       )
 
       sub_loc_choices <- stats::setNames(
@@ -1662,10 +1663,19 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         result_value_types$result_value_type_id,
         titleCase(result_value_types$result_value_type, plot_lang)
       )
-      result_descriptor_choices <- stats::setNames(
-        result_descriptors$result_descriptor_id,
-        result_descriptors$result_descriptor
+      reporting_basis_choices <- stats::setNames(
+        reporting_bases$reporting_basis_id,
+        reporting_bases$reporting_basis
       )
+
+      speciations <- ac_option_rows(scope, moduleData$AC_result_speciations, "result_speciation_id", "result_speciation_id")
+      targets <- ac_option_rows(scope, moduleData$AC_result_targets, "result_target_id", "result_target_id")
+      speciation_choices <- stats::setNames(speciations$result_speciation_id, speciations$result_speciation)
+      target_choices <- stats::setNames(targets$result_target_id, targets$result_target)
+      modes <- unique(scope$endpoint_mode[!is.na(scope$endpoint_mode)])
+      ph <- unique(scope$endpoint_ph[!is.na(scope$endpoint_ph)])
+      contexts <- unique(scope$analysis_conditions)
+      contexts <- contexts[!is.na(contexts)]
 
       blank_available <- any(
         grepl("blank", sample_types$sample_type, ignore.case = TRUE)
@@ -1700,11 +1710,19 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             input$collection_methods_AC
           ),
           ac_selectize(
-            "result_descriptors_AC",
-            tr("result_descriptor(s)", language$language),
-            result_descriptor_choices,
-            input$result_descriptors_AC
-          )
+            "reporting_bases_AC", "result_speciations_AC", "result_targets_AC", "endpoint_modes_AC", "endpoint_ph_AC",
+            tr("reporting_basis(s)", language$language),
+            reporting_basis_choices,
+            input$reporting_bases_AC
+          ),
+          ac_selectize("result_speciations_AC", if (plot_lang == "fr") "Formes chimiques" else "Chemical forms / species scopes", speciation_choices, input$result_speciations_AC),
+          ac_selectize("result_targets_AC", if (plot_lang == "fr") "Cibles analytiques" else "Analytical targets / materials", target_choices, input$result_targets_AC),
+          ac_selectize("endpoint_modes_AC", if (plot_lang == "fr") "Points finaux" else "Endpoint determinations", stats::setNames(modes, modes), input$endpoint_modes_AC),
+          ac_selectize("endpoint_ph_AC", "Endpoint pH", stats::setNames(ph, ph), input$endpoint_ph_AC),
+          if (length(contexts) > 1L || any(contexts != "{}")) selectInput(ns("analysis_conditions_AC"),
+            if (plot_lang == "fr") "Conditions analytiques" else "Analysis conditions",
+            choices = c("All" = "all", stats::setNames(contexts, contexts)),
+            selected = if (length(input$analysis_conditions_AC) && input$analysis_conditions_AC %in% contexts) input$analysis_conditions_AC else "all") else NULL
         )
       )
       primary_inputs <- Filter(
@@ -2466,7 +2484,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "sub_locations_AC",
         "sample_types_AC",
         "collection_methods_AC",
-        "result_descriptors_AC",
+        "reporting_bases_AC", "result_speciations_AC", "result_targets_AC", "endpoint_modes_AC", "endpoint_ph_AC",
         "sample_fractions_AC",
         "result_value_types_AC",
         "result_types_AC",
@@ -2749,7 +2767,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         result_types,
         sample_fractions,
         result_value_types,
-        result_descriptors,
+        reporting_bases,
         include_blanks,
         duplicate_action,
         sample_ids,
@@ -2757,7 +2775,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         season_highlight_ranges,
         dbSource,
         dbPath,
-        config
+        config,
+        result_speciations = NULL, result_targets = NULL, endpoint_modes = NULL, endpoint_ph = NULL, analysis_conditions = NULL
       ) {
         promises::future_promise({
           tryCatch(
@@ -2810,7 +2829,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 result_types = result_types,
                 sample_fractions = sample_fractions,
                 result_value_types = result_value_types,
-                result_descriptors = result_descriptors,
+                reporting_bases = reporting_bases,
+                result_speciations = result_speciations, result_targets = result_targets,
+                endpoint_modes = endpoint_modes, endpoint_ph = endpoint_ph, analysis_conditions = analysis_conditions,
                 include_blanks = include_blanks,
                 duplicate_action = duplicate_action,
                 sample_ids = sample_ids,
@@ -3007,7 +3028,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             result_types = NULL,
             sample_fractions = NULL,
             result_value_types = NULL,
-            result_descriptors = NULL,
+            reporting_bases = NULL,
             include_blanks = TRUE,
             duplicate_action = "show",
             sample_ids = NULL,
@@ -3076,7 +3097,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             result_types = NULL,
             sample_fractions = NULL,
             result_value_types = NULL,
-            result_descriptors = NULL,
+            reporting_bases = NULL,
             include_blanks = TRUE,
             duplicate_action = "show",
             sample_ids = NULL,
@@ -3270,16 +3291,21 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             } else {
               NULL
             },
-            result_descriptors = if (use_guided_filters) {
+            reporting_bases = if (use_guided_filters) {
               keep_ac_ids(
-                input$result_descriptors_AC,
-                moduleData$AC_result_descriptors,
-                "result_descriptor_id",
-                "result_descriptor_id"
+                input$reporting_bases_AC,
+                moduleData$AC_reporting_bases,
+                "reporting_basis_id",
+                "reporting_basis_id"
               )
             } else {
               NULL
             },
+            result_speciations = if (use_guided_filters) keep_ac_ids(input$result_speciations_AC, moduleData$AC_result_speciations, "result_speciation_id", "result_speciation_id") else NULL,
+            result_targets = if (use_guided_filters) keep_ac_ids(input$result_targets_AC, moduleData$AC_result_targets, "result_target_id", "result_target_id") else NULL,
+            endpoint_modes = if (use_guided_filters && length(input$endpoint_modes_AC) && !"all" %in% input$endpoint_modes_AC) input$endpoint_modes_AC else NULL,
+            endpoint_ph = if (use_guided_filters && length(input$endpoint_ph_AC) && !"all" %in% input$endpoint_ph_AC) input$endpoint_ph_AC else NULL,
+            analysis_conditions = if (use_guided_filters && length(input$analysis_conditions_AC) && !"all" %in% input$analysis_conditions_AC) input$analysis_conditions_AC else NULL,
             include_blanks = if (
               !use_guided_filters || is.null(input$include_blanks)
             ) {

@@ -153,18 +153,19 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
           options = single_selectize_options("Select a matrix state")
         ),
         uiOutput(ns("parameter_unit_status")),
+        uiOutput(ns("guideline_chemistry")),
         shinyjs::hidden(
           div(
-            id = ns("result_descriptor_section"),
+            id = ns("reporting_basis_section"),
             selectizeInput(
-              ns("result_descriptor"),
-              "Result descriptor",
+              ns("reporting_basis"),
+              "Reporting basis",
               choices = NULL,
               width = "100%",
               selected = character(0),
               multiple = TRUE,
               options = single_selectize_options(
-                "Leave empty to apply to all descriptors"
+                "Unspecified reporting basis"
               )
             )
           )
@@ -967,7 +968,8 @@ addGuidelines <- function(id, language) {
       "parameter_id",
       "matrix_state_id",
       "sample_fraction_id",
-      "result_descriptor_id",
+      "reporting_basis_id",
+      "result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions",
       "result_type",
       "result_type_preference",
       "aggregate_method",
@@ -1142,9 +1144,9 @@ addGuidelines <- function(id, language) {
     }
     descriptor_choices <- function() {
       choice_values(
-        moduleData$result_descriptors,
-        "result_descriptor_id",
-        "result_descriptor"
+        moduleData$reporting_bases,
+        "reporting_basis_id",
+        "reporting_basis"
       )
     }
     result_type_choices <- function() {
@@ -1374,7 +1376,7 @@ addGuidelines <- function(id, language) {
         is.na(parameter_id) ||
           is.null(moduleData$parameters) ||
           !nrow(moduleData$parameters) ||
-          !"result_descriptor" %in% names(moduleData$parameters)
+          !"reporting_basis" %in% names(moduleData$parameters)
       ) {
         return(FALSE)
       }
@@ -1383,7 +1385,7 @@ addGuidelines <- function(id, language) {
         ,
         drop = FALSE
       ]
-      nrow(row) && isTRUE(row$result_descriptor[[1]])
+      nrow(row) && isTRUE(row$reporting_basis[[1]])
     }
     parameter_requires_fraction <- function(parameter_id) {
       if (is_hardness_helper_choice(parameter_id)) {
@@ -1422,19 +1424,8 @@ addGuidelines <- function(id, language) {
       ]
       nrow(row) && isTRUE(row[[column]][[1]])
     }
-    update_result_descriptor_visibility <- function(
-      parameter_id = input$parameter_id
-    ) {
-      if (parameter_requires_descriptor(parameter_id)) {
-        shinyjs::show(id = "result_descriptor_section", anim = FALSE)
-      } else {
-        updateSelectizeInput(
-          session,
-          "result_descriptor",
-          selected = character(0)
-        )
-        shinyjs::hide(id = "result_descriptor_section", anim = FALSE)
-      }
+    update_reporting_basis_visibility <- function(parameter_id = input$parameter_id) {
+      shinyjs::show(id = "reporting_basis_section", anim = FALSE)
     }
     blank_rule_input_rows <- function(n = 1L) {
       data.frame(
@@ -1444,7 +1435,9 @@ addGuidelines <- function(id, language) {
         parameter_id = rep(NA_integer_, n),
         matrix_state_id = rep(NA_integer_, n),
         sample_fraction_id = rep(NA_integer_, n),
-        result_descriptor_id = rep(NA_integer_, n),
+        reporting_basis_id = rep(NA_integer_, n),
+        result_speciation_id = rep(NA_integer_, n), result_target_id = rep(NA_integer_, n),
+        endpoint_mode = rep(NA_character_, n), endpoint_ph = rep(NA_real_, n), analysis_conditions = rep("{}", n),
         result_type = rep(NA_integer_, n),
         result_type_preference = rep("", n),
         aggregate_method = rep("single", n),
@@ -1523,16 +1516,14 @@ addGuidelines <- function(id, language) {
           matrix_state_id <- integer_or_na(input$matrix_state)
         }
         sample_fraction_id <- if (
-          identical(input_source, "hardness_helper") ||
-            !parameter_requires_fraction(parameter_choice)
+          identical(input_source, "hardness_helper")
         ) {
           NA_integer_
         } else {
           integer_or_na(input[[rule_input_id("sample_fraction", i)]])
         }
-        result_descriptor_id <- if (
-          identical(input_source, "hardness_helper") ||
-            !parameter_requires_descriptor(parameter_choice)
+        reporting_basis_id <- if (
+          identical(input_source, "hardness_helper")
         ) {
           NA_integer_
         } else {
@@ -1551,7 +1542,8 @@ addGuidelines <- function(id, language) {
           parameter_id = parameter_id,
           matrix_state_id = matrix_state_id,
           sample_fraction_id = sample_fraction_id,
-          result_descriptor_id = result_descriptor_id,
+          reporting_basis_id = reporting_basis_id,
+          YGwater:::chemistry_metadata_values(input, paste0("rule_chem_", i, "_")),
           result_type = NA_integer_,
           result_type_preference = collapse_id_vector(
             input[[rule_input_id("result_type_preference", i)]]
@@ -1634,7 +1626,7 @@ addGuidelines <- function(id, language) {
                 public.get_parameter_unit_name(g.parameter_id, g.matrix_state_id) AS units,
                 ms.matrix_state_name AS matrix_state, fr.fractions, mt.media_types,
                 loc.locations,
-                rs.result_descriptor AS descriptor, g.comparison_operator_code,
+                rs.reporting_basis AS descriptor, g.comparison_operator_code,
                 gj.jurisdiction_name AS jurisdiction,
                 gpg.protection_goal_name AS protection_goal,
                 ged.exposure_duration_name AS exposure_duration,
@@ -1642,7 +1634,8 @@ addGuidelines <- function(id, language) {
                 g.valid_from, g.valid_to, g.review_status, g.active,
                 COALESCE(rule_summary.rule_count, 0) AS rule_count,
                 rule_summary.rules, g.publisher_id, g.series_id, g.parameter_id,
-                g.matrix_state_id, g.result_descriptor_id, fr.fraction_ids,
+                g.matrix_state_id, g.reporting_basis_id, g.result_speciation_id, g.result_target_id,
+                g.endpoint_mode, g.endpoint_ph, g.analysis_conditions, fr.fraction_ids,
                 mt.media_ids, loc.location_ids, g.reference, g.general_notes, g.applicability_notes,
                 gjl.jurisdiction_level_name AS jurisdiction_level,
                 g.jurisdiction_id,
@@ -1660,7 +1653,7 @@ addGuidelines <- function(id, language) {
          LEFT JOIN criteria.guideline_averaging_periods gap ON gap.averaging_period_id = g.averaging_period_id
          JOIN public.parameters p ON p.parameter_id = g.parameter_id
          LEFT JOIN public.matrix_states ms ON ms.matrix_state_id = g.matrix_state_id
-         LEFT JOIN discrete.result_descriptors rs ON rs.result_descriptor_id = g.result_descriptor_id
+         LEFT JOIN discrete.reporting_bases rs ON rs.reporting_basis_id = g.reporting_basis_id
          LEFT JOIN rule_summary ON rule_summary.guideline_id = g.guideline_id
          LEFT JOIN fr ON fr.guideline_id = g.guideline_id
          LEFT JOIN mt ON mt.guideline_id = g.guideline_id
@@ -1702,7 +1695,7 @@ addGuidelines <- function(id, language) {
                 p.units_solid, us.unit_name AS unit_solid_name,
                 p.units_gas, ug.unit_name AS unit_gas_name,
                 p.units_na, una.unit_name AS unit_na_name,
-                p.result_descriptor, p.sample_fraction
+                p.reporting_basis, p.result_speciation, p.result_target, p.endpoint, to_jsonb(p.analysis_conditions_required_keys) AS analysis_conditions_required_keys, p.analysis_conditions_required_keys_by_matrix, p.sample_fraction
          FROM public.parameters p
          LEFT JOIN public.units ul ON ul.unit_id = p.units_liquid
          LEFT JOIN public.units us ON us.unit_id = p.units_solid
@@ -1710,6 +1703,7 @@ addGuidelines <- function(id, language) {
          LEFT JOIN public.units una ON una.unit_id = p.units_na
          ORDER BY p.param_name"
       )
+      moduleData$chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(con)
       moduleData$units <- DBI::dbGetQuery(
         con,
         "SELECT unit_id, unit_name
@@ -1720,9 +1714,9 @@ addGuidelines <- function(id, language) {
         con,
         "SELECT sample_fraction_id, sample_fraction FROM discrete.sample_fractions ORDER BY sample_fraction"
       )
-      moduleData$result_descriptors <- DBI::dbGetQuery(
+      moduleData$reporting_bases <- DBI::dbGetQuery(
         con,
-        "SELECT result_descriptor_id, result_descriptor FROM discrete.result_descriptors ORDER BY result_descriptor"
+        "SELECT reporting_basis_id, reporting_basis FROM discrete.reporting_bases ORDER BY reporting_basis"
       )
       moduleData$result_types <- DBI::dbGetQuery(
         con,
@@ -1807,11 +1801,11 @@ addGuidelines <- function(id, language) {
         )
         updateSelectizeInput(
           session,
-          "result_descriptor",
+          "reporting_basis",
           choices = choice_values(
-            moduleData$result_descriptors,
-            "result_descriptor_id",
-            "result_descriptor"
+            moduleData$reporting_bases,
+            "reporting_basis_id",
+            "reporting_basis"
           ),
           selected = selected,
           server = TRUE
@@ -1940,7 +1934,7 @@ addGuidelines <- function(id, language) {
       function() {
         update_choices(clear = TRUE)
         set_rule_input_rows(blank_rule_input_rows(1L))
-        update_result_descriptor_visibility(character(0))
+        update_reporting_basis_visibility(character(0))
         updateTextAreaInput(
           session,
           "coefficients_text",
@@ -2370,9 +2364,9 @@ addGuidelines <- function(id, language) {
                   id = ns(rule_input_id("descriptor_section", i)),
                   selectizeInput(
                     ns(rule_input_id("descriptor", i)),
-                    "Descriptor",
+                    "Reporting basis",
                     choices = choices_with_any(descriptor_choices()),
-                    selected = selected_or_empty(row$result_descriptor_id),
+                    selected = selected_or_empty(row$reporting_basis_id),
                     multiple = TRUE,
                     options = selectize_single_options,
                     width = "100%"
@@ -2398,6 +2392,7 @@ addGuidelines <- function(id, language) {
               )
             )
           ),
+          YGwater:::chemistry_metadata_ui(ns, paste0("rule_chem_", i, "_"), moduleData$chemistry_catalogues, row),
           tags$details(
             open = FALSE,
             tags$summary("Input matching options"),
@@ -2563,7 +2558,7 @@ addGuidelines <- function(id, language) {
     observeEvent(
       input$parameter_id,
       {
-        update_result_descriptor_visibility(input$parameter_id)
+        update_reporting_basis_visibility(input$parameter_id)
       },
       ignoreInit = FALSE
     )
@@ -2573,19 +2568,19 @@ addGuidelines <- function(id, language) {
       if (is.na(parameter_id)) {
         return(tags$small(
           class = "text-muted",
-          "Leaving guideline fractions empty applies the guideline to all fractions, including results where fraction is empty. Leaving result descriptor empty applies the guideline to all descriptors, including results where descriptor is empty."
+          "Leaving guideline fractions empty applies the guideline to all fractions, including results where fraction is empty. An unspecified chemical identity matches only an equally unspecified result; required analytical dimensions must be explicit."
         ))
       }
 
       fraction_required <- parameter_flag_value(parameter_id, "sample_fraction")
       descriptor_required <- parameter_flag_value(
         parameter_id,
-        "result_descriptor"
+        "reporting_basis"
       )
 
       notes <- c(
         "Leave guideline fractions empty unless the source guideline applies only to named fractions. Empty means all fractions, including results where fraction is empty.",
-        "Leave result descriptor empty unless the source guideline applies only to a named descriptor. Empty means all descriptors, including results where descriptor is empty."
+        "Select the reporting expression, chemical form, target, endpoint, and analysis conditions defined by the source guideline. Unspecified chemical identity does not match a specified variant."
       )
       if (!fraction_required) {
         notes <- c(
@@ -2596,7 +2591,7 @@ addGuidelines <- function(id, language) {
       if (!descriptor_required) {
         notes <- c(
           notes,
-          "This parameter is not marked as requiring result descriptor in public.parameters, so results for it commonly have no descriptor."
+          "This parameter is not marked as requiring reporting basis, so some results for it have an unspecified numeric expression."
         )
       }
 
@@ -2618,32 +2613,9 @@ addGuidelines <- function(id, language) {
       }
       for (i in seq_len(n)) {
         parameter_id <- input[[rule_input_id("parameter", i)]]
-        if (parameter_requires_fraction(parameter_id)) {
-          shinyjs::show(id = rule_input_id("fraction_section", i), anim = FALSE)
-        } else {
-          updateSelectizeInput(
-            session,
-            rule_input_id("sample_fraction", i),
-            selected = character(0)
-          )
-          shinyjs::hide(id = rule_input_id("fraction_section", i), anim = FALSE)
-        }
-        if (parameter_requires_descriptor(parameter_id)) {
-          shinyjs::show(
-            id = rule_input_id("descriptor_section", i),
-            anim = FALSE
-          )
-        } else {
-          updateSelectizeInput(
-            session,
-            rule_input_id("descriptor", i),
-            selected = character(0)
-          )
-          shinyjs::hide(
-            id = rule_input_id("descriptor_section", i),
-            anim = FALSE
-          )
-        }
+        # Optional dimensions still define a particular input when populated.
+        shinyjs::show(id = rule_input_id("fraction_section", i), anim = FALSE)
+        shinyjs::show(id = rule_input_id("descriptor_section", i), anim = FALSE)
       }
     })
 
@@ -2719,7 +2691,8 @@ addGuidelines <- function(id, language) {
                 COALESCE(gri.input_source, 'sample_result') AS input_source,
                 gri.parameter_id,
                 gri.matrix_state_id, gri.sample_fraction_id,
-                gri.result_descriptor_id, gri.result_type,
+                gri.reporting_basis_id, gri.result_speciation_id, gri.result_target_id,
+                gri.endpoint_mode, gri.endpoint_ph, gri.analysis_conditions, gri.result_type,
                 array_to_string(gri.result_type_preference, ',') AS result_type_preference,
                 gri.aggregate_method, gri.required, gri.allow_condition_value,
                 gri.lower_calibrated_bound,
@@ -2895,6 +2868,7 @@ addGuidelines <- function(id, language) {
     }
 
     clear_form <- function() {
+      output$guideline_chemistry <- renderUI({ YGwater:::chemistry_metadata_ui(ns, "guideline_chem_", moduleData$chemistry_catalogues) })
       selected_guideline_id(NA_integer_)
       updateTextInput(session, "guideline_code", value = "")
       updateTextInput(session, "guideline_name", value = "")
@@ -2904,7 +2878,7 @@ addGuidelines <- function(id, language) {
       updateSelectizeInput(session, "matrix_state", selected = character(0))
       updateSelectizeInput(
         session,
-        "result_descriptor",
+        "reporting_basis",
         selected = character(0)
       )
       updateSelectizeInput(session, "sample_fraction", selected = character(0))
@@ -2962,7 +2936,7 @@ addGuidelines <- function(id, language) {
         value = empty_table_text(narrative_cols)
       )
       update_formula_sql("")
-      update_result_descriptor_visibility(character(0))
+      update_reporting_basis_visibility(character(0))
     }
 
     load_form <- function(guideline_id) {
@@ -3023,20 +2997,21 @@ addGuidelines <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "result_descriptor",
+        "reporting_basis",
         choices = choice_values(
-          moduleData$result_descriptors,
-          "result_descriptor_id",
-          "result_descriptor"
+          moduleData$reporting_bases,
+          "reporting_basis_id",
+          "reporting_basis"
         ),
-        selected = if (is.na(g$result_descriptor_id[[1]])) {
+        selected = if (is.na(g$reporting_basis_id[[1]])) {
           character(0)
         } else {
-          as.character(g$result_descriptor_id[[1]])
+          as.character(g$reporting_basis_id[[1]])
         },
         server = TRUE
       )
-      update_result_descriptor_visibility(g$parameter_id[[1]])
+      output$guideline_chemistry <- renderUI({ YGwater:::chemistry_metadata_ui(ns, "guideline_chem_", moduleData$chemistry_catalogues, g) })
+      update_reporting_basis_visibility(g$parameter_id[[1]])
       updateSelectizeInput(
         session,
         "sample_fraction",
@@ -3351,11 +3326,11 @@ addGuidelines <- function(id, language) {
     find_descriptor_id <- function(pattern) {
       hits <- grep(
         pattern,
-        moduleData$result_descriptors$result_descriptor,
+        moduleData$reporting_bases$reporting_basis,
         ignore.case = TRUE
       )
       if (length(hits)) {
-        moduleData$result_descriptors$result_descriptor_id[[hits[[1]]]]
+        moduleData$reporting_bases$reporting_basis_id[[hits[[1]]]]
       } else {
         NA_integer_
       }
@@ -3432,11 +3407,12 @@ addGuidelines <- function(id, language) {
       df$result_type_id[is.na(df$result_type_id)] <- default_result_type_id()
       hardness_rows <- df$input_source %in% "hardness_helper"
       if (any(hardness_rows)) {
+        df$matrix_state_id[hardness_rows] <- liquid_matrix_state_id()
         df$sample_fraction_id[
           hardness_rows & is.na(df$sample_fraction_id)
         ] <- find_fraction_id("^total$")
-        df$result_descriptor_id[
-          hardness_rows & is.na(df$result_descriptor_id)
+        df$reporting_basis_id[
+          hardness_rows & is.na(df$reporting_basis_id)
         ] <- find_descriptor_id("CaCO3|CaCO3 equivalent")
       }
       df
@@ -3518,8 +3494,14 @@ addGuidelines <- function(id, language) {
         "  sample_fraction_id := ",
         null_or_int_sql(row$sample_fraction_id[[1]]),
         ",\n",
-        "  result_descriptor_id := ",
-        null_or_int_sql(row$result_descriptor_id[[1]]),
+        "  reporting_basis_id := ",
+        null_or_int_sql(row$reporting_basis_id[[1]]),
+        ",\n  result_speciation_id := ", null_or_int_sql(row$result_speciation_id[[1]]),
+        ",\n  result_target_id := ", null_or_int_sql(row$result_target_id[[1]]),
+        ",\n  endpoint_mode := ", if (is.na(row$endpoint_mode[[1]])) "NULL::TEXT" else as.character(DBI::dbQuoteString(con, row$endpoint_mode[[1]])),
+        ",\n  endpoint_ph := ", if (is.na(row$endpoint_ph[[1]])) "NULL::NUMERIC" else as.character(row$endpoint_ph[[1]]),
+        ",\n  analysis_conditions := ", as.character(DBI::dbQuoteString(con, AquaCache::normalizeAnalysisConditions(row$analysis_conditions[[1]]))), "::JSONB",
+        ",\n  matrix_state_id := ", null_or_int_sql(row$matrix_state_id[[1]]),
         "\n",
         ") AS ",
         input_code
@@ -3555,9 +3537,9 @@ addGuidelines <- function(id, language) {
             ),
             ", descriptor ",
             ifelse(
-              is.na(integer_or_na(row$result_descriptor_id[[1]])),
+              is.na(integer_or_na(row$reporting_basis_id[[1]])),
               "NULL",
-              integer_or_na(row$result_descriptor_id[[1]])
+              integer_or_na(row$reporting_basis_id[[1]])
             )
           )
           paste0(name, " [", code, "; ", meta, "]")
@@ -3639,7 +3621,7 @@ SELECT 0::numeric",
       sample_id := $1::INT,
       ***!parameter_id := xxx::INT!***,
       ***!sample_fraction_id := xxx::INT!***,
-      ***!result_descriptor_id := xxx::INT!***
+      ***!reporting_basis_id := xxx::INT!***
     ) AS v1
 
     -- Add more sample inputs here if needed, separated by commas.
@@ -3658,7 +3640,7 @@ FROM vals",
     --     sample_id := $1::INT,
     --     ***!parameter_id := xxx::INT!***,
     --     ***!sample_fraction_id := xxx::INT!***,
-    --     ***!result_descriptor_id := xxx::INT!***
+    --     ***!reporting_basis_id := xxx::INT!***
     --   ) AS v1
 )
 SELECT CASE
@@ -3972,68 +3954,17 @@ FROM vals",
       }
       sql_int_literal(parts[[position]])
     }
-    sql_ref_key <- function(
-      parameter_id,
-      sample_fraction_id,
-      result_descriptor_id
-    ) {
-      paste(
-        ifelse(
-          is.na(parameter_id),
-          "NULL",
-          as.character(as.integer(parameter_id))
-        ),
-        ifelse(
-          is.na(sample_fraction_id),
-          "NULL",
-          as.character(as.integer(sample_fraction_id))
-        ),
-        ifelse(
-          is.na(result_descriptor_id),
-          "NULL",
-          as.character(as.integer(result_descriptor_id))
-        ),
-        sep = "|"
-      )
+    sql_ref_key <- function(parameter_id, sample_fraction_id, reporting_basis_id,
+      result_speciation_id = NA_integer_, result_target_id = NA_integer_,
+      endpoint_mode = NA_character_, endpoint_ph = NA_real_, analysis_conditions = "{}", matrix_state_id = NA_integer_) {
+      if (!length(parameter_id)) return(character())
+      YGwater:::chemistry_accessor_keys(data.frame(parameter_id, sample_fraction_id, reporting_basis_id,
+        result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions, matrix_state_id))
     }
-    format_sql_ref_key <- function(key) {
-      parts <- strsplit(key, "|", fixed = TRUE)[[1]]
-      paste0(
-        "parameter_id=",
-        parts[[1]],
-        ", sample_fraction_id=",
-        parts[[2]],
-        ", result_descriptor_id=",
-        parts[[3]]
-      )
-    }
+    format_sql_ref_key <- function(key) key
     sql_scalar_input_refs <- function(sql) {
       scan <- strip_sql_for_input_scan(sql)
-      call_hits <- gregexpr(
-        "\\bdiscrete\\.get_sample_val\\s*\\(([^()]*)\\)",
-        scan,
-        perl = TRUE,
-        ignore.case = TRUE
-      )
-      calls <- regmatches(scan, call_hits)[[1]]
-      if (length(calls) == 1L && identical(calls, "-1")) {
-        calls <- character(0)
-      }
-      sample_refs <- character(0)
-      if (length(calls)) {
-        sample_refs <- vapply(
-          calls,
-          function(call) {
-            args <- sub("^.*?\\((.*)\\)\\s*$", "\\1", call, perl = TRUE)
-            sql_ref_key(
-              sql_arg_value(args, "parameter_id", 2L),
-              sql_arg_value(args, "sample_fraction_id", 3L),
-              sql_arg_value(args, "result_descriptor_id", 4L)
-            )
-          },
-          character(1)
-        )
-      }
+      sample_refs <- YGwater:::chemistry_sql_accessor_refs(clean_sql_scalar(sql))
       list(
         sample_refs = unique(sample_refs),
         uses_hardness = grepl(
@@ -4087,9 +4018,10 @@ FROM vals",
       declared_refs <- unique(sql_ref_key(
         declared_samples$parameter_id,
         declared_samples$sample_fraction_id,
-        declared_samples$result_descriptor_id
+        declared_samples$reporting_basis_id, declared_samples$result_speciation_id, declared_samples$result_target_id,
+        declared_samples$endpoint_mode, declared_samples$endpoint_ph, declared_samples$analysis_conditions, declared_samples$matrix_state_id
       ))
-      declared_refs <- declared_refs[!grepl("^NULL\\|", declared_refs)]
+      declared_refs <- declared_refs[!is.na(declared_samples$parameter_id)]
 
       if (refs$uses_sample_id && helper_count == 0L) {
         stop(
@@ -4197,7 +4129,7 @@ FROM vals",
         if (
           !is_helper &&
             parameter_requires_descriptor(df$parameter_id[i]) &&
-            is.na(integer_or_na(df$result_descriptor_id[i]))
+            is.na(integer_or_na(df$reporting_basis_id[i]))
         ) {
           stop(
             "Descriptor is required for input '",
@@ -4211,10 +4143,10 @@ FROM vals",
           "INSERT INTO criteria.guideline_rule_inputs (
              rule_id, input_code, input_name, input_source,
              parameter_id, matrix_state_id, sample_fraction_id,
-             result_descriptor_id, result_type, result_type_preference,
+             reporting_basis_id, result_type, result_type_preference,
              aggregate_method, required, allow_condition_value,
              lower_calibrated_bound, upper_calibrated_bound,
-             bounds_action, note
+             bounds_action, note, result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions
            )
            VALUES (
              $1, $2, $3, $4, $5, $6, $7, $8, $9,
@@ -4222,7 +4154,7 @@ FROM vals",
                WHEN NULLIF($10, '') IS NULL THEN NULL::integer[]
                ELSE string_to_array($10, ',')::integer[]
              END,
-             $11, $12, $13, $14, $15, $16, $17
+             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb
            )",
           params = list(
             rule_id,
@@ -4232,7 +4164,7 @@ FROM vals",
             integer_or_na(df$parameter_id[i]),
             integer_or_na(df$matrix_state_id[i]),
             integer_or_na(df$sample_fraction_id[i]),
-            integer_or_na(df$result_descriptor_id[i]),
+            integer_or_na(df$reporting_basis_id[i]),
             integer_or_na(df$result_type[i]),
             text_value(df$result_type_preference[i]),
             text_default(df$aggregate_method[i], "single"),
@@ -4241,7 +4173,8 @@ FROM vals",
             numeric_or_na(df$lower_calibrated_bound[i]),
             numeric_or_na(df$upper_calibrated_bound[i]),
             text_default(df$bounds_action[i], "flag"),
-            text_or_na(df$note[i])
+            text_or_na(df$note[i]), integer_or_na(df$result_speciation_id[i]), integer_or_na(df$result_target_id[i]),
+            text_or_na(df$endpoint_mode[i]), numeric_or_na(df$endpoint_ph[i]), AquaCache::normalizeAnalysisConditions(df$analysis_conditions[i])
           )
         )
       }
@@ -4461,6 +4394,8 @@ FROM vals",
       if (!is.null(formula_sql)) {
         validate_sql_scalar_inputs(formula_sql, df)
       }
+      sample_rows <- df[!df$input_source %in% "hardness_helper", , drop = FALSE]
+      if (nrow(sample_rows)) AquaCache::validateResultChemistry(NULL, sample_rows, parameters = moduleData$parameters, matrix_states = moduleData$matrix_states)
       for (i in seq_len(nrow(df))) {
         is_helper <- identical(
           text_default(df$input_source[i], "sample_result"),
@@ -4481,7 +4416,7 @@ FROM vals",
         if (
           !is_helper &&
             parameter_requires_descriptor(df$parameter_id[i]) &&
-            is.na(integer_or_na(df$result_descriptor_id[i]))
+            is.na(integer_or_na(df$reporting_basis_id[i]))
         ) {
           stop(
             "Descriptor is required for input '",
@@ -4558,7 +4493,8 @@ FROM vals",
         applicability_notes = text_or_na(input$applicability_notes),
         parameter_id = parameter_id,
         matrix_state_id = matrix_state_id,
-        result_descriptor_id = integer_or_na(input$result_descriptor),
+        reporting_basis_id = integer_or_na(input$reporting_basis),
+        chemistry = YGwater:::chemistry_metadata_values(input, "guideline_chem_"),
         comparison_operator_code = operator,
         jurisdiction = input$jurisdiction,
         protection_goal = input$protection_goal,
@@ -4821,10 +4757,11 @@ FROM vals",
                   "INSERT INTO criteria.guideline_rule_inputs (
                      rule_id, input_code, input_name, input_source,
                      parameter_id, matrix_state_id, sample_fraction_id,
-                     result_descriptor_id, result_type,
+                     reporting_basis_id, result_type,
                      result_type_preference, aggregate_method, required,
                      allow_condition_value, lower_calibrated_bound,
-                     upper_calibrated_bound, bounds_action, note
+                     upper_calibrated_bound, bounds_action, note,
+                     result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions
                    )
                    VALUES (
                      $1, $2, $3, $4, $5, $6, $7, $8, $9,
@@ -4832,7 +4769,7 @@ FROM vals",
                        WHEN NULLIF($10, '') IS NULL THEN NULL::integer[]
                        ELSE string_to_array($10, ',')::integer[]
                      END,
-                     $11, $12, $13, $14, $15, $16, $17
+                     $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb
                    )",
                   params = list(
                     rule_id,
@@ -4846,7 +4783,7 @@ FROM vals",
                     int_or_na(df$parameter_id[i]),
                     int_or_na(df$matrix_state_id[i]),
                     int_or_na(df$sample_fraction_id[i]),
-                    int_or_na(df$result_descriptor_id[i]),
+                    int_or_na(df$reporting_basis_id[i]),
                     int_or_na(df$result_type[i]),
                     txt_value(df$result_type_preference[i]),
                     if (is_empty(df$aggregate_method[i])) {
@@ -4863,7 +4800,8 @@ FROM vals",
                     } else {
                       txt_value(df$bounds_action[i])
                     },
-                    txt_or_na(df$note[i])
+                    txt_or_na(df$note[i]), int_or_na(df$result_speciation_id[i]), int_or_na(df$result_target_id[i]),
+                    txt_or_na(df$endpoint_mode[i]), num_or_na(df$endpoint_ph[i]), AquaCache::normalizeAnalysisConditions(df$analysis_conditions[i])
                   )
                 )
               }
@@ -4996,7 +4934,7 @@ FROM vals",
               req$applicability_notes,
               req$parameter_id,
               req$matrix_state_id,
-              req$result_descriptor_id,
+              req$reporting_basis_id,
               req$comparison_operator_code,
               jurisdiction_id,
               protection_goal_id,
@@ -5020,7 +4958,7 @@ FROM vals",
                 "INSERT INTO criteria.guidelines (
                    guideline_code, guideline_name, publisher_id, series_id,
                    reference, general_notes, applicability_notes,
-                   parameter_id, matrix_state_id, result_descriptor_id,
+                   parameter_id, matrix_state_id, reporting_basis_id,
                    comparison_operator_code, jurisdiction_id,
                    protection_goal_id, exposure_duration_id,
                    averaging_period_id, source_document_title, source_url,
@@ -5044,7 +4982,7 @@ FROM vals",
                      publisher_id = $3, series_id = $4, reference = $5,
                      general_notes = $6, applicability_notes = $7,
                      parameter_id = $8, matrix_state_id = $9,
-                     result_descriptor_id = $10,
+                     reporting_basis_id = $10,
                      comparison_operator_code = $11, jurisdiction_id = $12,
                      protection_goal_id = $13, exposure_duration_id = $14,
                      averaging_period_id = $15,
@@ -5057,6 +4995,11 @@ FROM vals",
                 params = c(guideline_params, list(guideline_id))
               )
             }
+
+            DBI::dbExecute(con,
+              "UPDATE criteria.guidelines SET result_speciation_id = $1, result_target_id = $2,
+                endpoint_mode = $3, endpoint_ph = $4, analysis_conditions = $5::jsonb WHERE guideline_id = $6",
+              params = c(unname(req$chemistry), list(guideline_id)))
 
             DBI::dbExecute(
               con,
@@ -5359,21 +5302,22 @@ FROM vals",
             guideline_row <- req$guideline_row
             params <- list(
               as.integer(guideline_row$parameter_id[[1]]),
-              as.integer(guideline_row$matrix_state_id[[1]])
+              as.integer(guideline_row$matrix_state_id[[1]]), as.integer(guideline_row$guideline_id[[1]])
             )
             target_conditions <- c(
               "r.parameter_id = $1",
-              "r.matrix_state_id = $2"
+              "r.matrix_state_id = $2",
+              "discrete.result_matches_chemistry(r.result_id, (SELECT to_jsonb(g) FROM criteria.guidelines g WHERE g.guideline_id = $3))"
             )
-            result_descriptor_id <- suppressWarnings(as.integer(
-              guideline_row$result_descriptor_id[[1]]
+            reporting_basis_id <- suppressWarnings(as.integer(
+              guideline_row$reporting_basis_id[[1]]
             ))
-            if (!is.na(result_descriptor_id)) {
-              params <- c(params, list(result_descriptor_id))
+            if (!is.na(reporting_basis_id)) {
+              params <- c(params, list(reporting_basis_id))
               target_conditions <- c(
                 target_conditions,
                 paste0(
-                  "r.result_descriptor_id IS NOT DISTINCT FROM $",
+                  "r.reporting_basis_id IS NOT DISTINCT FROM $",
                   length(params)
                 )
               )
@@ -5577,22 +5521,23 @@ FROM vals",
               params <- list(
                 int_or_na(sample_id),
                 as.integer(guideline_row$parameter_id[[1]]),
-                as.integer(guideline_row$matrix_state_id[[1]])
+                as.integer(guideline_row$matrix_state_id[[1]]), as.integer(guideline_row$guideline_id[[1]])
               )
               conditions <- c(
                 "r.sample_id = $1",
                 "r.parameter_id = $2",
-                "r.matrix_state_id = $3"
+                "r.matrix_state_id = $3",
+                "discrete.result_matches_chemistry(r.result_id, (SELECT to_jsonb(g) FROM criteria.guidelines g WHERE g.guideline_id = $4))"
               )
-              result_descriptor_id <- int_or_na(
-                guideline_row$result_descriptor_id[[1]]
+              reporting_basis_id <- int_or_na(
+                guideline_row$reporting_basis_id[[1]]
               )
-              if (!is.na(result_descriptor_id)) {
-                params <- c(params, list(result_descriptor_id))
+              if (!is.na(reporting_basis_id)) {
+                params <- c(params, list(reporting_basis_id))
                 conditions <- c(
                   conditions,
                   paste0(
-                    "r.result_descriptor_id IS NOT DISTINCT FROM $",
+                    "r.reporting_basis_id IS NOT DISTINCT FROM $",
                     length(params)
                   )
                 )
@@ -5628,30 +5573,36 @@ FROM vals",
               parameter_id,
               matrix_state_id,
               sample_fraction_id,
-              result_descriptor_id,
+              reporting_basis_id,
               value,
               result_type_id,
-              analysis_datetime
+              analysis_datetime,
+              chemistry = list()
             ) {
               result_type_id <- if (is.na(int_or_na(result_type_id))) {
                 default_result_type_id()
               } else {
                 int_or_na(result_type_id)
               }
+              defaults <- list(result_speciation_id = NA_integer_, result_target_id = NA_integer_,
+                endpoint_mode = NA_character_, endpoint_ph = NA_real_, analysis_conditions = "{}")
+              chemistry <- utils::modifyList(defaults, chemistry)
               query <- DBI::sqlInterpolate(
                 con,
                 "INSERT INTO discrete.results (
                    sample_id, result_type, parameter_id, sample_fraction_id,
                    result, result_condition, result_condition_value,
-                   result_value_type, result_descriptor_id,
-                   analysis_datetime, share_with, no_source_update, matrix_state_id
+                   result_value_type, reporting_basis_id,
+                   analysis_datetime, share_with, no_source_update, matrix_state_id,
+                   result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions
                  )
                  VALUES (
                    ?sample_id, ?result_type_id, ?parameter_id,
                    ?sample_fraction_id, ?value, NULL, NULL,
-                   ?result_value_type_id, ?result_descriptor_id,
+                   ?result_value_type_id, ?reporting_basis_id,
                    CAST(?analysis_datetime AS timestamptz),
-                   ARRAY['public_reader'], false, ?matrix_state_id
+                   ARRAY['public_reader'], false, ?matrix_state_id,
+                   ?result_speciation_id, ?result_target_id, ?endpoint_mode, ?endpoint_ph, CAST(?analysis_conditions AS jsonb)
                  )
                  RETURNING result_id",
                 sample_id = sample_id,
@@ -5660,9 +5611,13 @@ FROM vals",
                 sample_fraction_id = sample_fraction_id,
                 value = value,
                 result_value_type_id = actual_value_type_id(),
-                result_descriptor_id = result_descriptor_id,
+                reporting_basis_id = reporting_basis_id,
                 analysis_datetime = analysis_datetime,
-                matrix_state_id = matrix_state_id
+                matrix_state_id = matrix_state_id,
+                result_speciation_id = chemistry$result_speciation_id,
+                result_target_id = chemistry$result_target_id,
+                endpoint_mode = chemistry$endpoint_mode, endpoint_ph = chemistry$endpoint_ph,
+                analysis_conditions = AquaCache::normalizeAnalysisConditions(chemistry$analysis_conditions)
               )
               DBI::dbGetQuery(con, query)$result_id[[1]]
             }
@@ -5852,12 +5807,13 @@ FROM vals",
               parameter_id = as.integer(guideline_row$parameter_id[[1]]),
               matrix_state_id = as.integer(guideline_row$matrix_state_id[[1]]),
               sample_fraction_id = first_id(guideline_row$fraction_ids[[1]]),
-              result_descriptor_id = int_or_na(
-                guideline_row$result_descriptor_id[[1]]
+              reporting_basis_id = int_or_na(
+                guideline_row$reporting_basis_id[[1]]
               ),
               value = req$target_value,
               result_type_id = NA_integer_,
-              analysis_datetime = sample_datetime
+              analysis_datetime = sample_datetime,
+              chemistry = as.list(guideline_row[1, c("result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions"), drop = FALSE])
             )
             inserted_input_count <- 0L
             input_results <- req$input_results
@@ -5873,12 +5829,13 @@ FROM vals",
                   parameter_id = input_results$parameter_id[[i]],
                   matrix_state_id = input_results$matrix_state_id[[i]],
                   sample_fraction_id = input_results$sample_fraction_id[[i]],
-                  result_descriptor_id = input_results$result_descriptor_id[[
+                  reporting_basis_id = input_results$reporting_basis_id[[
                     i
                   ]],
                   value = input_results$value[[i]],
                   result_type_id = input_results$result_type_id[[i]],
-                  analysis_datetime = sample_datetime
+                  analysis_datetime = sample_datetime,
+                  chemistry = as.list(input_results[i, c("result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions"), drop = FALSE])
                 )
                 inserted_input_count <- inserted_input_count + 1L
               }

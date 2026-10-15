@@ -37,7 +37,7 @@ plotDiscrete(
   result_types = NULL,
   sample_fractions = NULL,
   result_value_types = NULL,
-  result_descriptors = NULL,
+  reporting_bases = NULL,
   include_blanks = TRUE,
   duplicate_action = c("show", "hide", "average"),
   sample_ids = NULL,
@@ -46,7 +46,12 @@ plotDiscrete(
   dbSource = "EQ",
   dbCon = NULL,
   dbPath = eqwin_db_path(),
-  data = FALSE
+  data = FALSE,
+  result_speciations = NULL,
+  result_targets = NULL,
+  endpoint_modes = NULL,
+  endpoint_ph = NULL,
+  analysis_conditions = NULL
 )
 }
 \arguments{
@@ -114,7 +119,7 @@ plotDiscrete(
 
 \item{result_value_types}{Optional AquaCache result value type ids or names to include, for example Actual or Calculated.}
 
-\item{result_descriptors}{Optional AquaCache result descriptor ids or names to include.}
+\item{reporting_bases}{Optional AquaCache numeric reporting basis IDs or names.}
 
 \item{include_blanks}{Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.}
 
@@ -135,6 +140,16 @@ handled. One of \code{"show"}, \code{"hide"}, or \code{"average"}. Averaging use
 \item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}.}
 
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
+
+\item{result_speciations}{Optional chemical form/scope IDs or names.}
+
+\item{result_targets}{Optional analytical target/material IDs or names.}
+
+\item{endpoint_modes}{Optional endpoint determination modes to include.}
+
+\item{endpoint_ph}{Optional finite endpoint pH values to include.}
+
+\item{analysis_conditions}{Optional JSON object or named list of exact analysis conditions.}
 }
 \value{
 An interactive HTML plot. When \code{data = TRUE}, a list containing the

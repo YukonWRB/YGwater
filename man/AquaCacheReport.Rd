@@ -55,8 +55,8 @@ selected for each location and target date; ties prefer the later date.}
 \item{sd_multiplier}{Optional number of sample standard deviations from the
 mean used to flag unusually high or low results. Only numeric result values
 are used; censored and missing results are excluded. Groups are calculated
-separately by location, parameter, matrix, fraction, speciation, and result
-type.}
+separately by location, parameter, matrix, fraction, reporting basis,
+chemical form, analytical target, endpoint, analysis conditions, and result type.}
 
 \item{sd_start}{Optional first date included in the SD calculation.}
 
@@ -109,8 +109,9 @@ and location. If this selects one sample for multiple dates, the function
 warns and reports the reuse count; each result detail row includes both its
 requested and actual sample dates. Optional matrix-state and sample-fraction
 filters are applied when finding the closest eligible sample, then retained
-in the report matrix and result details. Result descriptor is shown in the
-report whenever it is recorded for a measurement. Matrix rows also
+in the report matrix and result details. Reporting basis, chemical form,
+analytical target, endpoint, and analysis conditions distinguish report rows
+whenever recorded for a measurement. Matrix rows also
 distinguish result type, so field and laboratory measurements of the same
 parameter and sample remain separate. When \code{date_range} is
 supplied, all eligible samples collected in the inclusive interval are

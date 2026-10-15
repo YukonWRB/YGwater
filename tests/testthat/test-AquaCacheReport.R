@@ -219,8 +219,12 @@ make_report_fixture <- function() {
         matrix_state = "Liquid",
         sample_fraction_id = 1L,
         sample_fraction = "Total",
-        result_descriptor_id = NA_integer_,
-        result_descriptor = NA_character_,
+        reporting_basis_id = NA_integer_,
+        reporting_basis = NA_character_,
+        result_speciation_id = NA_integer_, result_speciation = NA_character_,
+        result_target_id = NA_integer_, result_target = NA_character_,
+        endpoint_mode = NA_character_, endpoint_ph = NA_real_,
+        analysis_conditions = "{}", analysis_conditions_key = "empty_conditions",
         result_type_id = 1L,
         result_type = "Discrete",
         result_value_type_id = 1L,
@@ -687,4 +691,28 @@ test_that("AquaCacheReport keeps empty target dates and resolves ties consistent
   output_paths <- c(output_paths, tie_report$xlsx_path)
   details <- openxlsx::read.xlsx(tie_report$xlsx_path, "Result details")
   expect_equal(details[[2]], 102L)
+})
+
+
+test_that("report matrices keep endpoints and dry/wet contexts on distinct rows", {
+  con <- make_report_fixture()
+  original <- con@fixture$results[1, , drop = FALSE]
+  variants <- original[rep(1L, 4L), , drop = FALSE]
+  variants$result_id <- 9001:9004
+  variants$result <- c(10, 20, 30, 40)
+  variants$endpoint_mode <- "fixed"
+  variants$endpoint_ph <- c(4.5, 8.3, 4.5, 4.5)
+  variants$analysis_conditions <- c("{}", "{}", '{"mass_basis":"dry"}', '{"mass_basis":"wet"}')
+  variants$analysis_conditions_key <- c("empty_conditions", "empty_conditions", "dry_conditions", "wet_conditions")
+  con@fixture$results <- rbind(con@fixture$results, variants)
+  report <- run_mock_aquacache_report(con, date = original$sample_date,
+    location_ids = original$location_id, parameter_ids = original$parameter_id)
+  on.exit(unlink(report$xlsx_path), add = TRUE)
+  sheet <- openxlsx::read.xlsx(report$xlsx_path, "Report", colNames = FALSE)
+  text <- as.character(unlist(sheet))
+  expect_true(any(grepl("endpoint pH 4.5", text)))
+  expect_true(any(grepl("endpoint pH 8.3", text)))
+  expect_true(any(grepl('"mass_basis":"dry"', text, fixed = TRUE)))
+  expect_true(any(grepl('"mass_basis":"wet"', text, fixed = TRUE)))
+  expect_true(all(c(10, 20, 30, 40) %in% suppressWarnings(as.numeric(text))))
 })

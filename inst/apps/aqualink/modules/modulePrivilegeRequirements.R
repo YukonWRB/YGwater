@@ -240,6 +240,34 @@ ygwater_module_privilege_requirements <- function() {
       ),
       list(default_write[[1]], default_write[[1]], "UPDATE")
     ),
+    importSetup = req(
+      c(
+        "discrete.import_sources",
+        "discrete.import_profiles",
+        "discrete.import_mapping_sets",
+        "discrete.import_parameter_mappings",
+        "discrete.import_location_mappings",
+        "discrete.import_result_flag_mappings",
+        "public.parameters",
+        "public.units",
+        "public.matrix_states",
+        "public.locations",
+        "public.sub_locations",
+        "public.organizations",
+        "public.media_types",
+        "discrete.collection_methods",
+        "discrete.sample_types",
+        "discrete.result_types",
+        "discrete.result_conditions",
+        "discrete.result_value_types",
+        "discrete.sample_fractions",
+        "discrete.reporting_bases",
+        "discrete.result_speciations",
+        "discrete.result_targets",
+        "discrete.laboratories"
+      ),
+      list("SELECT")
+    ),
     addDiscData = req(
       c("files.documents", "discrete.samples", "discrete.results"),
       list(c("INSERT", "UPDATE"), "INSERT", "INSERT")
@@ -411,12 +439,26 @@ ygwater_module_privilege_requirements <- function() {
         "public.parameters",
         "public.parameter_relationships",
         "public.parameter_groups",
-        "public.parameter_sub_groups"
+        "public.parameter_sub_groups",
+        "discrete.reporting_bases",
+        "discrete.result_speciations",
+        "discrete.result_targets",
+        "public.parameter_reporting_basis_suggestions",
+        "public.parameter_speciation_suggestions",
+        "public.parameter_target_suggestions",
+        "information.patch65_result_descriptor_crosswalk"
       ),
       list(
         c("SELECT", "INSERT", "UPDATE"),
         c("SELECT", "INSERT", "DELETE"),
         "SELECT",
+        "SELECT",
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT", "INSERT", "DELETE"),
+        c("SELECT", "INSERT", "DELETE"),
+        c("SELECT", "INSERT", "DELETE"),
         "SELECT"
       )
     ),

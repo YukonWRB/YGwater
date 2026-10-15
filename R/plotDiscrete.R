@@ -34,7 +34,12 @@
 #' @param result_types Optional AquaCache result type ids or names to include.
 #' @param sample_fractions Optional AquaCache sample fraction ids or names to include, for example total or dissolved.
 #' @param result_value_types Optional AquaCache result value type ids or names to include, for example Actual or Calculated.
-#' @param result_descriptors Optional AquaCache result descriptor ids or names to include.
+#' @param reporting_bases Optional AquaCache numeric reporting basis IDs or names.
+#' @param result_speciations Optional chemical form/scope IDs or names.
+#' @param result_targets Optional analytical target/material IDs or names.
+#' @param endpoint_modes Optional endpoint determination modes to include.
+#' @param endpoint_ph Optional finite endpoint pH values to include.
+#' @param analysis_conditions Optional JSON object or named list of exact analysis conditions.
 #' @param include_blanks Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.
 #' @param duplicate_action How AquaCache duplicate/replicate samples should be
 #'   handled. One of `"show"`, `"hide"`, or `"average"`. Averaging uses active
@@ -90,7 +95,7 @@ plotDiscrete <- function(
   result_types = NULL,
   sample_fractions = NULL,
   result_value_types = NULL,
-  result_descriptors = NULL,
+  reporting_bases = NULL,
   include_blanks = TRUE,
   duplicate_action = c("show", "hide", "average"),
   sample_ids = NULL,
@@ -99,7 +104,12 @@ plotDiscrete <- function(
   dbSource = "EQ",
   dbCon = NULL,
   dbPath = eqwin_db_path(),
-  data = FALSE
+  data = FALSE,
+  result_speciations = NULL,
+  result_targets = NULL,
+  endpoint_modes = NULL,
+  endpoint_ph = NULL,
+  analysis_conditions = NULL
 ) {
   # testing params
   # start = "2010-05-12"
@@ -132,7 +142,7 @@ plotDiscrete <- function(
   # result_types = NULL
   # sample_fractions = NULL
   # result_value_types = NULL
-  # result_descriptors = NULL
+  # reporting_bases = NULL
   # include_blanks = TRUE
   # duplicate_action = "show"
   # sample_ids = NULL
@@ -218,7 +228,7 @@ plotDiscrete <- function(
       result_types = result_types,
       sample_fractions = sample_fractions,
       result_value_types = result_value_types,
-      result_descriptors = result_descriptors
+      reporting_bases = reporting_bases
     )
     if (any(vapply(ac_args, Negate(is.null), logical(1)))) {
       warning(
@@ -300,7 +310,7 @@ plotDiscrete <- function(
   }
 
   # Create a data.frame to hold the plotting data. EQWin and aquacache fill this list in differently, but the end result is the same to pass on to the plotting portion.
-  # 'data' should contain columns named location, location_name, parameter, datetime, result, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by aquacache) are sample_type, collection_method, sample_fraction, result_descriptor.
+  # 'data' should contain columns named location, location_name, parameter, datetime, result, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by aquacache) are sample_type, collection_method, sample_fraction, reporting_basis.
   data <- data.frame()
 
   collapse_unique <- function(x) {
@@ -551,7 +561,8 @@ plotDiscrete <- function(
           c("datetime", "target_datetime")
         },
         "sample_fraction",
-        "result_descriptor",
+        "reporting_basis",
+        chemistry_identity_columns(),
         "result_type",
         "result_value_type",
         "matrix_state",
@@ -1576,11 +1587,25 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "rvt.result_value_type"
       ),
       selected_value_clause(
-        result_descriptors,
-        "r.result_descriptor_id",
-        "rs.result_descriptor"
-      )
+        reporting_bases,
+        "r.reporting_basis_id",
+        "rs.reporting_basis"
+      ),
+      selected_value_clause(result_speciations, "r.result_speciation_id", "spec.result_speciation"),
+      selected_value_clause(result_targets, "r.result_target_id", "target.result_target"),
+      selected_value_clause(endpoint_modes, "r.endpoint_mode", "r.endpoint_mode")
     )
+    if (!is.null(endpoint_ph) && length(endpoint_ph)) {
+      ph <- suppressWarnings(as.numeric(endpoint_ph))
+      if (any(!is.finite(ph))) stop("Endpoint pH filters must be finite numbers.")
+      placeholder <- bind_query_value(jsonlite::toJSON(ph, auto_unbox = FALSE))
+      where_clauses <- c(where_clauses, paste0("r.endpoint_ph IN (SELECT value::numeric FROM jsonb_array_elements_text(", placeholder, "::jsonb))"))
+    }
+    if (!is.null(analysis_conditions)) {
+      conditions <- AquaCache::normalizeAnalysisConditions(analysis_conditions)
+      placeholder <- bind_query_value(conditions)
+      where_clauses <- c(where_clauses, paste0("r.analysis_conditions = ", placeholder, "::jsonb"))
+    }
     if (!isTRUE(include_blanks)) {
       where_clauses <- c(
         where_clauses,
@@ -1660,13 +1685,15 @@ ORDER BY ag.result_id, ag.guideline_id;"
          r.result_condition_value,
          r.result_value_type AS result_value_type_id,
          r.sample_fraction_id,
-         r.result_descriptor_id,
+         r.reporting_basis_id, r.result_speciation_id, r.result_target_id,
+         r.endpoint_mode, r.endpoint_ph, r.analysis_conditions, r.analysis_conditions_key,
+         spec.result_speciation, target.result_target,
          r.matrix_state_id,
          rt.result_type,
          rc.result_condition AS result_condition_label,
          rvt.result_value_type,
          sf.sample_fraction,
-         rs.result_descriptor,
+         rs.reporting_basis,
          ms.matrix_state_name AS matrix_state,
          s.location_id,
          sl.sub_location_name,
@@ -1766,8 +1793,10 @@ ORDER BY ag.result_id, ag.guideline_id;"
          ON r.result_condition = rc.result_condition_id
        LEFT JOIN discrete.sample_fractions AS sf
          ON r.sample_fraction_id = sf.sample_fraction_id
-       LEFT JOIN discrete.result_descriptors AS rs
-         ON r.result_descriptor_id = rs.result_descriptor_id
+       LEFT JOIN discrete.reporting_bases AS rs
+         ON r.reporting_basis_id = rs.reporting_basis_id
+       LEFT JOIN discrete.result_speciations spec ON spec.result_speciation_id = r.result_speciation_id
+       LEFT JOIN discrete.result_targets target ON target.result_target_id = r.result_target_id
        LEFT JOIN discrete.result_value_types AS rvt
          ON r.result_value_type = rvt.result_value_type_id
        LEFT JOIN public.matrix_states AS ms
@@ -1834,6 +1863,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
     }
 
     data <- samples
+    chemistry_data <- data[, c(chemistry_identity_columns(), "result_speciation", "result_target", "analysis_conditions"), drop = FALSE]
 
     # Now make result_condition column understandable
     #result_condition should get < DL, > DL, or NA depending on if 1 or 2 show up in column 'result_condition'
@@ -1865,7 +1895,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_descriptor",
+        "reporting_basis",
         "result_value_type",
         "matrix_state",
         "grade_type_description_fr",
@@ -1903,7 +1933,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_descriptor",
+        "reporting_basis",
         "result_value_type",
         "matrix_state",
         "grade_type_description",
@@ -1942,7 +1972,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_descriptor",
+        "reporting_basis",
         "result_value_type",
         "matrix_state",
         "grade_type_description",
@@ -1980,7 +2010,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_descriptor",
+        "reporting_basis",
         "result_value_type",
         "matrix_state",
         "grade_type_description",
@@ -2000,6 +2030,13 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "expected_count"
       )
     }
+
+    data[names(chemistry_data)] <- chemistry_data
+    # Facets/series carry analytical identity through every plot statistic.
+    # No automatic conversion between as N/as NO3 or dry/wet bases is implied.
+    labels <- chemistry_result_labels(data)
+    data$parameter_name <- data$param_name
+    data$param_name <- htmltools::htmlEscape(ifelse(nzchar(labels), paste0(data$param_name, " [", labels, "]"), data$param_name))
 
     if (!is.null(guidelines)) {
       guidelines <- tolower(guidelines)
@@ -2170,10 +2207,10 @@ ORDER BY ag.result_id, ag.guideline_id;"
         }
       }
       descriptor <- FALSE
-      if ("result_descriptor" %in% names(df)) {
-        if (any(!is.na(df$result_descriptor))) {
+      if ("reporting_basis" %in% names(df)) {
+        if (any(!is.na(df$reporting_basis))) {
           descriptor <- TRUE
-          df$result_descriptor <- titleCase(df$result_descriptor, lang)
+          df$reporting_basis <- titleCase(df$reporting_basis, lang)
         }
       }
       has_result_type <- FALSE
@@ -2303,7 +2340,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
           if (has_media) paste("<br>Media:", media_type),
           if (has_result_type) paste("<br>Result type:", result_type),
           if (fraction) paste("<br>Sample fraction:", sample_fraction), # Sample fraction if provided
-          if (descriptor) paste("<br>Result descriptor:", result_descriptor), # Result descriptor if provided
+          if (descriptor) paste("<br>Reporting basis:", reporting_basis), # Result descriptor if provided
           if (has_result_value_type) {
             paste("<br>Result value type:", result_value_type)
           },
@@ -2380,7 +2417,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
             if (has_media) paste("<br>Media:", media_type),
             if (has_result_type) paste("<br>Result type:", result_type),
             if (fraction) paste("<br>Sample fraction:", sample_fraction), # Sample fraction if provided
-            if (descriptor) paste("<br>Result descriptor:", result_descriptor), # Result descriptor if provided
+            if (descriptor) paste("<br>Reporting basis:", reporting_basis), # Result descriptor if provided
             if (has_result_value_type) {
               paste("<br>Result value type:", result_value_type)
             },

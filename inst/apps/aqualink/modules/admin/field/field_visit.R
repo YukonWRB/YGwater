@@ -319,12 +319,13 @@ visit <- function(id, language) {
         session$userData$AquaCache,
         "SELECT sub_location_id, sub_location_name, location_id FROM public.sub_locations"
       )
+      moduleData$chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(session$userData$AquaCache)
       moduleData$parameters <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT p.parameter_id,
                 p.param_name,
                 p.sample_fraction,
-                p.result_descriptor,
+                p.reporting_basis, p.result_speciation, p.result_target, p.endpoint, to_jsonb(p.analysis_conditions_required_keys) AS analysis_conditions_required_keys, p.analysis_conditions_required_keys_by_matrix,
                 u.unit_name AS unit_liquid
            FROM public.parameters AS p
            LEFT JOIN public.units AS u
@@ -378,11 +379,11 @@ visit <- function(id, language) {
            FROM discrete.sample_fractions
           ORDER BY sample_fraction"
       )
-      moduleData$result_descriptors <- DBI::dbGetQuery(
+      moduleData$reporting_bases <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT result_descriptor_id, result_descriptor
-           FROM discrete.result_descriptors
-          ORDER BY result_descriptor"
+        "SELECT reporting_basis_id, reporting_basis
+           FROM discrete.reporting_bases
+          ORDER BY reporting_basis"
       )
       moduleData$protocols_methods <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -1100,18 +1101,19 @@ visit <- function(id, language) {
           column(
             6,
             selectInput(
-              ns("field_result_descriptor"),
-              "Result descriptor",
+              ns("field_reporting_basis"),
+              "Reporting basis",
               choices = field_id_choices(
-                moduleData$result_descriptors,
-                "result_descriptor_id",
-                "result_descriptor",
+                moduleData$reporting_bases,
+                "reporting_basis_id",
+                "reporting_basis",
                 include_blank = TRUE
               ),
               selected = ""
             )
           )
         ),
+        YGwater:::chemistry_metadata_ui(ns, "field_chem_", moduleData$chemistry_catalogues),
         fluidRow(
           column(
             6,
@@ -1327,7 +1329,7 @@ visit <- function(id, language) {
         condition_value <- NA_real_
       }
       sample_fraction_id <- scalar_id(input$field_sample_fraction)
-      result_descriptor_id <- scalar_id(input$field_result_descriptor)
+      reporting_basis_id <- scalar_id(input$field_reporting_basis)
       parameter <- moduleData$parameters[parameter_index, , drop = FALSE]
       if (
         isTRUE(as.logical(parameter$sample_fraction[[1]])) &&
@@ -1336,10 +1338,10 @@ visit <- function(id, language) {
         stop("Choose the required sample fraction.", call. = FALSE)
       }
       if (
-        isTRUE(as.logical(parameter$result_descriptor[[1]])) &&
-          is.na(result_descriptor_id)
+        isTRUE(as.logical(parameter$reporting_basis[[1]])) &&
+          is.na(reporting_basis_id)
       ) {
-        stop("Choose the required result descriptor.", call. = FALSE)
+        stop("Choose the required reporting basis.", call. = FALSE)
       }
       measurement_datetime <- scalar_utc_datetime(input$field_result_datetime)
       result <- data.frame(
@@ -1351,7 +1353,8 @@ visit <- function(id, language) {
         result_condition = result_condition,
         result_condition_value = condition_value,
         result_value_type = result_value_type,
-        result_descriptor_id = result_descriptor_id,
+        reporting_basis_id = reporting_basis_id,
+        YGwater:::chemistry_metadata_values(input, "field_chem_"),
         laboratory = NA_integer_,
         analysis_datetime = measurement_datetime,
         lab_report_no = NA_character_,
@@ -1366,6 +1369,7 @@ visit <- function(id, language) {
         },
         stringsAsFactors = FALSE
       )
+      AquaCache::validateResultChemistry(NULL, result, parameters = moduleData$parameters, matrix_states = moduleData$matrix_states)
       result
     }
 
@@ -1392,8 +1396,8 @@ visit <- function(id, language) {
         moduleData$sample_fractions$sample_fraction_id
       )
       descriptor_index <- match(
-        results$result_descriptor_id,
-        moduleData$result_descriptors$result_descriptor_id
+        results$reporting_basis_id,
+        moduleData$reporting_bases$reporting_basis_id
       )
       value_label <- ifelse(
         is.na(results$result),
@@ -1404,7 +1408,7 @@ visit <- function(id, language) {
         Parameter = moduleData$parameters$param_name[parameter_index],
         Result = value_label,
         `Sample fraction` = moduleData$sample_fractions$sample_fraction[fraction_index],
-        Descriptor = moduleData$result_descriptors$result_descriptor[descriptor_index],
+        Descriptor = moduleData$reporting_bases$reporting_basis[descriptor_index],
         `Measurement time (UTC)` = format(
           as.POSIXct(results$analysis_datetime, tz = "UTC"),
           "%Y-%m-%d %H:%M",
@@ -1433,7 +1437,7 @@ visit <- function(id, language) {
             "protocol_method",
             "sample_fraction_id",
             "result_value_type",
-            "result_descriptor_id",
+            "reporting_basis_id",
             "analysis_datetime"
           )
           make_keys <- function(rows) {
@@ -1457,7 +1461,7 @@ visit <- function(id, language) {
         updateSelectInput(session, "field_result_condition", selected = "")
         updateNumericInput(session, "field_result_condition_value", value = NA_real_)
         updateSelectInput(session, "field_sample_fraction", selected = "")
-        updateSelectInput(session, "field_result_descriptor", selected = "")
+        updateSelectInput(session, "field_reporting_basis", selected = "")
         updateTextAreaInput(session, "field_result_note", value = "")
         showNotification("Measurement added to the sample preview.", type = "message")
       }, error = function(e) {
@@ -1769,7 +1773,7 @@ visit <- function(id, language) {
                result_condition,
                result_condition_value,
                result_value_type,
-               result_descriptor_id,
+               reporting_basis_id,
                laboratory,
                analysis_datetime,
                lab_report_no,
@@ -1779,10 +1783,10 @@ visit <- function(id, language) {
                matrix_state_id,
                no_source_update,
                note,
-               share_with
+               share_with, result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions
              ) VALUES (
                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-               $14, $15, $16, $17, $18, $19, $20::text[]
+               $14, $15, $16, $17, $18, $19, $20::text[], $21, $22, $23, $24, $25::jsonb
              )
              RETURNING result_id",
             params = list(
@@ -1795,7 +1799,7 @@ visit <- function(id, language) {
               as.integer(result$result_condition[[1]]),
               as.numeric(result$result_condition_value[[1]]),
               as.integer(result$result_value_type[[1]]),
-              as.integer(result$result_descriptor_id[[1]]),
+              as.integer(result$reporting_basis_id[[1]]),
               as.integer(result$laboratory[[1]]),
               as.POSIXct(result$analysis_datetime[[1]], tz = "UTC"),
               as.character(result$lab_report_no[[1]]),
@@ -1805,7 +1809,9 @@ visit <- function(id, language) {
               as.integer(result$matrix_state_id[[1]]),
               isTRUE(result$no_source_update[[1]]),
               as.character(result$note[[1]]),
-              as.character(share_with)
+              as.character(share_with), as.integer(result$result_speciation_id[[1]]), as.integer(result$result_target_id[[1]]),
+              as.character(result$endpoint_mode[[1]]), as.numeric(result$endpoint_ph[[1]]),
+              AquaCache::normalizeAnalysisConditions(result$analysis_conditions[[1]])
               )
             )
           }

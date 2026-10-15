@@ -1994,7 +1994,8 @@ discData <- function(id, language, inputs) {
           media_alias = "s"
         ),
         ",
-          rs.result_descriptor,
+          rs.reporting_basis, spec.result_speciation, target.result_target,
+          r.endpoint_mode, r.endpoint_ph, r.analysis_conditions,
           rt.result_type,
           sf.sample_fraction,
           rc.result_condition,
@@ -2027,7 +2028,9 @@ discData <- function(id, language, inputs) {
         LEFT JOIN discrete.sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
         LEFT JOIN discrete.result_conditions rc ON r.result_condition = rc.result_condition_id
         LEFT JOIN discrete.result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN discrete.result_descriptors rs ON r.result_descriptor_id = rs.result_descriptor_id
+        LEFT JOIN discrete.reporting_bases rs ON r.reporting_basis_id = rs.reporting_basis_id
+        LEFT JOIN discrete.result_speciations spec ON r.result_speciation_id = spec.result_speciation_id
+        LEFT JOIN discrete.result_targets target ON r.result_target_id = target.result_target_id
         LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
         LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
         LEFT JOIN public.grade_types rg ON r.grade_type_id = rg.grade_type_id

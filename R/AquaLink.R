@@ -73,14 +73,15 @@ AquaLink <- function(
     reason = "to create base64-encoded plot images"
   )
 
-  if (!rlang::is_installed("AquaCache")) {
+  if (!rlang::is_installed("AquaCache", version = "2.8.9")) {
     rlang::check_installed(
       "remotes",
       reason = "required to install AquaCache from GitHub"
     )
     rlang::check_installed(
       "AquaCache",
-      reason = "required to use AquaLink app",
+      version = "2.8.9",
+      reason = "required for Patch 65 chemistry and import mappings in AquaLink",
       action = \(pkg, ...) remotes::install_github("YukonWRB/AquaCache")
     )
   }

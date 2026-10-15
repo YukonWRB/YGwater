@@ -326,7 +326,7 @@ addTimeseries <- function(id, language) {
         window_end_offset = "0 seconds",
         evaluation_interval = NULL,
         evaluation_anchor = NULL,
-        evaluation_timezone = NULL,
+        evaluation_timezone = "UTC",
         expected_input_interval = NULL,
         input_weighting = "equal",
         minimum_input_count = NULL,
@@ -408,13 +408,13 @@ addTimeseries <- function(id, language) {
 
     aggregation_step_drafts_from_input <- function(editor) {
       steps <- editor$steps
+      step_keys <- vapply(steps, `[[`, character(1), "key")
       for (i in seq_along(steps)) {
         step <- steps[[i]]
         key <- as.character(step$key)
         read_input <- function(field) {
           input[[aggregation_step_input_id(key, field)]]
         }
-        step$stage_number <- nullable_integer(read_input("stage_number"))
         step$operation_type <- nullable_text(read_input("operation_type"))
         step$aggregation_type_id <- nullable_integer(
           read_input("aggregation_type_id")
@@ -427,8 +427,14 @@ addTimeseries <- function(id, language) {
           step[[field]] <- nullable_text(read_input(field))
         }
         if (identical(step$operation_type, "arithmetic_mean")) {
-          step$window_start_offset <- NA_character_
-          step$window_end_offset <- NA_character_
+          # Means combine linked outputs; window/cadence fields apply only to
+          # window operations and must be NULL under the Patch 65 constraints.
+          for (field in c(
+            "window_start_offset", "window_end_offset", "evaluation_interval",
+            "evaluation_anchor", "evaluation_timezone", "expected_input_interval"
+          )) {
+            step[[field]] <- NA_character_
+          }
         }
         step$input_weighting <- aggregation_step_or(
           list(input_weighting = read_input("input_weighting")),
@@ -478,34 +484,63 @@ addTimeseries <- function(id, language) {
           }
         }
         step$inputs <- step_inputs
+        # Display order identifies steps. Derive calculation layers from links:
+        # source operations are stage 1; a consumer follows its latest input.
+        step$stage_number <- if (length(step_inputs)) {
+          max(vapply(step_inputs, function(link) {
+            previous_index <- match(link$step_key, step_keys)
+            as.integer(steps[[previous_index]]$stage_number)
+          }, integer(1))) + 1L
+        } else {
+          1L
+        }
         steps[[i]] <- step
       }
       steps
     }
 
+    aggregation_output_choices <- function(operation_type) {
+      types <- moduleData$aggregation_types
+      if (identical(operation_type, "arithmetic_mean")) {
+        types <- types[
+          tolower(trimws(types$aggregation_type)) %in%
+            c("mean", "arithmetic mean", "(min+max)/2"),
+          ,
+          drop = FALSE
+        ]
+      }
+      stats::setNames(
+        as.character(types$aggregation_type_id),
+        types$aggregation_type
+      )
+    }
+
     aggregation_step_fields_ui <- function(editor) {
       steps <- editor$steps
-      if (length(steps) == 0L) {
-        return(tags$p("Add at least one calculation step.", class = "text-muted"))
-      }
-      aggregation_choices <- stats::setNames(
-        as.character(moduleData$aggregation_types$aggregation_type_id),
-        moduleData$aggregation_types$aggregation_type
-      )
       operation_choices <- c(
         "Window aggregate" = "window_aggregate",
         "Arithmetic mean" = "arithmetic_mean"
       )
-      timezone_names <- unique(OlsonNames())
-      timezone_choices <- stats::setNames(
-        c("", timezone_names),
-        c("Method default", timezone_names)
+      # Reuse numeric labels from the upload module. Patch 65 requires names in
+      # pg_timezone_names, so use fixed Etc/GMT zones (whose signs are reversed).
+      # Fractional offsets have no corresponding fixed IANA name in this schema.
+      offsets <- input_timezone_choices()
+      offset_minutes <- vapply(
+        unname(offsets), parse_utc_offset_minutes, integer(1)
+      )
+      offsets <- offsets[offset_minutes %% 60L == 0L]
+      offset_minutes <- offset_minutes[offset_minutes %% 60L == 0L]
+      timezone_choices <- c(
+        "Unspecified (elapsed durations only)" = "",
+        stats::setNames(vapply(offset_minutes, function(minutes) {
+          if (minutes == 0L) "UTC" else sprintf("Etc/GMT%+d", -(minutes %/% 60L))
+        }, character(1)), names(offsets))
       )
 
       tagList(
         fluidRow(
           column(
-            width = 6,
+            width = 4,
             actionButton(
               ns("add_aggregation_step"),
               "Add calculation step",
@@ -513,72 +548,88 @@ addTimeseries <- function(id, language) {
             )
           ),
           column(
-            width = 8,
+            width = 5,
             selectInput(
               ns("remove_aggregation_step_key"),
               "Remove step",
-              choices = stats::setNames(
-                vapply(steps, `[[`, character(1), "key"),
-                paste("Step", seq_along(steps))
-              )
+              choices = if (length(steps)) {
+                stats::setNames(
+                  vapply(steps, `[[`, character(1), "key"),
+                  paste("Step", seq_along(steps))
+                )
+              } else {
+                character(0)
+              }
             )
           ),
           column(
-            width = 4,
+            width = 3,
             actionButton(
               ns("remove_aggregation_step"),
               "Remove",
-              icon = icon("trash")
+              icon = icon("trash"),
+              disabled = length(steps) == 0L
             )
           )
         ),
+        if (length(steps) == 0L) {
+          tags$p("Add at least one calculation step.", class = "text-muted")
+        },
         lapply(seq_along(steps), function(i) {
           step <- steps[[i]]
           key <- as.character(step$key)
           step_id <- function(field) ns(aggregation_step_input_id(key, field))
+          window_condition <- sprintf(
+            "input['%s'] == 'window_aggregate'", step_id("operation_type")
+          )
           current_inputs <- vapply(
             step$inputs,
             function(link) as.character(link$step_key),
             character(1)
           )
+          step_timezone <- nullable_text(step$evaluation_timezone)
+          step_timezone_choices <- timezone_choices
+          if (!is.na(step_timezone) && !step_timezone %in% timezone_choices) {
+            # Preserve an existing named zone, including its historical/DST
+            # rules, until the user explicitly replaces it with a fixed offset.
+            step_timezone_choices <- c(
+              timezone_choices,
+              stats::setNames(step_timezone, paste0(
+                step_timezone, " (existing named timezone)"
+              ))
+            )
+          }
           step_card <- tagList(
             tags$hr(),
             tags$h5(paste("Step", i)),
             fluidRow(
               column(
-                width = 2,
-                numericInput(
-                  step_id("stage_number"),
-                  "Stage",
-                  value = step$stage_number,
-                  min = 1,
-                  step = 1
-                )
-              ),
-              column(
-                width = 5,
+                width = 6,
                 selectInput(
                   step_id("operation_type"),
                   "Operation",
                   choices = operation_choices,
                   selected = step$operation_type
-                )
+                ) |>
+                  tooltip(
+                    "Window aggregate summarizes values in a time window using the output aggregation type. Arithmetic mean combines two or more linked step outputs using their component weights; equal weights on a minimum and maximum give (minimum + maximum) / 2."
+                  )
               ),
               column(
-                width = 5,
+                width = 6,
                 selectInput(
                   step_id("aggregation_type_id"),
                   "Output aggregation type",
-                  choices = aggregation_choices,
+                  choices = aggregation_output_choices(step$operation_type),
                   selected = as.character(step$aggregation_type_id)
-                )
+                ) |>
+                  tooltip(
+                    "Describes what this step produces. A window can produce a minimum, maximum, sum, or mean. Arithmetic mean produces a mean, even when its inputs are minima and maxima. Choose (min+max)/2 only for that specific calculation. The final output must match the timeseries aggregation type."
+                  )
               )
             ),
             conditionalPanel(
-              condition = sprintf(
-                "input['%s'] == 'window_aggregate'",
-                step_id("operation_type")
-              ),
+              condition = window_condition,
               fluidRow(
                 column(
                   width = 6,
@@ -600,48 +651,57 @@ addTimeseries <- function(id, language) {
                 )
               )
             ),
-            fluidRow(
-              column(
-                width = 4,
-                textInput(
-                  step_id("evaluation_interval"),
-                  "Evaluation interval",
-                  value = safe_text(step$evaluation_interval),
-                  placeholder = "1 day"
-                )
-              ),
-              column(
-                width = 4,
-                textInput(
-                  step_id("evaluation_anchor"),
-                  "Evaluation anchor (UTC)",
-                  value = safe_text(step$evaluation_anchor),
-                  placeholder = "1970-01-02 06:00:00"
-                )
-              ),
-              column(
-                width = 4,
-                selectizeInput(
-                  step_id("evaluation_timezone"),
-                  "Evaluation timezone",
-                  choices = timezone_choices,
-                  selected = if (is.null(step$evaluation_timezone)) {
-                    ""
-                  } else {
-                    step$evaluation_timezone
-                  },
-                  options = list(create = FALSE, allowEmptyOption = TRUE)
+            conditionalPanel(
+              condition = window_condition,
+              fluidRow(
+                column(
+                  width = 4,
+                  textInput(
+                    step_id("evaluation_interval"),
+                    "Evaluation interval",
+                    value = safe_text(step$evaluation_interval),
+                    placeholder = "1 day"
+                  )
+                ),
+                column(
+                  width = 4,
+                  textInput(
+                    step_id("evaluation_anchor"),
+                    "Evaluation anchor (selected UTC offset)",
+                    value = safe_text(step$evaluation_anchor),
+                    placeholder = "1970-01-02 06:00:00"
+                  )
+                ),
+                column(
+                  width = 4,
+                  selectizeInput(
+                    step_id("evaluation_timezone"),
+                    "Evaluation UTC offset",
+                    choices = step_timezone_choices,
+                    selected = if (is.na(step_timezone)) {
+                      ""
+                    } else {
+                      step_timezone
+                    },
+                    options = list(create = FALSE, allowEmptyOption = TRUE)
+                  ) |>
+                    tooltip(
+                      "Numeric UTC offsets stay fixed throughout the year, without daylight saving. The evaluation anchor is a wall-clock time at this offset. Patch 65 supports fixed whole-hour offsets; a retained existing named timezone keeps its historical and daylight-saving rules. Calendar windows or intervals require an explicit timezone."
+                    )
                 )
               )
             ),
             fluidRow(
               column(
                 width = 4,
-                textInput(
-                  step_id("expected_input_interval"),
-                  "Expected input interval",
-                  value = safe_text(step$expected_input_interval),
-                  placeholder = "1 hour"
+                conditionalPanel(
+                  condition = window_condition,
+                  textInput(
+                    step_id("expected_input_interval"),
+                    "Expected input interval",
+                    value = safe_text(step$expected_input_interval),
+                    placeholder = "1 hour"
+                  )
                 )
               ),
               column(
@@ -661,7 +721,9 @@ addTimeseries <- function(id, language) {
                   choices = c(
                     "Ignore missing values" = "ignore",
                     "Propagate missing values" = "propagate",
-                    "Require complete inputs" = "require_complete"
+                    if (!identical(step$operation_type, "arithmetic_mean")) {
+                      c("Require complete inputs" = "require_complete")
+                    }
                   ),
                   selected = step$missing_data_policy
                 )
@@ -5150,18 +5212,22 @@ addTimeseries <- function(id, language) {
               "No start limit (-infinity)",
               value = from_unbounded
             ),
-            shinyWidgets::airDatepickerInput(
-              ns("aggregation_applicable_from"),
-              "Applicable from (UTC; inclusive)",
-              value = aggregation_datetime_picker_value(
-                form$applicable_from
-              ),
-              timepicker = TRUE,
-              update_on = "change",
-              tz = "UTC",
-              timepickerOpts = shinyWidgets::timepickerOptions(
-                minutesStep = 1,
-                timeFormat = "HH:mm"
+            conditionalPanel(
+              condition = "input.aggregation_from_unbounded === false",
+              ns = ns,
+              shinyWidgets::airDatepickerInput(
+                ns("aggregation_applicable_from"),
+                "Applicable from (UTC; inclusive)",
+                value = aggregation_datetime_picker_value(
+                  form$applicable_from
+                ),
+                timepicker = TRUE,
+                update_on = "change",
+                tz = "UTC",
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 1,
+                  timeFormat = "HH:mm"
+                )
               )
             )
           ),
@@ -5172,18 +5238,22 @@ addTimeseries <- function(id, language) {
               "No end limit (+infinity)",
               value = until_unbounded
             ),
-            shinyWidgets::airDatepickerInput(
-              ns("aggregation_applicable_until"),
-              "Applicable until (UTC; exclusive)",
-              value = aggregation_datetime_picker_value(
-                form$applicable_until
-              ),
-              timepicker = TRUE,
-              update_on = "change",
-              tz = "UTC",
-              timepickerOpts = shinyWidgets::timepickerOptions(
-                minutesStep = 1,
-                timeFormat = "HH:mm"
+            conditionalPanel(
+              condition = "input.aggregation_until_unbounded === false",
+              ns = ns,
+              shinyWidgets::airDatepickerInput(
+                ns("aggregation_applicable_until"),
+                "Applicable until (UTC; exclusive)",
+                value = aggregation_datetime_picker_value(
+                  form$applicable_until
+                ),
+                timepicker = TRUE,
+                update_on = "change",
+                tz = "UTC",
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 1,
+                  timeFormat = "HH:mm"
+                )
               )
             )
           )
@@ -5214,7 +5284,7 @@ addTimeseries <- function(id, language) {
           width = "100%"
         ),
         tags$p(
-          "Add ordered steps below. Stage 1 reads source values; later stages can use earlier steps. The final step's aggregation type must match the timeseries.",
+          "Add ordered steps below. Steps without input links read source values; linked steps use earlier outputs. Calculation stages are assigned automatically from these links. The final step's aggregation type must match the timeseries.",
           class = "text-muted"
         ),
         uiOutput(ns("aggregation_steps_editor_ui")),
@@ -5239,6 +5309,49 @@ addTimeseries <- function(id, language) {
       aggregation_step_fields_ui(editor)
     })
 
+    observe({
+      editor <- aggregation_method_editor()
+      if (is.null(editor)) {
+        return()
+      }
+      for (step in editor$steps) {
+        operation <- input[[aggregation_step_input_id(step$key, "operation_type")]]
+        if (is.null(operation)) {
+          next
+        }
+        choices <- aggregation_output_choices(operation)
+        output_id <- aggregation_step_input_id(step$key, "aggregation_type_id")
+        selected <- isolate(input[[output_id]])
+        if (is.null(selected) || !selected %in% choices) {
+          parent_type <- isolate(as.character(input$aggregation_type))
+          selected <- if (length(parent_type) == 1L && parent_type %in% choices) {
+            parent_type
+          } else if (length(choices)) {
+            unname(choices[[1L]])
+          } else {
+            character(0)
+          }
+        }
+        updateSelectInput(session, output_id, choices = choices, selected = selected)
+
+        # require_complete needs an expected input interval, which the schema
+        # excludes for arithmetic means. Mean missingness uses ignore/propagate.
+        policies <- c(
+          "Ignore missing values" = "ignore",
+          "Propagate missing values" = "propagate"
+        )
+        if (identical(operation, "window_aggregate")) {
+          policies <- c(policies, "Require complete inputs" = "require_complete")
+        }
+        policy_id <- aggregation_step_input_id(step$key, "missing_data_policy")
+        policy <- isolate(input[[policy_id]])
+        if (is.null(policy) || !policy %in% policies) {
+          policy <- "ignore"
+        }
+        updateSelectInput(session, policy_id, choices = policies, selected = policy)
+      }
+    })
+
     observeEvent(input$new_aggregation_method, {
       updateSelectizeInput(
         session,
@@ -5260,14 +5373,8 @@ addTimeseries <- function(id, language) {
         next_number <- next_number + 1L
         new_key <- paste0("new_step_", next_number)
       }
-      current_stages <- suppressWarnings(as.integer(vapply(
-        editor$steps,
-        function(step) as.character(step$stage_number),
-        character(1)
-      )))
-      new_stage <- max(c(0L, current_stages), na.rm = TRUE) + 1L
       editor$steps[[length(editor$steps) + 1L]] <- default_aggregation_step(
-        new_stage,
+        1L,
         nullable_integer(input$aggregation_type),
         key = new_key
       )
@@ -5449,6 +5556,19 @@ addTimeseries <- function(id, language) {
             moduleData$aggregation_types$aggregation_type_id
           )) {
             stop("A step uses an unknown aggregation_type_id.")
+          }
+          if (
+            operation_type == "arithmetic_mean" &&
+              !as.character(aggregation_type_ids[[i]]) %in%
+                aggregation_output_choices(operation_type)
+          ) {
+            stop("An arithmetic mean must use a mean output aggregation type.")
+          }
+          if (
+            operation_type == "arithmetic_mean" &&
+              identical(step$missing_data_policy, "require_complete")
+          ) {
+            stop("For an arithmetic mean, choose Ignore missing values or Propagate missing values.")
           }
 
           parameters_json <- aggregation_step_value(

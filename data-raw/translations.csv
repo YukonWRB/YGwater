@@ -597,7 +597,7 @@ four,Number word four,Four,Quatre
 disc_ac_guidelines,Discrete plot AquaCache guideline selector,Water quality guidelines,Lignes directrices de qualité de l'eau
 season,Season label,Season,Saison
 collection_method(s),Collection method selector,Collection method(s),Méthode(s) de prélèvement
-result_descriptor(s),Result descriptor selector,Result descriptor(s),Descripteur(s) du résultat
+reporting_basis(s),Reporting basis selector,Reporting bases,Bases d'expression
 sample_fraction(s),Sample fraction selector,Sample fraction(s),Fraction(s) de l'échantillon
 result_value_type(s),Result value type selector,Result value type(s),Type(s) de valeur du résultat
 result_type(s),Result type selector,Result type(s),Type(s) de résultat

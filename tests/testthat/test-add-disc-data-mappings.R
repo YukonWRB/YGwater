@@ -5,6 +5,7 @@ add_disc_data_mapping_environment <- function() {
   )
   env <- new.env(parent = asNamespace("shiny"))
   sys.source(module_path, envir = env)
+  sys.source(system.file("apps/aqualink/modules/admin/discreteData/importSetup.R", package = "YGwater"), envir = env)
   env
 }
 
@@ -165,7 +166,7 @@ test_that("mapping conversion and offset are applied once", {
       result_type = 2L,
       sample_fraction_id = 5L,
       result_value_type = 1L,
-      result_descriptor_id = NA_integer_,
+      reporting_basis_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
       result_offset = 0.5
@@ -214,7 +215,7 @@ test_that("source-specific result-flag mappings use typed detection limits", {
       result_type = 2L,
       sample_fraction_id = 5L,
       result_value_type = 1L,
-      result_descriptor_id = NA_integer_,
+      reporting_basis_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
       result_offset = 0
@@ -473,7 +474,7 @@ test_that("profile keys are source-specific and profile fields are human editabl
   expect_true(jsonlite::validate(json))
   expect_match(json, '"parameter_code"', fixed = TRUE)
 
-  server_code <- paste(deparse(body(env$addDiscData)), collapse = "\n")
+  server_code <- paste(deparse(body(env$importSetup)), collapse = "\n")
   profile_loader_code <- paste(
     deparse(body(env$addDiscData_read_profiles)),
     collapse = "\n"
@@ -542,9 +543,9 @@ test_that("mapped-result preview uses source text and lookup labels", {
       result_value_type_id = 1L,
       result_value_type = "Measured"
     ),
-    result_descriptors = data.frame(
-      result_descriptor_id = integer(),
-      result_descriptor = character()
+    reporting_bases = data.frame(
+      reporting_basis_id = integer(),
+      reporting_basis = character()
     ),
     matrix_states = data.frame(
       matrix_state_id = 1L,

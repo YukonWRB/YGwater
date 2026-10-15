@@ -746,7 +746,7 @@ editSamples <- function(id, language) {
         result_entry_type <- "exact"
       }
       metadata <- collect_result_metadata_inputs()
-      list(
+      c(list(
         sample_id = sample_id,
         result_entry_type = result_entry_type,
         result_type = integer_input("result_type"),
@@ -770,7 +770,7 @@ editSamples <- function(id, language) {
           NA_real_
         },
         result_value_type = integer_input("result_value_type"),
-        result_descriptor_id = integer_input("result_descriptor"),
+        reporting_basis_id = integer_input("reporting_basis"),
         protocol_method = integer_input("result_protocol_method"),
         laboratory = integer_input("result_laboratory"),
         analysis_datetime = scalar_utc_datetime(input$result_analysis_datetime),
@@ -787,7 +787,7 @@ editSamples <- function(id, language) {
         } else {
           NA_character_
         }
-      )
+      ), YGwater:::chemistry_metadata_values(input, "edit_chem_"))
     }
 
     result_lookup_choices <- function(data, id_col, label_col) {
@@ -909,10 +909,10 @@ editSamples <- function(id, language) {
 
     parameter_requires_descriptor <- function(parameter_id) {
       row <- selected_parameter_row(parameter_id)
-      if (is.null(row) || !"result_descriptor" %in% names(row)) {
+      if (is.null(row) || !"reporting_basis" %in% names(row)) {
         return(FALSE)
       }
-      isTRUE(row$result_descriptor[[1]])
+      isTRUE(row$reporting_basis[[1]])
     }
 
     supported_matrix_state_ids <- function(parameter_id) {
@@ -956,7 +956,7 @@ editSamples <- function(id, language) {
       parameter_id = integer_input("result_parameter"),
       selected_matrix_state = integer_input("result_matrix_state"),
       selected_fraction = integer_input("result_sample_fraction"),
-      selected_descriptor = integer_input("result_descriptor")
+      selected_descriptor = integer_input("reporting_basis")
     ) {
       matrix_choices <- matrix_state_choices_for_parameter(parameter_id)
       if (
@@ -999,11 +999,11 @@ editSamples <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "result_descriptor",
+        "reporting_basis",
         choices = result_lookup_choices(
-          moduleData$result_descriptors,
-          "result_descriptor_id",
-          "result_descriptor"
+          moduleData$reporting_bases,
+          "reporting_basis_id",
+          "reporting_basis"
         ),
         selected = if (is.na(selected_descriptor)) {
           character(0)
@@ -1064,8 +1064,8 @@ editSamples <- function(id, language) {
           r.result_condition_value,
           r.result_value_type,
           rvt.result_value_type AS result_value_type_name,
-          r.result_descriptor_id,
-          rs.result_descriptor,
+          r.reporting_basis_id, r.result_speciation_id, r.result_target_id, r.endpoint_mode, r.endpoint_ph, r.analysis_conditions,
+          rs.reporting_basis,
           r.protocol_method,
           pm.protocol_name,
           r.laboratory,
@@ -1104,8 +1104,8 @@ editSamples <- function(id, language) {
           ON r.result_condition = rc.result_condition_id
         LEFT JOIN discrete.result_value_types rvt
           ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN discrete.result_descriptors rs
-          ON r.result_descriptor_id = rs.result_descriptor_id
+        LEFT JOIN discrete.reporting_bases rs
+          ON r.reporting_basis_id = rs.reporting_basis_id
         LEFT JOIN discrete.protocols_methods pm
           ON r.protocol_method = pm.protocol_id
         LEFT JOIN discrete.laboratories lab
@@ -1467,14 +1467,14 @@ editSamples <- function(id, language) {
           column(
             4,
             selectizeInput(
-              ns("result_descriptor"),
-              "Descriptor",
+              ns("reporting_basis"),
+              "Reporting basis",
               choices = result_lookup_choices(
-                moduleData$result_descriptors,
-                "result_descriptor_id",
-                "result_descriptor"
+                moduleData$reporting_bases,
+                "reporting_basis_id",
+                "reporting_basis"
               ),
-              selected = selected_value("result_descriptor_id"),
+              selected = selected_value("reporting_basis_id"),
               multiple = TRUE,
               options = list(
                 maxItems = 1,
@@ -1489,6 +1489,7 @@ editSamples <- function(id, language) {
             )
           )
         ),
+        YGwater:::chemistry_metadata_ui(ns, "edit_chem_", moduleData$chemistry_catalogues, if (is.null(row)) list() else row),
         fluidRow(
           column(
             4,
@@ -1622,7 +1623,7 @@ editSamples <- function(id, language) {
           parameter_id = integer_input("result_parameter"),
           selected_matrix_state = integer_input("result_matrix_state"),
           selected_fraction = integer_input("result_sample_fraction"),
-          selected_descriptor = integer_input("result_descriptor")
+          selected_descriptor = integer_input("reporting_basis")
         )
       },
       ignoreInit = TRUE
@@ -1980,7 +1981,7 @@ editSamples <- function(id, language) {
         SELECT
           p.parameter_id,
           p.param_name,
-          p.result_descriptor,
+          p.reporting_basis, p.result_speciation, p.result_target, p.endpoint, to_jsonb(p.analysis_conditions_required_keys) AS analysis_conditions_required_keys, p.analysis_conditions_required_keys_by_matrix,
           p.sample_fraction,
           ul.unit_name AS units_liquid,
           us.unit_name AS units_solid,
@@ -2016,10 +2017,11 @@ editSamples <- function(id, language) {
         con,
         "SELECT result_value_type_id, result_value_type FROM discrete.result_value_types ORDER BY result_value_type ASC"
       )
-      moduleData$result_descriptors <- DBI::dbGetQuery(
+      moduleData$reporting_bases <- DBI::dbGetQuery(
         con,
-        "SELECT result_descriptor_id, result_descriptor FROM discrete.result_descriptors ORDER BY result_descriptor ASC"
+        "SELECT reporting_basis_id, reporting_basis FROM discrete.reporting_bases ORDER BY reporting_basis ASC"
       )
+      moduleData$chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(con)
       moduleData$protocols_methods <- DBI::dbGetQuery(
         con,
         "SELECT protocol_id, protocol_name FROM discrete.protocols_methods ORDER BY protocol_name ASC"
@@ -2125,7 +2127,7 @@ editSamples <- function(id, language) {
         moduleData$sample_fractions,
         moduleData$result_conditions,
         moduleData$result_value_types,
-        moduleData$result_descriptors,
+        moduleData$reporting_bases,
         moduleData$protocols_methods,
         moduleData$laboratories,
         moduleData$matrix_states
@@ -2879,7 +2881,7 @@ editSamples <- function(id, language) {
           condition = results$result_condition_name,
           value_type = results$result_value_type_name,
           fraction = results$sample_fraction,
-          descriptor = results$result_descriptor,
+          descriptor = results$reporting_basis,
           matrix_state = results$matrix_state_name,
           laboratory = results$laboratory_name,
           lab_report_no = results$lab_report_no,
@@ -3001,7 +3003,8 @@ editSamples <- function(id, language) {
         }
       }
 
-      form <- collect_result_inputs(sample_ids[[1]])
+      form <- tryCatch(collect_result_inputs(sample_ids[[1]]), error = function(e) e)
+      if (inherits(form, "error")) { showNotification(conditionMessage(form), type = "error"); return() }
       if (is.na(form$parameter_id)) {
         showNotification("Parameter is required.", type = "error")
         return()
@@ -3044,25 +3047,16 @@ editSamples <- function(id, language) {
         )
         return()
       }
-      if (
-        parameter_requires_sample_fraction(form$parameter_id) &&
-          is.na(form$sample_fraction_id)
-      ) {
-        showNotification(
-          "Sample fraction is required for the selected parameter.",
-          type = "error"
-        )
-        return()
-      }
-      if (
-        parameter_requires_descriptor(form$parameter_id) &&
-          is.na(form$result_descriptor_id)
-      ) {
-        showNotification(
-          "Descriptor is required for the selected parameter.",
-          type = "error"
-        )
-        return()
+      chemistry_fields <- c("parameter_id", "matrix_state_id", "sample_fraction_id", "reporting_basis_id",
+        "result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions", "protocol_method")
+      existing <- moduleData$sample_results[moduleData$sample_results$result_id == selected_result_id(), , drop = FALSE]
+      unchanged <- identical(result_edit_mode(), "edit") && nrow(existing) == 1L && all(vapply(chemistry_fields, function(field) {
+        if (field == "analysis_conditions") return(identical(AquaCache::normalizeAnalysisConditions(existing[[field]][[1]]), form[[field]]))
+        identical(as.character(existing[[field]][[1]]), as.character(form[[field]]))
+      }, logical(1)))
+      if (!unchanged) {
+        messages <- AquaCache::validateResultChemistry(NULL, as.data.frame(form[chemistry_fields]), parameters = moduleData$parameters, error = FALSE, matrix_states = moduleData$matrix_states)
+        if (any(nzchar(messages))) { showNotification(paste(messages, collapse = "; "), type = "error"); return() }
       }
 
       params <- list(
@@ -3073,7 +3067,7 @@ editSamples <- function(id, language) {
         form$result_condition,
         form$result_condition_value,
         form$result_value_type,
-        form$result_descriptor_id,
+        form$reporting_basis_id,
         form$protocol_method,
         form$laboratory,
         form$analysis_datetime,
@@ -3100,7 +3094,7 @@ editSamples <- function(id, language) {
             result_condition,
             result_condition_value,
             result_value_type,
-            result_descriptor_id,
+            reporting_basis_id,
             protocol_method,
             laboratory,
             analysis_datetime,
@@ -3112,7 +3106,7 @@ editSamples <- function(id, language) {
             no_source_update,
             private_expiry,
             matrix_state_id,
-            note
+            note, result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions
           ) VALUES (
             $21,
             $1,
@@ -3134,10 +3128,10 @@ editSamples <- function(id, language) {
             $17,
             $18,
             $19,
-            $20
+            $20, $22, $23, $24, $25, $26::jsonb
           ) RETURNING result_id;
         "
-        params <- c(params, list(form$sample_id))
+        params <- c(params, list(form$sample_id), form[c("result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions")])
       } else {
         result_id <- selected_result_id()
         if (is.na(result_id)) {
@@ -3154,7 +3148,7 @@ editSamples <- function(id, language) {
             result_condition = $5,
             result_condition_value = $6,
             result_value_type = $7,
-            result_descriptor_id = $8,
+            reporting_basis_id = $8,
             protocol_method = $9,
             laboratory = $10,
             analysis_datetime = $11,
@@ -3166,11 +3160,12 @@ editSamples <- function(id, language) {
             no_source_update = $17,
             private_expiry = $18,
             matrix_state_id = $19,
-            note = $20
+            note = $20, result_speciation_id = $23, result_target_id = $24,
+            endpoint_mode = $25, endpoint_ph = $26, analysis_conditions = $27::jsonb
           WHERE result_id = $21
             AND sample_id = $22;
         "
-        params <- c(params, list(result_id, form$sample_id))
+        params <- c(params, list(result_id, form$sample_id), form[c("result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions")])
       }
 
       tryCatch(

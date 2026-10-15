@@ -10,12 +10,14 @@ reference_text_field <- function(
   name,
   label,
   required = FALSE,
-  default = NULL
+  default = NULL,
+  storage = "character"
 ) {
   list(
     name = name,
     label = label,
     input = "text",
+    storage = storage,
     required = required,
     default = default
   )
@@ -247,6 +249,32 @@ reference_table_configs <- function() {
   audit_cols <- c("created", "created_by", "modified", "modified_by")
 
   list(
+    reporting_bases = list(key = "reporting_bases", title = "Reporting bases",
+      description = "Retire entries to preserve historical meaning; stable codes identify the analytical definition.",
+      schema = "discrete", table = "reporting_bases", pk = "reporting_basis_id", id_label = "ID",
+      order_by = "reporting_basis", audit_columns = audit_cols,
+      insert_only = c("reporting_basis_code", "reporting_basis", "description", "basis_kind"),
+      columns = list(reference_text_field("reporting_basis_code", "Stable code", required = TRUE), reference_text_field("reporting_basis", "Name", required = TRUE), reference_text_field("reporting_basis_fr", "Name (French)"), reference_text_field("basis_kind", "Kind", required = TRUE), reference_textarea_field("description", "Definition", required = TRUE), reference_textarea_field("description_fr", "Definition (French)"), reference_checkbox_field("active", "Active for new selections", default = TRUE))),
+    result_speciations = list(key = "result_speciations", title = "Chemical forms and scopes",
+      description = "Retire entries to preserve historical meaning; stable codes identify the analytical definition.",
+      schema = "discrete", table = "result_speciations", pk = "result_speciation_id", id_label = "ID",
+      order_by = "result_speciation", audit_columns = audit_cols,
+      insert_only = c("result_speciation_code", "result_speciation", "description"),
+      columns = list(reference_text_field("result_speciation_code", "Stable code", required = TRUE), reference_text_field("result_speciation", "Name", required = TRUE), reference_text_field("result_speciation_fr", "Name (French)"), reference_textarea_field("description", "Definition", required = TRUE), reference_textarea_field("description_fr", "Definition (French)"), reference_checkbox_field("active", "Active for new selections", default = TRUE))),
+    result_targets = list(key = "result_targets", title = "Analytical targets and materials",
+      description = "Retire entries to preserve historical meaning; stable codes identify the analytical definition.",
+      schema = "discrete", table = "result_targets", pk = "result_target_id", id_label = "ID",
+      order_by = "result_target", audit_columns = audit_cols,
+      insert_only = c("result_target_code", "result_target", "description", "target_kind"),
+      columns = list(reference_text_field("result_target_code", "Stable code", required = TRUE), reference_text_field("result_target", "Name", required = TRUE), reference_text_field("result_target_fr", "Name (French)"), reference_text_field("target_kind", "Kind", required = TRUE), reference_textarea_field("description", "Definition", required = TRUE), reference_textarea_field("description_fr", "Definition (French)"), reference_checkbox_field("active", "Active for new selections", default = TRUE))),
+    chemistry_crosswalk = list(
+      key = "chemistry_crosswalk", title = "Legacy chemistry crosswalk",
+      description = "Read-only Patch 65 dictionary preserving the interpretation of historical catalogue IDs.",
+      schema = "information", table = "patch65_result_descriptor_crosswalk",
+      pk = "legacy_id", id_label = "Legacy ID", editable = FALSE,
+      order_by = c("legacy_catalogue", "legacy_id"),
+      display_columns = c("legacy_catalogue", "legacy_label", "sample_fraction_id",
+        "reporting_basis_id", "result_speciation_id", "result_target_id"), columns = list()),
     organizations = list(
       key = "organizations",
       title = "Organizations",
@@ -556,9 +584,14 @@ reference_table_configs <- function() {
         ),
         reference_text_field("cas_number", "CAS number"),
         reference_checkbox_field(
-          "result_descriptor",
-          "Result descriptor required"
+          "reporting_basis",
+          "Reporting basis required"
         ),
+        reference_checkbox_field("result_speciation", "Chemical form / species scope required"),
+        reference_checkbox_field("result_target", "Analytical target required"),
+        reference_checkbox_field("endpoint", "Endpoint determination required"),
+        reference_text_field("analysis_conditions_required_keys", "Required analysis condition keys (comma separated)", default = "{}", storage = "text_array"),
+        utils::modifyList(reference_textarea_field("analysis_conditions_required_keys_by_matrix", "Required condition keys by matrix (JSON object)", default = "{}"), list(storage = "json_object")),
         reference_checkbox_field(
           "sample_fraction",
           "Sample fraction required"
@@ -1224,6 +1257,10 @@ reference_render_fields_ui <- function(ns, fields, choices, values = NULL) {
       reference_field_default_value(field)
     }
 
+    if (identical(field$storage, "text_array")) {
+      field_value <- paste(unlist(values[[field$name]]), collapse = ", ")
+      if (startsWith(field_value, "{") && endsWith(field_value, "}")) field_value <- substr(field_value, 2L, nchar(field_value) - 1L)
+    }
     if (identical(field$input, "text")) {
       return(textInput(
         input_id,
@@ -1285,6 +1322,21 @@ reference_normalize_value <- function(value, field) {
     return(as.numeric(value[[1]]))
   }
 
+  if (identical(field$storage, "json_object")) {
+    text <- as.character(reference_default(value, "{}"))
+    if (!length(text) || !nzchar(trimws(text))) text <- "{}"
+    if (!grepl("^[[:space:]]*\\{", text) || !jsonlite::validate(text)) stop("Enter a JSON object of matrix codes and required condition keys.")
+    return(text)
+  }
+  if (identical(field$storage, "text_array")) {
+    keys <- unique(trimws(strsplit(as.character(reference_default(value, "")), ",", fixed = TRUE)[[1]]))
+    keys <- keys[nzchar(keys) & keys != "{}"]
+    if (!length(keys)) return("{}")
+    # Keys use the usual stable identifier vocabulary. Bound PostgreSQL array
+    # literals avoid multi-row binding and support arbitrary additional keys.
+    if (any(!grepl("^[A-Za-z][A-Za-z0-9_.-]*$", keys))) stop("Enter condition keys separated by commas.")
+    return(paste0("{", paste(keys, collapse = ","), "}"))
+  }
   first_value <- if (is.null(value) || !length(value)) {
     NA
   } else {
@@ -1327,6 +1379,15 @@ reference_normalize_value <- function(value, field) {
   first_value
 }
 
+# Shared by the generic and parameter editors so malformed JSON/arrays are
+# handled as recoverable form errors before attempting a database write.
+reference_collect_values <- function(input, fields) {
+  values <- lapply(fields, function(field)
+    reference_normalize_value(input[[reference_form_input_id(field$name)]], field))
+  names(values) <- vapply(fields, `[[`, character(1), "name")
+  values
+}
+
 reference_is_missing_value <- function(value) {
   if (is.logical(value)) {
     return(FALSE)
@@ -1341,6 +1402,10 @@ reference_update_fields <- function(session, fields, row, choices) {
   for (field in fields) {
     input_id <- reference_form_input_id(field$name)
     value <- row[[field$name]][1]
+    if (identical(field$storage, "text_array")) {
+      value <- paste(unlist(row[[field$name]]), collapse = ", ")
+      if (startsWith(value, "{") && endsWith(value, "}")) value <- substr(value, 2L, nchar(value) - 1L)
+    }
 
     if (identical(field$input, "text")) {
       updateTextInput(
@@ -1567,6 +1632,8 @@ reference_save_record <- function(
   selected_id = NULL,
   existing_columns = character(0)
 ) {
+  # Definitions keep their scientific meaning once an ID has been created.
+  if (!is.null(selected_id)) values <- values[setdiff(names(values), config$insert_only)]
   column_names <- names(values)
   quoted_columns <- reference_quote_identifier_chr(con, column_names)
 
@@ -1709,6 +1776,12 @@ referenceTableManager <- function(
     current_record_id <- reactiveVal(NULL)
     current_row <- reactiveVal(reference_empty_row(config$columns))
 
+    observe({
+      for (field in config$insert_only) {
+        shinyjs::toggleState(reference_form_input_id(field), condition = is.null(current_record_id()))
+      }
+    })
+
     output$banner <- renderUI({
       req(language$language)
       application_notifications_ui(
@@ -1784,6 +1857,8 @@ referenceTableManager <- function(
     output$panel_intro <- renderUI({
       tagList(
         tags$p(class = "text-muted", config$description),
+        if (length(config$insert_only)) tags$p(class = "text-muted small",
+          "Definitions are set when creating an entry. For existing entries, edit French translations or active status; create a new entry for a different definition."),
         tags$p(
           class = "text-muted small",
           if (editable) {
@@ -1795,7 +1870,7 @@ referenceTableManager <- function(
           } else {
             paste(
               "This view is read-only.",
-              "Operational records are written by the responsible importer."
+              "Records are maintained by their responsible workflow."
             )
           }
         )
@@ -1859,7 +1934,7 @@ referenceTableManager <- function(
         DT::datatable(
           display,
           rownames = FALSE,
-          selection = "single",
+          selection = if (editable) "single" else "none",
           filter = "top",
           colnames = unname(reference_display_labels(config, names(display))),
           options = list(
@@ -1926,13 +2001,11 @@ referenceTableManager <- function(
           )
           return()
         }
-        values <- lapply(config$columns, function(field) {
-          reference_normalize_value(
-            input[[reference_form_input_id(field$name)]],
-            field
-          )
-        })
-        names(values) <- vapply(config$columns, `[[`, character(1), "name")
+        values <- tryCatch(reference_collect_values(input, config$columns), error = function(e) e)
+        if (inherits(values, "error")) {
+          showNotification(paste("Save failed:", conditionMessage(values)), type = "error", duration = 15)
+          return()
+        }
 
         validation_errors <- character(0)
         for (field in config$columns) {
@@ -2246,6 +2319,54 @@ parameter_unit_usage_messages <- function(usage) {
   )
 }
 
+# Advisory associations are edited with their parameter, within the same
+# transaction as its metadata and group links. Selection order is display order.
+parameter_suggestion_tables <- function() c(
+  reporting_bases = "parameter_reporting_basis_suggestions",
+  result_speciations = "parameter_speciation_suggestions",
+  result_targets = "parameter_target_suggestions"
+)
+
+update_parameter_suggestions <- function(session, con, parameter_id = NULL) {
+  configs <- reference_table_configs()
+  tables <- parameter_suggestion_tables()
+  for (catalogue in names(tables)) {
+    config <- configs[[catalogue]]
+    rows <- DBI::dbGetQuery(con, sprintf(
+      "SELECT c.%1$s AS id, c.%2$s AS label, c.active, s.display_order
+       FROM discrete.%3$s c LEFT JOIN public.%4$s s
+         ON s.%1$s = c.%1$s AND s.parameter_id = $1
+       ORDER BY s.display_order NULLS LAST, c.%2$s",
+      config$pk, config$order_by, catalogue, tables[[catalogue]]),
+      params = list(if (is.null(parameter_id)) NA_integer_ else as.integer(parameter_id)))
+    labels <- paste0(rows$label, ifelse(rows$active, "", " (inactive)"))
+    updateSelectizeInput(session, paste0("suggest_", catalogue),
+      choices = stats::setNames(as.character(rows$id), labels),
+      selected = as.character(rows$id[!is.na(rows$display_order)]))
+  }
+}
+
+save_parameter_suggestions <- function(con, parameter_id, input) {
+  configs <- reference_table_configs()
+  tables <- parameter_suggestion_tables()
+  for (catalogue in names(tables)) {
+    ids <- input[[paste0("suggest_", catalogue)]]
+    if (is.null(ids)) ids <- character()
+    numbers <- suppressWarnings(as.numeric(ids))
+    if (any(!is.finite(numbers) | numbers < 1 | numbers != trunc(numbers) |
+            numbers > .Machine$integer.max)) stop("Choose valid suggested catalogue entries.")
+    ids <- unique(as.integer(numbers))
+    DBI::dbExecute(con, sprintf("DELETE FROM public.%s WHERE parameter_id = $1", tables[[catalogue]]),
+      params = list(as.integer(parameter_id)))
+    if (length(ids)) DBI::dbExecute(con, sprintf(
+      "INSERT INTO public.%s (parameter_id, %s, display_order)
+       SELECT $1, value::INTEGER, ordinality::INTEGER
+       FROM jsonb_array_elements_text($2::JSONB) WITH ORDINALITY AS selected(value, ordinality)",
+      tables[[catalogue]], configs[[catalogue]]$pk),
+      params = list(as.integer(parameter_id), jsonlite::toJSON(ids, auto_unbox = FALSE)))
+  }
+}
+
 parameterManagerUI <- function(id) {
   ns <- NS(id)
   config <- reference_table_configs()[["parameters"]]
@@ -2269,6 +2390,14 @@ parameterManagerUI <- function(id) {
         choices = reference_empty_choices(config$columns),
         values = reference_empty_row(config$columns)
       ),
+      tags$hr(class = "my-3"),
+      tags$h5("Suggested analytical choices"),
+      tags$p(class = "text-muted small",
+        "Advisory choices only; other valid catalogue entries remain allowed. Choices appear in selection order."),
+      lapply(names(parameter_suggestion_tables()), function(catalogue) {
+        selectizeInput(ns(paste0("suggest_", catalogue)), reference_table_configs()[[catalogue]]$title,
+          choices = character(), multiple = TRUE, options = list(plugins = list("remove_button")))
+      }),
       tags$hr(class = "my-3"),
       tags$h5("Group links"),
       tags$p(
@@ -2306,6 +2435,11 @@ parameterManagerUI <- function(id) {
 }
 
 manageParameters <- function(id, language) {
+  configs <- reference_table_configs()
+  for (table in c(names(parameter_suggestion_tables()), "chemistry_crosswalk")) {
+    referenceTableManager(id = paste0(id, "_", table), language = language,
+      config = configs[[table]], notification_module_id = "manageParameters")
+  }
   moduleServer(id, function(input, output, session) {
     con <- session$userData$AquaCache
     config <- reference_table_configs()[["parameters"]]
@@ -2360,6 +2494,7 @@ manageParameters <- function(id, language) {
       current_row(empty_row)
       reference_clear_fields(session, config$columns, field_choices)
       current_relationships(parameter_relationships_empty())
+      update_parameter_suggestions(session, con)
       update_relationship_selectors(relationship_choices)
       DT::selectRows(table_proxy, NULL)
       DT::selectRows(relationship_proxy, NULL)
@@ -2375,6 +2510,7 @@ manageParameters <- function(id, language) {
       current_row(raw_row)
       reference_update_fields(session, config$columns, raw_row, field_choices)
       current_relationships(fetch_parameter_relationships(con, selected_id))
+      update_parameter_suggestions(session, con, selected_id)
       update_relationship_selectors(relationship_choices)
       DT::selectRows(relationship_proxy, NULL)
     }
@@ -2434,7 +2570,7 @@ manageParameters <- function(id, language) {
           class = "text-muted small",
           paste(
             "Save updates the selected parameter and synchronizes its",
-            "parameter group / sub-group links."
+            "parameter group / sub-group links and suggested analytical choices."
           )
         )
       )
@@ -2647,13 +2783,11 @@ manageParameters <- function(id, language) {
     observeEvent(
       input$save,
       {
-        values <- lapply(config$columns, function(field) {
-          reference_normalize_value(
-            input[[reference_form_input_id(field$name)]],
-            field
-          )
-        })
-        names(values) <- vapply(config$columns, `[[`, character(1), "name")
+        values <- tryCatch(reference_collect_values(input, config$columns), error = function(e) e)
+        if (inherits(values, "error")) {
+          showNotification(paste("Save failed:", conditionMessage(values)), type = "error", duration = 15)
+          return()
+        }
 
         validation_errors <- character(0)
         for (field in config$columns) {
@@ -2784,6 +2918,7 @@ manageParameters <- function(id, language) {
                 }
               }
 
+              save_parameter_suggestions(con, saved_parameter_id, input)
               saved_parameter_id
             })
 
@@ -2964,7 +3099,12 @@ manageParameterSubGroups <- function(id, language) {
 }
 
 manageParametersUI <- function(id) {
-  parameterManagerUI(id)
+  configs <- reference_table_configs()
+  panels <- lapply(c(names(parameter_suggestion_tables()), "chemistry_crosswalk"), function(table) {
+    bslib::nav_panel(configs[[table]]$title,
+      referenceTableManagerUI(paste0(id, "_", table), config = configs[[table]]))
+  })
+  do.call(bslib::navset_tab, c(list(bslib::nav_panel("Parameters", parameterManagerUI(id))), panels))
 }
 
 manageCommunicationProtocolFamiliesUI <- function(id) {
