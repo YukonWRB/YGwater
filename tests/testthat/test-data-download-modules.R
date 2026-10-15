@@ -2,7 +2,7 @@ data_download_cache_environment <- function() {
   env <- new.env(parent = asNamespace("shiny"))
   sys.source(
     system.file(
-      "apps/YGwater/modules/cache_functions.R",
+      "apps/aqualink/modules/cache_functions.R",
       package = "YGwater"
     ),
     envir = env
@@ -41,11 +41,11 @@ test_that("select-all follows the table's real selection", {
 test_that("continuous and discrete modules use stateless select-all", {
   module_paths <- c(
     system.file(
-      "apps/YGwater/modules/client/data/continuousData.R",
+      "apps/aqualink/modules/client/data/continuousData.R",
       package = "YGwater"
     ),
     system.file(
-      "apps/YGwater/modules/client/data/discreteData.R",
+      "apps/aqualink/modules/client/data/discreteData.R",
       package = "YGwater"
     )
   )
@@ -62,7 +62,7 @@ test_that("discrete downloads use current metadata contracts", {
   module_code <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/data/discreteData.R",
+        "apps/aqualink/modules/client/data/discreteData.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -72,7 +72,7 @@ test_that("discrete downloads use current metadata contracts", {
   helper_code <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/plot/discretePlot.R",
+        "apps/aqualink/modules/client/plot/discretePlot.R",
         package = "YGwater"
       ),
       warn = FALSE

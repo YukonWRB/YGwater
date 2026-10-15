@@ -4504,13 +4504,6 @@ extract_and_upload_comments <- function(
   ]
   comments_to_upload <- comments_to_upload[!duplicated(comments_to_upload), ]
 
-  if (nrow(comments_to_upload) == 0) {
-    return(list(
-      existing_keys = existing_keys,
-      remaining_upload_slots = remaining_upload_slots
-    ))
-  }
-
   comment_keys <- build_comment_key(comments_to_upload)
   comments_to_upload <- comments_to_upload[!comment_keys %in% existing_keys, ]
 
@@ -4612,7 +4605,14 @@ extract_raw_author_name <- function(author_name) {
     return(NA_character_)
   }
 
-  raw_values <- as.character(author_name)
+  # openxlsx returns a one-cell data frame when colNames = FALSE. Unwrap it
+  # before coercion so raw_author stores the workbook cell text, not a column
+  # representation or a normalized/matched author name.
+  raw_values <- as.character(unlist(
+    author_name,
+    recursive = TRUE,
+    use.names = FALSE
+  ))
   raw_values <- raw_values[!is.na(raw_values)]
 
   if (!length(raw_values)) {
@@ -4651,6 +4651,16 @@ split_author_names <- function(author_name) {
   unique(parts)
 }
 
+#' Normalize author aliases for matching
+#'
+#' @param author_name Character vector of author names or aliases.
+#'
+#' @return Lowercase names with whitespace and punctuation removed.
+#' @noRd
+normalize_author_alias <- function(author_name) {
+  tolower(gsub("[^[:alnum:]]", "", trimws(as.character(author_name))))
+}
+
 #' Map author names to author IDs
 #'
 #' @param author_name Character scalar with one or multiple author names.
@@ -4667,10 +4677,23 @@ map_author_ids <- function(author_name, author_lookup, max_authors = 4L) {
     return(ids)
   }
 
-  matched_ids <- author_lookup$author_id[match(
-    author_parts,
-    author_lookup$author
-  )]
+  normalized_lookup <- normalize_author_alias(author_lookup$author)
+  normalized_parts <- normalize_author_alias(author_parts)
+  matched_ids <- vapply(
+    normalized_parts,
+    function(alias) {
+      candidate_ids <- unique(author_lookup$author_id[
+        normalized_lookup == alias
+      ])
+      candidate_ids <- candidate_ids[!is.na(candidate_ids)]
+      if (length(candidate_ids) == 1L) {
+        as.integer(candidate_ids[[1L]])
+      } else {
+        NA_integer_
+      }
+    },
+    integer(1)
+  )
   matched_ids <- matched_ids[!is.na(matched_ids)]
 
   if (!length(matched_ids)) {
@@ -4680,6 +4703,58 @@ map_author_ids <- function(author_name, author_lookup, max_authors = 4L) {
   keep_n <- min(length(matched_ids), max_authors)
   ids[seq_len(keep_n)] <- as.integer(matched_ids[seq_len(keep_n)])
   ids
+}
+
+#' Build common author-name aliases
+#'
+#' @param first_name Character scalar given name, potentially initials.
+#' @param last_name Character scalar surname.
+#'
+#' @return Unique character vector of full-name and initials aliases.
+#' @noRd
+build_author_name_aliases <- function(first_name, last_name) {
+  first_name <- trimws(as.character(first_name))
+  last_name <- trimws(as.character(last_name))
+  first_initial <- substr(first_name, 1L, 1L)
+  last_initial <- substr(last_name, 1L, 1L)
+  first_name_words <- strsplit(first_name, "[[:space:]-]+")[[1L]]
+  first_name_initials <- paste0(
+    substr(first_name_words[nzchar(first_name_words)], 1L, 1L),
+    collapse = ""
+  )
+
+  # Some names in the authors table are themselves initials (for example,
+  # "EJ"). Keep the full initialism so it can match workbook text such as EJB.
+  compact_first_name <- gsub("[^[:alpha:]]", "", first_name)
+  if (
+    nchar(compact_first_name) > 1L &&
+      nchar(compact_first_name) <= 3L &&
+      identical(compact_first_name, toupper(compact_first_name))
+  ) {
+    first_name_initials <- compact_first_name
+  }
+
+  initials <- paste0(first_name_initials, last_initial)
+  dotted_initials <- paste(
+    strsplit(initials, "")[[1L]],
+    collapse = "."
+  )
+
+  unique(c(
+    paste(first_name, last_name),
+    paste(first_initial, last_name),
+    paste0(first_initial, ". ", last_name),
+    paste0(first_initial, last_name),
+    paste0(first_name, last_name),
+    paste(last_name, first_name, sep = ", "),
+    paste0(first_initial, ".", last_initial),
+    paste0(first_initial, last_initial),
+    initials,
+    paste(first_name_initials, last_initial),
+    paste0(first_name_initials, ".", last_initial),
+    dotted_initials,
+    paste0(dotted_initials, ".")
+  ))
 }
 
 #' Resolve parsed author details
@@ -4726,6 +4801,101 @@ build_comment_key <- function(data) {
       collapse = "||"
     )
   })
+}
+
+#' Refresh author metadata on matching existing comments
+#'
+#' Match by comment content and report identity, deliberately excluding author
+#' fields so corrected author mappings update the original row rather than
+#' creating a duplicate.
+#'
+#' @param con DBI connection.
+#' @param comments Data frame of normalized comments prepared for upload.
+#'
+#' @return Logical vector indicating which comments matched existing rows.
+#' @noRd
+refresh_existing_comment_authors <- function(con, comments) {
+  matched <- rep(FALSE, nrow(comments))
+  updated <- rep(FALSE, nrow(comments))
+  if (!nrow(comments)) {
+    return(list(matched = matched, updated = updated))
+  }
+
+  select_sql <- paste(
+    "SELECT id",
+    "FROM commentary.comments",
+    "WHERE text_en = $1",
+    "  AND document_type_id = $2",
+    "  AND comment_category_id = $3",
+    "  AND public = $4",
+    "  AND timestamp = $5",
+    "  AND location_id IS NOT DISTINCT FROM $6"
+  )
+  update_sql <- paste(
+    "UPDATE commentary.comments",
+    "SET raw_author = $1,",
+    "    author_id = $2,",
+    "    second_author_id = $3,",
+    "    third_author_id = $4,",
+    "    fourth_author_id = $5",
+    "WHERE id = $6",
+    "  AND (raw_author IS DISTINCT FROM $1",
+    "       OR author_id IS DISTINCT FROM $2",
+    "       OR second_author_id IS DISTINCT FROM $3",
+    "       OR third_author_id IS DISTINCT FROM $4",
+    "       OR fourth_author_id IS DISTINCT FROM $5)",
+    "RETURNING id"
+  )
+
+  for (i in seq_len(nrow(comments))) {
+    author_ids <- unlist(
+      comments[
+        i,
+        c(
+          "author_id",
+          "second_author_id",
+          "third_author_id",
+          "fourth_author_id"
+        ),
+        drop = FALSE
+      ],
+      use.names = FALSE
+    )
+    candidates <- DBI::dbGetQuery(
+      con,
+      select_sql,
+      params = list(
+        comments$text_en[[i]],
+        comments$document_type_id[[i]],
+        comments$comment_category_id[[i]],
+        comments$public[[i]],
+        comments$timestamp[[i]],
+        comments$location_id[[i]]
+      )
+    )
+    matched[[i]] <- nrow(candidates) > 0L
+    if (nrow(candidates) != 1L) {
+      next
+    }
+    if (!any(!is.na(author_ids))) {
+      next
+    }
+    refreshed <- DBI::dbGetQuery(
+      con,
+      update_sql,
+      params = list(
+        comments$raw_author[[i]],
+        comments$author_id[[i]],
+        comments$second_author_id[[i]],
+        comments$third_author_id[[i]],
+        comments$fourth_author_id[[i]],
+        candidates$id[[1L]]
+      )
+    )
+    updated[[i]] <- nrow(refreshed) > 0L
+  }
+
+  list(matched = matched, updated = updated)
 }
 
 #' Extract and upload comments from one workbook
@@ -4956,17 +5126,27 @@ extract_and_upload_comments <- function(
   if (nrow(comments_to_upload) == 0) {
     return(list(
       existing_keys = existing_keys,
-      remaining_upload_slots = remaining_upload_slots
+      remaining_upload_slots = remaining_upload_slots,
+      inserted_comments = 0L,
+      updated_comments = 0L
     ))
   }
 
+  refresh_result <- refresh_existing_comment_authors(con, comments_to_upload)
+  matched_existing <- refresh_result$matched
+  updated_comments <- sum(refresh_result$updated)
   comment_keys <- build_comment_key(comments_to_upload)
-  comments_to_upload <- comments_to_upload[!comment_keys %in% existing_keys, ]
+  existing_keys <- unique(c(existing_keys, comment_keys[matched_existing]))
+  comments_to_upload <- comments_to_upload[
+    !matched_existing & !comment_keys %in% existing_keys,
+  ]
 
   if (nrow(comments_to_upload) == 0) {
     return(list(
       existing_keys = existing_keys,
-      remaining_upload_slots = remaining_upload_slots
+      remaining_upload_slots = remaining_upload_slots,
+      inserted_comments = 0L,
+      updated_comments = updated_comments
     ))
   }
 
@@ -4980,7 +5160,9 @@ extract_and_upload_comments <- function(
   if (nrow(comments_to_upload) == 0) {
     return(list(
       existing_keys = existing_keys,
-      remaining_upload_slots = remaining_upload_slots
+      remaining_upload_slots = remaining_upload_slots,
+      inserted_comments = 0L,
+      updated_comments = updated_comments
     ))
   }
 
@@ -5000,7 +5182,12 @@ extract_and_upload_comments <- function(
   }
 
   list(
-    existing_keys = c(existing_keys, build_comment_key(comments_to_upload)),
+    existing_keys = unique(c(
+      existing_keys,
+      build_comment_key(comments_to_upload)
+    )),
+    inserted_comments = nrow(comments_to_upload),
+    updated_comments = updated_comments,
     remaining_upload_slots = if (is.finite(remaining_upload_slots)) {
       remaining_upload_slots - nrow(comments_to_upload)
     } else {

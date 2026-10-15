@@ -1,10 +1,11 @@
 add_disc_data_mapping_environment <- function() {
   module_path <- system.file(
-    "apps/YGwater/modules/admin/discreteData/addDiscData.R",
+    "apps/aqualink/modules/admin/discreteData/addDiscData.R",
     package = "YGwater"
   )
   env <- new.env(parent = asNamespace("shiny"))
   sys.source(module_path, envir = env)
+  sys.source(system.file("apps/aqualink/modules/admin/discreteData/importSetup.R", package = "YGwater"), envir = env)
   env
 }
 
@@ -121,6 +122,10 @@ test_that("unmapped parameter choices start with an explicit blank", {
     unit_solid = c("mg/kg", "mg/kg"),
     unit_gas = NA_character_
   )
+  matrix_states <- data.frame(
+    matrix_state_id = c(1L, 2L),
+    matrix_state_code = c("liquid", "solid")
+  )
 
   choices <- env$addDiscData_parameter_choices(parameters)
 
@@ -128,7 +133,12 @@ test_that("unmapped parameter choices start with an explicit blank", {
   expect_identical(names(choices)[[1]], "Select AquaCache parameter")
   expect_match(names(choices)[[2]], "Liquid: mg/l", fixed = TRUE)
   expect_identical(
-    env$addDiscData_target_unit(parameters, c(10L, 10L), c(1L, 2L)),
+    env$addDiscData_target_unit(
+      parameters,
+      c(10L, 10L),
+      c(1L, 2L),
+      matrix_states
+    ),
     c("mg/l", "mg/kg")
   )
 })
@@ -156,7 +166,7 @@ test_that("mapping conversion and offset are applied once", {
       result_type = 2L,
       sample_fraction_id = 5L,
       result_value_type = 1L,
-      result_speciation_id = NA_integer_,
+      reporting_basis_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
       result_offset = 0.5
@@ -205,7 +215,7 @@ test_that("source-specific result-flag mappings use typed detection limits", {
       result_type = 2L,
       sample_fraction_id = 5L,
       result_value_type = 1L,
-      result_speciation_id = NA_integer_,
+      reporting_basis_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
       result_offset = 0
@@ -458,13 +468,13 @@ test_that("profile keys are source-specific and profile fields are human editabl
 
   expect_identical(
     env$addDiscData_profile_key(c("ALS", "OTHER"), c("shared", "shared")),
-    c("ALS\rshared", "OTHER\rshared")
+    c("ALS::shared", "OTHER::shared")
   )
   json <- env$addDiscData_profile_json(profile, "column_map")
   expect_true(jsonlite::validate(json))
   expect_match(json, '"parameter_code"', fixed = TRUE)
 
-  server_code <- paste(deparse(body(env$addDiscData)), collapse = "\n")
+  server_code <- paste(deparse(body(env$importSetup)), collapse = "\n")
   profile_loader_code <- paste(
     deparse(body(env$addDiscData_read_profiles)),
     collapse = "\n"
@@ -533,12 +543,13 @@ test_that("mapped-result preview uses source text and lookup labels", {
       result_value_type_id = 1L,
       result_value_type = "Measured"
     ),
-    result_speciations = data.frame(
-      result_speciation_id = integer(),
-      result_speciation = character()
+    reporting_bases = data.frame(
+      reporting_basis_id = integer(),
+      reporting_basis = character()
     ),
     matrix_states = data.frame(
       matrix_state_id = 1L,
+      matrix_state_code = "liquid",
       matrix_state_name = "Liquid"
     ),
     laboratories = data.frame(lab_id = 2L, lab_name = "ALS Environmental"),
@@ -547,11 +558,23 @@ test_that("mapped-result preview uses source text and lookup labels", {
       collection_method_id = 27L,
       collection_method = "Grab"
     ),
-    sample_types = data.frame(sample_type_id = 34L, sample_type = "Routine")
+    sample_types = data.frame(sample_type_id = 34L, sample_type = "Routine"),
+    protocols_methods = data.frame(
+      protocol_id = integer(),
+      protocol_name = character()
+    ),
+    grade_types = data.frame(
+      grade_type_id = integer(),
+      grade_type_description = character()
+    ),
+    approval_types = data.frame(
+      approval_type_id = integer(),
+      approval_type_description = character()
+    )
   )
 
   expect_identical(display$`Source result`, "<0.010")
-  expect_identical(display$Result, "")
+  expect_identical(display$`Result value`, "")
   expect_identical(display$`Result condition`, "Less than")
   expect_identical(display$Laboratory, "ALS Environmental")
   expect_identical(display$`Sample fraction`, "Dissolved")
@@ -587,12 +610,17 @@ test_that("mapping persistence accepts all editable mapping details", {
 test_that("file uploads write generalized import-run provenance", {
   env <- add_disc_data_mapping_environment()
   server_code <- paste(deparse(body(env$addDiscData)), collapse = "\n")
+  upload_code <- paste(
+    deparse(body(env$addDiscData_run_upload)),
+    collapse = "\n"
+  )
 
-  expect_match(server_code, "AquaCache::createImportRun", fixed = TRUE)
-  expect_match(server_code, "AquaCache::appendImportRunRows", fixed = TRUE)
-  expect_match(server_code, "AquaCache::completeImportRun", fixed = TRUE)
+  expect_match(server_code, "addDiscData_run_upload(request)", fixed = TRUE)
+  expect_match(upload_code, "AquaCache::createImportRun", fixed = TRUE)
+  expect_match(upload_code, "AquaCache::appendImportRunRows", fixed = TRUE)
+  expect_match(upload_code, "AquaCache::completeImportRun", fixed = TRUE)
   expect_match(
-    server_code,
+    upload_code,
     "source_adapter_function = \"addDiscData\"",
     fixed = TRUE
   )

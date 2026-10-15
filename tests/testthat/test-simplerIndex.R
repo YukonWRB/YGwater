@@ -2,7 +2,7 @@ test_that("simplerIndex carries seal and screen construction fields to AquaCache
   module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        "apps/aqualink/modules/admin/boreholes_wells/simplerIndex.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -47,7 +47,7 @@ test_that("simplerIndex stores arbitrary wells beneath one borehole", {
   module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        "apps/aqualink/modules/admin/boreholes_wells/simplerIndex.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -110,7 +110,7 @@ test_that("simplerIndex supports named and document-free borehole uploads", {
   module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        "apps/aqualink/modules/admin/boreholes_wells/simplerIndex.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -134,7 +134,7 @@ test_that("simplerIndex stages supported documents before background processing"
   module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        "apps/aqualink/modules/admin/boreholes_wells/simplerIndex.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -177,7 +177,7 @@ test_that("simplerIndex normalizes JPEG and PNG uploads", {
   helper_environment <- new.env(parent = globalenv())
   sys.source(
     system.file(
-      "apps/YGwater/modules/admin/boreholes_wells/simplerIndex_helpers.R",
+      "apps/aqualink/modules/admin/boreholes_wells/simplerIndex_helpers.R",
       package = "YGwater"
     ),
     envir = helper_environment
@@ -224,7 +224,7 @@ test_that("simplerIndex caps PDF raster size and avoids graphics-device redactio
   helper_environment <- new.env(parent = globalenv())
   sys.source(
     system.file(
-      "apps/YGwater/modules/admin/boreholes_wells/simplerIndex_helpers.R",
+      "apps/aqualink/modules/admin/boreholes_wells/simplerIndex_helpers.R",
       package = "YGwater"
     ),
     envir = helper_environment
@@ -280,7 +280,7 @@ test_that("simplerIndex caps PDF raster size and avoids graphics-device redactio
   module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        "apps/aqualink/modules/admin/boreholes_wells/simplerIndex.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -290,7 +290,7 @@ test_that("simplerIndex caps PDF raster size and avoids graphics-device redactio
   helpers <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex_helpers.R",
+        "apps/aqualink/modules/admin/boreholes_wells/simplerIndex_helpers.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -309,7 +309,7 @@ test_that("WWR cache and popup expose well construction details", {
   cache_module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/cache_functions.R",
+        "apps/aqualink/modules/cache_functions.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -319,7 +319,7 @@ test_that("WWR cache and popup expose well construction details", {
   registry_module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/WWR/registry_front_end.R",
+        "apps/aqualink/modules/client/WWR/registry_front_end.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -343,7 +343,7 @@ test_that("WWR preserves distinct well and borehole registry rows", {
   cache_module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/cache_functions.R",
+        "apps/aqualink/modules/cache_functions.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -353,7 +353,7 @@ test_that("WWR preserves distinct well and borehole registry rows", {
   registry_module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/WWR/registry_front_end.R",
+        "apps/aqualink/modules/client/WWR/registry_front_end.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -440,7 +440,7 @@ test_that("simplerIndex construction selects default to empty", {
   simpler_index <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        "apps/aqualink/modules/admin/boreholes_wells/simplerIndex.R",
         package = "YGwater"
       ),
       warn = FALSE

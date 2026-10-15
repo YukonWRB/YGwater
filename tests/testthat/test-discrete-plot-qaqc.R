@@ -1,7 +1,7 @@
 discrete_plot_module_environment <- function() {
   module_path <-
     system.file(
-      "apps/YGwater/modules/client/plot/discretePlot.R",
+      "apps/aqualink/modules/client/plot/discretePlot.R",
       package = "YGwater"
     )
 
@@ -29,11 +29,11 @@ test_that("QA/QC module text is sourced from the translation catalogue", {
 
   module_paths <- c(
     system.file(
-      "apps/YGwater/modules/client/plot/discretePlot.R",
+      "apps/aqualink/modules/client/plot/discretePlot.R",
       package = "YGwater"
     ),
     system.file(
-      "apps/YGwater/modules/client/data/discreteData.R",
+      "apps/aqualink/modules/client/data/discreteData.R",
       package = "YGwater"
     )
   )
@@ -134,7 +134,7 @@ test_that("component retrieval handles an empty result selection", {
 test_that("component retrieval includes inherited Patch 60 result metadata", {
   module_code <- readLines(
     system.file(
-      "apps/YGwater/modules/client/plot/discretePlot.R",
+      "apps/aqualink/modules/client/plot/discretePlot.R",
       package = "YGwater"
     ),
     warn = FALSE
