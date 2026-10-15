@@ -161,12 +161,12 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/client/reports/yecDashboard.R",
+      "apps/aqualink/modules/client/reports/yecDashboard.R",
       package = "YGwater"
     ))
 
     source(system.file(
-      "apps/YGwater/modules/client/reports/basinDashboard.R",
+      "apps/aqualink/modules/client/reports/basinDashboard.R",
       package = "YGwater"
     ))
 
