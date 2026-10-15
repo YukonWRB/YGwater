@@ -55,7 +55,7 @@ floodDashboardUIMod <- function(id) {
             paste0(
                 "#",
                 ns("controls"),
-                " .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(3, minmax(0, 1fr)); }"
+                " .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(4, minmax(0, 1fr)); }"
             ),
             paste0(
                 "#",
@@ -350,6 +350,31 @@ floodDashboardUIMod <- function(id) {
                                 ),
                                 selected = "water level",
                                 options = list(placeholder = "Param")
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectizeInput(
+                                inputId = ns("historical_norms"),
+                                label = tooltip_label(
+                                    "Historical norms",
+                                    "The record used to calculate percentile bands and historical comparisons."
+                                ),
+                                choices = c(
+                                    "Entire record" = "entire-record",
+                                    "1990–2020" = "1990-2020",
+                                    stats::setNames(
+                                        "last-30-years",
+                                        sprintf(
+                                            "%d–%d",
+                                            as.integer(format(Sys.Date(), "%Y")) - 30L,
+                                            as.integer(format(Sys.Date(), "%Y"))
+                                        )
+                                    )
+                                ),
+                                selected = "1990-2020",
+                                multiple = FALSE,
+                                options = list(placeholder = "Norms")
                             )
                         ),
                         shiny::tags$div(
@@ -1017,13 +1042,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "'::date"
             )
         }
-        recent_cutoff_ts_sql <- dashboard_recent_cutoff_timestamp_sql(
-            reference_time
-        )
-        recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(
-            reference_time
-        )
-
         if (identical(parameter, "temperature, air")) {
             aggregation_sql <- DBI::dbQuoteString(
                 con,
@@ -1037,27 +1055,36 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
                         "),",
                         "target_timeseries AS (",
-                        "    SELECT ts.location_id, ts.timeseries_id",
+                        "    SELECT ts.location_id, ts.timeseries_id,",
+                        "        CASE",
+                        "            WHEN a.aggregation_type = %s THEN 1",
+                        "            WHEN LOWER(a.aggregation_type) IN ('average', 'mean') THEN 2",
+                        "            ELSE 3",
+                        "        END AS aggregation_priority",
                         "    FROM timeseries ts",
                         "    JOIN locations l ON l.location_id = ts.location_id",
                         "    JOIN target_locations tl ON tl.location_code = l.location_code",
                         "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                         "    JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
                         "    WHERE p.param_name = 'temperature, air'",
-                        "      AND a.aggregation_type = %s",
+                        "),",
+                        "daily_candidates AS (",
+                        "    SELECT tt.location_id, tt.timeseries_id, tt.aggregation_priority,",
+                        "        mcd.date::timestamp AS latest_time, mcd.value AS current_value",
+                        "    FROM target_timeseries tt",
+                        "    JOIN LATERAL (",
+                        "        SELECT date, value FROM measurements_calculated_daily",
+                        "        WHERE timeseries_id = tt.timeseries_id",
+                        "          AND value IS NOT NULL",
+                        paste0("          AND date <= ", ref_date_sql),
+                        "        ORDER BY date DESC LIMIT 1",
+                        "    ) mcd ON TRUE",
                         "),",
                         "daily_latest AS (",
-                        "    SELECT DISTINCT ON (tt.location_id)",
-                        "        tt.location_id, tt.timeseries_id, mcd.date::timestamp AS latest_time, mcd.value AS current_value",
-                        "    FROM target_timeseries tt",
-                        "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
-                        "    WHERE mcd.value IS NOT NULL",
-                        paste0(
-                            "      AND mcd.date >= ",
-                            recent_cutoff_date_sql
-                        ),
-                        paste0("      AND mcd.date <= ", ref_date_sql),
-                        "    ORDER BY tt.location_id, mcd.date DESC, tt.timeseries_id",
+                        "    SELECT DISTINCT ON (location_id)",
+                        "        location_id, timeseries_id, latest_time, current_value",
+                        "    FROM daily_candidates",
+                        "    ORDER BY location_id, latest_time DESC, aggregation_priority, timeseries_id",
                         "),",
                         "daily_change AS (",
                         "    SELECT",
@@ -1125,18 +1152,23 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                     "    WHERE p.param_name = %s",
                     "),",
-                    "continuous_latest AS (",
-                    "    SELECT DISTINCT ON (tt.location_id)",
-                    "        tt.location_id,",
-                    "        tt.timeseries_id,",
-                    "        mc.datetime AS latest_time,",
-                    "        mc.value AS current_value",
+                    "continuous_candidates AS (",
+                    "    SELECT tt.location_id, tt.timeseries_id,",
+                    "        mc.datetime AS latest_time, mc.value AS current_value",
                     "    FROM target_timeseries tt",
-                    "    JOIN measurements_continuous mc ON mc.timeseries_id = tt.timeseries_id",
-                    "    WHERE mc.value IS NOT NULL",
-                    paste0("      AND mc.datetime >= ", recent_cutoff_ts_sql),
-                    paste0("      AND mc.datetime <= ", ref_ts_sql),
-                    "    ORDER BY tt.location_id, mc.datetime DESC, tt.timeseries_id",
+                    "    JOIN LATERAL (",
+                    "        SELECT datetime, value FROM measurements_continuous",
+                    "        WHERE timeseries_id = tt.timeseries_id",
+                    "          AND value IS NOT NULL",
+                    paste0("          AND datetime <= ", ref_ts_sql),
+                    "        ORDER BY datetime DESC LIMIT 1",
+                    "    ) mc ON TRUE",
+                    "),",
+                    "continuous_latest AS (",
+                    "    SELECT DISTINCT ON (location_id)",
+                    "        location_id, timeseries_id, latest_time, current_value",
+                    "    FROM continuous_candidates",
+                    "    ORDER BY location_id, latest_time DESC, timeseries_id",
                     "),",
                     "continuous_change AS (",
                     "    SELECT",
@@ -1168,15 +1200,23 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        ORDER BY mc.datetime DESC LIMIT 1",
                     "    ) prev1w ON TRUE",
                     "),",
-                    "daily_latest AS (",
-                    "    SELECT DISTINCT ON (tt.location_id)",
-                    "        tt.location_id, tt.timeseries_id, mcd.date::timestamp AS latest_time, mcd.value AS current_value",
+                    "daily_candidates AS (",
+                    "    SELECT tt.location_id, tt.timeseries_id,",
+                    "        mcd.date::timestamp AS latest_time, mcd.value AS current_value",
                     "    FROM target_timeseries tt",
-                    "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
-                    "    WHERE mcd.value IS NOT NULL",
-                    paste0("      AND mcd.date >= ", recent_cutoff_date_sql),
-                    paste0("      AND mcd.date <= ", ref_date_sql),
-                    "    ORDER BY tt.location_id, mcd.date DESC, tt.timeseries_id",
+                    "    JOIN LATERAL (",
+                    "        SELECT date, value FROM measurements_calculated_daily",
+                    "        WHERE timeseries_id = tt.timeseries_id",
+                    "          AND value IS NOT NULL",
+                    paste0("          AND date <= ", ref_date_sql),
+                    "        ORDER BY date DESC LIMIT 1",
+                    "    ) mcd ON TRUE",
+                    "),",
+                    "daily_latest AS (",
+                    "    SELECT DISTINCT ON (location_id)",
+                    "        location_id, timeseries_id, latest_time, current_value",
+                    "    FROM daily_candidates",
+                    "    ORDER BY location_id, latest_time DESC, timeseries_id",
                     "),",
                     "daily_change AS (",
                     "    SELECT",
@@ -1283,10 +1323,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "'::date"
             )
         }
-        recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(
-            reference_time
-        )
-
         dat <- YGwater::dbGetQueryDT(
             sprintf(
                 paste(
@@ -1305,7 +1341,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    JOIN aggregation_types a",
                     "      ON a.aggregation_type_id = ts.aggregation_type_id",
                     "    WHERE p.param_name = 'temperature, air'",
-                    "      AND a.aggregation_type = %s",
                     "),",
                     "daily_temp AS (",
                     "    SELECT",
@@ -1406,11 +1441,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     ") prev1w ON TRUE",
                     "JOIN locations loc",
                     "  ON loc.location_id = l.location_id",
-                    paste0("WHERE l.date >= ", recent_cutoff_date_sql),
+                    "WHERE TRUE",
                     "ORDER BY loc.location_code"
                 ),
-                location_codes_sql,
-                aggregation_sql
+                location_codes_sql
             ),
             con = con
         )
@@ -1462,10 +1496,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "'::date"
             )
         }
-        recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(
-            reference_time
-        )
-
         dat <- YGwater::dbGetQueryDT(
             sprintf(
                 paste(
@@ -1484,7 +1514,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    JOIN aggregation_types a",
                     "      ON a.aggregation_type_id = ts.aggregation_type_id",
                     "    WHERE p.param_name = 'temperature, air'",
-                    "      AND a.aggregation_type = %s",
                     "),",
                     "daily_temp AS (",
                     "    SELECT",
@@ -1585,11 +1614,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     ") prev1w ON TRUE",
                     "JOIN locations loc",
                     "  ON loc.location_id = l.location_id",
-                    paste0("WHERE l.date >= ", recent_cutoff_date_sql),
+                    "WHERE TRUE",
                     "ORDER BY loc.location_code"
                 ),
-                location_codes_sql,
-                aggregation_sql
+                location_codes_sql
             ),
             con = con
         )
@@ -1641,9 +1669,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "'::date"
             )
         }
-        recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(
-            reference_time
-        )
 
         dat <- YGwater::dbGetQueryDT(
             sprintf(
@@ -1659,27 +1684,18 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                     "    WHERE p.param_name = 'precipitation, total'",
                     "),",
-                    "filtered AS MATERIALIZED (",
-                    "    SELECT t.location_id, t.timeseries_id, mc.date, mc.value",
-                    "    FROM measurements_calculated_daily mc",
-                    "    JOIN target_timeseries t ON t.timeseries_id = mc.timeseries_id",
-                    "    WHERE mc.value IS NOT NULL",
-                    paste0(
-                        "      AND mc.date >= ",
-                        ref_date_sql,
-                        " - INTERVAL '6 months'"
-                    ),
-                    paste0(
-                        "      AND mc.date < ",
-                        ref_date_sql,
-                        " + INTERVAL '1 day'"
-                    ),
-                    "),",
                     "latest_by_location AS (",
                     "    SELECT DISTINCT ON (location_id)",
-                    "        location_id, timeseries_id, date AS last_date",
-                    "    FROM filtered",
-                    "    ORDER BY location_id, date DESC, timeseries_id",
+                    "        t.location_id, t.timeseries_id, mc.date AS last_date",
+                    "    FROM target_timeseries t",
+                    "    JOIN LATERAL (",
+                    "        SELECT date FROM measurements_calculated_daily",
+                    "        WHERE timeseries_id = t.timeseries_id",
+                    "          AND value IS NOT NULL",
+                    paste0("          AND date < ", ref_date_sql, " + INTERVAL '1 day'"),
+                    "        ORDER BY date DESC LIMIT 1",
+                    "    ) mc ON TRUE",
+                    "    ORDER BY location_id, mc.date DESC, timeseries_id",
                     "),",
                     "current_accumulations AS (",
                     "    SELECT",
@@ -1710,7 +1726,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "LEFT JOIN latest_by_location l ON l.location_id = loc.location_id",
                     "LEFT JOIN current_accumulations ca ON ca.location_id = loc.location_id",
                     "WHERE l.last_date IS NOT NULL",
-                    paste0("  AND l.last_date >= ", recent_cutoff_date_sql),
                     "ORDER BY loc.location_code"
                 ),
                 location_codes_sql
@@ -2300,6 +2315,24 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         historical_start_year
     }
 
+    historical_norm_years <- function(value) {
+        selected <- as.character(value[[1]] %||% "1990-2020")
+        current_year <- as.integer(format(Sys.Date(), "%Y"))
+
+        switch(
+            selected,
+            "entire-record" = list(
+                start = NA_integer_,
+                end = NA_integer_
+            ),
+            "last-30-years" = list(
+                start = current_year - 30L,
+                end = current_year
+            ),
+            list(start = 1990L, end = 2020L)
+        )
+    }
+
     normalize_precip_accumulation <- function(value) {
         allowed <- c("1 week", "48h", "24h", "12h", "6h", "1h")
         selected <- as.character(value[[1]] %||% "1 week")
@@ -2468,35 +2501,36 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         historical_end_year <- suppressWarnings(as.integer(
             historical_end_year[[1]]
         ))
-        if (
+        entire_record <-
             length(historical_start_year) != 1 ||
-                is.na(historical_start_year) ||
-                historical_start_year < 1980 ||
-                historical_start_year > current_year
-        ) {
-            historical_start_year <- 1990L
-        }
-        if (
             length(historical_end_year) != 1 ||
-                is.na(historical_end_year) ||
-                historical_end_year < 1980 ||
-                historical_end_year > current_year
-        ) {
-            historical_end_year <- 2020L
+            is.na(historical_start_year) ||
+            is.na(historical_end_year)
+
+        if (entire_record) {
+            historical_start_date_sql <- "DATE '0001-01-01'"
+            historical_end_date_sql <- "DATE '9999-12-31'"
+        } else {
+            if (historical_start_year < 1980 || historical_start_year > current_year) {
+                historical_start_year <- 1990L
+            }
+            if (historical_end_year < 1980 || historical_end_year > current_year) {
+                historical_end_year <- 2020L
+            }
+            if (historical_end_year < historical_start_year) {
+                historical_end_year <- historical_start_year
+            }
+            historical_start_date_sql <- paste0(
+                "MAKE_DATE(",
+                historical_start_year,
+                ", 1, 1)"
+            )
+            historical_end_date_sql <- paste0(
+                "MAKE_DATE(",
+                historical_end_year,
+                ", 12, 31)"
+            )
         }
-        if (historical_end_year < historical_start_year) {
-            historical_end_year <- historical_start_year
-        }
-        historical_start_date_sql <- paste0(
-            "MAKE_DATE(",
-            historical_start_year,
-            ", 1, 1)"
-        )
-        historical_end_date_sql <- paste0(
-            "MAKE_DATE(",
-            historical_end_year,
-            ", 12, 31)"
-        )
 
         if (identical(parameter, "temperature, air")) {
             aggregation_sql <- DBI::dbQuoteString(
@@ -2506,19 +2540,29 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             return(YGwater::dbGetQueryDT(
                 sprintf(
                     paste(
-                        "WITH daily_values AS (",
-                        "    SELECT l.location_code,",
-                        "        CASE WHEN EXTRACT(MONTH FROM mc.date) > 2 AND ((EXTRACT(YEAR FROM mc.date)::int %% 4 = 0 AND EXTRACT(YEAR FROM mc.date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM mc.date)::int %% 400 = 0)",
-                        "            THEN EXTRACT(DOY FROM mc.date)::int - 1 ELSE EXTRACT(DOY FROM mc.date)::int END AS doy,",
-                        "        mc.value",
-                        "    FROM measurements_calculated_daily mc",
-                        "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                        "WITH selected_timeseries AS (",
+                        "    SELECT DISTINCT ON (l.location_code)",
+                        "        l.location_code, ts.timeseries_id",
+                        "    FROM timeseries ts",
                         "    JOIN locations l ON ts.location_id = l.location_id",
                         "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                         "    JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
                         "    WHERE l.location_code IN (%s)",
                         "      AND p.param_name = 'temperature, air'",
-                        "      AND a.aggregation_type = %s",
+                        "    ORDER BY l.location_code,",
+                        "      CASE WHEN a.aggregation_type = %s THEN 1",
+                        "           WHEN LOWER(a.aggregation_type) IN ('average', 'mean') THEN 2",
+                        "           ELSE 3 END,",
+                        "      ts.timeseries_id",
+                        "),",
+                        "daily_values AS (",
+                        "    SELECT st.location_code,",
+                        "        CASE WHEN EXTRACT(MONTH FROM mc.date) > 2 AND ((EXTRACT(YEAR FROM mc.date)::int %% 4 = 0 AND EXTRACT(YEAR FROM mc.date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM mc.date)::int %% 400 = 0)",
+                        "            THEN EXTRACT(DOY FROM mc.date)::int - 1 ELSE EXTRACT(DOY FROM mc.date)::int END AS doy,",
+                        "        mc.value",
+                        "    FROM measurements_calculated_daily mc",
+                        "    JOIN selected_timeseries st ON mc.timeseries_id = st.timeseries_id",
+                        "    WHERE TRUE",
                         paste0(
                             "      AND mc.date >= ",
                             historical_start_date_sql
@@ -3055,15 +3099,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             } else {
                 paste0(
                     "  AND dt.date >= MAKE_DATE(",
-                    "CASE WHEN EXTRACT(MONTH FROM ",
-                    ref_date_sql,
-                    ") >= 10 ",
-                    "THEN EXTRACT(YEAR FROM ",
-                    ref_date_sql,
-                    ")::int ",
-                    "ELSE EXTRACT(YEAR FROM ",
-                    ref_date_sql,
-                    ")::int - 1 END, ",
+                    "CASE WHEN EXTRACT(MONTH FROM ld.latest_date) >= 10 ",
+                    "THEN EXTRACT(YEAR FROM ld.latest_date)::int ",
+                    "ELSE EXTRACT(YEAR FROM ld.latest_date)::int - 1 END, ",
                     "10, 1)"
                 )
             }
@@ -3079,11 +3117,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
                         paste0("      AND mcd.date <= ", ref_date_sql),
                         "),",
+                        "latest_temperature_date AS (",
+                        "    SELECT MAX(date) AS latest_date FROM daily_temp",
+                        "),",
                         "daily_fdd AS (",
                         "    SELECT dt.date, GREATEST(-dt.mean_temp, 0) AS fdd_day,",
                         "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 10 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
-                        "    FROM daily_temp dt WHERE dt.date <=",
-                        ref_date_sql,
+                        "    FROM daily_temp dt",
+                        "    CROSS JOIN latest_temperature_date ld",
+                        "    WHERE ld.latest_date IS NOT NULL",
                         fdd_start_filter_sql,
                         "),",
                         "seasonal_fdd AS (",
@@ -3108,15 +3150,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             } else {
                 paste0(
                     "  AND dt.date >= MAKE_DATE(",
-                    "CASE WHEN EXTRACT(MONTH FROM ",
-                    ref_date_sql,
-                    ") >= 4 ",
-                    "THEN EXTRACT(YEAR FROM ",
-                    ref_date_sql,
-                    ")::int ",
-                    "ELSE EXTRACT(YEAR FROM ",
-                    ref_date_sql,
-                    ")::int - 1 END, ",
+                    "CASE WHEN EXTRACT(MONTH FROM ld.latest_date) >= 4 ",
+                    "THEN EXTRACT(YEAR FROM ld.latest_date)::int ",
+                    "ELSE EXTRACT(YEAR FROM ld.latest_date)::int - 1 END, ",
                     "4, 1)"
                 )
             }
@@ -3132,11 +3168,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
                         paste0("      AND mcd.date <= ", ref_date_sql),
                         "),",
+                        "latest_temperature_date AS (",
+                        "    SELECT MAX(date) AS latest_date FROM daily_temp",
+                        "),",
                         "daily_ddt AS (",
                         "    SELECT dt.date, GREATEST(dt.mean_temp, 0) AS ddt_day,",
                         "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 4 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
-                        "    FROM daily_temp dt WHERE dt.date <=",
-                        ref_date_sql,
+                        "    FROM daily_temp dt",
+                        "    CROSS JOIN latest_temperature_date ld",
+                        "    WHERE ld.latest_date IS NOT NULL",
                         ddt_start_filter_sql,
                         "),",
                         "seasonal_ddt AS (",
@@ -3913,9 +3953,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "snow water eq (pillow)",
                 "snow depth (pillow)"
             )
-        historical_start_year <- normalize_historical_start_year(
-            historical_start_year
-        )
+        if (!is.na(historical_start_year[[1]])) {
+            historical_start_year <- normalize_historical_start_year(
+                historical_start_year
+            )
+        }
 
         safe_as_posix <- function(x, tz) {
             tryCatch(
@@ -5274,6 +5316,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
         selected_img_series_id <- shiny::reactiveVal(NULL)
         selected_image_ts_index <- shiny::reactiveVal(NA_integer_)
+        selected_image_date <- shiny::reactiveVal(as.character(Sys.Date()))
 
         community_image_series <- shiny::reactive({
             basins <- community_basins()
@@ -5340,6 +5383,39 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
         })
 
+        # Dates are fetched for the active series rather than derived from the
+        # recent-image carousel, so historical images remain discoverable.
+        available_image_dates <- shiny::reactive({
+            if (!has_valid_connection()) {
+                return(as.Date(character()))
+            }
+
+            image_series <- selected_image_series()
+            shiny::req(!is.null(image_series) && nrow(image_series) > 0)
+            img_series_id <- suppressWarnings(as.integer(
+                image_series$img_series_id[[1]]
+            ))
+            if (is.na(img_series_id)) {
+                return(as.Date(character()))
+            }
+
+            tryCatch(
+                {
+                    dates <- DBI::dbGetQuery(
+                        con,
+                        paste0(
+                            "SELECT DISTINCT DATE(datetime) AS image_date ",
+                            "FROM images WHERE img_series_id = ",
+                            img_series_id,
+                            " AND file IS NOT NULL ORDER BY image_date DESC"
+                        )
+                    )
+                    sort(as.Date(dates$image_date))
+                },
+                error = function(e) as.Date(character())
+            )
+        })
+
         available_image_timestamps <- shiny::reactive({
             if (!has_valid_connection()) {
                 return(data.frame(
@@ -5353,13 +5429,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
             img_series_id <- image_series$img_series_id[[1]]
 
-            time0 <- if (!is.null(input$time0) && nzchar(input$time0)) {
-                parsed <- suppressWarnings(as.POSIXct(
-                    input$time0,
-                    format = "%Y-%m-%dT%H:%M",
-                    tz = "Etc/GMT+7"
-                ))
-                if (is.na(parsed)) Sys.time() else parsed
+            selected_date <- suppressWarnings(as.Date(selected_image_date()))
+            time0 <- if (!is.na(selected_date)) {
+                as.POSIXct(selected_date + 1, tz = "Etc/GMT+7")
             } else {
                 Sys.time()
             }
@@ -5378,21 +5450,21 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         con,
                         format(as.POSIXct(time0), "%Y-%m-%d %H:%M:%S")
                     )
+                    time_min <- as.POSIXct(selected_date, tz = "Etc/GMT+7")
                     time_min_sql <- DBI::dbQuoteString(
                         con,
                         format(
-                            as.POSIXct(time0) - 7 * 24 * 3600,
+                            time_min,
                             "%Y-%m-%d %H:%M:%S"
                         )
                     )
-
                     interpret_loaded_times_as_local(
                         DBI::dbGetQuery(
                             con,
                             paste0(
                                 "SELECT image_id, datetime FROM images WHERE img_series_id = ",
                                 img_series_id_int,
-                                " AND datetime <= ",
+                                " AND datetime < ",
                                 time0_sql,
                                 " AND datetime >= ",
                                 time_min_sql,
@@ -5449,72 +5521,84 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             ignoreNULL = TRUE
         )
 
-        shiny::observeEvent(input$previous_image_series, {
-            timestamps <- available_image_timestamps()
-            shiny::req(nrow(timestamps) > 0)
-
-            idx <- selected_image_ts_index()
-            if (
-                length(idx) != 1 ||
-                    is.na(idx) ||
-                    idx < 1 ||
-                    idx > nrow(timestamps)
-            ) {
-                idx <- nrow(timestamps)
+        shiny::observeEvent(input$image_date_select, {
+            selected_date <- suppressWarnings(as.Date(input$image_date_select))
+            if (!is.na(selected_date)) {
+                selected_image_date(as.character(selected_date))
             }
+            selected_image_ts_index(NA_integer_)
+        }, ignoreInit = TRUE)
 
-            selected_image_ts_index(
-                if (idx <= 1L) 1L else idx - 1L
-            )
+        shiny::observeEvent(selected_image_date(), {
+            selected_date <- selected_image_date()
+            if (!identical(as.character(input$image_date_select), selected_date)) {
+                shiny::updateDateInput(
+                    session,
+                    "image_date_select",
+                    value = as.Date(selected_date)
+                )
+            }
+        }, ignoreInit = TRUE)
+
+        shiny::observeEvent(input$time0, {
+            if (is.null(input$time0) || !nzchar(input$time0)) {
+                return()
+            }
+            timestamp <- suppressWarnings(as.POSIXct(
+                input$time0,
+                format = "%Y-%m-%dT%H:%M",
+                tz = "Etc/GMT+7"
+            ))
+            if (!is.na(timestamp)) {
+                selected_image_date(format(timestamp, "%Y-%m-%d", tz = "Etc/GMT+7"))
+                timestamps <- available_image_timestamps()
+                if (nrow(timestamps)) {
+                    valid <- which(as.POSIXct(
+                        timestamps$datetime,
+                        tz = "Etc/GMT+7"
+                    ) <= timestamp)
+                    selected_image_ts_index(if (length(valid)) {
+                        max(valid)
+                    } else {
+                        1L
+                    })
+                } else {
+                    selected_image_ts_index(NA_integer_)
+                }
+            }
+        }, ignoreInit = TRUE)
+
+        shiny::observeEvent(input$previous_image_series, {
+            dates <- available_image_dates()
+            shiny::req(length(dates) > 0)
+            current <- suppressWarnings(as.Date(selected_image_date()))
+            previous_dates <- dates[dates < current]
+            selected_image_date(as.character(if (length(previous_dates)) {
+                max(previous_dates)
+            } else {
+                min(dates)
+            }))
+            selected_image_ts_index(NA_integer_)
         })
 
         shiny::observeEvent(input$next_image_series, {
-            timestamps <- available_image_timestamps()
-            shiny::req(nrow(timestamps) > 0)
-
-            idx <- selected_image_ts_index()
-            if (
-                length(idx) != 1 ||
-                    is.na(idx) ||
-                    idx < 1 ||
-                    idx > nrow(timestamps)
-            ) {
-                idx <- nrow(timestamps)
-            }
-
-            selected_image_ts_index(
-                if (idx >= nrow(timestamps)) nrow(timestamps) else idx + 1L
-            )
+            dates <- available_image_dates()
+            shiny::req(length(dates) > 0)
+            current <- suppressWarnings(as.Date(selected_image_date()))
+            next_dates <- dates[dates > current]
+            selected_image_date(as.character(if (length(next_dates)) {
+                min(next_dates)
+            } else {
+                max(dates)
+            }))
+            selected_image_ts_index(NA_integer_)
         })
 
         output$image_series_header <- shiny::renderUI({
             series <- community_image_series()
 
-            timestamps <- tryCatch(
-                available_image_timestamps(),
-                error = function(e) NULL
-            )
-            ts_str <- if (!is.null(timestamps) && nrow(timestamps) > 0) {
-                idx <- selected_image_ts_index()
-                if (
-                    length(idx) != 1 ||
-                        is.na(idx) ||
-                        idx < 1 ||
-                        idx > nrow(timestamps)
-                ) {
-                    idx <- nrow(timestamps)
-                }
-                format(
-                    as.POSIXct(timestamps$datetime[[idx]], tz = "Etc/GMT+7"),
-                    "%d-%b-%y %H:%M",
-                    tz = "Etc/GMT+7"
-                )
-            } else {
-                "No images"
-            }
-
             if (is.null(series) || nrow(series) == 0) {
-                return(shiny::tags$span(paste("Images \u2014", ts_str)))
+                return(shiny::tags$span("Images"))
             }
 
             choices <- stats::setNames(
@@ -5535,6 +5619,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             } else {
                 as.character(series$img_series_id[[1]])
             }
+            image_dates <- tryCatch(
+                available_image_dates(),
+                error = function(e) as.Date(character())
+            )
+            selected_date <- shiny::isolate(selected_image_date())
+            earliest_date <- if (length(image_dates)) min(image_dates) else NULL
 
             shiny::tags$div(
                 style = "display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;",
@@ -5551,6 +5641,19 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     placement = "top"
                 ),
                 bslib::tooltip(
+                    shiny::dateInput(
+                        inputId = session$ns("image_date_select"),
+                        label = NULL,
+                        value = as.Date(selected_date),
+                        min = earliest_date,
+                        max = Sys.Date(),
+                        format = "yyyy-mm-dd",
+                        width = "180px"
+                    ),
+                    "Choose a date to load all images from that day.",
+                    placement = "top"
+                ),
+                bslib::tooltip(
                     shiny::actionButton(
                         inputId = session$ns("previous_image_series"),
                         label = "\u25c0",
@@ -5558,19 +5661,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     ),
                     "Show previous image timestamp.",
                     placement = "top"
-                ),
-                shiny::tags$span(
-                    if (!is.null(timestamps) && nrow(timestamps) > 0) {
-                        n <- nrow(timestamps)
-                        i <- selected_image_ts_index()
-                        if (length(i) != 1 || is.na(i) || i < 1 || i > n) {
-                            i <- n
-                        }
-                        sprintf("%d / %d", i, n)
-                    } else {
-                        "0 / 0"
-                    },
-                    style = "font-size:0.85rem; min-width:2.5rem; text-align:center; white-space:nowrap;"
                 ),
                 bslib::tooltip(
                     shiny::actionButton(
@@ -5580,16 +5670,33 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     ),
                     "Show next image timestamp.",
                     placement = "top"
-                ),
-                shiny::tags$span(
-                    ts_str,
-                    style = "white-space:nowrap; font-size:0.85rem; color:#6b7280;"
                 )
             )
         })
 
         output$image_series_navigation <- shiny::renderUI({
-            NULL
+            timestamps <- available_image_timestamps()
+            if (!nrow(timestamps)) {
+                return(shiny::tags$span(
+                    "No images available",
+                    style = "font-size:0.85rem; color:#6b7280;"
+                ))
+            }
+            index <- selected_image_ts_index()
+            if (
+                length(index) != 1 || is.na(index) || index < 1 ||
+                    index > nrow(timestamps)
+            ) {
+                index <- nrow(timestamps)
+            }
+            shiny::tags$span(
+                format(
+                    as.POSIXct(timestamps$datetime[[index]], tz = "Etc/GMT+7"),
+                    "%d-%b-%y %H:%M",
+                    tz = "Etc/GMT+7"
+                ),
+                style = "display:block; margin-bottom:0.35rem; font-size:0.85rem; color:#6b7280;"
+            )
         })
 
         output$station_image <- shiny::renderUI({
@@ -5604,7 +5711,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             if (is.null(timestamps) || nrow(timestamps) == 0) {
                 return(shiny::tags$div(
                     style = "color:#6b7280;",
-                    "No images available in the last 7 days for this location."
+                    "No images available for the selected date."
                 ))
             }
 
@@ -6312,6 +6419,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             ignoreInit = FALSE
         )
 
+        historical_norm_range <- shiny::reactive({
+            historical_norm_years(input$historical_norms)
+        })
+
         output$summary_table <- DT::renderDT({
             dat <- filtered_summary_data()
             summary_mode <- as.character(input$summary_mode %||% "recent")
@@ -6441,6 +6552,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         doy
                     )
 
+                    norm_years <- historical_norm_range()
                     pct <- tryCatch(
                         get_daily_percentiles(
                             location_codes = unique(stats::na.omit(
@@ -6448,8 +6560,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             )),
                             parameter = selected_parameter,
                             con = con,
-                            historical_start_year = 1990L,
-                            historical_end_year = 2020L,
+                            historical_start_year = norm_years$start,
+                            historical_end_year = norm_years$end,
                             precip_accumulation = normalize_precip_accumulation(
                                 input$precip_accumulation
                             )
@@ -6713,6 +6825,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     doy
                 )
 
+                norm_years <- historical_norm_range()
                 pct <- tryCatch(
                     get_daily_percentiles(
                         location_codes = unique(stats::na.omit(as.character(
@@ -6720,8 +6833,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         ))),
                         parameter = selected_parameter,
                         con = con,
-                        historical_start_year = 1990L,
-                        historical_end_year = 2020L,
+                        historical_start_year = norm_years$start,
+                        historical_end_year = norm_years$end,
                         precip_accumulation = normalize_precip_accumulation(
                             input$precip_accumulation
                         )
@@ -7214,6 +7327,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             if (is.null(selected_parameter) || !nzchar(selected_parameter)) {
                 selected_parameter <- "water level"
             }
+            norm_years <- historical_norm_range()
 
             list(
                 primary_station_code = primary_station_code,
@@ -7240,8 +7354,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     4L
                 ),
                 reference_time = time_zero(),
-                historical_start_year = 1990L,
-                historical_end_year = 2020L,
+                historical_start_year = norm_years$start,
+                historical_end_year = norm_years$end,
                 primary_station_label = station_label_for_code(
                     primary_station_code
                 ),
@@ -7350,6 +7464,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             # Take a reactive dependency on each soft input.
             prim_yrs <- input$primary_historical_years
             sec_yrs <- input$secondary_historical_years
+            norm_years <- historical_norm_range()
 
             stored <- station_plot_request()
             if (is.null(stored)) {
@@ -7359,6 +7474,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             updated <- stored
             updated$primary_historical_years <-
                 normalize_selected_historical_years(prim_yrs)
+            updated$historical_start_year <- norm_years$start
+            updated$historical_end_year <- norm_years$end
 
             # Only carry secondary historical years when a full,
             # eligible secondary selection exists.
@@ -7531,19 +7648,96 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 2L
             )
 
-            fetch_plot_series <- function(location_code, parameter_name) {
+            fetch_plot_series <- function(
+                location_code,
+                parameter_name,
+                history_days_override = NULL
+            ) {
                 if (parameter_name %in% derived_parameters) {
-                    return(tryCatch(
-                        get_station_timeseries(
-                            location_code = location_code,
-                            parameter = parameter_name,
-                            reference_time = request$reference_time,
-                            load_entire_record = FALSE,
-                            con = con,
-                            precip_accumulation = request$precip_accumulation
-                        ),
-                        error = function(e) NULL
-                    ))
+                    derived_series <- if (parameter_name %in% c("FDD", "DDT")) {
+                        NULL
+                    } else {
+                        tryCatch(
+                            get_station_timeseries(
+                                location_code = location_code,
+                                parameter = parameter_name,
+                                reference_time = request$reference_time,
+                                load_entire_record = FALSE,
+                                con = con,
+                                precip_accumulation = request$precip_accumulation
+                            ),
+                            error = function(e) NULL
+                        )
+                    }
+                    if (
+                        !(parameter_name %in% c("FDD", "DDT")) ||
+                            (!is.null(derived_series) &&
+                                nrow(derived_series) > 0)
+                    ) {
+                        return(derived_series)
+                    }
+
+                    # Some meteorological stations only expose a daily
+                    # temperature aggregation that the derived-series query
+                    # cannot resolve. Calculate the degree-day trace from the
+                    # already-supported temperature loader in that case.
+                    temperature_series <- fetch_plot_series(
+                        location_code,
+                        "temperature, air",
+                        history_days_override = 370L
+                    )
+                    if (
+                        is.null(temperature_series) ||
+                            nrow(temperature_series) == 0
+                    ) {
+                        return(temperature_series)
+                    }
+
+                    temperature_series$date <- as.Date(
+                        temperature_series$datetime,
+                        tz = "Etc/GMT+7"
+                    )
+                    daily_temperature <- stats::aggregate(
+                        value ~ date,
+                        data = temperature_series,
+                        FUN = mean,
+                        na.rm = TRUE
+                    )
+                    daily_temperature <- daily_temperature[
+                        order(daily_temperature$date),
+                        ,
+                        drop = FALSE
+                    ]
+                    month <- as.integer(format(daily_temperature$date, "%m"))
+                    year <- as.integer(format(daily_temperature$date, "%Y"))
+                    season_start_month <- if (
+                        identical(parameter_name, "FDD")
+                    ) 10L else 4L
+                    daily_temperature$season <- ifelse(
+                        month >= season_start_month,
+                        year,
+                        year - 1L
+                    )
+                    contribution <- if (identical(parameter_name, "FDD")) {
+                        pmax(-daily_temperature$value, 0)
+                    } else {
+                        pmax(daily_temperature$value, 0)
+                    }
+                    daily_temperature$value <- ave(
+                        contribution,
+                        daily_temperature$season,
+                        FUN = cumsum
+                    )
+                    daily_temperature$datetime <- as.POSIXct(
+                        daily_temperature$date,
+                        tz = "Etc/GMT+7"
+                    )
+                    daily_temperature$trace_source <- "observed"
+                    return(daily_temperature[, c(
+                        "datetime",
+                        "value",
+                        "trace_source"
+                    )])
                 }
 
                 if (identical(parameter_name, "temperature, air")) {
@@ -7552,27 +7746,56 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         con,
                         daily_temperature_aggregation_name()
                     )
-                    history_days <- max(rel_weeks_before * 7L, 1L)
+                    history_days <- max(
+                        suppressWarnings(as.integer(
+                            history_days_override %||%
+                                (rel_weeks_before * 7L)
+                        )),
+                        1L
+                    )
+                    reference_date_sql <- paste0(
+                        "'",
+                        format(
+                            as.POSIXct(request$reference_time),
+                            "%Y-%m-%d"
+                        ),
+                        "'::date"
+                    )
 
                     d <- tryCatch(
                         YGwater::dbGetQueryDT(
                             sprintf(
                                 paste(
+                                    "WITH candidates AS (",
+                                    "    SELECT ts.timeseries_id,",
+                                    "        CASE WHEN a.aggregation_type = %s THEN 1",
+                                    "             WHEN LOWER(a.aggregation_type) IN ('average', 'mean') THEN 2",
+                                    "             ELSE 3 END AS aggregation_priority,",
+                                    "        latest.date AS latest_date",
+                                    "    FROM timeseries ts",
+                                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                                    "    JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
+                                    "    JOIN locations l ON l.location_id = ts.location_id",
+                                    "    JOIN LATERAL (",
+                                    "        SELECT date FROM measurements_calculated_daily",
+                                    "        WHERE timeseries_id = ts.timeseries_id AND value IS NOT NULL",
+                                    paste0("          AND date <= ", reference_date_sql),
+                                    "        ORDER BY date DESC LIMIT 1",
+                                    "    ) latest ON TRUE",
+                                    "    WHERE l.location_code = %s AND p.param_name = 'temperature, air'",
+                                    "), best AS (",
+                                    "    SELECT timeseries_id, latest_date FROM candidates",
+                                    "    ORDER BY latest_date DESC, aggregation_priority, timeseries_id LIMIT 1",
+                                    ")",
                                     "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
-                                    "FROM measurements_calculated_daily mcd",
-                                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                                    "JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
-                                    "JOIN locations l ON l.location_id = ts.location_id",
-                                    "WHERE l.location_code = %s",
-                                    "  AND p.param_name = 'temperature, air'",
-                                    "  AND a.aggregation_type = %s",
-                                    "  AND mcd.date >= CURRENT_DATE - %s",
-                                    "  AND mcd.value IS NOT NULL",
+                                    "FROM best b",
+                                    "JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = b.timeseries_id",
+                                    "WHERE mcd.date >= b.latest_date - %s",
+                                    "  AND mcd.date <= b.latest_date AND mcd.value IS NOT NULL",
                                     "ORDER BY 1"
                                 ),
-                                code_sql,
                                 aggregation_sql,
+                                code_sql,
                                 history_days
                             ),
                             con = con
@@ -7856,6 +8079,23 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         )
                     }
 
+                    latest_observation <- suppressWarnings(max(
+                        dat$datetime,
+                        na.rm = TRUE
+                    ))
+                    if (
+                        is.finite(latest_observation) &&
+                            latest_observation <
+                                reference_ts - as.difftime(1, units = "days")
+                    ) {
+                        # Keep climatology bands in the same calendar year as
+                        # a stale station's trace.
+                        reference_ts <- structure(
+                            latest_observation,
+                            tzone = plot_timezone
+                        )
+                    }
+
                     ref_year <- suppressWarnings(as.integer(format(
                         reference_ts,
                         "%Y",
@@ -8026,12 +8266,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             pct_years %% 100 != 0) |
                             (pct_years %% 400 == 0)
 
+                        # A daily percentile represents the full local day.
+                        # Anchor it at noon so it aligns with the sub-daily
+                        # flow trace instead of appearing half a day early.
                         pct_plot <- data.frame(
                             location_code = code,
                             datetime = as.POSIXct(
                                 pct_dates,
                                 tz = plot_timezone
-                            ),
+                            ) + as.difftime(12, units = "hours"),
                             doy = ifelse(
                                 pct_months > 2 & pct_is_leap,
                                 pct_doys - 1L,
@@ -8526,6 +8769,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 )
             }
             attr(plot_ref_ts, "tzone") <- plot_tz_label
+            t0_ts <- plot_ref_ts
 
             rel_weeks_before <- normalize_relative_view_weeks(
                 request$relative_view_weeks_before,
@@ -8535,6 +8779,24 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 request$relative_view_weeks_after,
                 4L
             )
+
+            latest_data_ts <- suppressWarnings(max(
+                dat$datetime,
+                na.rm = TRUE
+            ))
+            if (
+                is.finite(latest_data_ts) &&
+                    !isTRUE(is_survey_param) &&
+                    latest_data_ts <
+                        plot_ref_ts - as.difftime(
+                            rel_weeks_before * 7,
+                            units = "days"
+                        )
+            ) {
+                # For an inactive station, centre the selected record around
+                # its latest observation instead of leaving its trace offscreen.
+                plot_ref_ts <- structure(latest_data_ts, tzone = plot_tz_label)
+            }
 
             view_x_min <- structure(
                 plot_ref_ts - as.difftime(rel_weeks_before * 7, units = "days"),
@@ -8886,8 +9148,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 type = "line",
                 xref = "x",
                 yref = "paper",
-                x0 = format(ref_ts, "%Y-%m-%d %H:%M:%S"),
-                x1 = format(ref_ts, "%Y-%m-%d %H:%M:%S"),
+                x0 = format(t0_ts, "%Y-%m-%d %H:%M:%S"),
+                x1 = format(t0_ts, "%Y-%m-%d %H:%M:%S"),
                 y0 = 0,
                 y1 = 1,
                 line = list(

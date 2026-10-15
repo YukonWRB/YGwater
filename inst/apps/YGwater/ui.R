@@ -395,6 +395,18 @@ app_ui <- function(request) {
               title = uiOutput("dashboardsNavFloodTitle"),
               value = "floodDashboard",
               uiOutput("floodDashboard_ui")
+            ),
+            if (isTRUE(config$partner)) {
+              nav_panel(
+                title = "YEC Dashboard",
+                value = "yecDashboard",
+                uiOutput("yecDashboard_ui")
+              )
+            },
+            nav_panel(
+              title = "Basin SWE Dashboard",
+              value = "basinDashboard",
+              uiOutput("basinDashboard_ui")
             )
           ) # End dashboards nav_menu
         }, # End if !config$public for dashboards nav_menu

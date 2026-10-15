@@ -1131,12 +1131,12 @@ addImgs <- function(id, language) {
           # check whether the date is valid
           if (!identical(input$image_date, as.Date(character(0)))) {
             if (input$image_time == "") {
-              image_time = "00:00"
+              image_time <- "00:00"
             } else {
-              image_time = input$image_time
+              image_time <- input$image_time
             }
 
-            image_datetime = as.POSIXct(
+            image_datetime <- as.POSIXct(
               paste(input$image_date, image_time),
               format = "%Y-%m-%d %H:%M"
             )
@@ -1419,6 +1419,7 @@ addImgs <- function(id, language) {
           weight = 2,
           fill = FALSE,
           fillOpacity = 1,
+          label = locations$name,
           popup = locations$name,
           group = "locations"
         )

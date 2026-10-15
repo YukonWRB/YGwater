@@ -17,6 +17,7 @@
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
 #' @param analytics FALSE (no analytics) or path to an HTML file containing analytics code to insert into the app, such as a matomo analytics script. If a file in the package's inst directory, point to it as `system.file("apps/YGwater/www/html/matomo.html", package = "YGwater")`. This file will be called within the main UI as `tags$head(includeHTML(file))`. Default is FALSE.
 #' @param public TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.
+#' @param partner TRUE enables dashboards intended only for the Shiny Partner deployment. Default is FALSE.
 #' @param brand Character string to specify the branding of the app. Default is "public", which is a more generic version of the app with Yukon-specific references removed. The "yukon" branding includes Yukon-specific logos and references. This parameter can be used in the future to create other branded versions of the app for different users or organizations.
 
 #'
@@ -38,6 +39,7 @@ YGwater <- function(
   server = FALSE,
   analytics = FALSE,
   public = TRUE,
+  partner = FALSE,
   brand = "yukon"
 ) {
   rlang::check_installed("shiny", reason = "to use YGwater app")
@@ -116,6 +118,9 @@ YGwater <- function(
     stop(
       "The 'network_check' argument must be either FALSE or a character string representing a path to check."
     )
+  }
+  if (!is.logical(partner) || length(partner) != 1L || is.na(partner)) {
+    stop("The 'partner' argument must be TRUE or FALSE.")
   }
 
   appDir <- system.file("apps/YGwater", package = "YGwater")
@@ -310,6 +315,7 @@ YGwater <- function(
     accessPath2 = accessPath2,
     network_check = network_check,
     public = public,
+    partner = partner,
     logout_timer_min = logout_timer_min,
     analytics = analytics,
     brand = brand,
