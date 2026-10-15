@@ -3212,7 +3212,7 @@ WHERE rolname = current_user;"
         )
       }
     }
-    if (isTRUE(config$partner) && input$navbar == "yecDashboard") {
+    if (input$navbar == "yecDashboard") {
       if (!ui_loaded$yecDashboard) {
         output$yecDashboard_ui <- renderUI(
           yecDashboardUIMod("yecDashboard")

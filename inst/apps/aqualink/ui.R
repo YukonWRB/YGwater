@@ -16,9 +16,12 @@ app_ui <- function(request) {
     # Load Shiny's complete Selectize dependency before lazy modules. Some
     # widgets provide an older Selectize script without Shiny's accessibility
     # plugin; loading that first prevents later result forms from binding.
-    htmltools::attachDependencies(tags$head(), htmltools::findDependencies(
-      shiny::selectizeInput("initial_selectize_dependency", NULL, character())
-    )),
+    htmltools::attachDependencies(
+      tags$head(),
+      htmltools::findDependencies(
+        shiny::selectizeInput("initial_selectize_dependency", NULL, character())
+      )
+    ),
     shinyjs::useShinyjs(),
 
     div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")), # Used for a heartbeat every 5 seconds to keep app alive, which occasionally gives issues on mobile devices.
@@ -433,13 +436,11 @@ app_ui <- function(request) {
               value = "floodDashboard",
               uiOutput("floodDashboard_ui")
             ),
-            if (isTRUE(config$partner)) {
-              nav_panel(
-                title = "YEC Dashboard",
-                value = "yecDashboard",
-                uiOutput("yecDashboard_ui")
-              )
-            },
+            nav_panel(
+              title = "YEC Dashboard",
+              value = "yecDashboard",
+              uiOutput("yecDashboard_ui")
+            ),
             nav_panel(
               title = "Basin SWE Dashboard",
               value = "basinDashboard",

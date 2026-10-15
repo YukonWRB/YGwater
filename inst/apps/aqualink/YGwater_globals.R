@@ -11,7 +11,6 @@ YGwater_globals <- function(
   logout_timer_min,
   analytics,
   public,
-  partner,
   brand,
   test_exists
 ) {
@@ -161,12 +160,11 @@ YGwater_globals <- function(
       "apps/aqualink/modules/client/reports/floodDashboard.R",
       package = "YGwater"
     ))
-    if (isTRUE(partner)) {
-      source(system.file(
-        "apps/YGwater/modules/client/reports/yecDashboard.R",
-        package = "YGwater"
-      ))
-    }
+    source(system.file(
+      "apps/YGwater/modules/client/reports/yecDashboard.R",
+      package = "YGwater"
+    ))
+
     source(system.file(
       "apps/YGwater/modules/client/reports/basinDashboard.R",
       package = "YGwater"
@@ -1248,7 +1246,6 @@ YGwater_globals <- function(
     dbUser = dbUser,
     dbPass = dbPass,
     public = public,
-    partner = isTRUE(partner),
     g_drive = g_drive, # YG specific - whether the app has access to the G drive where FOD reports are stored, which allows the FOD report module to be visible and functional
     network_check = network_check,
     mdb_files = mdb_files,
