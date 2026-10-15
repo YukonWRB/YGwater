@@ -1470,6 +1470,8 @@ app_server <- function(input, output, session) {
     "snowInfo",
     "waterInfo",
     "floodDashboard",
+    "yecDashboard",
+    "basinDashboard",
     "waterTemp",
     "WQReport",
     "snowBulletin",
@@ -1735,6 +1737,8 @@ app_server <- function(input, output, session) {
     ui_loaded$snowInfo <- FALSE
     ui_loaded$waterInfo <- FALSE
     ui_loaded$floodDashboard <- FALSE
+    ui_loaded$yecDashboard <- FALSE
+    ui_loaded$basinDashboard <- FALSE
     ui_loaded$waterTemp <- FALSE
     ui_loaded$WQReport <- FALSE
     ui_loaded$snowBulletin <- FALSE
@@ -1825,6 +1829,8 @@ app_server <- function(input, output, session) {
     "snowInfo",
     "waterInfo",
     "floodDashboard",
+    "yecDashboard",
+    "basinDashboard",
     "waterTemp",
     "WQReport",
     "snowBulletin",
@@ -3021,6 +3027,8 @@ WHERE rolname = current_user;"
           "snowInfo",
           "waterInfo",
           "floodDashboard",
+          "yecDashboard",
+          "basinDashboard",
           "waterTemp",
           "WQReport",
           "snowBulletin",
@@ -3204,7 +3212,39 @@ WHERE rolname = current_user;"
         )
       }
     }
-    if (input$navbar == "WQReport") {
+    if (isTRUE(config$partner) && input$navbar == "yecDashboard") {
+      if (!ui_loaded$yecDashboard) {
+        output$yecDashboard_ui <- renderUI(
+          yecDashboardUIMod("yecDashboard")
+        )
+        ui_loaded$yecDashboard <- TRUE
+        # Call the server
+        yecDashboardMod(
+          "yecDashboard",
+          language = languageSelection,
+          inputs = NULL
+        )
+      }
+    }
+    if (input$navbar == "basinDashboard") {
+      if (!ui_loaded$basinDashboard) {
+        output$basinDashboard_ui <- renderUI(
+          basinDashboardUIMod("basinDashboard")
+        )
+        ui_loaded$basinDashboard <- TRUE
+        basinDashboardMod(
+          "basinDashboard",
+          language = languageSelection,
+          inputs = NULL
+        )
+      }
+    }
+    if (
+      input$navbar == "WQReport" &&
+        !isTRUE(config$public) &&
+        isTRUE(config$network_check) &&
+        isTRUE(session$userData$user_logged_in)
+    ) {
       if (!ui_loaded$WQReport) {
         output$WQReport_ui <- renderUI(
           WQReportUI("WQReport")
