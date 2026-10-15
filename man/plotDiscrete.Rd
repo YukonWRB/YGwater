@@ -37,7 +37,7 @@ plotDiscrete(
   result_types = NULL,
   sample_fractions = NULL,
   result_value_types = NULL,
-  result_speciations = NULL,
+  result_descriptors = NULL,
   include_blanks = TRUE,
   duplicate_action = c("show", "hide", "average"),
   sample_ids = NULL,
@@ -114,11 +114,13 @@ plotDiscrete(
 
 \item{result_value_types}{Optional AquaCache result value type ids or names to include, for example Actual or Calculated.}
 
-\item{result_speciations}{Optional AquaCache result speciation ids or names to include.}
+\item{result_descriptors}{Optional AquaCache result descriptor ids or names to include.}
 
 \item{include_blanks}{Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.}
 
-\item{duplicate_action}{How AquaCache duplicate/replicate samples should be handled. One of "show", "hide", or "average".}
+\item{duplicate_action}{How AquaCache duplicate/replicate samples should be
+handled. One of \code{"show"}, \code{"hide"}, or \code{"average"}. Averaging uses active
+\code{replicate_set} memberships in \code{discrete.sample_groups}.}
 
 \item{sample_ids}{Optional AquaCache sample ids to include. This is used by Shiny browse-table selections.}
 

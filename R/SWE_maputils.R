@@ -268,20 +268,9 @@ get_dynamic_style_elements <- function(
     param_name = "snow water equivalent",
     language = "English"
 ) {
-    # VALUE_COL_CHOICES = c("relative_to_med", "absolute", "percentile")
-    # if (!(value_col %in% VALUE_COL_CHOICES)) {
-    #     stop(
-    #         paste0(
-    #             "Invalid value_col specified; must be one of ",
-    #             paste(VALUE_COL_CHOICES, collapse = ", ")
-    #         )
-    #     )
-    # }
-
     param_name <- standardize_swe_param_name(param_name)
 
-    # standardize parameter name for upcoming switch case
-    # param_name <- standardize_param_name(param_name)
+    language <- lengthenLanguage(language)
 
     if (is.null(statistic)) {
         statistic <- "relative_to_med"
@@ -622,12 +611,8 @@ get_latest_bulletin_month_year <- function(
 #' @return Character string containing the full self-contained HTML of the widget
 #' @noRd
 render_leaflet_widget_html <- function(widget) {
-    if (!requireNamespace("base64enc", quietly = TRUE)) {
-        stop("Package 'base64enc' is required to render leaflet map HTML.")
-    }
-    if (!requireNamespace("htmlwidgets", quietly = TRUE)) {
-        stop("Package 'htmlwidgets' is required to render leaflet map HTML.")
-    }
+    rlang::check_installed("base64enc", reason = "to render leaflet map HTML")
+    rlang::check_installed("htmlwidgets", reason = "to render leaflet map HTML")
 
     mime_type <- function(path) {
         switch(
@@ -780,6 +765,7 @@ create_snowbull_leaflet_html <- function(
     snowbull_shapefiles = NULL,
     snowbull_timeseries = NULL
 ) {
+    language <- lengthenLanguage(language)
     if (is.null(con)) {
         con <- AquaConnect(silent = TRUE)
         on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -2805,7 +2791,7 @@ create_continuous_plot_popup <- function(
     year,
     con,
     station_name,
-    language = "English"
+    language = "en"
 ) {
     lang <- shortenLanguage(language)
 
@@ -4500,9 +4486,9 @@ generate_popup_content <- function(
     label_tr_key <- switch(
         label,
         "swe_poly_discrete" = "snowbull_swe_basin",
-        "swe_point_discrete" = "snowbull_snow_survey",
+        "swe_point_discrete" = "snow_survey",
         "swe_point_continuous" = "snowbull_snow_pillow",
-        "snowbull_snow_survey"
+        "snow_survey"
     )
     datatype_label <- paste0(
         "<b>Type: </b>",
@@ -5363,7 +5349,7 @@ make_leaflet_map <- function(
                 html = paste0(
                     "<div style='padding: 8px; border-radius: 6px; font-size: 13px; line-height: 1.4; min-width: 140px;'>",
                     "<svg width='18' height='18' style='vertical-align:middle;'><circle cx='9' cy='9' r='7' fill='none' stroke='black' stroke-width='2'/></svg> ",
-                    tr("snowbull_snow_survey", language),
+                    tr("snow_survey", language),
                     "<br>",
                     "<svg width='18' height='18' style='vertical-align:middle;'><rect x='3' y='3' width='12' height='12' fill='none' stroke='black' stroke-width='2'/><circle cx='9' cy='9' r='5' fill='none' stroke='black' stroke-width='2'/></svg> ",
                     tr("snowbull_snow_pillow", language),
@@ -5400,7 +5386,6 @@ make_leaflet_map <- function(
 
     if (!is.null(filename)) {
         cat(sprintf("Saving map to file: %s\n", filename))
-        requireNamespace("pandoc")
 
         tryCatch(
             {
@@ -5590,8 +5575,10 @@ make_ggplot_map <- function(
     start_year_historical = NULL,
     end_year_historical = NULL
 ) {
-    requireNamespace("ggplot2")
-    requireNamespace("shadowtext")
+    rlang::check_installed(
+        "shadowtext",
+        reason = "to create publication-ready maps with shadowed labels."
+    )
 
     # Get the first two characters of the language (lowercase) for normalization
     lang_short <- tolower(substr(language, 1, 2))
@@ -5933,10 +5920,10 @@ make_ggplot_map <- function(
             " "
         ),
         "precipitation, total" = paste0(
-            tr("snowbull_precipitation", language),
+            tr("precipitation", language),
             " "
         ),
-        "temperature, air" = paste0(tr("snowbull_temperature", language), " "),
+        "temperature, air" = paste0(tr("temperature", language), " "),
         ""
     )
 
@@ -6144,11 +6131,9 @@ make_snowbull_map <- function(
     con = NULL,
     format = "ggplot"
 ) {
-    # Load required packages
-    requireNamespace("sf")
-    requireNamespace("stats")
-
     # param_name <- standardize_param_name(param_name)
+
+    language <- lengthenLanguage(language)
 
     STATISTICS <- c("value", "relative_to_med", "percentile", "anomalies")
     statistic <- match.arg(
@@ -6293,7 +6278,7 @@ make_snowbull_map <- function(
                 year = year,
                 month = month,
                 statistic = statistic,
-                language = "English",
+                language = language,
                 october_start = october_start
             )
             map_data[[data_type]] <- df[!is.na(df$historic_median), ]
@@ -6360,30 +6345,6 @@ make_snowbull_map <- function(
         }
         return(df)
     }
-
-    # # Attach processed map data to bulletin_data by parameter type
-    # if (param_name == "snow water equivalent") {
-    #     bulletin_data$swe_basins <- remove_mapping_fields(map_data$poly_data)
-    #     bulletin_data$swe_surveys <- remove_mapping_fields(map_data$point_data)
-    #     bulletin_data$swe_pillows <- remove_mapping_fields(
-    #         map_data$point_data_secondary
-    #     )
-    # } else if (param_name == "precipitation, total") {
-    #     bulletin_data$precip_stations <- remove_mapping_fields(
-    #         map_data$point_data
-    #     )
-    # } else if (param_name == "temperature, air") {
-    #     bulletin_data$temp_stations <- remove_mapping_fields(
-    #         map_data$point_data
-    #     )
-    # } else if (param_name == "streamflow") {
-    #     bulletin_data$flow_stations <- remove_mapping_fields(
-    #         map_data$point_data
-    #     )
-    #     bulletin_data$level_stations <- remove_mapping_fields(
-    #         map_data$point_data_secondary
-    #     )
-    # }
 
     switch(
         format,

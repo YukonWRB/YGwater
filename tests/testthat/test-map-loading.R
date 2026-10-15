@@ -2,7 +2,7 @@ test_that("location and WWR maps defer expensive marker work", {
   locations_module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/map/locationsMap.R",
+        "apps/aqualink/modules/client/map/locationsMap.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -12,7 +12,7 @@ test_that("location and WWR maps defer expensive marker work", {
   registry_module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/WWR/registry_front_end.R",
+        "apps/aqualink/modules/client/WWR/registry_front_end.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -44,7 +44,7 @@ test_that("continuous cache predicates apply to each timeseries", {
   cache_module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/cache_functions.R",
+        "apps/aqualink/modules/cache_functions.R",
         package = "YGwater"
       ),
       warn = FALSE

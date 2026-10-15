@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Guideline SQL Helper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    body { margin: 1.5rem auto; max-width: 1200px; font: 16px/1.5 system-ui, sans-serif; color: #202124; }
+    h1, h2, h3 { margin-top: 1.4rem; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    pre { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 1rem; overflow: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #d0d7de; padding: .5rem .65rem; vertical-align: top; }
+    th { background: #f2f4f7; }
+    .tip { background: #eef6ff; border-left: 4px solid #4f9ad7; border-radius: 4px; padding: .75rem 1rem; }
+    .warn { background: #fff7ed; border-left: 4px solid #d97706; border-radius: 4px; padding: .75rem 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Guideline SQL Helper</h1>
+
+  <p>
+    AquaCache stores water quality guideline values in the <code>criteria</code>
+    schema. Most guidelines should use fixed values, lookup ranges, lookup
+    grids, one-input formulas, narrative rows, or external model result rows.
+    Use an <strong>SQL scalar</strong> rule only when the guideline derivation
+    cannot be represented cleanly by those structured rule types.
+  </p>
+
+  <div class="tip">
+    SQL scalar rules are still database-driven. The Shiny app stores the SQL in
+    <code>criteria.guideline_value_rules.formula_sql</code>, and the database
+    evaluates it through the same guideline views and functions used by reports,
+    plots, and scripts.
+  </div>
+
+  <h2>Rules for SQL Scalar Rules</h2>
+  <ul>
+    <li>Write one PostgreSQL statement beginning with <code>SELECT</code> or <code>WITH ... SELECT</code>.</li>
+    <li>Return exactly one numeric value in the database units for the target parameter.</li>
+    <li>Use <code>$1::integer</code> when the expression needs the current <code>sample_id</code>.</li>
+    <li>Do not include a semicolon, inserts, updates, deletes, DDL, temp tables, or session changes.</li>
+    <li>Return <code>NULL::numeric</code> when required sample inputs are missing and no valid guideline value can be derived.</li>
+  </ul>
+
+  <h2>Useful Database Helpers</h2>
+  <p>
+    When a SQL scalar uses sample chemistry, list the same chemistry rows under
+    Rule inputs first, then use the Insert input button to add those helper
+    calls to the SQL editor. The admin form checks
+    <code>discrete.get_sample_val()</code> and
+    <code>criteria.get_sample_hardness()</code> calls against those rows before
+    saving.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Helper</th><th>Use</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>criteria.get_sample_hardness(sample_id)</code></td>
+        <td>Returns preferred hardness as mg/L CaCO3 using the database's standard priority order.</td>
+        <td><code>criteria.get_sample_hardness($1::integer)</code></td>
+      </tr>
+      <tr>
+        <td><code>discrete.get_sample_val(...)</code></td>
+        <td>Fetches a sample result by parameter, fraction, and optional descriptor.</td>
+        <td><code>discrete.get_sample_val(sample_id := $1::integer, parameter_id := 1190::integer, sample_fraction_id := NULL::integer)</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Fixed Value</h2>
+  <p>
+    Prefer the structured fixed-value rule type for this case, but this is the
+    equivalent SQL scalar form:
+  </p>
+  <pre><code>SELECT 0.230::numeric</code></pre>
+
+  <h2>Hardness-Dependent Example</h2>
+  <p>
+    This pattern is useful for guidelines that depend on hardness and cannot be
+    represented by the one-input formula rule.
+  </p>
+  <pre><code>WITH vals AS (
+  SELECT criteria.get_sample_hardness($1::integer) AS hardness_mg_l_caco3
+)
+SELECT CASE
+  WHEN hardness_mg_l_caco3 IS NULL THEN NULL::numeric
+  WHEN hardness_mg_l_caco3 &lt; 82 THEN 0.002::numeric
+  WHEN hardness_mg_l_caco3 &lt;= 180 THEN
+    (0.2 * exp(0.8545 * ln(hardness_mg_l_caco3) - 1.465) / 1000)::numeric
+  ELSE 0.004::numeric
+END
+FROM vals</code></pre>
+
+  <h2>Multiple Sample Inputs</h2>
+  <p>
+    SQL scalar rules can combine several inputs. Keep parameter, fraction, and
+    descriptor IDs explicit so the stored rule remains reproducible.
+  </p>
+  <pre><code>WITH vals AS (
+  SELECT
+    criteria.get_sample_hardness($1::integer) AS hardness_mg_l_caco3,
+    discrete.get_sample_val(
+      sample_id := $1::integer,
+      parameter_id := 538::integer,
+      sample_fraction_id := 2::integer,
+      result_descriptor_id := NULL::integer
+    ) AS doc_mg_l
+)
+SELECT CASE
+  WHEN hardness_mg_l_caco3 IS NULL OR doc_mg_l IS NULL THEN NULL::numeric
+  ELSE (0.001 + 0.00002 * hardness_mg_l_caco3 + 0.0001 * doc_mg_l)::numeric
+END
+FROM vals</code></pre>
+
+  <h2>Testing SQL Scalar Rules</h2>
+  <p>
+    The Shiny tester can evaluate a saved guideline against either an existing
+    result ID or a temporary sample. Temporary tests insert a synthetic sample
+    and result rows inside a transaction, run
+    <code>criteria.applicable_guidelines_for_result()</code>, and then roll the
+    transaction back.
+  </p>
+  <p>
+    For BLM or other external-model guidelines, enter the sample chemistry in
+    the temporary input table and optionally enter an external model output. The
+    app stores that model output only for the duration of the test transaction.
+  </p>
+
+  <div class="warn">
+    SQL scalar rules are intentionally powerful. Use structured rule types first
+    when they fit, and keep SQL scalar expressions short, reviewed, and tied to
+    source documentation.
+  </div>
+</body>
+</html>

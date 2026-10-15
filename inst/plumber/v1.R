@@ -198,12 +198,6 @@ function(req, res, lang = "en", format = NULL) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  visibility_sql <- if (request_cache_allowed(req)) {
-    "WHERE ts.publicly_visible = TRUE"
-  } else {
-    ""
-  }
-
   compound_sql <- "
     SELECT
       m.timeseries_id,
@@ -248,7 +242,7 @@ function(req, res, lang = "en", format = NULL) {
   sql <- sprintf(
     "SELECT
        tm.*,
-       ts.publicly_visible,
+       ts.default_show,
        ts.active,
        ts.default_owner AS default_owner_organization_id,
        org.name AS default_owner,
@@ -282,11 +276,9 @@ function(req, res, lang = "en", format = NULL) {
        ON ts.timeseries_id = tc.timeseries_id
      LEFT JOIN (%s) cm
        ON ts.timeseries_id = cm.timeseries_id
-     %s
      ORDER BY tm.timeseries_id",
     metadata_sql,
-    compound_sql,
-    visibility_sql
+    compound_sql
   )
   out <- DBI::dbGetQuery(con, sql)
 
@@ -434,7 +426,6 @@ function(
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   api_set_query_timeout(con)
-  include_private <- !request_cache_allowed(req)
   measurement_join_sql <- "
     LEFT JOIN LATERAL (
       SELECT
@@ -529,8 +520,8 @@ function(
   basic_modified_filter_sql <- ""
   compound_modified_filter_sql <- ""
   modified_ranges_cte_sql <- ""
-  query_params <- list(start, end, include_private, lim)
-  limit_param <- "$4"
+  query_params <- list(start, end, lim)
+  limit_param <- "$3"
   if (!is.null(modifiedSince)) {
     modified_ranges_cte_sql <- "
          modified_ranges AS MATERIALIZED (
@@ -543,7 +534,7 @@ function(
              ON c.timeseries_id = tt.source_timeseries_id
            WHERE c.start_dt <= $2
              AND c.end_dt >= $1
-             AND (c.created >= $4 OR c.modified >= $4)
+             AND (c.created >= $3 OR c.modified >= $3)
 
            UNION ALL
 
@@ -552,7 +543,7 @@ function(
            JOIN continuous.grades g USING (timeseries_id)
            WHERE g.start_dt <= $2
              AND g.end_dt >= $1
-             AND (g.created >= $4 OR g.modified >= $4)
+             AND (g.created >= $3 OR g.modified >= $3)
 
            UNION ALL
 
@@ -561,7 +552,7 @@ function(
            JOIN continuous.approvals a USING (timeseries_id)
            WHERE a.start_dt <= $2
              AND a.end_dt >= $1
-             AND (a.created >= $4 OR a.modified >= $4)
+             AND (a.created >= $3 OR a.modified >= $3)
 
            UNION ALL
 
@@ -570,7 +561,7 @@ function(
            JOIN continuous.qualifiers q USING (timeseries_id)
            WHERE q.start_dt <= $2
              AND q.end_dt >= $1
-             AND (q.created >= $4 OR q.modified >= $4)
+             AND (q.created >= $3 OR q.modified >= $3)
 
            UNION ALL
 
@@ -579,7 +570,7 @@ function(
            JOIN continuous.owners o USING (timeseries_id)
            WHERE o.start_dt <= $2
              AND o.end_dt >= $1
-             AND (o.created >= $4 OR o.modified >= $4)
+             AND (o.created >= $3 OR o.modified >= $3)
 
            UNION ALL
 
@@ -588,13 +579,13 @@ function(
            JOIN continuous.contributors c USING (timeseries_id)
            WHERE c.start_dt <= $2
              AND c.end_dt >= $1
-             AND (c.created >= $4 OR c.modified >= $4)
+             AND (c.created >= $3 OR c.modified >= $3)
          ),
     "
     basic_modified_filter_sql <- "
        AND (
-         mc.created >= $4
-         OR mc.modified >= $4
+         mc.created >= $3
+         OR mc.modified >= $3
          OR EXISTS (
            SELECT 1
            FROM modified_ranges changed
@@ -605,8 +596,8 @@ function(
        )"
     compound_modified_filter_sql <- "
        AND (
-         source_stamp.created >= $4
-         OR source_stamp.modified >= $4
+         source_stamp.created >= $3
+         OR source_stamp.modified >= $3
          OR EXISTS (
            SELECT 1
            FROM modified_ranges changed
@@ -615,8 +606,8 @@ function(
              AND changed.end_dt >= m.datetime
          )
        )"
-    query_params <- list(start, end, include_private, modifiedSince, lim)
-    limit_param <- "$5"
+    query_params <- list(start, end, modifiedSince, lim)
+    limit_param <- "$4"
   }
 
   # Apply common correction types set-wise and prefetch range metadata once per
@@ -635,7 +626,6 @@ function(
            FROM requested_timeseries r
            JOIN continuous.timeseries ts
              ON r.timeseries_id = ts.timeseries_id
-           WHERE ($3::boolean OR ts.publicly_visible)
          ),
          timeseries_tree(
            root_timeseries_id,
@@ -1186,19 +1176,18 @@ function(
     )
   }
   modified_filter_sql <- ""
-  query_params <- list(start, end, !request_cache_allowed(req), lim)
-  limit_param <- "$4"
+  query_params <- list(start, end, lim)
+  limit_param <- "$3"
   if (!is.null(modifiedSince)) {
     modified_filter_sql <- "
-          AND (m.created >= $4 OR m.modified >= $4)"
+          AND (m.created >= $3 OR m.modified >= $3)"
     query_params <- list(
       start,
       end,
-      !request_cache_allowed(req),
       modifiedSince,
       lim
     )
-    limit_param <- "$5"
+    limit_param <- "$4"
   }
 
   sql <- paste0(
@@ -1208,7 +1197,6 @@ function(
        WHERE timeseries_id = ANY(ARRAY[",
     paste(ids, collapse = ","),
     "]::integer[])
-         AND ($3::boolean OR publicly_visible)
      ),
      limited_daily_rows AS MATERIALIZED (
        SELECT m.*
@@ -1988,7 +1976,7 @@ snowInfo_mem <- memoise::memoise(
 get_snow_stamp <- function(con) {
   rows <- DBI::dbGetQuery(
     con,
-    "SELECT count(*) FROM discrete.samples WHERE import_source = 'downloadSnowCourseYG'"
+    "SELECT count(*) FROM discrete.samples WHERE source_adapter_function = 'downloadSnowCourseYG'"
   )[1, 1]
 
   stamp <- DBI::dbGetQuery(
@@ -1997,12 +1985,12 @@ get_snow_stamp <- function(con) {
   SELECT GREATEST(
     (SELECT MAX(COALESCE(s.modified, s.created))
        FROM discrete.samples s
-      WHERE s.import_source = 'downloadSnowCourseYG'),
+      WHERE s.source_adapter_function = 'downloadSnowCourseYG'),
 
     (SELECT MAX(COALESCE(r.modified, r.created))
        FROM discrete.results r
        JOIN discrete.samples s ON s.sample_id = r.sample_id
-      WHERE s.import_source = 'downloadSnowCourseYG'
+      WHERE s.source_adapter_function = 'downloadSnowCourseYG'
         AND r.parameter_id IN (21, 1220))
   ) AS stamp
 "

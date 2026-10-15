@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discrete workbook layout guide</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #24343d;
+      background: #f5f7f8;
+    }
+    body { max-width: 1050px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    h1 { margin: 0 0 .5rem; color: #164d5b; }
+    .intro { max-width: 75ch; margin: 0 0 1.5rem; line-height: 1.5; }
+    section { margin: 1.25rem 0; padding: 1.25rem; background: white; border: 1px solid #cbd5da; border-radius: .5rem; }
+    h2 { margin: 0 0 .4rem; font-size: 1.25rem; }
+    .hint { margin: 0 0 .9rem; color: #4e616a; }
+    .sheet { overflow-x: auto; border: 1px solid #aebcc2; }
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; white-space: nowrap; }
+    caption { padding: .55rem; text-align: left; color: #40535b; background: #edf2f4; font-weight: 600; }
+    th, td { padding: .55rem .65rem; border: 1px solid #cbd5da; text-align: left; }
+    thead th { color: #173e4a; background: #dce9ed; }
+    tbody th { color: #40535b; background: #f1f4f5; font-weight: 600; }
+    tbody tr:nth-child(even) td { background: #f8fafb; }
+    .note { margin: .8rem 0 0; color: #4e616a; font-size: .92rem; }
+    @media (max-width: 640px) {
+      body { padding: 1rem .75rem 2rem; }
+      section { padding: .9rem; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Choose a workbook layout</h1>
+  <p class="intro">
+    Match the option to the shape of the worksheet that contains the results.
+    These examples show the arrangement the importer expects; your column names
+    and sample values can be different. The saved format tells AquaCache where
+    to find each field.
+  </p>
+
+  <section aria-labelledby="long-title">
+    <h2 id="long-title">Long table — one result per row</h2>
+    <p class="hint">Sample details repeat as each analyte result gets its own row.</p>
+    <div class="sheet">
+      <table>
+        <caption>Worksheet snapshot</caption>
+        <thead><tr><th>Sample ID</th><th>Station Code</th><th>Sample Date</th><th>Parameter Code</th><th>Parameter Name</th><th>Units</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>VA26B9810-001</td><td>TC-RB-DS200</td><td>2026-07-23</td><td>Al-T</td><td>Aluminum, total</td><td>mg/L</td><td>0.012</td></tr>
+          <tr><td>VA26B9810-001</td><td>TC-RB-DS200</td><td>2026-07-23</td><td>Ca-D</td><td>Calcium, dissolved</td><td>mg/L</td><td>18.4</td></tr>
+          <tr><td>VA26B9810-002</td><td>TC-RB-DS200-R</td><td>2026-07-23</td><td>Al-T</td><td>Aluminum, total</td><td>mg/L</td><td>0.009</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Choose this for a conventional row-based data table, including EQWin-style exports.</p>
+  </section>
+
+  <section aria-labelledby="transposed-title">
+    <h2 id="transposed-title">Transposed table — one sample per column</h2>
+    <p class="hint">Sample IDs and details run across columns; each analyte has its own row.</p>
+    <div class="sheet">
+      <table>
+        <caption>Worksheet snapshot</caption>
+        <thead><tr><th>Field / Parameter Name</th><th>Parameter Code</th><th>Units</th><th>Sample 1</th><th>Sample 2</th></tr></thead>
+        <tbody>
+          <tr><th>Lab Sample #</th><td></td><td></td><td>VA26B9810-001</td><td>VA26B9810-002</td></tr>
+          <tr><th>Station Code</th><td></td><td></td><td>TC-RB-DS200</td><td>TC-RB-DS200-R</td></tr>
+          <tr><th>Sample Date</th><td></td><td></td><td>2026-07-23</td><td>2026-07-23</td></tr>
+          <tr><th>Sample Time</th><td></td><td></td><td>12:05</td><td>12:15</td></tr>
+          <tr><td>Aluminum, total</td><td>Al-T</td><td>mg/L</td><td>0.012</td><td>0.009</td></tr>
+          <tr><td>Calcium, dissolved</td><td>Ca-D</td><td>mg/L</td><td>18.4</td><td>19.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Choose this when result values for several samples are arranged in separate columns.</p>
+  </section>
+
+  <section aria-labelledby="xlr-title">
+    <h2 id="xlr-title">XLR Detailed Report — lab report export</h2>
+    <p class="hint">The detailed report has report pages above a results table headed “Analyte” and “ALS Sample ID”.</p>
+    <div class="sheet">
+      <table>
+        <caption>Worksheet snapshot — the results header can appear below report details</caption>
+        <thead><tr><th>Analyte</th><th>ALS Sample ID</th><th>Sampling Point</th><th>Date/Time</th><th>Result</th><th>Units</th><th>Qualifier</th></tr></thead>
+        <tbody>
+          <tr><td>Aluminum, total</td><td>VA26B9810-001</td><td>TC-RB-DS200</td><td>2026-07-23 12:05</td><td>0.012</td><td>mg/L</td><td></td></tr>
+          <tr><td>Calcium, dissolved</td><td>VA26B9810-001</td><td>TC-RB-DS200</td><td>2026-07-23 12:05</td><td>18.4</td><td>mg/L</td><td></td></tr>
+          <tr><td>Aluminum, total</td><td>VA26B9810-002</td><td>TC-RB-DS200-R</td><td>2026-07-23 12:15</td><td>&lt;0.005</td><td>mg/L</td><td>&lt;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Choose this only for the lab’s XLR Detailed Report export, not for another workbook that happens to have similar columns.</p>
+  </section>
+</body>
+</html>

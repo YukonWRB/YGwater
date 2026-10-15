@@ -1,6 +1,6 @@
 edit_samples_module_environment <- function() {
   module_path <- system.file(
-    "apps/YGwater/modules/admin/discreteData/editSamples.R",
+    "apps/aqualink/modules/admin/discreteData/editSamples.R",
     package = "YGwater"
   )
 
@@ -24,7 +24,7 @@ test_that("sample association synchronization changes only selected links", {
 test_that("sample editor uses normalized qualifiers and observers", {
   module_code <- readLines(
     system.file(
-      "apps/YGwater/modules/admin/discreteData/editSamples.R",
+      "apps/aqualink/modules/admin/discreteData/editSamples.R",
       package = "YGwater"
     ),
     warn = FALSE
@@ -55,4 +55,14 @@ test_that("sample editor uses normalized qualifiers and observers", {
     perl = TRUE
   ))
   expect_false(grepl("result_qualifiers", code, fixed = TRUE))
+  expect_match(code, "discrete.sample_group_members", fixed = TRUE)
+  expect_false(grepl("linked_with", code, fixed = TRUE))
+})
+
+test_that("duplicate averaging uses replicate-set memberships", {
+  code <- paste(deparse(body(plotDiscrete)), collapse = "\n")
+
+  expect_match(code, "replicate_set", fixed = TRUE)
+  expect_match(code, "replicate_group_id", fixed = TRUE)
+  expect_false(grepl("linked_with", code, fixed = TRUE))
 })

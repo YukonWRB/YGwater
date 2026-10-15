@@ -165,7 +165,7 @@ test_that("adaptive continuous plot displays sensor priority in both metadata vi
   module_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        "apps/aqualink/modules/client/plot/continuousPlotAdaptive.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -187,7 +187,7 @@ test_that("adaptive continuous plot displays sensor priority in both metadata vi
   cache_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/cache_functions.R",
+        "apps/aqualink/modules/cache_functions.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -201,7 +201,7 @@ test_that("adaptive multi-timeseries plots batch data and preserve axis units", 
   module_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        "apps/aqualink/modules/client/plot/continuousPlotAdaptive.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -247,7 +247,7 @@ test_that("public statistics-period controls use translated labels", {
   adaptive_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        "apps/aqualink/modules/client/plot/continuousPlotAdaptive.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -257,7 +257,7 @@ test_that("public statistics-period controls use translated labels", {
   params_map_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/map/paramsMap.R",
+        "apps/aqualink/modules/client/map/paramsMap.R",
         package = "YGwater"
       ),
       warn = FALSE
