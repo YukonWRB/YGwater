@@ -729,15 +729,11 @@ contPlot <- function(id, language, windowDims, inputs) {
                           "Stats period"
                         },
                         choices = stats::setNames(
-                          c("30yr", "full"),
-                          if (language$abbrev == "fr") {
-                            c(
-                              "30 derni\u00e8res ann\u00e9es",
-                              "Toute la p\u00e9riode"
-                            )
-                          } else {
-                            c("Last 30 years", "Entire record")
-                          }
+                          c("30yr", "1991_2020", "1981_2010", "full"),
+                          YGwater:::format_stats_period_label(
+                            c("30yr", "1991_2020", "1981_2010", "full"),
+                            language$language
+                          )
                         ),
                         selected = "30yr",
                         multiple = FALSE
@@ -1027,7 +1023,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
 
       stats_period <- as.character(input$historic_stats_period[[1]])
-      if (!(stats_period %in% c("30yr", "full"))) {
+      if (!(stats_period %in% c("30yr", "1991_2020", "1981_2010", "full"))) {
         return("30yr")
       }
 
@@ -1143,20 +1139,29 @@ contPlot <- function(id, language, windowDims, inputs) {
       list(disabled = !is.null(note), note = note)
     })
 
+    fixed_historic_stats_period <- reactive({
+      current_historic_stats_period() %in% c("1991_2020", "1981_2010")
+    })
+
     observe({
       hist_state <- historic_range_ui_state()
+      fixed_period <- fixed_historic_stats_period()
 
       if (isTRUE(hist_state$disabled)) {
         updateCheckboxInput(session, "show_hist", value = FALSE)
+        shinyjs::disable("show_hist")
+      } else {
+        shinyjs::enable("show_hist")
+      }
+
+      if (isTRUE(hist_state$disabled) || fixed_period) {
         updateSelectizeInput(
           session,
           "historic_range_overlap",
           selected = "none"
         )
-        shinyjs::disable("show_hist")
         shinyjs::disable("historic_range_overlap")
       } else {
-        shinyjs::enable("show_hist")
         shinyjs::enable("historic_range_overlap")
       }
     })
@@ -1857,7 +1862,9 @@ contPlot <- function(id, language, windowDims, inputs) {
         years = selected_years,
         historic_range = !isTRUE(hist_state$disabled) &&
           isTRUE(input$show_hist),
-        historic_range_overlap = if (isTRUE(hist_state$disabled)) {
+        historic_range_overlap = if (
+          isTRUE(hist_state$disabled) || fixed_historic_stats_period()
+        ) {
           "none"
         } else if (
           is.null(input$historic_range_overlap) ||

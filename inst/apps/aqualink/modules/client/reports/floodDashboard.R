@@ -5764,10 +5764,17 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 selected_date <- suppressWarnings(as.Date(
                     input$image_date_select
                 ))
-                if (!is.na(selected_date)) {
+                if (
+                    length(selected_date) == 1L &&
+                        !is.na(selected_date) &&
+                        !identical(
+                            as.character(selected_date),
+                            selected_image_date()
+                        )
+                ) {
                     selected_image_date(as.character(selected_date))
+                    selected_image_ts_index(NA_integer_)
                 }
-                selected_image_ts_index(NA_integer_)
             },
             ignoreInit = TRUE
         )
@@ -5863,37 +5870,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             selected_image_ts_index(NA_integer_)
         })
 
+        # Timestamp changes must not rebuild and rebind the navigation buttons.
         output$image_series_header <- shiny::renderUI({
             series <- community_image_series()
-
-            timestamps <- tryCatch(
-                available_image_timestamps(),
-                error = function(e) NULL
-            )
-            ts_str <- if (!is.null(timestamps) && nrow(timestamps) > 0) {
-                idx <- selected_image_ts_index()
-                if (
-                    length(idx) != 1 ||
-                        is.na(idx) ||
-                        idx < 1 ||
-                        idx > nrow(timestamps)
-                ) {
-                    idx <- nrow(timestamps)
-                }
-                format(
-                    as.POSIXct(timestamps$datetime[[idx]], tz = "Etc/GMT+7"),
-                    "%Y-%m-%d %H:%M",
-                    tz = "Etc/GMT+7"
-                )
-            } else {
-                tr("flood_no_images", language$language)
-            }
 
             if (is.null(series) || nrow(series) == 0) {
                 return(shiny::tags$span(paste(
                     tr("flood_images", language$language),
                     "\u2014",
-                    ts_str
+                    tr("flood_no_images", language$language)
                 )))
             }
 
@@ -5934,19 +5919,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         selectize = FALSE
                     ),
                     tr("flood_image_location_help", language$language),
-                    placement = "top"
-                ),
-                bslib::tooltip(
-                    shiny::dateInput(
-                        inputId = session$ns("image_date_select"),
-                        label = NULL,
-                        value = as.Date(selected_date),
-                        min = earliest_date,
-                        max = Sys.Date(),
-                        format = "yyyy-mm-dd",
-                        width = "180px"
-                    ),
-                    "Choose a date to load all images from that day.",
                     placement = "top"
                 ),
                 bslib::tooltip(

@@ -49,6 +49,8 @@ format_stats_period_label <- function(
 ) {
   keys <- c(
     `30yr` = "stats_period_last_30_years",
+    `1991_2020` = "stats_period_1991_2020",
+    `1981_2010` = "stats_period_1981_2010",
     full = "stats_period_entire_record"
   )
   stats_period <- as.character(stats_period)
@@ -202,17 +204,32 @@ continuous_trace_uses_corrected_source <- function(
 }
 
 #' Normalize the daily-statistics period selector
-#' @param stats_period One of "full" or "30yr".
+#' @param stats_period A supported historical-statistics period.
 #' @return A normalized period string.
 #' @noRd
 #' @keywords internal
 normalize_daily_stats_period <- function(stats_period) {
-  stats_period <- match.arg(stats_period, c("full", "30yr"))
-  stats_period
+  match.arg(stats_period, c("full", "30yr", "1991_2020", "1981_2010"))
+}
+
+#' Return fixed date boundaries for a historical-statistics period.
+#' @param stats_period A normalized historical-statistics period.
+#' @return NULL for dynamic periods, otherwise a named character vector with
+#'   inclusive `start` and exclusive `end` dates.
+#' @noRd
+#' @keywords internal
+daily_stats_period_bounds <- function(stats_period) {
+  stats_period <- normalize_daily_stats_period(stats_period)
+  switch(
+    stats_period,
+    `1991_2020` = c(start = "1991-01-01", end = "2021-01-01"),
+    `1981_2010` = c(start = "1981-01-01", end = "2011-01-01"),
+    NULL
+  )
 }
 
 #' Resolve the historic-statistics window shown in plot-data exports
-#' @param stats_period One of "full" or "30yr".
+#' @param stats_period A supported historical-statistics period.
 #' @param trace_data Exported trace data with a datetime column.
 #' @param range_data Exported range data with a datetime column.
 #' @param timeseries_start Full record start datetime.
@@ -298,6 +315,14 @@ historic_stats_export_window <- function(
     if (!is.na(full_end) && !is.na(stats_end) && stats_end > full_end) {
       stats_end <- full_end
     }
+  }
+
+  fixed_bounds <- daily_stats_period_bounds(stats_period)
+  if (!is.null(fixed_bounds)) {
+    fixed_start <- as.POSIXct(fixed_bounds[["start"]], tz = "UTC")
+    fixed_end <- as.POSIXct(fixed_bounds[["end"]], tz = "UTC") - 1
+    stats_start <- if (is.na(full_start)) fixed_start else max(full_start, fixed_start)
+    stats_end <- if (is.na(full_end)) fixed_end else min(full_end, fixed_end)
   }
 
   start_text <- if (is.na(stats_start)) {
@@ -1116,7 +1141,7 @@ write_continuous_plot_csv_zip <- function(tables, file) {
 }
 
 #' Build the historic-statistics caption used below plot legends
-#' @param stats_period One of "full" or "30yr".
+#' @param stats_period A supported historical-statistics period.
 #' @param plot_data Plot data returned by continuous plotting helpers.
 #' @param timeseries_ids Timeseries IDs included in the plot.
 #' @param timeseries_table Timeseries metadata with start/end datetimes.
@@ -1247,7 +1272,7 @@ historic_stats_caption_for_plot_data <- function(
 
 #' Build stable daily-statistics SELECT expressions
 #' @param con A DBI database connection object.
-#' @param stats_period One of "full" or "30yr".
+#' @param stats_period A supported historical-statistics period.
 #' @param columns Base daily-statistics columns to select.
 #' @param table_alias Optional table alias to prefix column references.
 #' @return A character vector of SQL SELECT expressions.
@@ -1260,6 +1285,41 @@ daily_stats_select_sql <- function(
   table_alias = NULL
 ) {
   stats_period <- normalize_daily_stats_period(stats_period)
+  has_table_alias <- !is.null(table_alias) && nzchar(table_alias)
+  prefix <- if (has_table_alias) paste0(table_alias, ".") else ""
+  outer_prefix <- if (has_table_alias) prefix else "measurements_calculated_daily."
+  fixed_bounds <- daily_stats_period_bounds(stats_period)
+
+  if (!is.null(fixed_bounds)) {
+    aggregates <- c(
+      min = "MIN(history.value)",
+      max = "MAX(history.value)",
+      q10 = "percentile_cont(0.10) WITHIN GROUP (ORDER BY history.value)",
+      q25 = "percentile_cont(0.25) WITHIN GROUP (ORDER BY history.value)",
+      q50 = "percentile_cont(0.50) WITHIN GROUP (ORDER BY history.value)",
+      q75 = "percentile_cont(0.75) WITHIN GROUP (ORDER BY history.value)",
+      q90 = "percentile_cont(0.90) WITHIN GROUP (ORDER BY history.value)",
+      mean = "AVG(history.value)"
+    )
+    if (!all(columns %in% names(aggregates))) {
+      stop("Unsupported fixed-period daily statistics column.", call. = FALSE)
+    }
+    return(vapply(columns, function(column) {
+      paste0(
+        "(SELECT ", aggregates[[column]],
+        " FROM continuous.measurements_calculated_daily AS history",
+        " WHERE history.timeseries_id = ", outer_prefix, "timeseries_id",
+        " AND history.date >= DATE '", fixed_bounds[["start"]], "'",
+        " AND history.date < DATE '", fixed_bounds[["end"]], "'",
+        " AND EXTRACT(MONTH FROM history.date) = EXTRACT(MONTH FROM ",
+        outer_prefix, "date)",
+        " AND EXTRACT(DAY FROM history.date) = EXTRACT(DAY FROM ",
+        outer_prefix, "date)) AS ",
+        as.character(DBI::dbQuoteIdentifier(con, column))
+      )
+    }, character(1)))
+  }
+
   available <- DBI::dbGetQuery(
     con,
     "SELECT column_name
@@ -1274,12 +1334,6 @@ daily_stats_select_sql <- function(
       all(paste0(columns, "_30yr") %in% available)
   ) {
     suffix <- "_30yr"
-  }
-
-  prefix <- if (is.null(table_alias) || !nzchar(table_alias)) {
-    ""
-  } else {
-    paste0(table_alias, ".")
   }
 
   vapply(
