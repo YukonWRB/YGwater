@@ -2024,36 +2024,48 @@ addDiscData_run_upload <- function(request) {
       }
 
       insert_document <- function(file) {
-        document <- readBin(
+        YGwater:::with_heif_upload_as_jpeg(
           file$datapath,
-          "raw",
-          as.integer(file.info(file$datapath)$size)
+          function(upload_path) {
+            is_heif <- tolower(tools::file_ext(file$name)) %in% c("heic", "heif")
+            document_name <- if (is_heif) {
+              paste0(tools::file_path_sans_ext(file$name), ".jpg")
+            } else {
+              file$name
+            }
+            document <- readBin(
+              upload_path,
+              "raw",
+              as.integer(file.info(upload_path)$size)
+            )
+            existing <- DBI::dbGetQuery(
+              con,
+              "SELECT document_id, name
+               FROM files.documents
+               WHERE file_hash = md5(encode($1::bytea, 'hex'))
+               LIMIT 1;",
+              params = list(list(document))
+            )
+            if (nrow(existing)) {
+              return(as.integer(existing$document_id[[1]]))
+            }
+            result <- AquaCache::insertACDocument(
+              path = upload_path,
+              name = document_name,
+              type = default_document_type(),
+              description = sprintf(
+                "Uploaded %s from the discrete data upload workflow.",
+                file$name
+              ),
+              tags = c("discrete sample", "discrete upload"),
+              share_with = "public_reader",
+              geoms = NULL,
+              con = con
+            )
+            as.integer(result$new_document_id)
+          },
+          extension = tools::file_ext(file$name)
         )
-        existing <- DBI::dbGetQuery(
-          con,
-          "SELECT document_id, name
-           FROM files.documents
-           WHERE file_hash = md5(encode($1::bytea, 'hex'))
-           LIMIT 1;",
-          params = list(list(document))
-        )
-        if (nrow(existing)) {
-          return(as.integer(existing$document_id[[1]]))
-        }
-        result <- AquaCache::insertACDocument(
-          path = file$datapath,
-          name = file$name,
-          type = default_document_type(),
-          description = sprintf(
-            "Uploaded %s from the discrete data upload workflow.",
-            file$name
-          ),
-          tags = c("discrete sample", "discrete upload"),
-          share_with = "public_reader",
-          geoms = NULL,
-          con = con
-        )
-        as.integer(result$new_document_id)
       }
 
       sample_document_fields <- DBI::dbListFields(
@@ -2719,6 +2731,7 @@ addDiscData_result_display <- function(
   sample_fractions,
   result_value_types,
   reporting_bases,
+  chemistry_catalogues,
   matrix_states,
   laboratories,
   media,
@@ -2754,6 +2767,23 @@ addDiscData_result_display <- function(
       rows$source_result_condition_value[rebuild]
     )
   }
+
+  endpoint_labels <- c(
+    fixed = "Fixed pH",
+    inflection = "Inflection",
+    gran = "Gran",
+    other = "Other"
+  )
+  endpoint_determination <- unname(endpoint_labels[rows$endpoint_mode])
+  endpoint_determination[is.na(endpoint_determination)] <- ""
+  analysis_conditions <- vapply(
+    rows$analysis_conditions,
+    function(value) {
+      if (is.null(value) || is.na(value)) "{}" else
+        AquaCache::normalizeAnalysisConditions(value)
+    },
+    character(1)
+  )
 
   location_index <- match(rows$location_id, locations$location_id)
   parameter_name <- addDiscData_lookup_label(
@@ -2827,6 +2857,21 @@ addDiscData_result_display <- function(
       "reporting_basis_id",
       "reporting_basis"
     ),
+    `Chemical form / species scope` = addDiscData_lookup_label(
+      rows$result_speciation_id,
+      chemistry_catalogues$result_speciations,
+      "result_speciation_id",
+      "result_speciation"
+    ),
+    `Analytical target / material` = addDiscData_lookup_label(
+      rows$result_target_id,
+      chemistry_catalogues$result_targets,
+      "result_target_id",
+      "result_target"
+    ),
+    `Endpoint determination` = endpoint_determination,
+    `Endpoint pH` = rows$endpoint_ph,
+    `Additional analysis conditions (JSON)` = analysis_conditions,
     Matrix = addDiscData_lookup_label(
       rows$matrix_state_id,
       matrix_states,
@@ -2901,11 +2946,11 @@ addDiscData_result_edit_columns <- function() {
     "Sample fraction" = "sample_fraction_id",
     "Value type" = "result_value_type",
     "Reporting basis" = "reporting_basis_id",
-    "Chemical form" = "result_speciation_id",
-    "Analytical target" = "result_target_id",
-    "Endpoint mode" = "endpoint_mode",
+    "Chemical form / species scope" = "result_speciation_id",
+    "Analytical target / material" = "result_target_id",
+    "Endpoint determination" = "endpoint_mode",
     "Endpoint pH" = "endpoint_ph",
-    "Analysis conditions" = "analysis_conditions",
+    "Additional analysis conditions (JSON)" = "analysis_conditions",
     "Matrix" = "matrix_state_id",
     "Protocol" = "protocol_method",
     "Laboratory" = "laboratory",
@@ -3178,6 +3223,7 @@ addDiscDataUI <- function(id) {
                   )
                 ),
 
+                uiOutput(ns("manual_chemistry_requirements")),
                 uiOutput(ns("manual_chemistry")),
                 fluidRow(
                   column(
@@ -3371,7 +3417,7 @@ addDiscDataUI <- function(id) {
           tags$h5("Results for selected sample"),
           DT::DTOutput(ns("data_table")),
           helpText(
-            "Any additional documents selected below will also be attached to every sample created by this upload."
+            "Any additional documents selected below will also be attached to every sample created by this upload. HEIC/HEIF files are converted to JPEG when this server supports conversion."
           ),
           fileInput(
             ns("attach_docs"),
@@ -3948,6 +3994,63 @@ addDiscData <- function(id, language) {
       }
       isTRUE(as.logical(parameter_rows[[requirement]][[parameter_index]]))
     }
+    output$manual_chemistry_requirements <- renderUI({
+      parameter_id <- addDiscData_int(input$manual_parameter)
+      parameter_rows <- params()
+      parameter_index <- match(parameter_id, parameter_rows$parameter_id)
+      if (is.na(parameter_id) || is.na(parameter_index)) {
+        return(helpText("Select a parameter to see its required analytical fields."))
+      }
+
+      parameter_row <- parameter_rows[parameter_index, ]
+      required_fields <- c(
+        sample_fraction = "Sample fraction",
+        reporting_basis = "Reporting basis",
+        result_speciation = "Chemical form / species scope",
+        result_target = "Analytical target / material",
+        endpoint = "Endpoint determination"
+      )
+      required_fields <- unname(required_fields[vapply(
+        names(required_fields),
+        function(field) isTRUE(as.logical(parameter_row[[field]][[1]])),
+        logical(1)
+      )])
+
+      condition_fields <- c(
+        "analysis_conditions_required_keys",
+        "analysis_conditions_required_keys_by_matrix"
+      )
+      has_condition_requirements <- any(vapply(condition_fields, function(field) {
+        if (!field %in% names(parameter_row)) return(FALSE)
+        value <- parameter_row[[field]][[1]]
+        if (is.null(value) || !length(value) || all(is.na(value))) return(FALSE)
+        if (is.list(value)) return(length(unlist(value, recursive = TRUE)) > 0L)
+        text <- as.character(value[[1]])
+        if (!nzchar(text)) return(FALSE)
+        parsed <- tryCatch(
+          jsonlite::fromJSON(text, simplifyVector = FALSE),
+          error = function(e) text
+        )
+        length(unlist(parsed, recursive = TRUE)) > 0L
+      }, logical(1)))
+      if (has_condition_requirements) {
+        required_fields <- c(required_fields, "Additional analysis conditions (may depend on matrix)")
+      }
+
+      if (length(required_fields)) {
+        tags$div(
+          class = "alert alert-info",
+          tags$strong(paste0("Required fields for ", parameter_row$param_name[[1]], ": ")),
+          paste0(paste(required_fields, collapse = "; "), ".")
+        )
+      } else {
+        helpText(paste0(
+          "No required sample fraction, reporting basis, chemical form, target, or endpoint for ",
+          parameter_row$param_name[[1]],
+          ". Any analysis-condition rules are checked when you add the result."
+        ))
+      }
+    })
     validate_parameter_mapping_descriptors <- function(
       parameter_id,
       sample_fraction_id,
@@ -4219,7 +4322,8 @@ addDiscData <- function(id, language) {
       updateSelectizeInput(
         session,
         "manual_parameter",
-        choices = stats::setNames(params()$parameter_id, params()$param_name)
+        choices = stats::setNames(params()$parameter_id, params()$param_name),
+        server = TRUE
       )
     })
 
@@ -7958,6 +8062,7 @@ addDiscData <- function(id, language) {
         sample_fractions = sample_fractions,
         result_value_types = result_value_types,
         reporting_bases = reporting_bases,
+        chemistry_catalogues = chemistry_catalogues,
         matrix_states = matrix_states,
         laboratories = laboratories,
         media = media,
@@ -7973,10 +8078,14 @@ addDiscData <- function(id, language) {
       {
         display <- result_display()
         if (!nrow(display)) {
+          selected_sample <- selected_sample_row()
+          message <- if (is.null(selected_sample)) {
+            "Select a sample to review its results."
+          } else {
+            "This sample has no results yet. Use ‘Add result to selected sample’ above."
+          }
           return(DT::datatable(
-            data.frame(
-              Message = "Select a sample to review its results."
-            ),
+            data.frame(Message = message),
             rownames = FALSE,
             selection = "none",
             options = list(dom = "t")
@@ -8108,6 +8217,39 @@ addDiscData <- function(id, language) {
             type = "error"
           )
           data$df <- data$df
+          return()
+        }
+      } else if (identical(source_column, "endpoint_mode")) {
+        endpoint_choices <- c(
+          "Fixed pH" = "fixed",
+          "Inflection" = "inflection",
+          "Gran" = "gran",
+          "Other" = "other"
+        )
+        if (!nzchar(value)) {
+          new_value <- NA_character_
+        } else if (value %in% names(endpoint_choices)) {
+          new_value <- unname(endpoint_choices[[value]])
+        } else {
+          showNotification(
+            "Enter Fixed pH, Inflection, Gran, Other, or leave the endpoint determination blank.",
+            type = "error"
+          )
+          return()
+        }
+      } else if (identical(source_column, "analysis_conditions")) {
+        if (!nzchar(value)) {
+          value <- "{}"
+        }
+        new_value <- tryCatch(
+          AquaCache::normalizeAnalysisConditions(value),
+          error = function(e) NULL
+        )
+        if (is.null(new_value)) {
+          showNotification(
+            "Enter additional analysis conditions as a JSON object, or {} when unspecified.",
+            type = "error"
+          )
           return()
         }
       } else if (

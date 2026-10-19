@@ -445,8 +445,7 @@ ygwater_module_privilege_requirements <- function() {
         "discrete.result_targets",
         "public.parameter_reporting_basis_suggestions",
         "public.parameter_speciation_suggestions",
-        "public.parameter_target_suggestions",
-        "information.patch65_result_descriptor_crosswalk"
+        "public.parameter_target_suggestions"
       ),
       list(
         c("SELECT", "INSERT", "UPDATE"),
@@ -458,8 +457,7 @@ ygwater_module_privilege_requirements <- function() {
         c("SELECT", "INSERT", "UPDATE"),
         c("SELECT", "INSERT", "DELETE"),
         c("SELECT", "INSERT", "DELETE"),
-        c("SELECT", "INSERT", "DELETE"),
-        "SELECT"
+        c("SELECT", "INSERT", "DELETE")
       )
     ),
     manageCommunicationProtocolFamilies = req(

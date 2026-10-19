@@ -437,6 +437,10 @@ disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
 #'   `disc_plot_related_qaqc_data()`.
 #' @param result_components Component observations for the plotted canonical
 #'   results.
+#' @param header_style Whether workbook headings use database field names or
+#'   reader-friendly labels.
+#' @param header_language Language code for reader-friendly headings. The
+#'   machine-readable export is not localized.
 #'
 #' @return A named list of tabular data suitable for `openxlsx::write.xlsx()`.
 #'
@@ -445,26 +449,150 @@ disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
 disc_plot_download_tables <- function(
   plot_data,
   qaqc_data,
-  result_components = data.frame()
+  result_components = data.frame(),
+  header_style = c("machine", "human"),
+  header_language = c("en", "fr")
 ) {
+  header_style <- match.arg(header_style)
+  header_language <- match.arg(header_language)
   tables <- list(plot_data = disc_plot_tabularize(plot_data))
   if (nrow(result_components) > 0L) {
     tables$result_components <- disc_plot_tabularize(result_components)
   }
-  if (nrow(qaqc_data$samples) == 0L) {
-    return(tables)
+  if (nrow(qaqc_data$samples) > 0L) {
+    tables$qaqc_group_links <- disc_plot_tabularize(qaqc_data$group_links)
+    tables$qaqc_samples <- disc_plot_tabularize(qaqc_data$samples)
+    tables$qaqc_results <- disc_plot_tabularize(qaqc_data$results)
+    if (nrow(qaqc_data$result_components) > 0L) {
+      tables$qaqc_result_components <- disc_plot_tabularize(
+        qaqc_data$result_components
+      )
+    }
+    if (nrow(qaqc_data$documents) > 0L) {
+      tables$qaqc_documents <- disc_plot_tabularize(qaqc_data$documents)
+    }
   }
-
-  tables$qaqc_group_links <- disc_plot_tabularize(qaqc_data$group_links)
-  tables$qaqc_samples <- disc_plot_tabularize(qaqc_data$samples)
-  tables$qaqc_results <- disc_plot_tabularize(qaqc_data$results)
-  if (nrow(qaqc_data$result_components) > 0L) {
-    tables$qaqc_result_components <- disc_plot_tabularize(
-      qaqc_data$result_components
+  if (identical(header_style, "human")) {
+    column_labels <- c(
+      result_id = "Result ID",
+      sample_id = "Sample ID",
+      parameter_id = "Parameter ID",
+      reporting_basis = "Reporting basis",
+      result_speciation = "Chemical form / species scope",
+      result_target = "Analytical target / material",
+      endpoint_mode = "Endpoint determination",
+      endpoint_ph = "Endpoint pH",
+      analysis_conditions = "Additional analysis conditions (JSON)",
+      sample_fraction = "Sample fraction",
+      result_value_type = "Value type",
+      result_condition = "Result condition",
+      result_grade = "Grade",
+      result_approval = "Approval",
+      datetime = "Sample date/time (UTC)",
+      target_datetime = "Target date/time (UTC)"
     )
-  }
-  if (nrow(qaqc_data$documents) > 0L) {
-    tables$qaqc_documents <- disc_plot_tabularize(qaqc_data$documents)
+    column_labels_fr <- c(
+      result_id = "ID du résultat",
+      sample_id = "ID de l'échantillon",
+      parameter_id = "ID du paramètre",
+      result = "Résultat",
+      units = "Unités",
+      param_name = "Paramètre",
+      parameter_name = "Paramètre",
+      location = "Code du lieu",
+      location_name = "Lieu",
+      replicate_group_id = "ID du groupe de réplicats",
+      datetime = "Date/heure de l'échantillon (UTC)",
+      target_datetime = "Date/heure cible (UTC)",
+      reporting_basis = "Base d'expression",
+      result_speciation = "Forme chimique / portée de spéciation",
+      result_target = "Cible analytique / matériau",
+      endpoint_mode = "Détermination du point final",
+      endpoint_ph = "pH au point final",
+      analysis_conditions = "Conditions d'analyse supplémentaires (JSON)",
+      sample_fraction = "Fraction d'échantillon",
+      result_value_type = "Type de valeur",
+      result_condition = "Condition du résultat",
+      result_condition_value = "Valeur de la condition",
+      media_type = "Milieu",
+      result_type = "Type de résultat",
+      sample_type = "Type d'échantillon",
+      collection_method = "Méthode de prélèvement",
+      matrix_state = "Matrice",
+      result_grade = "Classe",
+      result_approval = "Approbation",
+      result_grade_description = "Classe du résultat",
+      result_approval_description = "Approbation du résultat",
+      grade_type_description = "Classe de l'échantillon",
+      approval_type_description = "Approbation de l'échantillon",
+      qualifier_type_description = "Qualificatifs de l'échantillon",
+      lab_report_no = "Numéro du rapport de laboratoire",
+      lab_sample_no = "Numéro d'échantillon du laboratoire",
+      aggregation_type = "Méthode d'agrégation",
+      calculation_version = "Version du calcul",
+      calculation_arguments = "Arguments du calcul (JSON)",
+      expected_count = "Nombre de composantes attendu",
+      observation_number = "Numéro de l'observation",
+      observation_datetime = "Date/heure de l'observation (UTC)",
+      included_in_aggregate = "Incluse dans l'agrégat",
+      weight = "Poids",
+      note = "Note"
+    )
+    if (identical(header_language, "fr")) {
+      column_labels[names(column_labels_fr)] <- column_labels_fr
+    }
+    tables <- lapply(tables, function(table) {
+      source_names <- names(table)
+      labels <- unname(column_labels[source_names])
+      missing_labels <- is.na(labels)
+      if (any(missing_labels)) {
+        labels[missing_labels] <- tools::toTitleCase(gsub(
+          "_", " ", source_names[missing_labels], fixed = TRUE
+        ))
+        labels[missing_labels] <- gsub(
+          "\\bId\\b", "ID", labels[missing_labels], perl = TRUE
+        )
+        labels[missing_labels] <- gsub(
+          "\\bUtc\\b", "UTC", labels[missing_labels], perl = TRUE
+        )
+        labels[missing_labels] <- gsub(
+          "\\bPh\\b", "pH", labels[missing_labels], perl = TRUE
+        )
+        labels[missing_labels] <- gsub(
+          "\\bQaqc\\b",
+          if (identical(header_language, "fr")) "AQ/CQ" else "QA/QC",
+          labels[missing_labels],
+          perl = TRUE
+        )
+      }
+      names(table) <- make.unique(labels, sep = " ")
+      table
+    })
+    sheet_labels <- c(
+      plot_data = "Plotted results",
+      result_components = "Result components",
+      qaqc_group_links = "QA/QC sample groups",
+      qaqc_samples = "Related samples",
+      qaqc_results = "Related results",
+      qaqc_result_components = "QA/QC result components",
+      qaqc_documents = "QA/QC documents"
+    )
+    if (identical(header_language, "fr")) {
+      sheet_labels <- c(
+        plot_data = "Résultats tracés",
+        result_components = "Composantes des résultats",
+        qaqc_group_links = "Liens de groupes AQ/CQ",
+        qaqc_samples = "Échantillons associés",
+        qaqc_results = "Résultats associés",
+        qaqc_result_components = "Composantes AQ/CQ",
+        qaqc_documents = "Documents AQ/CQ"
+      )
+    }
+    labels <- unname(sheet_labels[names(tables)])
+    labels[is.na(labels)] <- tools::toTitleCase(gsub(
+      "_", " ", names(tables)[is.na(labels)], fixed = TRUE
+    ))
+    names(tables) <- make.unique(labels, sep = " ")
   }
   tables
 }
@@ -1710,7 +1838,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             input$collection_methods_AC
           ),
           ac_selectize(
-            "reporting_bases_AC", "result_speciations_AC", "result_targets_AC", "endpoint_modes_AC", "endpoint_ph_AC",
+            "reporting_bases_AC",
             tr("reporting_basis(s)", language$language),
             reporting_basis_choices,
             input$reporting_bases_AC
@@ -1912,7 +2040,25 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             style = "display: none;"
           ),
           div(
+            id = ns("download_controls_container"),
             class = "d-inline-block",
+            div(
+              id = ns("download_header_style_container"),
+              selectInput(
+                ns("export_header_style"),
+                tr("disc_export_headers", language$language),
+                choices = stats::setNames(
+                  c("human", "machine"),
+                  c(
+                    tr("disc_export_human", language$language),
+                    tr("disc_export_machine", language$language)
+                  )
+                ),
+                selected = "human",
+                width = "240px"
+              ),
+              style = "display: none;"
+            ),
             downloadButton(
               ns("download_data"),
               tr("dl_data", language$language)
@@ -2046,6 +2192,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         }
         shinyjs::hide("full_screen")
         shinyjs::hide("download_data")
+        shinyjs::hide("download_controls_container")
+        shinyjs::hide("download_header_style_container")
       },
       ignoreInit = TRUE
     )
@@ -2859,6 +3007,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       {
         shinyjs::hide("full_screen")
         shinyjs::hide("download_data")
+        shinyjs::hide("download_controls_container")
+        shinyjs::hide("download_header_style_container")
         qaQcData(disc_plot_empty_qaqc_data())
         plot_created(FALSE)
         plotSeasonMetadata(NULL)
@@ -3554,6 +3704,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
       shinyjs::show("full_screen")
       shinyjs::show("download_data")
+      shinyjs::show("download_controls_container")
+      shinyjs::show("download_header_style_container")
 
       if (
         identical(input$data_source, "AC") &&
@@ -3671,7 +3823,13 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
               session$userData$AquaCache,
               plottedResultIds(),
               lang = language$abbrev
-            )
+            ),
+            header_style = if (identical(input$export_header_style, "machine")) {
+              "machine"
+            } else {
+              "human"
+            },
+            header_language = language$abbrev
           ),
           file
         )

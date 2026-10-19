@@ -82,13 +82,15 @@ importSetupUI <- function(id) {
         checkboxInput(ns("needs_attention"), "Needs attention only", TRUE),
         checkboxInput(ns("review_inactive"), "Include inactive mappings", FALSE),
         DT::DTOutput(ns("mapping_review")),
-        actionButton(ns("open_review_mapping"), "Open selected mapping")),
+        actionButton(ns("open_review_mapping"), "Edit selected mapping"),
+        helpText("Select a row above to open its saved definition in the editor. Saving creates or updates a draft; it does not change the published mapping.")),
         tabPanel(
           "Formats and mappings",
           value = "editor",
           helpText(
             "Manage reusable sources, workbook layouts and mapping revisions. Source-wide mappings are used by AquaCache download functions; workbook mappings override them for that format. Save incomplete work as a draft, then review and publish a complete revision. Reparse any open workbook after changing its setup."
           ),
+          uiOutput(ns("editing_mapping")),
           fluidRow(column(6, selectizeInput(ns("manage_source"), "Source", choices = NULL)),
             column(6, actionButton(ns("new_source"), "Create source"))),
           fluidRow(
@@ -179,7 +181,6 @@ importSetupUI <- function(id) {
             )
           ),
           actionButton(ns("manage_publish_mappings"), "Review draft for publication"),
-          uiOutput(ns("editing_mapping")),
           conditionalPanel(
             condition = "input.manage_mapping_type == 'parameter'",
             ns = ns,
@@ -285,7 +286,7 @@ importSetupUI <- function(id) {
               ),
               actionButton(
                 ns("manage_save_parameter_mapping"),
-                "Save parameter mapping"
+                "Save parameter mapping as draft"
               )
             )
           ),
@@ -363,7 +364,7 @@ importSetupUI <- function(id) {
               ),
               actionButton(
                 ns("manage_save_location_mapping"),
-                "Save location mapping"
+                "Save location mapping as draft"
               )
             )
           ),
@@ -469,7 +470,7 @@ importSetupUI <- function(id) {
               textAreaInput(ns("manage_flag_note"), "Mapping note", rows = 2),
               actionButton(
                 ns("manage_save_flag_mapping"),
-                "Save result-flag mapping"
+                "Save result-flag mapping as draft"
               )
             )
           )
@@ -487,6 +488,7 @@ importSetup <- function(id, language) {
     profile_load_error <- reactiveVal(NULL)
     sources <- reactiveVal(data.frame())
     pending_open <- reactiveVal(NULL)
+    opened_review_mapping <- reactiveVal(NULL)
     pending_profile_selection <- reactiveVal(NULL)
     pending_publication <- reactiveVal(NULL)
     if (is.null(session$userData$import_setup_revision)) session$userData$import_setup_revision <- reactiveVal(0L)
@@ -499,6 +501,7 @@ importSetup <- function(id, language) {
     new_profile_template <- reactiveVal(NULL)
     new_profile_mode <- reactiveVal("create")
     manage_mapping_selected <- reactiveVal(NULL)
+    manager_selection_from_review <- reactiveVal(NULL)
     manage_mapping_error <- reactiveVal(NULL)
     profile_permissions <- tryCatch(
       DBI::dbGetQuery(
@@ -587,6 +590,87 @@ importSetup <- function(id, language) {
       proxy <- DT::dataTableProxy("manage_mapping_table", session = session)
       try(DT::selectRows(proxy, NULL), silent = TRUE)
       invisible(NULL)
+    }
+    select_manager_mapping_row <- function(index, row) {
+      index <- addDiscData_int(index)
+      if (is.na(index) || index < 1L || is.null(row) || !nrow(row)) {
+        return(invisible(NULL))
+      }
+      table_id <- as.character(jsonlite::toJSON(
+        session$ns("manage_mapping_table"),
+        auto_unbox = TRUE
+      ))
+      selection_input_id <- as.character(jsonlite::toJSON(
+        session$ns("manager_mapping_table_selection"),
+        auto_unbox = TRUE
+      ))
+      scope <- if (isTRUE(as.logical(row$profile_specific[[1]]))) {
+        "This workbook format"
+      } else {
+        "All formats for this source"
+      }
+      expected_values <- switch(
+        input$manage_mapping_type,
+        parameter = c(scope, row$source_match[[1]], ""),
+        location = c(
+          scope,
+          manager_text(row$source_location_code[[1]]),
+          manager_text(row$source_location_name[[1]])
+        ),
+        result_flag = c(
+          scope,
+          if (addDiscData_present(row$source_flag_column[[1]])) {
+            row$source_flag_column[[1]]
+          } else {
+            "Any column"
+          },
+          manager_text(row$source_flag_value[[1]])
+        )
+      )
+      expected_values <- as.character(expected_values)
+      expected_values[is.na(expected_values)] <- ""
+      expected <- as.character(jsonlite::toJSON(
+        expected_values,
+        auto_unbox = FALSE
+      ))
+      script <- sprintf(
+        "(function() {
+          var outputId = %s;
+          var expected = %s;
+          var rowIndex = %d;
+          var selectionInputId = %s;
+          var attempts = 0;
+          function selectWhenReady() {
+            var output = document.getElementById(outputId);
+            var element = output && (output.matches('table') ? output : output.querySelector('table[id]'));
+            if (element && $.fn.dataTable.isDataTable(element)) {
+              var table = $(element).DataTable();
+              var row = table.row(rowIndex);
+              var data = row.data();
+              if (row.any() && data && String(data[0]) === expected[0] &&
+                  String(data[1]) === expected[1] &&
+                  (!expected[2] || String(data[2]) === expected[2])) {
+                table.search('').columns().search('').draw();
+                var ordered = table.rows({order: 'applied', search: 'applied'}).indexes().toArray();
+                var position = ordered.indexOf(row.index());
+                if (position >= 0) {
+                  table.page(Math.floor(position / table.page.len())).draw('page');
+                  Shiny.setInputValue(selectionInputId, rowIndex + 1, {priority: 'event'});
+                  return;
+                }
+              }
+            }
+            if (++attempts < 50) window.setTimeout(selectWhenReady, 100);
+          }
+          selectWhenReady();
+        })();",
+        table_id,
+        expected,
+        as.integer(index) - 1L,
+        selection_input_id
+      )
+      shinyjs::runjs(script)
+      invisible(index)
     }
     # Catalogue choices do not change when a mapping draft is saved. Reloading
     # them would reset the editor and discard an asynchronously loaded selection.
@@ -739,6 +823,7 @@ importSetup <- function(id, language) {
     }
     reload_profiles()
     observeEvent(input$manage_source, {
+      if (is.null(pending_open())) opened_review_mapping(NULL)
       clear_manager_mapping_selection()
       pending <- pending_open()
       selected <- if (!is.null(pending) && identical(input$manage_source,pending$source_code[[1]]) &&
@@ -751,6 +836,7 @@ importSetup <- function(id, language) {
       update_manage_formats(selected)
     })
     observeEvent(input$manage_import_profile, {
+      if (is.null(pending_open())) opened_review_mapping(NULL)
       clear_manager_mapping_selection()
       has_profile <- nzchar(addDiscData_first(input$manage_import_profile,""))
       choices <- c("Source-wide / package downloads"="source")
@@ -764,11 +850,46 @@ importSetup <- function(id, language) {
     })
     output$editing_mapping <- renderUI({
       row <- manage_mapping_selected()
-      if (is.null(row)) return(tags$p(class="text-muted","Create a mapping or select one from the table to edit it."))
-      tags$p(sprintf("Editing %s mapping %s from %s revision %s. Changes are saved to the current draft.",
-        input$manage_mapping_type,row[[switch(input$manage_mapping_type,parameter="import_mapping_id",
-          location="import_location_mapping_id",result_flag="import_result_flag_mapping_id")]][[1]],
-        row$mapping_set_status[[1]],row$mapping_set_version[[1]]))
+      context <- opened_review_mapping()
+      if (is.null(row)) {
+        if (is.null(context)) {
+          return(tags$div(class="alert alert-info",
+            tags$strong("No mapping selected."),
+            tags$p("Select a saved mapping in the table below, or choose Create mapping. Saving stages a draft; publication is a separate review step.")))
+        }
+        return(tags$div(class="alert alert-warning",
+          tags$strong("Opening the selected mapping…"),
+          tags$p(sprintf("%s | %s | %s",context$source_code[[1]],
+            if (is.na(context$profile_code[[1]])) "Source-wide / package downloads" else context$profile_name[[1]],
+            context$mapping_type[[1]])),
+          tags$p(tags$strong("Needs attention: "),context$issue[[1]])))
+      }
+      id_field <- switch(input$manage_mapping_type,parameter="import_mapping_id",
+        location="import_location_mapping_id",result_flag="import_result_flag_mapping_id")
+      mapping_id <- row[[id_field]][[1]]
+      if (!is.null(context)) {
+        scope <- if (is.na(context$profile_code[[1]])) "Source-wide / package downloads" else
+          addDiscData_first(context$profile_name[[1]],context$profile_code[[1]])
+        issue <- addDiscData_first(context$issue[[1]],"Review this mapping's saved definition.")
+        save_note <- if (identical(context$status[[1]],"published"))
+          "Saving your correction stages it in a draft. The published mapping stays in use until you review and publish the whole scope." else
+          "Saving updates the draft. It remains unpublished until you review and publish the whole scope."
+        return(tags$div(class="alert alert-warning",
+          tags$strong(sprintf("Editing %s mapping %s",context$mapping_type[[1]],mapping_id)),
+          tags$p(sprintf("%s | %s | %s revision %s",context$source_code[[1]],scope,
+            context$status[[1]],context$version[[1]])),
+          tags$p(tags$strong("Needs attention: "),issue),
+          tags$p(tags$strong("Source criteria: "),tags$code(context$source_match[[1]])),
+          tags$p(save_note)))
+      }
+      status <- row$mapping_set_status[[1]]
+      save_note <- if (identical(status,"published"))
+        "Saving stages your change in a draft. This published revision stays unchanged until you review and publish the scope." else
+        "Saving updates this draft. It remains unpublished until you review and publish the scope."
+      tags$div(class="alert alert-info",
+        tags$strong(sprintf("Editing %s mapping %s",input$manage_mapping_type,mapping_id)),
+        tags$p(sprintf("%s revision %s",status,row$mapping_set_version[[1]])),
+        tags$p(save_note))
     })
     observeEvent(input$new_source, {
       req(can_manage_mappings)
@@ -1829,6 +1950,7 @@ importSetup <- function(id, language) {
     observeEvent(
       input$manage_mapping_type,
       {
+        if (is.null(pending_open())) opened_review_mapping(NULL)
         clear_manager_mapping_selection()
       },
       ignoreInit = TRUE
@@ -1994,10 +2116,22 @@ importSetup <- function(id, language) {
         }
     }
     observeEvent(input$manage_mapping_table_rows_selected, {
+      selected_index <- addDiscData_int(input$manage_mapping_table_rows_selected)
+      from_review <- !is.null(manager_selection_from_review()) &&
+        identical(selected_index, manager_selection_from_review())
+      if (!from_review) opened_review_mapping(NULL)
+      manager_selection_from_review(NULL)
       load_manager_mapping(selected_manage_mapping())
     })
+    observeEvent(input$manager_mapping_table_selection, {
+      selected <- addDiscData_int(input$manager_mapping_table_selection)
+      if (is.na(selected) || selected < 1L) return()
+      proxy <- DT::dataTableProxy("manage_mapping_table", session = session)
+      DT::selectRows(proxy, selected)
+    }, ignoreInit = TRUE)
 
     observeEvent(input$manage_new_mapping, {
+      opened_review_mapping(NULL)
       clear_manager_mapping_selection()
       updateTextAreaInput(session, "manage_source_match", value = '{"parameter_code":"", "unit":""}')
       updateSelectInput(session, "manage_mapping_scope", selected = if (nzchar(addDiscData_first(input$manage_import_profile, ""))) "profile" else "source")
@@ -2266,6 +2400,7 @@ importSetup <- function(id, language) {
       tryCatch(
         {
           save_manager_mapping("parameter")
+          opened_review_mapping(NULL)
           showNotification(
             "Parameter mapping saved as a draft. Publish this scope when all active mappings are complete.",
             type = "message"
@@ -2284,6 +2419,7 @@ importSetup <- function(id, language) {
       tryCatch(
         {
           save_manager_mapping("location")
+          opened_review_mapping(NULL)
           showNotification(
             "Location mapping saved as a draft. Publish this scope when all active mappings are complete.",
             type = "message"
@@ -2302,6 +2438,7 @@ importSetup <- function(id, language) {
       tryCatch(
         {
           save_manager_mapping("result_flag")
+          opened_review_mapping(NULL)
           showNotification(
             "Result-flag mapping saved as a draft. Publish this scope when all active mappings are complete.",
             type = "message"
@@ -2368,7 +2505,12 @@ importSetup <- function(id, language) {
           tags$pre(as.character(jsonlite::prettify(row$definition[[1]]))),footer=modalButton("Close")))
         return()
       }
+      clear_manager_mapping_selection()
       pending_open(row)
+      opened_review_mapping(row)
+      if (!isTRUE(as.logical(row$active[[1]]))) {
+        updateCheckboxInput(session,"manage_show_inactive",value=TRUE)
+      }
       updateSelectizeInput(session,"manage_source",selected=row$source_code[[1]])
       updateSelectizeInput(session,"manage_import_profile",selected=if (is.na(row$profile_code[[1]])) "" else
         addDiscData_profile_key(row$source_code[[1]],row$profile_code[[1]]))
@@ -2394,7 +2536,12 @@ importSetup <- function(id, language) {
       },logical(1))
       matches <- matches & if (is.na(pending$profile_code[[1]])) !rows$profile_specific else rows$profile_specific
       if (any(matches)) {
-        load_manager_mapping(rows[which(matches)[[1]],,drop=FALSE])
+        mapping_index <- which(matches)[[1]]
+        mapping_row <- rows[mapping_index,,drop=FALSE]
+        load_manager_mapping(mapping_row)
+        manager_selection_from_review(mapping_index)
+        select_manager_mapping_row(mapping_index, mapping_row)
+        shinyjs::runjs("window.scrollTo(0, 0);")
         pending_open(NULL)
       }
     })

@@ -267,14 +267,6 @@ reference_table_configs <- function() {
       order_by = "result_target", audit_columns = audit_cols,
       insert_only = c("result_target_code", "result_target", "description", "target_kind"),
       columns = list(reference_text_field("result_target_code", "Stable code", required = TRUE), reference_text_field("result_target", "Name", required = TRUE), reference_text_field("result_target_fr", "Name (French)"), reference_text_field("target_kind", "Kind", required = TRUE), reference_textarea_field("description", "Definition", required = TRUE), reference_textarea_field("description_fr", "Definition (French)"), reference_checkbox_field("active", "Active for new selections", default = TRUE))),
-    chemistry_crosswalk = list(
-      key = "chemistry_crosswalk", title = "Legacy chemistry crosswalk",
-      description = "Read-only Patch 65 dictionary preserving the interpretation of historical catalogue IDs.",
-      schema = "information", table = "patch65_result_descriptor_crosswalk",
-      pk = "legacy_id", id_label = "Legacy ID", editable = FALSE,
-      order_by = c("legacy_catalogue", "legacy_id"),
-      display_columns = c("legacy_catalogue", "legacy_label", "sample_fraction_id",
-        "reporting_basis_id", "result_speciation_id", "result_target_id"), columns = list()),
     organizations = list(
       key = "organizations",
       title = "Organizations",
@@ -2436,7 +2428,7 @@ parameterManagerUI <- function(id) {
 
 manageParameters <- function(id, language) {
   configs <- reference_table_configs()
-  for (table in c(names(parameter_suggestion_tables()), "chemistry_crosswalk")) {
+  for (table in names(parameter_suggestion_tables())) {
     referenceTableManager(id = paste0(id, "_", table), language = language,
       config = configs[[table]], notification_module_id = "manageParameters")
   }
@@ -3100,7 +3092,7 @@ manageParameterSubGroups <- function(id, language) {
 
 manageParametersUI <- function(id) {
   configs <- reference_table_configs()
-  panels <- lapply(c(names(parameter_suggestion_tables()), "chemistry_crosswalk"), function(table) {
+  panels <- lapply(names(parameter_suggestion_tables()), function(table) {
     bslib::nav_panel(configs[[table]]$title,
       referenceTableManagerUI(paste0(id, "_", table), config = configs[[table]]))
   })

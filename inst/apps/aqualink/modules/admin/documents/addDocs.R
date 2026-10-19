@@ -167,6 +167,9 @@ addDocs <- function(id, language) {
             ns("doc_file"),
             label = "Select document",
             multiple = FALSE
+          ),
+          helpText(
+            "HEIC/HEIF files are converted to JPEG when this server supports conversion."
           )
         ),
         textInput(ns("doc_name"), label = "Document name"),
@@ -409,81 +412,104 @@ addDocs <- function(id, language) {
       }
 
       tryCatch(
-        {
-          # In transaction
-          active <- AquaCache::dbTransBegin(session$userData$AquaCache)
-          AquaCache::insertACDocument(
-            path = doc_path,
-            name = input$doc_name,
-            type = input$doc_type,
-            description = input$doc_description,
-            tags = if (length(tags)) tags else NULL,
-            authors = if (length(authors)) authors else NULL,
-            publish_date = publish_date_value,
-            url = if (nzchar(input$doc_url)) input$doc_url else NULL,
-            share_with = share_with,
-            geoms = if (length(geoms)) geoms else NULL,
-            con = session$userData$AquaCache
-          )
-          if (is_data_sharing_agreement && length(doc_organizations)) {
-            dsa_type_id <- moduleData$doc_types$document_type_id[
-              match(
-                "data sharing agreement",
-                moduleData$doc_types$document_type_en
+        YGwater:::with_heif_upload_as_jpeg(
+          doc_path,
+          function(upload_path) {
+            transaction_started <- isTRUE(
+              AquaCache::dbTransBegin(session$userData$AquaCache)
+            )
+            on.exit(
+              if (transaction_started) {
+                try(
+                  DBI::dbExecute(
+                    session$userData$AquaCache,
+                    "ROLLBACK"
+                  ),
+                  silent = TRUE
+                )
+              },
+              add = TRUE
+            )
+            AquaCache::insertACDocument(
+              path = upload_path,
+              name = input$doc_name,
+              type = input$doc_type,
+              description = input$doc_description,
+              tags = if (length(tags)) tags else NULL,
+              authors = if (length(authors)) authors else NULL,
+              publish_date = publish_date_value,
+              url = if (nzchar(input$doc_url)) input$doc_url else NULL,
+              share_with = share_with,
+              geoms = if (length(geoms)) geoms else NULL,
+              con = session$userData$AquaCache
+            )
+            if (is_data_sharing_agreement && length(doc_organizations)) {
+              dsa_type_id <- moduleData$doc_types$document_type_id[
+                match(
+                  "data sharing agreement",
+                  moduleData$doc_types$document_type_en
+                )
+              ]
+              if (is.na(dsa_type_id)) {
+                stop("Data sharing agreement document type not found.")
+              }
+              new_doc <- DBI::dbGetQuery(
+                session$userData$AquaCache,
+                "SELECT document_id FROM files.documents
+                WHERE name = $1 AND type = $2
+                ORDER BY document_id DESC
+                LIMIT 1;",
+                params = list(input$doc_name, dsa_type_id)
               )
-            ]
-            if (is.na(dsa_type_id)) {
-              stop("Data sharing agreement document type not found.")
+              if (!nrow(new_doc)) {
+                stop("Failed to locate the newly added document.")
+              }
+              org_links <- data.frame(
+                organization_id = doc_organizations,
+                data_sharing_agreement_id = new_doc$document_id[1]
+              )
+              DBI::dbAppendTable(
+                session$userData$AquaCache,
+                DBI::Id(
+                  schema = "public",
+                  table = "organization_data_sharing_agreements"
+                ),
+                org_links
+              )
             }
-            new_doc <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              "SELECT document_id FROM files.documents
-              WHERE name = $1 AND type = $2
-              ORDER BY document_id DESC
-              LIMIT 1;",
-              params = list(input$doc_name, dsa_type_id)
-            )
-            if (!nrow(new_doc)) {
-              stop("Failed to locate the newly added document.")
-            }
-            org_links <- data.frame(
-              organization_id = doc_organizations,
-              data_sharing_agreement_id = new_doc$document_id[1]
-            )
-            DBI::dbAppendTable(
-              session$userData$AquaCache,
-              DBI::Id(
-                schema = "public",
-                table = "organization_data_sharing_agreements"
-              ),
-              org_links
-            )
-          }
 
-          DBI::dbExecute(session$userData$AquaCache, "COMMIT")
-          showNotification("Document added successfully.", type = "message")
-          getModuleData()
-          updateTextInput(session, "doc_name", value = "")
-          updateSelectizeInput(session, "doc_type", selected = character(0))
-          updateTextAreaInput(session, "doc_description", value = "")
-          updateTextInput(session, "doc_authors", value = "")
-          updateTextInput(session, "doc_tags", value = "")
-          updateDateInput(session, "doc_publish_date", value = as.Date(NA))
-          updateTextInput(session, "doc_url", value = "")
-          updateSelectizeInput(
-            session,
-            "doc_share_with",
-            selected = "public_reader"
-          )
-          updateSelectizeInput(session, "doc_geoms", selected = character(0))
-          updateSelectizeInput(
-            session,
-            "doc_organizations",
-            selected = character(0)
-          )
-        },
+            if (transaction_started) {
+              DBI::dbExecute(session$userData$AquaCache, "COMMIT")
+              transaction_started <- FALSE
+            }
+            showNotification("Document added successfully.", type = "message")
+            getModuleData()
+            updateTextInput(session, "doc_name", value = "")
+            updateSelectizeInput(session, "doc_type", selected = character(0))
+            updateTextAreaInput(session, "doc_description", value = "")
+            updateTextInput(session, "doc_authors", value = "")
+            updateTextInput(session, "doc_tags", value = "")
+            updateDateInput(session, "doc_publish_date", value = as.Date(NA))
+            updateTextInput(session, "doc_url", value = "")
+            updateSelectizeInput(
+              session,
+              "doc_share_with",
+              selected = "public_reader"
+            )
+            updateSelectizeInput(
+              session,
+              "doc_geoms",
+              selected = character(0)
+            )
+            updateSelectizeInput(
+              session,
+              "doc_organizations",
+              selected = character(0)
+            )
+          },
+          extension = tools::file_ext(input$doc_file$name)
+        ),
         error = function(err) {
-          DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
           showNotification(
             paste("Failed to add document:", err$message),
             type = "error"

@@ -46,19 +46,30 @@ visit <- function(id, language) {
       samples = NULL,
       current_visit = NULL
     )
+    pending_field_results <- reactiveVal(data.frame())
+    pending_visit_samples <- reactiveVal(list(
+      new = list(),
+      existing = data.frame()
+    ))
     visit_photo_extensions <- c("jpg", "jpeg", "png", "gif", "bmp", "tiff")
+    if (YGwater:::heif_jpeg_conversion_available()) {
+      visit_photo_extensions <- c(visit_photo_extensions, "heic", "heif")
+    }
 
     make_visit_photo_thumbnail <- function(path) {
       if (!requireNamespace("magick", quietly = TRUE)) {
         return(path)
       }
       thumbnail <- tempfile(fileext = ".png")
-      converted <- tryCatch({
-        image <- magick::image_read(path)
-        image <- magick::image_resize(image, "480x360>")
-        magick::image_write(image, path = thumbnail, format = "png")
-        file.exists(thumbnail) && file.size(thumbnail) > 0
-      }, error = function(e) FALSE)
+      converted <- tryCatch(
+        {
+          image <- magick::image_read(path)
+          image <- magick::image_resize(image, "480x360>")
+          magick::image_write(image, path = thumbnail, format = "png")
+          file.exists(thumbnail) && file.size(thumbnail) > 0
+        },
+        error = function(e) FALSE
+      )
       if (converted) {
         thumbnail
       } else {
@@ -77,6 +88,8 @@ visit <- function(id, language) {
         bmp = "image/bmp",
         tif = "image/tiff",
         tiff = "image/tiff",
+        heic = "image/heic",
+        heif = "image/heif",
         "application/octet-stream"
       )
     }
@@ -89,30 +102,9 @@ visit <- function(id, language) {
       photos
     }
 
-    validate_visit_photos <- function(saved_count = 0L) {
+    validate_visit_photos <- function() {
       photos <- current_visit_photo_files()
-      has_saved <- saved_count > 0L
       has_uploads <- nrow(photos) > 0L
-      photos_taken <- identical(input$photos_taken, "yes")
-
-      if (photos_taken && !has_saved && !has_uploads) {
-        stop(
-          "Select at least one photo, or choose No if no photos were taken.",
-          call. = FALSE
-        )
-      }
-      if (!photos_taken && has_uploads) {
-        stop(
-          "Photos are selected. Choose Yes, or clear the selected photos before saving.",
-          call. = FALSE
-        )
-      }
-      if (has_saved && !photos_taken) {
-        stop(
-          "This visit already has saved photos. Keep Were photos taken? set to Yes.",
-          call. = FALSE
-        )
-      }
       if (has_uploads) {
         extension <- tolower(tools::file_ext(photos$name))
         invalid_extension <- !extension %in% visit_photo_extensions
@@ -120,16 +112,25 @@ visit <- function(id, language) {
           is.na(file.info(photos$datapath)$size) |
           file.info(photos$datapath)$size <= 0
         if (any(invalid_extension)) {
+          supported_types <- paste(
+            toupper(visit_photo_extensions),
+            collapse = ", "
+          )
           stop(
-            "Photos must be JPG, PNG, GIF, BMP, or TIFF files.",
+            paste0("Photos must be ", supported_types, " files."),
             call. = FALSE
           )
         }
         if (any(missing_file)) {
-          stop("One or more selected photos could not be read. Select them again.", call. = FALSE)
+          stop(
+            "One or more selected photos could not be read. Select them again.",
+            call. = FALSE
+          )
         }
-        if (any(extension %in% c("tif", "tiff")) &&
-            !requireNamespace("magick", quietly = TRUE)) {
+        if (
+          any(extension %in% c("tif", "tiff")) &&
+            !requireNamespace("magick", quietly = TRUE)
+        ) {
           stop(
             "TIFF photos cannot be previewed on this server. Select JPG, PNG, GIF, or BMP photos instead.",
             call. = FALSE
@@ -161,26 +162,35 @@ visit <- function(id, language) {
       }
 
       for (i in seq_len(nrow(photos))) {
-        AquaCache::insertACImage(
-          object = photos$datapath[[i]],
-          datetime = form$start_utc,
-          image_type = as.integer(image_type[[1]]),
-          description = paste("Photo from field visit", visit_id),
-          tags = c("field visit"),
-          # insertACImage expects one plain group name per vector element. The
-          # visit form stores a PostgreSQL text[] literal for its SQL writes.
-          share_with = array_to_text(form$share_with),
-          location = as.integer(form$location_id),
-          con = con
+        file_hash <- YGwater:::with_heif_upload_as_jpeg(
+          photos$datapath[[i]],
+          function(upload_path) {
+            AquaCache::insertACImage(
+              object = upload_path,
+              datetime = form$start_utc,
+              image_type = as.integer(image_type[[1]]),
+              description = paste("Photo from field visit", visit_id),
+              tags = c("field visit"),
+              # insertACImage expects one plain group name per vector element. The
+              # visit form stores a PostgreSQL text[] literal for its SQL writes.
+              share_with = array_to_text(form$share_with),
+              location = as.integer(form$location_id),
+              con = con
+            )
+            unname(tools::md5sum(upload_path))
+          },
+          extension = tools::file_ext(photos$name[[i]])
         )
-        file_hash <- unname(tools::md5sum(photos$datapath[[i]]))
         image_id <- DBI::dbGetQuery(
           con,
           "SELECT image_id FROM files.images WHERE file_hash = $1",
           params = list(file_hash)
         )$image_id
         if (!length(image_id) || is.na(image_id[[1]])) {
-          stop("A photo was uploaded but its image record could not be found.", call. = FALSE)
+          stop(
+            "A photo was uploaded but its image record could not be found.",
+            call. = FALSE
+          )
         }
         DBI::dbExecute(
           con,
@@ -305,9 +315,10 @@ visit <- function(id, language) {
       visitData$images <- NULL
       visitData$samples <- NULL
       visitData$current_visit <- NULL
+      pending_field_results(data.frame())
+      pending_visit_samples(list(new = list(), existing = data.frame()))
       selected_sample(NULL)
       shinyjs::reset(ns("visit_photos"))
-      updateRadioButtons(session, "photos_taken", selected = "no")
     }
 
     getModuleData <- function() {
@@ -319,7 +330,6 @@ visit <- function(id, language) {
         session$userData$AquaCache,
         "SELECT sub_location_id, sub_location_name, location_id FROM public.sub_locations"
       )
-      moduleData$chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(session$userData$AquaCache)
       moduleData$parameters <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT p.parameter_id,
@@ -332,6 +342,16 @@ visit <- function(id, language) {
              ON u.unit_id = p.units_liquid
           ORDER BY p.param_name"
       )
+      moduleData$field_parameter_ids <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT DISTINCT p.parameter_id
+           FROM public.parameters AS p
+           JOIN public.parameter_relationships AS pr
+             ON pr.parameter_id = p.parameter_id
+           JOIN public.parameter_groups AS pg
+             ON pg.group_id = pr.group_id
+          WHERE LOWER(BTRIM(pg.group_name)) = 'field'"
+      )$parameter_id
       moduleData$media <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT media_id, media_type FROM public.media_types"
@@ -548,7 +568,7 @@ visit <- function(id, language) {
             6,
             selectizeInput(
               ns("location"),
-              "Location (add new in 'locations' menu)",
+              "Location (add new in 'Locations -> Add/modify locations' menu)",
               choices = stats::setNames(
                 moduleData$locations$location_id,
                 moduleData$locations$name
@@ -562,7 +582,7 @@ visit <- function(id, language) {
             6,
             selectizeInput(
               ns("sub_location"),
-              "Sub-location (add new in 'locations' menu)",
+              "Sub-location (add new in 'Locations -> Add/modify locations' menu)",
               choices = NULL, # Populated by observer when location is selected
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = 'Optional'),
@@ -583,7 +603,7 @@ visit <- function(id, language) {
             6,
             numericInput(
               ns("air_temp"),
-              "Air temperature (°C)",
+              "Air temperature (\u00B0C)",
               value = NA,
               step = 0.1
             )
@@ -635,7 +655,7 @@ visit <- function(id, language) {
             )
           )
         ),
-        h3("Recent precipitation"),
+        h5("Recent precipitation"),
         fluidRow(
           column(
             6,
@@ -656,35 +676,29 @@ visit <- function(id, language) {
             )
           )
         ), # End of precip fluidRow
-        hr(),
         uiOutput(ns("sample_tools")),
+
+        hr(),
+
         h3("Instruments used"),
         helpText(
-          "Instrument association is optional. Save the visit first; the sample and field measurement controls will then appear below."
+          "Instrument association is optional."
         ),
         actionButton(ns("choose_instruments"), "Select instruments used"),
         uiOutput(ns("instruments_chosen_ui")),
 
-        radioButtons(
-          ns("photos_taken"),
-          "Were photos taken?",
-          choices = c("Yes" = "yes", "No" = "no"),
-          selected = "no"
+        hr(),
+
+        helpText(
+          "Visit photos are optional. Select JPG, PNG, GIF, BMP, or TIFF files. HEIC/HEIF files are also accepted and converted to JPEG when server support is available."
         ),
-        conditionalPanel(
-          condition = "input.photos_taken == 'yes'",
-          ns = ns,
-          helpText(
-            "Select one or more JPG, PNG, GIF, BMP, or TIFF photos. Photos are attached to this visit and dated with the visit start time."
-          ),
-          fileInput(
-            ns("visit_photos"),
-            "Upload visit photos",
-            multiple = TRUE,
-            accept = paste0(".", visit_photo_extensions)
-          ),
-          actionButton(ns("clear_visit_photos"), "Clear selected photos")
+        fileInput(
+          ns("visit_photos"),
+          "Upload visit photos (optional)",
+          multiple = TRUE,
+          accept = paste0(".", visit_photo_extensions)
         ),
+        actionButton(ns("clear_visit_photos"), "Clear selected photos"),
         uiOutput(ns("visit_photo_previews")),
         tags$style(HTML(
           ".visit-photo-card { display: inline-block; vertical-align: top; margin: 0 12px 12px 0; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }\n.visit-photo-card img { width: 180px; height: 135px; object-fit: contain; background: #f7f7f7; }"
@@ -752,7 +766,6 @@ visit <- function(id, language) {
     # Keep track of the currently selected visit ID
     selected_visit <- reactiveVal(NULL)
     selected_sample <- reactiveVal(NULL)
-    pending_field_results <- reactiveVal(data.frame())
     visit_context_is_saved <- function(visit = visitData$current_visit) {
       if (is.null(visit) || !nrow(visit)) {
         return(FALSE)
@@ -770,14 +783,18 @@ visit <- function(id, language) {
       }
       saved_start <- as.POSIXct(visit$start_datetime[[1]], tz = "UTC")
       form_start <- as.POSIXct(form$start_utc, tz = "UTC")
-      start_matches <- !is.na(saved_start) && !is.na(form_start) &&
+      start_matches <- !is.na(saved_start) &&
+        !is.na(form_start) &&
         abs(as.numeric(saved_start) - as.numeric(form_start)) < 60
       normalize_share <- function(value) {
         value <- array_to_text(value)
         value <- as.character(value)
         sort(unique(value[!is.na(value) & nzchar(value)]))
       }
-      identical(normalize_share(form$share_with), normalize_share(visit$share_with)) &&
+      identical(
+        normalize_share(form$share_with),
+        normalize_share(visit$share_with)
+      ) &&
         same_integer(form$location_id, saved_location) &&
         same_integer(form$sub_location_id, saved_sub_location) &&
         start_matches
@@ -794,11 +811,72 @@ visit <- function(id, language) {
       FALSE
     }
 
+    pending_sample_rows <- function() {
+      pending <- pending_visit_samples()
+      rows <- lapply(seq_along(pending$new), function(index) {
+        item <- pending$new[[index]]
+        sample_type_index <- match(
+          as.integer(item$sample$sample_type[[1]]),
+          moduleData$sample_types$sample_type_id
+        )
+        data.frame(
+          entry_type = "new",
+          entry_index = as.integer(index),
+          sample_id = NA_integer_,
+          Sample = paste(
+            "New field sample",
+            moduleData$sample_types$sample_type[sample_type_index]
+          ),
+          `Sample time (UTC)` = format(
+            as.POSIXct(item$sample$datetime[[1]], tz = "UTC"),
+            "%Y-%m-%d %H:%M",
+            tz = "UTC"
+          ),
+          `Field measurements` = nrow(item$results),
+          Note = item$sample$note[[1]],
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+      })
+      if (nrow(pending$existing)) {
+        rows[[length(rows) + 1L]] <- data.frame(
+          entry_type = "existing",
+          entry_index = NA_integer_,
+          sample_id = as.integer(pending$existing$sample_id),
+          Sample = paste("Existing sample", pending$existing$sample_id),
+          `Sample time (UTC)` = format(
+            as.POSIXct(pending$existing$datetime, tz = "UTC"),
+            "%Y-%m-%d %H:%M",
+            tz = "UTC"
+          ),
+          `Field measurements` = NA_integer_,
+          Note = pending$existing$note,
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+      }
+      if (!length(rows)) {
+        return(data.frame(
+          entry_type = character(),
+          entry_index = integer(),
+          sample_id = integer(),
+          Sample = character(),
+          `Sample time (UTC)` = character(),
+          `Field measurements` = integer(),
+          Note = character(),
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        ))
+      }
+      do.call(rbind, rows)
+    }
+
     output$sample_tools <- renderUI({
       visit_id <- selected_visit()
       visit_saved <- !is.null(visit_id) &&
         !is.null(visitData$current_visit) &&
         nrow(visitData$current_visit) > 0L
+      can_stage <- isTRUE(visit_saved) || identical(input$mode, "add")
       tagList(
         hr(),
         h3("Samples and field measurements"),
@@ -806,15 +884,19 @@ visit <- function(id, language) {
           helpText(
             "A visit can link to many samples. Each field result is stored once on the sample it describes; it is not copied to every sample from the visit."
           )
+        } else if (can_stage) {
+          helpText(
+            "Add new field samples with measurements or link to existing samples and optionally add measurements."
+          )
         } else {
           helpText(
-            "Save the visit first to enable sample linking and field measurements. These controls are available here after the visit is saved."
+            "Select a field visit to manage its samples and field measurements."
           )
         },
         fluidRow(
           column(
             6,
-            if (visit_saved) {
+            if (can_stage) {
               actionButton(
                 ns("create_field_sample"),
                 "Create a field sample with a measurement"
@@ -828,7 +910,7 @@ visit <- function(id, language) {
           ),
           column(
             6,
-            if (visit_saved) {
+            if (can_stage) {
               actionButton(
                 ns("associate_existing_samples"),
                 "Associate existing sample(s)"
@@ -841,8 +923,52 @@ visit <- function(id, language) {
             }
           )
         ),
-        DT::DTOutput(ns("visit_samples")),
-        uiOutput(ns("selected_sample_controls"))
+        if (visit_saved) {
+          tagList(
+            DT::DTOutput(ns("visit_samples")),
+            uiOutput(ns("selected_sample_controls"))
+          )
+        } else if (can_stage) {
+          uiOutput(ns("pending_sample_controls"))
+        }
+      )
+    })
+
+    output$pending_visit_samples <- DT::renderDT(
+      {
+        rows <- pending_sample_rows()
+        if (!nrow(rows)) {
+          return(DT::datatable(
+            data.frame(Message = "No samples have been staged for this visit."),
+            rownames = FALSE,
+            selection = "none",
+            options = list(dom = "t")
+          ))
+        }
+        DT::datatable(
+          rows,
+          selection = "single",
+          rownames = FALSE,
+          options = list(
+            columnDefs = list(list(targets = c(0, 1, 2), visible = FALSE)),
+            pageLength = 5,
+            scrollX = TRUE
+          )
+        )
+      },
+      server = FALSE
+    )
+
+    output$pending_sample_controls <- renderUI({
+      if (!nrow(pending_sample_rows())) {
+        return(NULL)
+      }
+      tagList(
+        DT::DTOutput(ns("pending_visit_samples")),
+        actionButton(
+          ns("remove_pending_visit_sample"),
+          "Remove selected staged sample"
+        )
       )
     })
 
@@ -857,32 +983,39 @@ visit <- function(id, language) {
           local({
             id <- output_id
             saved_id <- image_id
-            output[[id]] <- renderImage({
-              image <- DBI::dbGetQuery(
-                session$userData$AquaCache,
-                "SELECT format, file FROM files.images WHERE image_id = $1",
-                params = list(saved_id)
-              )
-              if (!nrow(image) || is.null(image$file[[1]]) || !length(image$file[[1]])) {
-                return(list(src = NULL))
-              }
-              extension <- tolower(image$format[[1]])
-              source <- tempfile(fileext = paste0(".", extension))
-              writeBin(image$file[[1]], source)
-              thumbnail <- make_visit_photo_thumbnail(source)
-              if (!identical(thumbnail, source)) {
-                unlink(source)
-              }
-              list(
-                src = thumbnail,
-                alt = paste("Saved photo", saved_id),
-                contentType = if (identical(thumbnail, source)) {
-                  visit_photo_mime_type(extension)
-                } else {
-                  "image/png"
+            output[[id]] <- renderImage(
+              {
+                image <- DBI::dbGetQuery(
+                  session$userData$AquaCache,
+                  "SELECT format, file FROM files.images WHERE image_id = $1",
+                  params = list(saved_id)
+                )
+                if (
+                  !nrow(image) ||
+                    is.null(image$file[[1]]) ||
+                    !length(image$file[[1]])
+                ) {
+                  return(list(src = NULL))
                 }
-              )
-            }, deleteFile = TRUE)
+                extension <- tolower(image$format[[1]])
+                source <- tempfile(fileext = paste0(".", extension))
+                writeBin(image$file[[1]], source)
+                thumbnail <- make_visit_photo_thumbnail(source)
+                if (!identical(thumbnail, source)) {
+                  unlink(source)
+                }
+                list(
+                  src = thumbnail,
+                  alt = paste("Saved photo", saved_id),
+                  contentType = if (identical(thumbnail, source)) {
+                    visit_photo_mime_type(extension)
+                  } else {
+                    "image/png"
+                  }
+                )
+              },
+              deleteFile = TRUE
+            )
           })
           cards[[length(cards) + 1L]] <- tags$div(
             class = "visit-photo-card",
@@ -892,26 +1025,32 @@ visit <- function(id, language) {
         }
       }
 
-      if (identical(input$photos_taken, "yes")) {
-        photos <- current_visit_photo_files()
-        if (nrow(photos)) {
-          for (i in seq_len(nrow(photos))) {
-            output_id <- paste0("pending_visit_photo_", i)
-            photo_path <- photos$datapath[[i]]
-            photo_name <- as.character(photos$name[[i]])
-            extension <- tolower(tools::file_ext(photo_name))
-            local({
-              id <- output_id
-              path <- photo_path
-              name <- photo_name
-              ext <- extension
-              output[[id]] <- renderImage({
-                thumbnail <- if (ext %in% c("tif", "tiff")) {
+      photos <- current_visit_photo_files()
+      if (nrow(photos)) {
+        for (i in seq_len(nrow(photos))) {
+          output_id <- paste0("pending_visit_photo_", i)
+          photo_path <- photos$datapath[[i]]
+          photo_name <- as.character(photos$name[[i]])
+          extension <- tolower(tools::file_ext(photo_name))
+          local({
+            id <- output_id
+            path <- photo_path
+            name <- photo_name
+            ext <- extension
+            output[[id]] <- renderImage(
+              {
+                needs_thumbnail <- ext %in% c(
+                  "tif",
+                  "tiff",
+                  "heic",
+                  "heif"
+                )
+                thumbnail <- if (needs_thumbnail) {
                   make_visit_photo_thumbnail(path)
                 } else {
                   path
                 }
-                if (ext %in% c("tif", "tiff") && identical(thumbnail, path)) {
+                if (needs_thumbnail && identical(thumbnail, path)) {
                   return(list(src = NULL))
                 }
                 list(
@@ -923,14 +1062,15 @@ visit <- function(id, language) {
                     "image/png"
                   }
                 )
-              }, deleteFile = extension %in% c("tif", "tiff"))
-            })
-            cards[[length(cards) + 1L]] <- tags$div(
-              class = "visit-photo-card",
-              tags$strong(photo_name),
-              imageOutput(ns(output_id), width = "180px", height = "135px")
+              },
+              deleteFile = extension %in% c("tif", "tiff", "heic", "heif")
             )
-          }
+          })
+          cards[[length(cards) + 1L]] <- tags$div(
+            class = "visit-photo-card",
+            tags$strong(photo_name),
+            imageOutput(ns(output_id), width = "180px", height = "135px")
+          )
         }
       }
 
@@ -943,37 +1083,42 @@ visit <- function(id, language) {
       )
     })
 
-    output$visit_samples <- DT::renderDT({
-      samples <- visitData$samples
-      if (is.null(samples) || !nrow(samples)) {
-        return(DT::datatable(
-          data.frame(Message = "No samples are associated with this visit yet."),
+    output$visit_samples <- DT::renderDT(
+      {
+        samples <- visitData$samples
+        if (is.null(samples) || !nrow(samples)) {
+          return(DT::datatable(
+            data.frame(
+              Message = "No samples are associated with this visit yet."
+            ),
+            rownames = FALSE,
+            selection = "none",
+            options = list(dom = "t")
+          ))
+        }
+        display <- data.frame(
+          `Sample ID` = samples$sample_id,
+          `Sample time (UTC)` = format(
+            as.POSIXct(samples$datetime, tz = "UTC"),
+            "%Y-%m-%d %H:%M",
+            tz = "UTC"
+          ),
+          `Sample type` = samples$sample_type_name,
+          `Field results` = samples$field_result_count,
+          Note = samples$note,
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+        display[is.na(display)] <- ""
+        DT::datatable(
+          display,
+          selection = "single",
           rownames = FALSE,
-          selection = "none",
-          options = list(dom = "t")
-        ))
-      }
-      display <- data.frame(
-        `Sample ID` = samples$sample_id,
-        `Sample time (UTC)` = format(
-          as.POSIXct(samples$datetime, tz = "UTC"),
-          "%Y-%m-%d %H:%M",
-          tz = "UTC"
-        ),
-        `Sample type` = samples$sample_type_name,
-        `Field results` = samples$field_result_count,
-        Note = samples$note,
-        check.names = FALSE,
-        stringsAsFactors = FALSE
-      )
-      display[is.na(display)] <- ""
-      DT::datatable(
-        display,
-        selection = "single",
-        rownames = FALSE,
-        options = list(pageLength = 10, scrollX = TRUE)
-      )
-    }, server = FALSE)
+          options = list(pageLength = 10, scrollX = TRUE)
+        )
+      },
+      server = FALSE
+    )
 
     output$selected_sample_controls <- renderUI({
       sample <- selected_sample()
@@ -982,7 +1127,10 @@ visit <- function(id, language) {
       }
       tagList(
         p(paste("Selected sample:", sample$sample_id[[1]])),
-        actionButton(ns("add_field_result"), "Add a field result to selected sample")
+        actionButton(
+          ns("add_field_result"),
+          "Add a field result to selected sample"
+        )
       )
     })
 
@@ -1005,31 +1153,54 @@ visit <- function(id, language) {
     field_result_inputs <- function(include_sample = FALSE) {
       visit <- visitData$current_visit
       existing_sample <- selected_sample()
-      result_datetime_default <- if (include_sample && !is.null(visit)) {
+      visit_start <- if (!is.null(visit) && nrow(visit)) {
         coerce_utc_datetime(visit$start_datetime)
+      } else if (include_sample) {
+        collect_visit_inputs()$start_utc
+      } else {
+        NULL
+      }
+      if (
+        is.null(visit_start) || !length(visit_start) || is.na(visit_start[[1]])
+      ) {
+        visit_start <- .POSIXct(Sys.time(), tz = "UTC")
+      }
+      result_datetime_default <- if (include_sample) {
+        visit_start
       } else if (!include_sample && !is.null(existing_sample)) {
         coerce_utc_datetime(existing_sample$datetime[[1]])
       } else {
         .POSIXct(Sys.time(), tz = "UTC")
       }
       result_value_type_id <- moduleData$result_value_types$result_value_type_id[
-        match("actual", tolower(moduleData$result_value_types$result_value_type))
+        match(
+          "actual",
+          tolower(moduleData$result_value_types$result_value_type)
+        )
       ]
-      parameter_labels <- moduleData$parameters$param_name
-      has_liquid_units <- !is.na(moduleData$parameters$unit_liquid) &
-        nzchar(moduleData$parameters$unit_liquid)
-      parameter_labels[has_liquid_units] <- paste0(
-        parameter_labels[has_liquid_units],
+      field_parameters <- moduleData$parameters[
+        moduleData$parameters$parameter_id %in% moduleData$field_parameter_ids,
+        ,
+        drop = FALSE
+      ]
+      parameter_labels <- field_parameters$param_name
+      has_field_liquid_units <- !is.na(field_parameters$unit_liquid) &
+        nzchar(field_parameters$unit_liquid)
+      parameter_labels[has_field_liquid_units] <- paste0(
+        parameter_labels[has_field_liquid_units],
         " (",
-        moduleData$parameters$unit_liquid[has_liquid_units],
+        field_parameters$unit_liquid[has_field_liquid_units],
         ")"
       )
       parameter_choices <- stats::setNames(
-        as.character(moduleData$parameters$parameter_id),
+        as.character(field_parameters$parameter_id),
         parameter_labels
       )
       common_fields <- tagList(
         h4("Field measurement"),
+        helpText(
+          "Only parameters in the field group are listed. Add other parameters to this sample in Discrete Data > Edit samples and results."
+        ),
         fluidRow(
           column(
             6,
@@ -1040,7 +1211,10 @@ visit <- function(id, language) {
               options = list(placeholder = "Choose a parameter", maxItems = 1)
             )
           ),
-          column(3, numericInput(ns("field_result"), "Result value", value = NA_real_)),
+          column(
+            3,
+            numericInput(ns("field_result"), "Result value", value = NA_real_)
+          ),
           column(
             3,
             selectInput(
@@ -1076,10 +1250,14 @@ visit <- function(id, language) {
           ),
           column(
             6,
-            numericInput(
-              ns("field_result_condition_value"),
-              "Condition value (when required)",
-              value = NA_real_
+            conditionalPanel(
+              condition = "input.field_result_condition == '1' || input.field_result_condition == '2'",
+              ns = ns,
+              numericInput(
+                ns("field_result_condition_value"),
+                "Condition value",
+                value = NA_real_
+              )
             )
           )
         ),
@@ -1113,7 +1291,6 @@ visit <- function(id, language) {
             )
           )
         ),
-        YGwater:::chemistry_metadata_ui(ns, "field_chem_", moduleData$chemistry_catalogues),
         fluidRow(
           column(
             6,
@@ -1172,23 +1349,33 @@ visit <- function(id, language) {
         drop = FALSE
       ]
       sample_type_labels <- eligible_sample_types$sample_type
-      sample_type_default <- which(grepl("field", sample_type_labels, ignore.case = TRUE))
+      sample_type_default <- which(grepl(
+        "field",
+        sample_type_labels,
+        ignore.case = TRUE
+      ))
       method_default <- which(grepl(
         "observation",
         moduleData$collection_methods$collection_method,
         ignore.case = TRUE
       ))
-      media_default <- which(grepl("water", moduleData$media$media_type, ignore.case = TRUE))
+      media_default <- which(grepl(
+        "water",
+        moduleData$media$media_type,
+        ignore.case = TRUE
+      ))
       tagList(
         h4("Sample details"),
-        helpText("This creates one sample linked to this visit, then stores the field result on that sample."),
+        helpText(
+          "This creates one sample linked to this visit, then stores the field result on that sample."
+        ),
         fluidRow(
           column(
             6,
             shinyWidgets::airDatepickerInput(
               ns("field_sample_datetime"),
               "Sample time",
-              value = coerce_utc_datetime(visit$start_datetime),
+              value = visit_start,
               timepicker = TRUE,
               update_on = "change",
               tz = "UTC",
@@ -1209,7 +1396,9 @@ visit <- function(id, language) {
                 "sample_type"
               ),
               selected = if (length(sample_type_default)) {
-                as.character(eligible_sample_types$sample_type_id[sample_type_default[[1]]])
+                as.character(eligible_sample_types$sample_type_id[sample_type_default[[
+                  1
+                ]]])
               } else {
                 NULL
               }
@@ -1222,7 +1411,11 @@ visit <- function(id, language) {
             selectInput(
               ns("field_sample_media"),
               "Media",
-              choices = field_id_choices(moduleData$media, "media_id", "media_type"),
+              choices = field_id_choices(
+                moduleData$media,
+                "media_id",
+                "media_type"
+              ),
               selected = if (length(media_default)) {
                 as.character(moduleData$media$media_id[media_default[[1]]])
               } else {
@@ -1241,7 +1434,9 @@ visit <- function(id, language) {
                 "collection_method"
               ),
               selected = if (length(method_default)) {
-                as.character(moduleData$collection_methods$collection_method_id[method_default[[1]]])
+                as.character(moduleData$collection_methods$collection_method_id[method_default[[
+                  1
+                ]]])
               } else {
                 NULL
               }
@@ -1254,13 +1449,21 @@ visit <- function(id, language) {
               "Sample owner",
               choices = c(
                 "Choose an owner" = "",
-                field_id_choices(moduleData$organizations, "organization_id", "name")
+                field_id_choices(
+                  moduleData$organizations,
+                  "organization_id",
+                  "name"
+                )
               ),
               selected = ""
             )
           )
         ),
-        textAreaInput(ns("field_sample_note"), "Sample note (optional)", rows = 2),
+        textAreaInput(
+          ns("field_sample_note"),
+          "Sample note (optional)",
+          rows = 2
+        ),
         common_fields
       )
     }
@@ -1288,8 +1491,13 @@ visit <- function(id, language) {
         match("field", tolower(moduleData$result_types$result_type))
       ]
       parameter_index <- match(parameter_id, moduleData$parameters$parameter_id)
-      if (is.na(parameter_id) || is.na(parameter_index) || !length(result_type_id)) {
-        stop("Choose a field result parameter.", call. = FALSE)
+      if (
+        is.na(parameter_id) ||
+          is.na(parameter_index) ||
+          !parameter_id %in% moduleData$field_parameter_ids ||
+          !length(result_type_id)
+      ) {
+        stop("Choose a parameter from the field group.", call. = FALSE)
       }
       result_value_type <- scalar_id(input$field_result_value_type)
       if (is.na(result_value_type)) {
@@ -1298,7 +1506,10 @@ visit <- function(id, language) {
       result_value <- scalar_number(input$field_result)
       result_condition <- scalar_id(input$field_result_condition)
       if (is.na(result_value) && is.na(result_condition)) {
-        stop("Enter a result value or choose a result condition.", call. = FALSE)
+        stop(
+          "Enter a result value or choose a result condition.",
+          call. = FALSE
+        )
       }
       if (!is.na(result_value) && !is.finite(result_value)) {
         stop("Result value must be finite.", call. = FALSE)
@@ -1311,7 +1522,8 @@ visit <- function(id, language) {
       }
       if (
         !is.na(result_condition) &&
-          !result_condition %in% moduleData$result_conditions$result_condition_id
+          !result_condition %in%
+            moduleData$result_conditions$result_condition_id
       ) {
         stop("Choose a valid result condition.", call. = FALSE)
       }
@@ -1354,7 +1566,11 @@ visit <- function(id, language) {
         result_condition_value = condition_value,
         result_value_type = result_value_type,
         reporting_basis_id = reporting_basis_id,
-        YGwater:::chemistry_metadata_values(input, "field_chem_"),
+        result_speciation_id = NA_integer_,
+        result_target_id = NA_integer_,
+        endpoint_mode = NA_character_,
+        endpoint_ph = NA_real_,
+        analysis_conditions = "{}",
         laboratory = NA_integer_,
         analysis_datetime = measurement_datetime,
         lab_report_no = NA_character_,
@@ -1369,163 +1585,230 @@ visit <- function(id, language) {
         },
         stringsAsFactors = FALSE
       )
-      AquaCache::validateResultChemistry(NULL, result, parameters = moduleData$parameters, matrix_states = moduleData$matrix_states)
+      AquaCache::validateResultChemistry(
+        NULL,
+        result,
+        parameters = moduleData$parameters,
+        matrix_states = moduleData$matrix_states
+      )
       result
     }
 
-    output$field_result_preview <- DT::renderDT({
-      results <- pending_field_results()
-      if (!nrow(results)) {
-        return(DT::datatable(
-          data.frame(Message = "No measurements have been added yet."),
+    output$field_result_preview <- DT::renderDT(
+      {
+        results <- pending_field_results()
+        if (!nrow(results)) {
+          return(DT::datatable(
+            data.frame(Message = "No measurements have been added yet."),
+            rownames = FALSE,
+            selection = "none",
+            options = list(dom = "t")
+          ))
+        }
+        parameter_index <- match(
+          results$parameter_id,
+          moduleData$parameters$parameter_id
+        )
+        condition_index <- match(
+          results$result_condition,
+          moduleData$result_conditions$result_condition_id
+        )
+        fraction_index <- match(
+          results$sample_fraction_id,
+          moduleData$sample_fractions$sample_fraction_id
+        )
+        descriptor_index <- match(
+          results$reporting_basis_id,
+          moduleData$reporting_bases$reporting_basis_id
+        )
+        value_label <- ifelse(
+          is.na(results$result),
+          moduleData$result_conditions$result_condition[condition_index],
+          as.character(results$result)
+        )
+        display <- data.frame(
+          Parameter = moduleData$parameters$param_name[parameter_index],
+          Result = value_label,
+          `Sample fraction` = moduleData$sample_fractions$sample_fraction[
+            fraction_index
+          ],
+          Descriptor = moduleData$reporting_bases$reporting_basis[
+            descriptor_index
+          ],
+          `Measurement time (UTC)` = format(
+            as.POSIXct(results$analysis_datetime, tz = "UTC"),
+            "%Y-%m-%d %H:%M",
+            tz = "UTC"
+          ),
+          Note = results$note,
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+        display[is.na(display)] <- ""
+        DT::datatable(
+          display,
+          selection = "single",
           rownames = FALSE,
-          selection = "none",
-          options = list(dom = "t")
-        ))
-      }
-      parameter_index <- match(
-        results$parameter_id,
-        moduleData$parameters$parameter_id
-      )
-      condition_index <- match(
-        results$result_condition,
-        moduleData$result_conditions$result_condition_id
-      )
-      fraction_index <- match(
-        results$sample_fraction_id,
-        moduleData$sample_fractions$sample_fraction_id
-      )
-      descriptor_index <- match(
-        results$reporting_basis_id,
-        moduleData$reporting_bases$reporting_basis_id
-      )
-      value_label <- ifelse(
-        is.na(results$result),
-        moduleData$result_conditions$result_condition[condition_index],
-        as.character(results$result)
-      )
-      display <- data.frame(
-        Parameter = moduleData$parameters$param_name[parameter_index],
-        Result = value_label,
-        `Sample fraction` = moduleData$sample_fractions$sample_fraction[fraction_index],
-        Descriptor = moduleData$reporting_bases$reporting_basis[descriptor_index],
-        `Measurement time (UTC)` = format(
-          as.POSIXct(results$analysis_datetime, tz = "UTC"),
-          "%Y-%m-%d %H:%M",
-          tz = "UTC"
-        ),
-        Note = results$note,
-        check.names = FALSE,
-        stringsAsFactors = FALSE
-      )
-      display[is.na(display)] <- ""
-      DT::datatable(
-        display,
-        selection = "single",
-        rownames = FALSE,
-        options = list(pageLength = 5, scrollX = TRUE)
-      )
-    }, server = FALSE)
+          options = list(pageLength = 5, scrollX = TRUE)
+        )
+      },
+      server = FALSE
+    )
 
-    observeEvent(input$stage_field_result, {
-      tryCatch({
-        result <- collect_field_result()
-        pending <- pending_field_results()
-        if (nrow(pending)) {
-          key_columns <- c(
-            "parameter_id",
-            "protocol_method",
-            "sample_fraction_id",
-            "result_value_type",
-            "reporting_basis_id",
-            "analysis_datetime"
-          )
-          make_keys <- function(rows) {
-            values <- lapply(key_columns, function(name) {
-              value <- as.character(rows[[name]])
-              value[is.na(value)] <- ""
-              value
-            })
-            do.call(paste, c(values, sep = "\r"))
-          }
-          if (make_keys(rbind(pending, result))[[nrow(pending) + 1L]] %in% make_keys(pending)) {
-            stop(
-              "That parameter and measurement time are already in this sample preview.",
-              call. = FALSE
+    observeEvent(
+      input$stage_field_result,
+      {
+        tryCatch(
+          {
+            result <- collect_field_result()
+            pending <- pending_field_results()
+            if (nrow(pending)) {
+              key_columns <- c(
+                "parameter_id",
+                "protocol_method",
+                "sample_fraction_id",
+                "result_value_type",
+                "reporting_basis_id",
+                "analysis_datetime"
+              )
+              make_keys <- function(rows) {
+                values <- lapply(key_columns, function(name) {
+                  value <- as.character(rows[[name]])
+                  value[is.na(value)] <- ""
+                  value
+                })
+                do.call(paste, c(values, sep = "\r"))
+              }
+              if (
+                make_keys(rbind(pending, result))[[nrow(pending) + 1L]] %in%
+                  make_keys(pending)
+              ) {
+                stop(
+                  "That parameter and measurement time are already in this sample preview.",
+                  call. = FALSE
+                )
+              }
+            }
+            pending_field_results(rbind(pending, result))
+            updateSelectizeInput(
+              session,
+              "field_parameter",
+              selected = character()
+            )
+            updateNumericInput(session, "field_result", value = NA_real_)
+            updateSelectInput(session, "field_result_condition", selected = "")
+            updateNumericInput(
+              session,
+              "field_result_condition_value",
+              value = NA_real_
+            )
+            updateSelectInput(session, "field_sample_fraction", selected = "")
+            updateSelectInput(session, "field_reporting_basis", selected = "")
+            updateTextAreaInput(session, "field_result_note", value = "")
+            showNotification(
+              "Measurement added to the sample preview.",
+              type = "message"
+            )
+          },
+          error = function(e) {
+            showNotification(
+              paste("Could not add measurement:", e$message),
+              type = "error"
             )
           }
-        }
-        pending_field_results(rbind(pending, result))
-        updateSelectizeInput(session, "field_parameter", selected = character())
-        updateNumericInput(session, "field_result", value = NA_real_)
-        updateSelectInput(session, "field_result_condition", selected = "")
-        updateNumericInput(session, "field_result_condition_value", value = NA_real_)
-        updateSelectInput(session, "field_sample_fraction", selected = "")
-        updateSelectInput(session, "field_reporting_basis", selected = "")
-        updateTextAreaInput(session, "field_result_note", value = "")
-        showNotification("Measurement added to the sample preview.", type = "message")
-      }, error = function(e) {
-        showNotification(paste("Could not add measurement:", e$message), type = "error")
-      })
-    }, ignoreInit = TRUE)
+        )
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$remove_staged_field_result, {
-      pending <- pending_field_results()
-      selected <- input$field_result_preview_rows_selected
-      if (!length(selected) || selected > nrow(pending)) {
-        showNotification("Select a preview measurement to remove.", type = "warning")
-        return()
-      }
-      pending_field_results(pending[-selected, , drop = FALSE])
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$remove_staged_field_result,
+      {
+        pending <- pending_field_results()
+        selected <- input$field_result_preview_rows_selected
+        if (!length(selected) || selected > nrow(pending)) {
+          showNotification(
+            "Select a preview measurement to remove.",
+            type = "warning"
+          )
+          return()
+        }
+        pending_field_results(pending[-selected, , drop = FALSE])
+      },
+      ignoreInit = TRUE
+    )
 
     available_samples <- reactiveVal(data.frame())
 
-    output$available_samples <- DT::renderDT({
-      samples <- available_samples()
-      if (!nrow(samples)) {
-        return(DT::datatable(
-          data.frame(Message = "No unlinked samples were found at this location."),
+    output$available_samples <- DT::renderDT(
+      {
+        samples <- available_samples()
+        if (!nrow(samples)) {
+          return(DT::datatable(
+            data.frame(
+              Message = "No unlinked samples were found at this location."
+            ),
+            rownames = FALSE,
+            selection = "none",
+            options = list(dom = "t")
+          ))
+        }
+        display <- data.frame(
+          `Sample ID` = samples$sample_id,
+          `Sample time (UTC)` = format(
+            as.POSIXct(samples$datetime, tz = "UTC"),
+            "%Y-%m-%d %H:%M",
+            tz = "UTC"
+          ),
+          `Sub-location` = samples$sub_location_name,
+          `Sample type` = samples$sample_type,
+          Note = samples$note,
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+        display[is.na(display)] <- ""
+        DT::datatable(
+          display,
+          selection = "multiple",
           rownames = FALSE,
-          selection = "none",
-          options = list(dom = "t")
-        ))
-      }
-      display <- data.frame(
-        `Sample ID` = samples$sample_id,
-        `Sample time (UTC)` = format(
-          as.POSIXct(samples$datetime, tz = "UTC"),
-          "%Y-%m-%d %H:%M",
-          tz = "UTC"
-        ),
-        `Sub-location` = samples$sub_location_name,
-        `Sample type` = samples$sample_type,
-        Note = samples$note,
-        check.names = FALSE,
-        stringsAsFactors = FALSE
-      )
-      display[is.na(display)] <- ""
-      DT::datatable(
-        display,
-        selection = "multiple",
-        rownames = FALSE,
-        filter = "top",
-        options = list(pageLength = 10, scrollX = TRUE)
-      )
-    }, server = FALSE)
+          filter = "top",
+          options = list(pageLength = 10, scrollX = TRUE)
+        )
+      },
+      server = FALSE
+    )
 
-    observeEvent(input$associate_existing_samples, {
-      visit <- visitData$current_visit
-      if (is.null(visit) || !nrow(visit)) {
-        showNotification("Select a field visit first.", type = "warning")
-        return()
-      }
-      if (!require_saved_visit_context(visit)) {
-        return()
-      }
-      available_samples(DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT s.sample_id,
+    observeEvent(
+      input$associate_existing_samples,
+      {
+        visit <- visitData$current_visit
+        visit_saved <- !is.null(selected_visit()) &&
+          !is.null(visit) &&
+          nrow(visit) > 0L
+        if (visit_saved) {
+          if (!require_saved_visit_context(visit)) {
+            return()
+          }
+          location_id <- as.integer(visit$location_id[[1]])
+          sub_location_id <- as.integer(visit$sub_location_id[[1]])
+        } else if (identical(input$mode, "add")) {
+          form <- collect_visit_inputs()
+          if (is.na(form$location_id)) {
+            showNotification(
+              "Choose the visit location before selecting samples.",
+              type = "warning"
+            )
+            return()
+          }
+          location_id <- as.integer(form$location_id)
+          sub_location_id <- as.integer(form$sub_location_id)
+        } else {
+          showNotification("Select a field visit first.", type = "warning")
+          return()
+        }
+        samples <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT s.sample_id,
                 s.datetime,
                 s.sub_location_id,
                 sl.sub_location_name,
@@ -1543,44 +1826,83 @@ visit <- function(id, language) {
               OR s.sub_location_id IS NOT DISTINCT FROM $2
             )
           ORDER BY s.datetime DESC, s.sample_id DESC",
-        params = list(
-          as.integer(visit$location_id[[1]]),
-          as.integer(visit$sub_location_id[[1]])
+          params = list(
+            location_id,
+            sub_location_id
+          )
         )
-      ))
-      showModal(modalDialog(
-        title = "Associate existing samples",
-        size = "l",
-        DT::DTOutput(ns("available_samples")),
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("link_existing_samples"), "Link selected samples")
-        )
-      ))
-    }, ignoreInit = TRUE)
+        staged_ids <- pending_visit_samples()$existing$sample_id
+        if (length(staged_ids)) {
+          samples <- samples[!samples$sample_id %in% staged_ids, , drop = FALSE]
+        }
+        available_samples(samples)
+        showModal(modalDialog(
+          title = "Associate existing samples",
+          size = "l",
+          DT::DTOutput(ns("available_samples")),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(
+              ns("link_existing_samples"),
+              if (visit_saved) {
+                "Link selected samples"
+              } else {
+                "Stage selected samples"
+              }
+            )
+          )
+        ))
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$link_existing_samples, {
-      visit <- visitData$current_visit
-      samples <- available_samples()
-      selected <- input$available_samples_rows_selected
-      if (
-        is.null(visit) ||
+    observeEvent(
+      input$link_existing_samples,
+      {
+        visit <- visitData$current_visit
+        samples <- available_samples()
+        selected <- input$available_samples_rows_selected
+        visit_saved <- !is.null(selected_visit()) &&
+          !is.null(visit) &&
+          nrow(visit) > 0L
+        if (
           !length(selected) ||
-          any(selected < 1L | selected > nrow(samples))
-      ) {
-        showNotification("Select one or more samples to link.", type = "warning")
-        return()
-      }
-      if (!require_saved_visit_context(visit)) {
-        return()
-      }
-      tryCatch({
-        DBI::dbWithTransaction(session$userData$AquaCache, {
-          for (sample_id in samples$sample_id[selected]) {
-            updated <- DBI::dbExecute(
-              session$userData$AquaCache,
-              "UPDATE discrete.samples
+            any(selected < 1L | selected > nrow(samples))
+        ) {
+          showNotification(
+            "Select one or more samples to link.",
+            type = "warning"
+          )
+          return()
+        }
+        if (!visit_saved && identical(input$mode, "add")) {
+          pending <- pending_visit_samples()
+          selected_samples <- samples[selected, , drop = FALSE]
+          pending$existing <- if (nrow(pending$existing)) {
+            rbind(pending$existing, selected_samples)
+          } else {
+            selected_samples
+          }
+          pending_visit_samples(pending)
+          removeModal()
+          showNotification(
+            "Samples staged. They will be linked when you save the visit.",
+            type = "message"
+          )
+          return()
+        }
+        if (!visit_saved || !require_saved_visit_context(visit)) {
+          showNotification("Select a field visit first.", type = "warning")
+          return()
+        }
+        tryCatch(
+          {
+            DBI::dbWithTransaction(session$userData$AquaCache, {
+              for (sample_id in samples$sample_id[selected]) {
+                updated <- DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "UPDATE discrete.samples
                   SET field_visit_id = $1
                 WHERE sample_id = $2
                   AND location_id = $3
@@ -1589,181 +1911,304 @@ visit <- function(id, language) {
                     OR sub_location_id IS NOT DISTINCT FROM $4
                   )
                   AND field_visit_id IS NULL",
-              params = list(
-                as.integer(visit$field_visit_id[[1]]),
-                as.integer(sample_id),
-                as.integer(visit$location_id[[1]]),
-                as.integer(visit$sub_location_id[[1]])
-              )
+                  params = list(
+                    as.integer(visit$field_visit_id[[1]]),
+                    as.integer(sample_id),
+                    as.integer(visit$location_id[[1]]),
+                    as.integer(visit$sub_location_id[[1]])
+                  )
+                )
+                if (updated != 1L) {
+                  stop(
+                    paste(
+                      "Sample",
+                      sample_id,
+                      "is no longer available to link."
+                    ),
+                    call. = FALSE
+                  )
+                }
+              }
+            })
+            load_visit_samples(visit$field_visit_id[[1]], visit)
+            removeModal()
+            showNotification(
+              "Selected samples linked to the field visit.",
+              type = "message"
             )
-            if (updated != 1L) {
+          },
+          error = function(e) {
+            showNotification(
+              paste("Could not link samples:", e$message),
+              type = "error"
+            )
+          }
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$remove_pending_visit_sample,
+      {
+        selected <- input$pending_visit_samples_rows_selected
+        rows <- pending_sample_rows()
+        if (!length(selected) || selected < 1L || selected > nrow(rows)) {
+          showNotification(
+            "Select a staged sample to remove.",
+            type = "warning"
+          )
+          return()
+        }
+        pending <- pending_visit_samples()
+        row <- rows[selected, , drop = FALSE]
+        if (identical(row$entry_type[[1]], "new")) {
+          pending$new <- pending$new[-row$entry_index[[1]]]
+        } else {
+          pending$existing <- pending$existing[
+            pending$existing$sample_id != row$sample_id[[1]],
+            ,
+            drop = FALSE
+          ]
+        }
+        pending_visit_samples(pending)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$create_field_sample,
+      {
+        visit <- visitData$current_visit
+        visit_saved <- !is.null(selected_visit()) &&
+          !is.null(visit) &&
+          nrow(visit) > 0L
+        if (visit_saved) {
+          if (!require_saved_visit_context(visit)) {
+            return()
+          }
+        } else if (!identical(input$mode, "add")) {
+          showNotification("Select a field visit first.", type = "warning")
+          return()
+        }
+        pending_field_results(data.frame())
+        showModal(modalDialog(
+          title = "Create a field sample with a measurement",
+          size = "l",
+          field_result_inputs(include_sample = TRUE),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(
+              ns("save_field_sample"),
+              if (visit_saved) {
+                "Create sample and save field results"
+              } else {
+                "Stage sample and measurements"
+              }
+            )
+          )
+        ))
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$save_field_sample,
+      {
+        visit <- visitData$current_visit
+        visit_id <- selected_visit()
+        visit_saved <- !is.null(visit_id) &&
+          !is.null(visit) &&
+          nrow(visit) > 0L
+        staging_for_new_visit <- !visit_saved && identical(input$mode, "add")
+        if (!visit_saved && !staging_for_new_visit) {
+          showNotification("Select a field visit first.", type = "warning")
+          return()
+        }
+        if (
+          visit_saved &&
+            (!identical(
+              as.integer(visit$field_visit_id[[1]]),
+              as.integer(visit_id)
+            ) ||
+              !require_saved_visit_context(visit))
+        ) {
+          return()
+        }
+        tryCatch(
+          {
+            form <- if (staging_for_new_visit) collect_visit_inputs() else NULL
+            if (staging_for_new_visit && is.na(form$location_id)) {
               stop(
-                paste("Sample", sample_id, "is no longer available to link."),
+                "Choose the visit location before creating a field sample.",
                 call. = FALSE
               )
             }
-          }
-        })
-        load_visit_samples(visit$field_visit_id[[1]], visit)
-        removeModal()
-        showNotification("Selected samples linked to the field visit.", type = "message")
-      }, error = function(e) {
-        showNotification(paste("Could not link samples:", e$message), type = "error")
-      })
-    }, ignoreInit = TRUE)
-
-    observeEvent(input$create_field_sample, {
-      if (is.null(selected_visit()) || is.null(visitData$current_visit)) {
-        showNotification("Save or select a field visit first.", type = "warning")
-        return()
-      }
-      if (!require_saved_visit_context()) {
-        return()
-      }
-      pending_field_results(data.frame())
-      showModal(modalDialog(
-        title = "Create a field sample with a measurement",
-        size = "l",
-        field_result_inputs(include_sample = TRUE),
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("save_field_sample"), "Create sample and save field results")
-        )
-      ))
-    }, ignoreInit = TRUE)
-
-    observeEvent(input$save_field_sample, {
-      visit <- visitData$current_visit
-      visit_id <- selected_visit()
-      if (is.null(visit) || is.null(visit_id)) {
-        showNotification("Save or select a field visit first.", type = "warning")
-        return()
-      }
-      if (
-        !identical(as.integer(visit$field_visit_id[[1]]), as.integer(visit_id)) ||
-          !require_saved_visit_context(visit)
-      ) {
-        return()
-      }
-      tryCatch({
-        sample_datetime <- scalar_utc_datetime(input$field_sample_datetime)
-        if (is.na(sample_datetime)) {
-          stop("Sample time is required.", call. = FALSE)
-        }
-        sample_type <- suppressWarnings(as.integer(input$field_sample_type))
-        media_id <- suppressWarnings(as.integer(input$field_sample_media))
-        collection_method <- suppressWarnings(as.integer(input$field_sample_method))
-        owner <- suppressWarnings(as.integer(input$field_sample_owner))
-        if (anyNA(c(sample_type, media_id, collection_method, owner))) {
-          stop(
-            "Choose a sample type, media, collection method, and owner.",
-            call. = FALSE
-          )
-        }
-        share_groups <- array_to_text(visit$share_with)
-        if (!length(share_groups)) {
-          share_groups <- "public_reader"
-        }
-        results <- pending_field_results()
-        if (!nrow(results)) {
-          stop("Add at least one field measurement.", call. = FALSE)
-        }
-        sample <- data.frame(
-          location_id = as.integer(visit$location_id[[1]]),
-          sub_location_id = as.integer(visit$sub_location_id[[1]]),
-          media_id = media_id,
-          datetime = sample_datetime,
-          collection_method = collection_method,
-          sample_type = sample_type,
-          owner = owner,
-          note = if (isTruthy(input$field_sample_note)) {
-            as.character(input$field_sample_note)
-          } else {
-            NA_character_
+            sample_datetime <- scalar_utc_datetime(input$field_sample_datetime)
+            if (is.na(sample_datetime)) {
+              stop("Sample time is required.", call. = FALSE)
+            }
+            sample_type <- suppressWarnings(as.integer(input$field_sample_type))
+            media_id <- suppressWarnings(as.integer(input$field_sample_media))
+            collection_method <- suppressWarnings(as.integer(
+              input$field_sample_method
+            ))
+            owner <- suppressWarnings(as.integer(input$field_sample_owner))
+            if (anyNA(c(sample_type, media_id, collection_method, owner))) {
+              stop(
+                "Choose a sample type, media, collection method, and owner.",
+                call. = FALSE
+              )
+            }
+            share_groups <- if (staging_for_new_visit) {
+              array_to_text(form$share_with)
+            } else {
+              array_to_text(visit$share_with)
+            }
+            if (!length(share_groups)) {
+              share_groups <- "public_reader"
+            }
+            results <- pending_field_results()
+            if (!nrow(results)) {
+              stop("Add at least one field measurement.", call. = FALSE)
+            }
+            sample <- data.frame(
+              location_id = if (staging_for_new_visit) {
+                as.integer(form$location_id)
+              } else {
+                as.integer(visit$location_id[[1]])
+              },
+              sub_location_id = if (staging_for_new_visit) {
+                as.integer(form$sub_location_id)
+              } else {
+                as.integer(visit$sub_location_id[[1]])
+              },
+              media_id = media_id,
+              datetime = sample_datetime,
+              collection_method = collection_method,
+              sample_type = sample_type,
+              owner = owner,
+              note = if (isTruthy(input$field_sample_note)) {
+                as.character(input$field_sample_note)
+              } else {
+                NA_character_
+              },
+              field_visit_id = if (staging_for_new_visit) {
+                NA_integer_
+              } else {
+                as.integer(visit_id)
+              },
+              stringsAsFactors = FALSE
+            )
+            share_with <- paste0("{", paste(share_groups, collapse = ", "), "}")
+            sample$share_with <- share_with
+            results$share_with <- rep(share_with, nrow(results))
+            if (staging_for_new_visit) {
+              pending <- pending_visit_samples()
+              pending$new[[length(pending$new) + 1L]] <- list(
+                sample = sample,
+                results = results
+              )
+              pending_visit_samples(pending)
+              pending_field_results(data.frame())
+              removeModal()
+              showNotification(
+                "Field sample staged. It will be saved with the visit.",
+                type = "message"
+              )
+              return()
+            }
+            sample_id <- AquaCache::addNewDiscrete(
+              con = session$userData$AquaCache,
+              sample = sample,
+              results = results
+            )
+            load_visit_samples(visit_id, visit)
+            pending_field_results(data.frame())
+            removeModal()
+            showNotification(
+              paste(
+                "Field sample",
+                sample_id,
+                "and",
+                nrow(results),
+                "field result(s) were saved."
+              ),
+              type = "message"
+            )
           },
-          field_visit_id = as.integer(visit_id),
-          stringsAsFactors = FALSE
+          error = function(e) {
+            showNotification(
+              paste("Could not create field sample:", e$message),
+              type = "error"
+            )
+          }
         )
-        share_with <- paste0("{", paste(share_groups, collapse = ", "), "}")
-        sample$share_with <- share_with
-        results$share_with <- rep(share_with, nrow(results))
-        sample_id <- AquaCache::addNewDiscrete(
-          con = session$userData$AquaCache,
-          sample = sample,
-          results = results
-        )
-        load_visit_samples(visit_id, visit)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$add_field_result,
+      {
+        sample <- selected_sample()
+        if (is.null(sample)) {
+          showNotification("Select a sample first.", type = "warning")
+          return()
+        }
         pending_field_results(data.frame())
-        removeModal()
-        showNotification(
-          paste(
-            "Field sample",
-            sample_id,
-            "and",
-            nrow(results),
-            "field result(s) were saved."
-          ),
-          type = "message"
+        showModal(modalDialog(
+          title = paste("Add field result to sample", sample$sample_id[[1]]),
+          size = "l",
+          field_result_inputs(include_sample = FALSE),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(ns("save_field_result"), "Save field results")
+          )
+        ))
+        sample_datetime <- coerce_utc_datetime(sample$datetime[[1]])
+        shinyWidgets::updateAirDateInput(
+          session,
+          "field_result_datetime",
+          value = sample_datetime,
+          tz = "UTC"
         )
-      }, error = function(e) {
-        showNotification(paste("Could not create field sample:", e$message), type = "error")
-      })
-    }, ignoreInit = TRUE)
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$add_field_result, {
-      sample <- selected_sample()
-      if (is.null(sample)) {
-        showNotification("Select a sample first.", type = "warning")
-        return()
-      }
-      pending_field_results(data.frame())
-      showModal(modalDialog(
-        title = paste("Add field result to sample", sample$sample_id[[1]]),
-        size = "l",
-        field_result_inputs(include_sample = FALSE),
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("save_field_result"), "Save field results")
-        )
-      ))
-      sample_datetime <- coerce_utc_datetime(sample$datetime[[1]])
-      shinyWidgets::updateAirDateInput(
-        session,
-        "field_result_datetime",
-        value = sample_datetime,
-        tz = "UTC"
-      )
-    }, ignoreInit = TRUE)
-
-    observeEvent(input$save_field_result, {
-      sample <- selected_sample()
-      if (is.null(sample)) {
-        showNotification("Select a sample first.", type = "warning")
-        return()
-      }
-      tryCatch({
-        results <- pending_field_results()
-        if (!nrow(results)) {
-          stop("Add at least one field measurement.", call. = FALSE)
+    observeEvent(
+      input$save_field_result,
+      {
+        sample <- selected_sample()
+        if (is.null(sample)) {
+          showNotification("Select a sample first.", type = "warning")
+          return()
         }
-        results <- AquaCache:::normalize_discrete_result_matrix_states(
-          con = session$userData$AquaCache,
-          sample_media_id = as.integer(sample$media_id[[1]]),
-          results = results
-        )
-        share_groups <- array_to_text(sample$share_with[[1]])
-        if (!length(share_groups)) {
-          share_groups <- "public_reader"
-        }
-        share_with <- paste0("{", paste(share_groups, collapse = ", "), "}")
-        DBI::dbWithTransaction(session$userData$AquaCache, {
-          for (i in seq_len(nrow(results))) {
-            result <- results[i, , drop = FALSE]
-            DBI::dbGetQuery(
-              session$userData$AquaCache,
-              "INSERT INTO discrete.results (
+        tryCatch(
+          {
+            results <- pending_field_results()
+            if (!nrow(results)) {
+              stop("Add at least one field measurement.", call. = FALSE)
+            }
+            results <- AquaCache:::normalize_discrete_result_matrix_states(
+              con = session$userData$AquaCache,
+              sample_media_id = as.integer(sample$media_id[[1]]),
+              results = results
+            )
+            share_groups <- array_to_text(sample$share_with[[1]])
+            if (!length(share_groups)) {
+              share_groups <- "public_reader"
+            }
+            share_with <- paste0("{", paste(share_groups, collapse = ", "), "}")
+            DBI::dbWithTransaction(session$userData$AquaCache, {
+              for (i in seq_len(nrow(results))) {
+                result <- results[i, , drop = FALSE]
+                DBI::dbGetQuery(
+                  session$userData$AquaCache,
+                  "INSERT INTO discrete.results (
                sample_id,
                result_type,
                parameter_id,
@@ -1789,58 +2234,74 @@ visit <- function(id, language) {
                $14, $15, $16, $17, $18, $19, $20::text[], $21, $22, $23, $24, $25::jsonb
              )
              RETURNING result_id",
-            params = list(
-              as.integer(sample$sample_id[[1]]),
-              as.integer(result$result_type[[1]]),
-              as.integer(result$parameter_id[[1]]),
-              as.integer(result$protocol_method[[1]]),
-              as.integer(result$sample_fraction_id[[1]]),
-              as.numeric(result$result[[1]]),
-              as.integer(result$result_condition[[1]]),
-              as.numeric(result$result_condition_value[[1]]),
-              as.integer(result$result_value_type[[1]]),
-              as.integer(result$reporting_basis_id[[1]]),
-              as.integer(result$laboratory[[1]]),
-              as.POSIXct(result$analysis_datetime[[1]], tz = "UTC"),
-              as.character(result$lab_report_no[[1]]),
-              as.character(result$lab_sample_no[[1]]),
-              as.integer(result$grade_type_id[[1]]),
-              as.integer(result$approval_type_id[[1]]),
-              as.integer(result$matrix_state_id[[1]]),
-              isTRUE(result$no_source_update[[1]]),
-              as.character(result$note[[1]]),
-              as.character(share_with), as.integer(result$result_speciation_id[[1]]), as.integer(result$result_target_id[[1]]),
-              as.character(result$endpoint_mode[[1]]), as.numeric(result$endpoint_ph[[1]]),
-              AquaCache::normalizeAnalysisConditions(result$analysis_conditions[[1]])
-              )
+                  params = list(
+                    as.integer(sample$sample_id[[1]]),
+                    as.integer(result$result_type[[1]]),
+                    as.integer(result$parameter_id[[1]]),
+                    as.integer(result$protocol_method[[1]]),
+                    as.integer(result$sample_fraction_id[[1]]),
+                    as.numeric(result$result[[1]]),
+                    as.integer(result$result_condition[[1]]),
+                    as.numeric(result$result_condition_value[[1]]),
+                    as.integer(result$result_value_type[[1]]),
+                    as.integer(result$reporting_basis_id[[1]]),
+                    as.integer(result$laboratory[[1]]),
+                    as.POSIXct(result$analysis_datetime[[1]], tz = "UTC"),
+                    as.character(result$lab_report_no[[1]]),
+                    as.character(result$lab_sample_no[[1]]),
+                    as.integer(result$grade_type_id[[1]]),
+                    as.integer(result$approval_type_id[[1]]),
+                    as.integer(result$matrix_state_id[[1]]),
+                    isTRUE(result$no_source_update[[1]]),
+                    as.character(result$note[[1]]),
+                    as.character(share_with),
+                    as.integer(result$result_speciation_id[[1]]),
+                    as.integer(result$result_target_id[[1]]),
+                    as.character(result$endpoint_mode[[1]]),
+                    as.numeric(result$endpoint_ph[[1]]),
+                    AquaCache::normalizeAnalysisConditions(result$analysis_conditions[[
+                      1
+                    ]])
+                  )
+                )
+              }
+            })
+            load_visit_samples(selected_visit(), visitData$current_visit)
+            pending_field_results(data.frame())
+            removeModal()
+            showNotification(
+              paste(nrow(results), "field result(s) saved."),
+              type = "message"
+            )
+          },
+          error = function(e) {
+            showNotification(
+              paste("Could not save field result:", e$message),
+              type = "error"
             )
           }
-        })
-        load_visit_samples(selected_visit(), visitData$current_visit)
-        pending_field_results(data.frame())
-        removeModal()
-        showNotification(
-          paste(nrow(results), "field result(s) saved."),
-          type = "message"
         )
-      }, error = function(e) {
-        showNotification(paste("Could not save field result:", e$message), type = "error")
-      })
-    }, ignoreInit = TRUE)
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$visit_samples_rows_selected, {
-      selected <- input$visit_samples_rows_selected
-      samples <- visitData$samples
-      if (
-        length(selected) != 1L ||
-          is.null(samples) ||
-          selected > nrow(samples)
-      ) {
-        selected_sample(NULL)
-      } else {
-        selected_sample(samples[selected, , drop = FALSE])
-      }
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$visit_samples_rows_selected,
+      {
+        selected <- input$visit_samples_rows_selected
+        samples <- visitData$samples
+        if (
+          length(selected) != 1L ||
+            is.null(samples) ||
+            selected > nrow(samples)
+        ) {
+          selected_sample(NULL)
+        } else {
+          selected_sample(samples[selected, , drop = FALSE])
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$timezone,
@@ -1960,7 +2421,6 @@ visit <- function(id, language) {
           visitData$images <- NULL
           visitData$current_visit <- NULL
           shinyjs::reset(ns("visit_photos"))
-          updateRadioButtons(session, "photos_taken", selected = "no")
         } else {
           visit_id <- moduleData$visit_display$field_visit_id[selected]
           selected_visit(visit_id)
@@ -1976,11 +2436,6 @@ visit <- function(id, language) {
           # Find the images taken in this visit, if any
           load_visit_images(visit_id)
           shinyjs::reset(ns("visit_photos"))
-          updateRadioButtons(
-            session,
-            "photos_taken",
-            selected = if (nrow(visitData$images)) "yes" else "no"
-          )
 
           # Populate inputs with data from selected visit
           visit_data <- DBI::dbGetQuery(
@@ -2134,6 +2589,7 @@ visit <- function(id, language) {
         if (is.null(photos)) {
           return()
         }
+        staged_samples <- pending_visit_samples()
 
         params <- list(
           form$start_utc,
@@ -2192,6 +2648,59 @@ visit <- function(id, language) {
                     )
                   }
                 }
+                for (sample_id in staged_samples$existing$sample_id) {
+                  updated <- DBI::dbExecute(
+                    session$userData$AquaCache,
+                    "UPDATE discrete.samples
+                        SET field_visit_id = $1
+                      WHERE sample_id = $2
+                        AND location_id = $3
+                        AND (
+                          $4::integer IS NULL
+                          OR sub_location_id IS NOT DISTINCT FROM $4
+                        )
+                        AND field_visit_id IS NULL",
+                    params = list(
+                      as.integer(visit_id),
+                      as.integer(sample_id),
+                      as.integer(form$location_id),
+                      as.integer(form$sub_location_id)
+                    )
+                  )
+                  if (updated != 1L) {
+                    stop(
+                      paste(
+                        "Sample",
+                        sample_id,
+                        "is no longer available to link."
+                      ),
+                      call. = FALSE
+                    )
+                  }
+                }
+                share_groups <- array_to_text(form$share_with)
+                if (!length(share_groups)) {
+                  share_groups <- "public_reader"
+                }
+                share_with <- paste0(
+                  "{",
+                  paste(share_groups, collapse = ", "),
+                  "}"
+                )
+                for (staged_sample in staged_samples$new) {
+                  sample <- staged_sample$sample
+                  sample$location_id <- as.integer(form$location_id)
+                  sample$sub_location_id <- as.integer(form$sub_location_id)
+                  sample$field_visit_id <- as.integer(visit_id)
+                  sample$share_with <- share_with
+                  results <- staged_sample$results
+                  results$share_with <- rep(share_with, nrow(results))
+                  AquaCache::addNewDiscrete(
+                    con = session$userData$AquaCache,
+                    sample = sample,
+                    results = results
+                  )
+                }
                 save_visit_photos(visit_id, form, photos)
                 visit_id
               }
@@ -2201,12 +2710,21 @@ visit <- function(id, language) {
             selected_visit(as.integer(created_visit_id))
             load_visit_samples(created_visit_id)
             load_visit_images(created_visit_id)
+            pending_visit_samples(list(new = list(), existing = data.frame()))
+            pending_field_results(data.frame())
             shinyjs::reset(ns("visit_photos"))
-            if (nrow(visitData$images)) {
-              updateRadioButtons(session, "photos_taken", selected = "yes")
-            }
+            staged_count <- length(staged_samples$new) +
+              nrow(staged_samples$existing)
             showNotification(
-              "Field visit added. You can now create a field sample or link existing samples below.",
+              if (staged_count) {
+                paste(
+                  "Field visit and",
+                  staged_count,
+                  "sample(s) saved successfully."
+                )
+              } else {
+                "Field visit added successfully."
+              },
               type = "message"
             )
           },
@@ -2274,9 +2792,7 @@ visit <- function(id, language) {
           return()
         }
         photos <- tryCatch(
-          validate_visit_photos(
-            saved_count = if (is.null(visitData$images)) 0L else nrow(visitData$images)
-          ),
+          validate_visit_photos(),
           error = function(e) {
             showNotification(e$message, type = "error")
             NULL
@@ -2386,9 +2902,6 @@ visit <- function(id, language) {
             load_visit_samples(visit_id)
             load_visit_images(visit_id)
             shinyjs::reset(ns("visit_photos"))
-            if (nrow(visitData$images)) {
-              updateRadioButtons(session, "photos_taken", selected = "yes")
-            }
             showNotification(
               "Field visit updated successfully.",
               type = "message"

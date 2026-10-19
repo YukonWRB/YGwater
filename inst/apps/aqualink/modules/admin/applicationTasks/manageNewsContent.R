@@ -29,6 +29,9 @@ manageNewsContentUI <- function(id) {
       tabPanel(
         title = "Add/Remove Image",
         fileInput(ns("image_file"), "Select image"),
+        helpText(
+          "HEIC/HEIF images are converted to JPEG when this server supports conversion."
+        ),
         textInput(ns("image_id"), "Image ID"),
         div(
           actionButton(ns("save_image"), "Save image"),
@@ -392,23 +395,33 @@ manageNewsContent <- function(id, language) {
 
     observeEvent(input$save_image, {
       req(input$image_file, input$image_id)
-      bin <- hexView::readRaw(input$image_file$datapath)$fileRaw
-      fmt <- tools::file_ext(input$image_file$name)
       tryCatch(
-        {
-          DBI::dbExecute(
-            session$userData$AquaCache,
-            "INSERT INTO application.images (id, image, format) VALUES ($1,$2,$3)",
-            params = list(input$image_id, paste0(bin, collapse = ""), fmt)
-          )
-          showNotification("Image saved.", type = 'message')
-          load_images()
-          if (input$content_type == "image") {
-            updateSelectInput(session, "content_id", choices = image_ids_val())
-          }
-        },
+        YGwater:::with_heif_upload_as_jpeg(
+          input$image_file$datapath,
+          function(upload_path) {
+            bin <- hexView::readRaw(upload_path)$fileRaw
+            fmt <- tolower(tools::file_ext(upload_path))
+            if (
+              tolower(tools::file_ext(input$image_file$name)) %in%
+                c("heic", "heif")
+            ) {
+              fmt <- "jpeg"
+            }
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              "INSERT INTO application.images (id, image, format) VALUES ($1,$2,$3)",
+              params = list(input$image_id, paste0(bin, collapse = ""), fmt)
+            )
+            showNotification("Image saved.", type = "message")
+            load_images()
+            if (input$content_type == "image") {
+              updateSelectInput(session, "content_id", choices = image_ids_val())
+            }
+          },
+          extension = tools::file_ext(input$image_file$name)
+        ),
         error = function(e) {
-          showNotification(paste('Insert failed:', e$message), type = 'error')
+          showNotification(paste("Insert failed:", e$message), type = "error")
         }
       )
     })

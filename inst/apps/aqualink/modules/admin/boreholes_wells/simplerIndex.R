@@ -219,8 +219,19 @@ simplerIndexUI <- function(id) {
           fileInput(
             ns("pdf_file"),
             "Upload PDF(s) or image(s)",
-            accept = c(".pdf", ".jpg", ".jpeg", ".png"),
+            accept = c(
+              ".pdf",
+              ".jpg",
+              ".jpeg",
+              ".png",
+              if (YGwater:::heif_jpeg_conversion_available()) {
+                c(".heic", ".heif")
+              }
+            ),
             multiple = TRUE
+          ),
+          helpText(
+            "HEIC/HEIF images are converted to JPEG during upload when server support is available."
           ),
           uiOutput(ns("pdf_processing_status")),
           numericInput(
@@ -5119,14 +5130,24 @@ simplerIndex <- function(id, language) {
 
       file_extensions <- tolower(tools::file_ext(uploaded_files$name))
       supported_extensions <- c("pdf", "jpg", "jpeg", "png")
+      if (YGwater:::heif_jpeg_conversion_available()) {
+        supported_extensions <- c(supported_extensions, "heic", "heif")
+      }
       unsupported <- is.na(file_extensions) |
         !file_extensions %in% supported_extensions
       if (any(unsupported)) {
+        supported_types <- if (YGwater:::heif_jpeg_conversion_available()) {
+          "PDF, JPG, JPEG, PNG, HEIC, or HEIF"
+        } else {
+          "PDF, JPG, JPEG, or PNG"
+        }
         showNotification(
           paste0(
             "Unsupported file type: ",
             paste(uploaded_files$name[unsupported], collapse = ", "),
-            ". Upload PDF, JPG, JPEG, or PNG files."
+            ". Upload ",
+            supported_types,
+            " files."
           ),
           type = "error",
           duration = 8
