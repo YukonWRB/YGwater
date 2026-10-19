@@ -846,9 +846,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                         ns("historic_stats_period"),
                         label = tr("stats_period", language$language),
                         choices = stats::setNames(
-                          c("30yr", "full"),
+                          c("30yr", "1991_2020", "1981_2010", "full"),
                           YGwater:::format_stats_period_label(
-                            c("30yr", "full"),
+                            c("30yr", "1991_2020", "1981_2010", "full"),
                             language$language
                           )
                         ),
@@ -1177,7 +1177,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       }
 
       stats_period <- as.character(input$historic_stats_period[[1]])
-      if (!(stats_period %in% c("30yr", "full"))) {
+      if (!(stats_period %in% c("30yr", "1991_2020", "1981_2010", "full"))) {
         return("30yr")
       }
 
@@ -1293,20 +1293,29 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       list(disabled = !is.null(note), note = note)
     })
 
+    fixed_historic_stats_period <- reactive({
+      current_historic_stats_period() %in% c("1991_2020", "1981_2010")
+    })
+
     observe({
       hist_state <- historic_range_ui_state()
+      fixed_period <- fixed_historic_stats_period()
 
       if (isTRUE(hist_state$disabled)) {
         updateCheckboxInput(session, "show_hist", value = FALSE)
+        shinyjs::disable("show_hist")
+      } else {
+        shinyjs::enable("show_hist")
+      }
+
+      if (isTRUE(hist_state$disabled) || fixed_period) {
         updateSelectizeInput(
           session,
           "historic_range_overlap",
           selected = "none"
         )
-        shinyjs::disable("show_hist")
         shinyjs::disable("historic_range_overlap")
       } else {
-        shinyjs::enable("show_hist")
         shinyjs::enable("historic_range_overlap")
       }
     })
@@ -2551,7 +2560,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         years = selected_years,
         historic_range = !isTRUE(hist_state$disabled) &&
           isTRUE(input$show_hist),
-        historic_range_overlap = if (isTRUE(hist_state$disabled)) {
+        historic_range_overlap = if (
+          isTRUE(hist_state$disabled) || fixed_historic_stats_period()
+        ) {
           "none"
         } else if (
           is.null(input$historic_range_overlap) ||
