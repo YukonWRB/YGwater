@@ -56,7 +56,8 @@ selected for each location and target date; ties prefer the later date.}
 mean used to flag unusually high or low results. Only numeric result values
 are used; censored and missing results are excluded. Groups are calculated
 separately by location, parameter, matrix, fraction, reporting basis,
-chemical form, analytical target, endpoint, analysis conditions, and result type.}
+chemical form, analytical target, endpoint, analysis conditions, result type,
+and result value type.}
 
 \item{sd_start}{Optional first date included in the SD calculation.}
 
@@ -112,8 +113,8 @@ filters are applied when finding the closest eligible sample, then retained
 in the report matrix and result details. Reporting basis, chemical form,
 analytical target, endpoint, and analysis conditions distinguish report rows
 whenever recorded for a measurement. Matrix rows also
-distinguish result type, so field and laboratory measurements of the same
-parameter and sample remain separate. When \code{date_range} is
+distinguish result type and value type, so field, laboratory, actual, and
+calculated measurements remain separate. When \code{date_range} is
 supplied, all eligible samples collected in the inclusive interval are
 included directly, and matrix columns represent individual sample IDs.
 }

@@ -158,18 +158,30 @@ disc_sample_metadata <- function(con, sample_ids, lang = "en") {
 #' Retrieve complete result metadata for downloads
 #'
 #' @inheritParams disc_sample_metadata
+#' @param parameter_ids Optional parameter IDs to retain. `NULL` includes all
+#'   parameters; an empty or wholly invalid selection returns no results.
 #'
 #' @return A data table with one row per visible canonical result.
 #'
 #' @keywords internal
 #' @noRd
-disc_result_metadata <- function(con, sample_ids, lang = "en") {
+disc_result_metadata <- function(con, sample_ids, lang = "en", parameter_ids = NULL) {
   sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
   sample_ids <- sample_ids[!is.na(sample_ids)]
   if (!length(sample_ids)) {
     return(data.table::data.table())
   }
   suffix <- if (identical(lang, "fr")) "fr" else "en"
+  parameter_clause <- ""
+  if (!is.null(parameter_ids)) {
+    parameter_ids <- sort(unique(suppressWarnings(as.integer(parameter_ids))))
+    parameter_ids <- parameter_ids[!is.na(parameter_ids) & parameter_ids > 0L]
+    parameter_clause <- if (length(parameter_ids)) {
+      paste0(" AND parameter_id IN (", paste(parameter_ids, collapse = ","), ")")
+    } else {
+      " AND FALSE"
+    }
+  }
   disc_plot_tabularize(DBI::dbGetQuery(
     con,
     paste0(
@@ -177,8 +189,9 @@ disc_result_metadata <- function(con, sample_ids, lang = "en") {
       suffix,
       " WHERE sample_id IN (",
       paste(sample_ids, collapse = ","),
-      ") ORDER BY datetime, sample_id, parameter_name, result_id, ",
-      "sample_source_adapter_function, sample_external_sample_id"
+      ")", parameter_clause,
+      # These identity columns have the same names in both language views.
+      " ORDER BY datetime, sample_id, parameter_id, result_id"
     )
   ))
 }

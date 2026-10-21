@@ -1673,7 +1673,9 @@ ORDER BY ag.result_id, ag.guideline_id;"
       )
     }
 
-    unit_sql <- ac_parameter_unit_select_sql(AC, "p", "units")
+    unit_sql <- ac_parameter_unit_select_sql(
+      AC, "p", "units", matrix_state_alias = "r"
+    )
     samp_query <- paste0(
       "SELECT
          r.result_id,
@@ -2511,7 +2513,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
             ,
             drop = FALSE
           ]
-          if (nrow(plot_data) <= 1) {
+          if (nrow(plot_data) == 0L) {
             return(p)
           }
 

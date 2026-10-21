@@ -2039,6 +2039,8 @@ discData <- function(id, language, inputs) {
         LEFT JOIN discrete.result_aggregation_types rat USING (result_aggregation_type_id)
         WHERE r.sample_id IN (",
         sample_ids_str,
+        ") AND r.parameter_id IN (",
+        paste(filteredData$params$parameter_id, collapse = ","),
         ")) sub WHERE rn <= 3;"
       )
 
@@ -2290,7 +2292,8 @@ discData <- function(id, language, inputs) {
         data$results <- disc_result_metadata(
           session$userData$AquaCache,
           selected_sampleids,
-          language$abbrev
+          language$abbrev,
+          parameter_ids = filteredData$params$parameter_id
         )
         data$result_components <- disc_result_components(
           session$userData$AquaCache,

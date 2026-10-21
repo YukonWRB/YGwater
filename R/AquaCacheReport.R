@@ -15,8 +15,8 @@
 #' in the report matrix and result details. Reporting basis, chemical form,
 #' analytical target, endpoint, and analysis conditions distinguish report rows
 #' whenever recorded for a measurement. Matrix rows also
-#' distinguish result type, so field and laboratory measurements of the same
-#' parameter and sample remain separate. When `date_range` is
+#' distinguish result type and value type, so field, laboratory, actual, and
+#' calculated measurements remain separate. When `date_range` is
 #' supplied, all eligible samples collected in the inclusive interval are
 #' included directly, and matrix columns represent individual sample IDs.
 #'
@@ -43,7 +43,8 @@
 #'   mean used to flag unusually high or low results. Only numeric result values
 #'   are used; censored and missing results are excluded. Groups are calculated
 #'   separately by location, parameter, matrix, fraction, reporting basis,
-#'   chemical form, analytical target, endpoint, analysis conditions, and result type.
+#'   chemical form, analytical target, endpoint, analysis conditions, result type,
+#'   and result value type.
 #' @param sd_start Optional first date included in the SD calculation.
 #' @param sd_end Optional last date included in the SD calculation.
 #' @param sd_day_of_year Optional day-of-year values included in the SD
@@ -781,7 +782,8 @@ AquaCacheReport <- function(
         "SELECT s.location_id, r.parameter_id, r.matrix_state_id,\n",
         "  r.sample_fraction_id, r.reporting_basis_id, r.result_speciation_id, r.result_target_id,\n",
         "  r.endpoint_mode, r.endpoint_ph, r.analysis_conditions_key,\n",
-        "  r.result_type AS result_type_id, r.result AS result\n",
+        "  r.result_type AS result_type_id, r.result_value_type AS result_value_type_id,\n",
+        "  r.result AS result\n",
         "FROM discrete.results r\n",
         "JOIN discrete.samples s ON s.sample_id = r.sample_id\n",
         "LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
@@ -791,7 +793,8 @@ AquaCacheReport <- function(
     )
     key_columns <- c(
       "location_id", "parameter_id", "matrix_state_id",
-      "sample_fraction_id", chemistry_identity_columns(), "result_type_id"
+      "sample_fraction_id", chemistry_identity_columns(), "result_type_id",
+      "result_value_type_id"
     )
     if (nrow(sd_history)) {
       sd_dt <- data.table::as.data.table(sd_history)
@@ -803,8 +806,9 @@ AquaCacheReport <- function(
       sd_stats[, sd_lower := sd_mean - sd_multiplier * sd_value]
       sd_stats[, sd_upper := sd_mean + sd_multiplier * sd_value]
       make_group_key <- function(x) do.call(paste, c(
-        lapply(x[key_columns], function(value) {
-          value <- as.character(value)
+        lapply(key_columns, function(column) {
+          # [[ selects a column consistently from data.frames and data.tables.
+          value <- as.character(x[[column]])
           value[is.na(value)] <- "<NA>"
           value
         }),
@@ -843,11 +847,11 @@ AquaCacheReport <- function(
 
   results$analytical_identity <- chemistry_result_labels(results)
 
-  # Keep distinct result types on separate matrix rows so field and laboratory
-  # measurements from the same sample are not combined into one cell.
+  # Result provenance and value type are independent parts of the row identity.
+  # Do not combine field/lab or actual/calculated results into one matrix cell.
   param_key_columns <- c(
     "parameter_id", "matrix_state_id", "sample_fraction_id",
-    chemistry_identity_columns(), "units", "result_type_id"
+    chemistry_identity_columns(), "units", "result_type_id", "result_value_type_id"
   )
   make_matrix_key <- function(x, columns) do.call(paste, c(
     lapply(x[columns], function(value) {
@@ -859,7 +863,8 @@ AquaCacheReport <- function(
   ))
   all_param_groups <- unique(results[c(
     param_key_columns, "parameter_label", "matrix_label",
-    "sample_fraction", "reporting_basis", "analytical_identity", "result_type"
+    "sample_fraction", "reporting_basis", "analytical_identity", "result_type",
+    "result_value_type"
   )])
   all_param_groups <- all_param_groups[order(
     match(all_param_groups$parameter_id, parameter_ids),
@@ -867,6 +872,7 @@ AquaCacheReport <- function(
     all_param_groups$sample_fraction_id,
     all_param_groups$reporting_basis_id,
     all_param_groups$result_type_id,
+    all_param_groups$result_value_type_id,
     na.last = TRUE
   ), , drop = FALSE]
   all_param_groups$row_key <- make_matrix_key(all_param_groups, param_key_columns)
@@ -1063,13 +1069,14 @@ AquaCacheReport <- function(
       row_groups <- unique(row_results[c(
         "location_id", "location", "location_label", "parameter_id",
         "matrix_state_id", "sample_fraction_id", chemistry_identity_columns(),
-        "units", "result_type_id", "matrix_label", "sample_fraction",
-        "reporting_basis", "analytical_identity", "result_type"
+        "units", "result_type_id", "result_value_type_id", "matrix_label", "sample_fraction",
+        "reporting_basis", "analytical_identity", "result_type", "result_value_type"
       )])
       row_groups <- row_groups[order(
         match(row_groups$location_id, location_ids),
         row_groups$matrix_state_id, row_groups$sample_fraction_id,
         row_groups$reporting_basis_id, row_groups$result_type_id,
+        row_groups$result_value_type_id,
         na.last = TRUE
       ), , drop = FALSE]
       row_groups$row_key <- make_matrix_key(row_groups, param_key_columns)
@@ -1175,6 +1182,7 @@ AquaCacheReport <- function(
         `Sample fraction` = row_groups$sample_fraction,
         `Analytical identity` = row_groups$analytical_identity,
         `Result type` = row_groups$result_type,
+        `Result value type` = row_groups$result_value_type,
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
@@ -1206,6 +1214,7 @@ AquaCacheReport <- function(
       matrix_report$`Sample fraction` <- row_groups$sample_fraction
       matrix_report$`Analytical identity` <- row_groups$analytical_identity
       matrix_report$`Result type` <- row_groups$result_type
+      matrix_report$`Result value type` <- row_groups$result_value_type
     }
     for (header in date_headers) {
       matrix_report[[header]] <- rep("", nrow(row_groups))
@@ -1251,10 +1260,10 @@ AquaCacheReport <- function(
     report_last_col <- ncol(matrix_report)
     guide_count <- length(guideline_column_names)
     if (report_format == "by_parameter") {
-      location_end <- 7L
-      guideline_start <- 8L
-      guideline_end <- 7L + guide_count
-      date_start <- 8L + guide_count
+      location_end <- match("Result value type", names(matrix_report))
+      guideline_start <- location_end + 1L
+      guideline_end <- location_end + guide_count
+      date_start <- guideline_end + 1L
       date_end <- date_start + length(date_headers) - 1L
       context_start <- 1L
       context_end <- location_end
@@ -1262,8 +1271,8 @@ AquaCacheReport <- function(
       guideline_start <- 2L
       guideline_end <- 1L + guide_count
       context_start <- 2L + guide_count
-      context_end <- 6L + guide_count
-      date_start <- 7L + guide_count
+      context_end <- match("Result value type", names(matrix_report))
+      date_start <- context_end + 1L
       date_end <- date_start + length(date_headers) - 1L
     }
     openxlsx::addWorksheet(wb, sheet_name, gridLines = FALSE)
@@ -1412,7 +1421,7 @@ AquaCacheReport <- function(
     if (report_format == "by_parameter") {
       openxlsx::setColWidths(wb, sheet_name, cols = 1, widths = 16)
       openxlsx::setColWidths(wb, sheet_name, cols = 2, widths = 26)
-      openxlsx::setColWidths(wb, sheet_name, cols = 3:7, widths = 16)
+      openxlsx::setColWidths(wb, sheet_name, cols = 3:context_end, widths = 16)
     } else {
       openxlsx::setColWidths(wb, sheet_name, cols = 1, widths = 28)
       openxlsx::setColWidths(wb, sheet_name, cols = context_start:context_end, widths = 15)
