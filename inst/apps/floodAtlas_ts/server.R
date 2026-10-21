@@ -119,7 +119,7 @@ app_server <- function(input, output, session) {
         label = "Info",
         style = 'margin-bottom: 15px',
         class = "btn btn-primary"
-      ),
+      )
     )
   })
 
@@ -215,8 +215,8 @@ app_server <- function(input, output, session) {
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
     function(loc, param, lang, webgl, config, resolution) {
-      promises::future_promise({
-        con <- AquaConnect(
+      mirai::mirai({
+        con <- YGwater::AquaConnect(
           name = config$dbName,
           host = config$dbHost,
           port = config$dbPort,
@@ -224,6 +224,7 @@ app_server <- function(input, output, session) {
           password = config$dbPass,
           silent = TRUE
         )
+        on.exit(DBI::dbDisconnect(con), add = TRUE)
 
         loc_name <- DBI::dbGetQuery(
           con,
@@ -240,7 +241,7 @@ app_server <- function(input, output, session) {
           loc_name <- paste0(substr(loc_name, 1, 25), "...")
         }
 
-        p <- plotTimeseries(
+        p <- YGwater::plotTimeseries(
           location = loc,
           sub_location = NULL,
           parameter = param,
@@ -267,11 +268,8 @@ app_server <- function(input, output, session) {
         )
 
         # Remove the plotly logo and other buttons from the top right of the plot
-        p <- plotly::config(p, displayModeBar = FALSE)
-
-        DBI::dbDisconnect(con)
-        return(p) # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (which used to be DBI::dbDisconnect(con))
-      })
+        plotly::config(p, displayModeBar = FALSE)
+      }, environment(), .compute = "YGwater_floodAtlas_timeseries")
     }
   )
 

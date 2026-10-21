@@ -3242,7 +3242,6 @@ WHERE rolname = current_user;"
     if (
       input$navbar == "WQReport" &&
         !isTRUE(config$public) &&
-        isTRUE(config$network_check) &&
         isTRUE(session$userData$user_logged_in)
     ) {
       if (!ui_loaded$WQReport) {
