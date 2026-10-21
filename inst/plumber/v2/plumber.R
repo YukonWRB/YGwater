@@ -1102,7 +1102,14 @@ v2_snow_stamp <- function(con) {
        FROM discrete.results r
        JOIN discrete.samples s ON s.sample_id = r.sample_id
       WHERE s.source_adapter_function = 'downloadSnowCourseYG'
-        AND r.parameter_id IN (21, 1220))
+        AND r.parameter_id IN (
+          SELECT p.parameter_id
+          FROM public.parameters p
+          WHERE LOWER(BTRIM(p.param_name)) IN (
+            'snow water equivalent',
+            'snow depth'
+          )
+        ))
   ) AS stamp
 "
   )[1L, 1L]
