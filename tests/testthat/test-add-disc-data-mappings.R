@@ -3,7 +3,7 @@ add_disc_data_mapping_environment <- function() {
     "apps/aqualink/modules/admin/discreteData/addDiscData.R",
     package = "YGwater"
   )
-  env <- new.env(parent = asNamespace("shiny"))
+  env <- new.env(parent = asNamespace("YGwater"))
   sys.source(module_path, envir = env)
   sys.source(system.file("apps/aqualink/modules/admin/discreteData/importSetup.R", package = "YGwater"), envir = env)
   env
@@ -546,6 +546,10 @@ test_that("mapped-result preview uses source text and lookup labels", {
     reporting_bases = data.frame(
       reporting_basis_id = integer(),
       reporting_basis = character()
+    ),
+    chemistry_catalogues = list(
+      result_speciations = data.frame(result_speciation_id = integer(), result_speciation = character()),
+      result_targets = data.frame(result_target_id = integer(), result_target = character())
     ),
     matrix_states = data.frame(
       matrix_state_id = 1L,

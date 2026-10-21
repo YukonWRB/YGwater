@@ -13,6 +13,190 @@
 
 # Make way to retire instruments, apply with 15B104601 (yellow)
 
+#' Build analytical identity keys for results belonging to one sample.
+#'
+#' Uses the Patch 65 results_analytical_identity dimensions, with equal missing
+#' values, canonical analysis conditions, and timezone-independent instants.
+#' @param results Result rows, including normalized matrix_state_id values.
+#' @return One character key per row; result values and provenance are excluded.
+field_visit_result_keys <- function(results) {
+  identity <- c(
+    "result_type",
+    "parameter_id",
+    "matrix_state_id",
+    "sample_fraction_id",
+    "result_value_type",
+    "reporting_basis_id",
+    "result_speciation_id",
+    "result_target_id",
+    "endpoint_mode",
+    "endpoint_ph",
+    "analysis_conditions",
+    "protocol_method",
+    "laboratory",
+    "analysis_datetime"
+  )
+  values <- lapply(identity, function(column) {
+    value <- results[[column]]
+    if (is.null(value)) {
+      value <- rep(NA, nrow(results))
+    }
+    if (column == "analysis_conditions") {
+      return(vapply(
+        value,
+        AquaCache::normalizeAnalysisConditions,
+        character(1)
+      ))
+    }
+    if (column == "analysis_datetime") {
+      if (inherits(value, "POSIXt")) {
+        return(as.numeric(value))
+      }
+      return(as.numeric(as.POSIXct(as.character(value), tz = "UTC")))
+    }
+    if (column == "endpoint_mode") {
+      return(as.character(value))
+    }
+    as.numeric(value)
+  })
+  names(values) <- identity
+  vapply(
+    seq_len(nrow(results)),
+    function(index) {
+      as.character(jsonlite::toJSON(
+        lapply(values, `[`, index),
+        auto_unbox = TRUE,
+        na = "null",
+        digits = NA
+      ))
+    },
+    character(1)
+  )
+}
+
+#' Save field results inside a caller-owned transaction.
+#'
+#' Locks saved rows and rechecks overwrite consent against their original values.
+#' Updates only the reading, condition/limit, and note, preserving other metadata.
+#' An insert racing another writer fails without overwriting the competing row.
+#' @param con Database connection, already inside a transaction.
+#' @param sample_id Target sample identifier.
+#' @param results Result rows with normalized matrix states and sample sharing.
+#' @param overwrites Saved result snapshots explicitly approved for replacement.
+#' @return NULL invisibly; errors leave rollback to the transaction owner.
+field_visit_write_results <- function(con, sample_id, results, overwrites) {
+  keys <- field_visit_result_keys(results)
+  if (anyDuplicated(keys)) {
+    stop(
+      "Duplicate measurements in the sample preview. Remove the duplicate before saving.",
+      call. = FALSE
+    )
+  }
+  stored <- DBI::dbGetQuery(
+    con,
+    "SELECT * FROM discrete.results WHERE sample_id = $1 FOR UPDATE",
+    params = list(as.integer(sample_id))
+  )
+  stored_keys <- field_visit_result_keys(stored)
+  approved_keys <- field_visit_result_keys(overwrites)
+  payload <- c("result", "result_condition", "result_condition_value", "note")
+  columns <- c(
+    "sample_id",
+    "result_type",
+    "parameter_id",
+    "protocol_method",
+    "sample_fraction_id",
+    "result",
+    "result_condition",
+    "result_condition_value",
+    "result_value_type",
+    "reporting_basis_id",
+    "laboratory",
+    "analysis_datetime",
+    "lab_report_no",
+    "lab_sample_no",
+    "grade_type_id",
+    "approval_type_id",
+    "matrix_state_id",
+    "no_source_update",
+    "note",
+    "share_with",
+    "result_speciation_id",
+    "result_target_id",
+    "endpoint_mode",
+    "endpoint_ph",
+    "analysis_conditions"
+  )
+  for (index in seq_len(nrow(results))) {
+    result <- results[index, , drop = FALSE]
+    existing_index <- match(keys[[index]], stored_keys)
+    approved_index <- match(keys[[index]], approved_keys)
+    if (!is.na(approved_index)) {
+      if (
+        is.na(existing_index) ||
+          stored$result_id[[existing_index]] !=
+            overwrites$result_id[[approved_index]] ||
+          !isTRUE(all.equal(
+            stored[existing_index, payload, drop = FALSE],
+            overwrites[approved_index, payload, drop = FALSE],
+            check.attributes = FALSE,
+            tolerance = 0
+          ))
+      ) {
+        stop(
+          "An existing measurement changed after you reviewed it. Reopen the sample and review the replacement again.",
+          call. = FALSE
+        )
+      }
+      saved <- DBI::dbGetQuery(
+        con,
+        "UPDATE discrete.results
+            SET result = $1, result_condition = $2,
+                result_condition_value = $3, note = $4
+          WHERE result_id = $5 AND sample_id = $6
+          RETURNING result_id",
+        params = c(
+          unname(as.list(result[1, payload, drop = FALSE])),
+          list(
+            as.integer(stored$result_id[[existing_index]]),
+            as.integer(sample_id)
+          )
+        )
+      )
+    } else {
+      if (!is.na(existing_index)) {
+        stop(
+          "A matching measurement already exists. Reopen the sample and confirm its replacement before saving.",
+          call. = FALSE
+        )
+      }
+      result$sample_id <- as.integer(sample_id)
+      saved <- DBI::dbGetQuery(
+        con,
+        "INSERT INTO discrete.results (
+           sample_id, result_type, parameter_id, protocol_method, sample_fraction_id,
+           result, result_condition, result_condition_value, result_value_type,
+           reporting_basis_id, laboratory, analysis_datetime, lab_report_no,
+           lab_sample_no, grade_type_id, approval_type_id, matrix_state_id,
+           no_source_update, note, share_with, result_speciation_id, result_target_id,
+           endpoint_mode, endpoint_ph, analysis_conditions
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+           $15, $16, $17, $18, $19, $20::text[], $21, $22, $23, $24, $25::jsonb
+         ) ON CONFLICT DO NOTHING RETURNING result_id",
+        params = unname(as.list(result[1, columns, drop = FALSE]))
+      )
+    }
+    if (nrow(saved) != 1L) {
+      stop(
+        "The measurement could not be saved: it may have changed or you may not have write access. Reopen the sample and review its results.",
+        call. = FALSE
+      )
+    }
+  }
+  invisible(NULL)
+}
+
 visitUI <- function(id) {
   ns <- NS(id)
   page_fluid(
@@ -47,9 +231,14 @@ visit <- function(id, language) {
       current_visit = NULL
     )
     pending_field_results <- reactiveVal(data.frame())
+    field_result_overwrites <- reactiveVal(data.frame())
+    stored_field_results <- reactiveVal(data.frame())
+    field_result_conflict <- reactiveVal(NULL)
+    sample_editor_target <- reactiveVal(NULL)
     pending_visit_samples <- reactiveVal(list(
       new = list(),
-      existing = data.frame()
+      existing = data.frame(),
+      existing_results = list()
     ))
     visit_photo_extensions <- c("jpg", "jpeg", "png", "gif", "bmp", "tiff")
     if (YGwater:::heif_jpeg_conversion_available()) {
@@ -316,7 +505,15 @@ visit <- function(id, language) {
       visitData$samples <- NULL
       visitData$current_visit <- NULL
       pending_field_results(data.frame())
-      pending_visit_samples(list(new = list(), existing = data.frame()))
+      pending_visit_samples(list(
+        new = list(),
+        existing = data.frame(),
+        existing_results = list()
+      ))
+      stored_field_results(data.frame())
+      field_result_overwrites(data.frame())
+      field_result_conflict(NULL)
+      sample_editor_target(NULL)
       selected_sample(NULL)
       shinyjs::reset(ns("visit_photos"))
     }
@@ -832,7 +1029,7 @@ visit <- function(id, language) {
             "%Y-%m-%d %H:%M",
             tz = "UTC"
           ),
-          `Field measurements` = nrow(item$results),
+          `Staged measurements` = nrow(item$results),
           Note = item$sample$note[[1]],
           check.names = FALSE,
           stringsAsFactors = FALSE
@@ -849,7 +1046,14 @@ visit <- function(id, language) {
             "%Y-%m-%d %H:%M",
             tz = "UTC"
           ),
-          `Field measurements` = NA_integer_,
+          `Staged measurements` = vapply(
+            pending$existing$sample_id,
+            function(sample_id) {
+              staged <- pending$existing_results[[as.character(sample_id)]]
+              if (is.null(staged)) 0L else nrow(staged$results)
+            },
+            integer(1)
+          ),
           Note = pending$existing$note,
           check.names = FALSE,
           stringsAsFactors = FALSE
@@ -862,7 +1066,7 @@ visit <- function(id, language) {
           sample_id = integer(),
           Sample = character(),
           `Sample time (UTC)` = character(),
-          `Field measurements` = integer(),
+          `Staged measurements` = integer(),
           Note = character(),
           check.names = FALSE,
           stringsAsFactors = FALSE
@@ -964,7 +1168,11 @@ visit <- function(id, language) {
         return(NULL)
       }
       tagList(
+        helpText(
+          "Select a sample row to open its measurements. Staged changes are saved with the visit."
+        ),
         DT::DTOutput(ns("pending_visit_samples")),
+        actionButton(ns("open_pending_sample"), "Open selected sample"),
         actionButton(
           ns("remove_pending_visit_sample"),
           "Remove selected staged sample"
@@ -1039,12 +1247,13 @@ visit <- function(id, language) {
             ext <- extension
             output[[id]] <- renderImage(
               {
-                needs_thumbnail <- ext %in% c(
-                  "tif",
-                  "tiff",
-                  "heic",
-                  "heif"
-                )
+                needs_thumbnail <- ext %in%
+                  c(
+                    "tif",
+                    "tiff",
+                    "heic",
+                    "heif"
+                  )
                 thumbnail <- if (needs_thumbnail) {
                   make_visit_photo_thumbnail(path)
                 } else {
@@ -1123,13 +1332,13 @@ visit <- function(id, language) {
     output$selected_sample_controls <- renderUI({
       sample <- selected_sample()
       if (is.null(sample)) {
-        return(helpText("Select a sample to add a field result to it."))
+        return(helpText("Select a sample row to open its measurements."))
       }
       tagList(
         p(paste("Selected sample:", sample$sample_id[[1]])),
         actionButton(
           ns("add_field_result"),
-          "Add a field result to selected sample"
+          "Open selected sample / add measurements"
         )
       )
     })
@@ -1197,6 +1406,15 @@ visit <- function(id, language) {
         parameter_labels
       )
       common_fields <- tagList(
+        if (!include_sample) {
+          tagList(
+            h4("Saved measurements"),
+            DT::DTOutput(ns("stored_sample_results")),
+            helpText(
+              "Saved measurements are read-only here. A matching field measurement can be replaced only after confirmation."
+            )
+          )
+        },
         h4("Field measurement"),
         helpText(
           "Only parameters in the field group are listed. Add other parameters to this sample in Discrete Data > Edit samples and results."
@@ -1328,6 +1546,8 @@ visit <- function(id, language) {
           rows = 2
         ),
         actionButton(ns("stage_field_result"), "Add measurement to sample"),
+        uiOutput(ns("field_result_conflict")),
+        h4("Measurements to save"),
         DT::DTOutput(ns("field_result_preview")),
         actionButton(
           ns("remove_staged_field_result"),
@@ -1594,6 +1814,185 @@ visit <- function(id, language) {
       result
     }
 
+    prepare_field_results <- function(sample, results) {
+      if (!nrow(results)) {
+        return(results)
+      }
+      results <- AquaCache:::normalize_discrete_result_matrix_states(
+        con = session$userData$AquaCache,
+        sample_media_id = as.integer(sample$media_id[[1]]),
+        results = results
+      )
+      if (!is.null(sample$share_with)) {
+        groups <- array_to_text(sample$share_with[[1]])
+        if (!length(groups)) {
+          groups <- "public_reader"
+        }
+        results$share_with <- paste0("{", paste(groups, collapse = ", "), "}")
+      }
+      results
+    }
+
+    field_result_display <- function(results) {
+      data.frame(
+        Parameter = moduleData$parameters$param_name[
+          match(results$parameter_id, moduleData$parameters$parameter_id)
+        ],
+        Type = moduleData$result_types$result_type[
+          match(results$result_type, moduleData$result_types$result_type_id)
+        ],
+        Value = results$result,
+        Condition = moduleData$result_conditions$result_condition[
+          match(
+            results$result_condition,
+            moduleData$result_conditions$result_condition_id
+          )
+        ],
+        Limit = results$result_condition_value,
+        `Value type` = moduleData$result_value_types$result_value_type[
+          match(
+            results$result_value_type,
+            moduleData$result_value_types$result_value_type_id
+          )
+        ],
+        `Sample fraction` = moduleData$sample_fractions$sample_fraction[
+          match(
+            results$sample_fraction_id,
+            moduleData$sample_fractions$sample_fraction_id
+          )
+        ],
+        `Reporting basis` = moduleData$reporting_bases$reporting_basis[
+          match(
+            results$reporting_basis_id,
+            moduleData$reporting_bases$reporting_basis_id
+          )
+        ],
+        Method = moduleData$protocols_methods$protocol_name[
+          match(
+            results$protocol_method,
+            moduleData$protocols_methods$protocol_id
+          )
+        ],
+        `Measurement time (UTC)` = format(
+          as.POSIXct(results$analysis_datetime, tz = "UTC"),
+          "%Y-%m-%d %H:%M:%S",
+          tz = "UTC"
+        ),
+        Note = results$note,
+        check.names = FALSE
+      )
+    }
+
+    output$stored_sample_results <- DT::renderDT(
+      {
+        results <- stored_field_results()
+        if (!nrow(results)) {
+          return(DT::datatable(
+            data.frame(Message = "No saved measurements on this sample."),
+            rownames = FALSE,
+            selection = "none",
+            options = list(dom = "t")
+          ))
+        }
+        display <- field_result_display(results)
+        display[is.na(display)] <- ""
+        DT::datatable(
+          display,
+          rownames = FALSE,
+          selection = "none",
+          options = list(pageLength = 5, scrollX = TRUE)
+        )
+      },
+      server = FALSE
+    )
+
+    output$field_result_conflict <- renderUI({
+      conflict <- field_result_conflict()
+      if (is.null(conflict)) {
+        return(NULL)
+      }
+      tags$div(
+        class = "alert alert-warning",
+        h4(paste(
+          "Replace saved result",
+          conflict$existing$result_id[[1]],
+          "?"
+        )),
+        p(
+          "This entry has the same analytical identity as a saved result, including method and measurement time. It cannot be added as a second result."
+        ),
+        tags$div(
+          style = "overflow-x: auto;",
+          tableOutput(ns("field_result_conflict_values"))
+        ),
+        p(
+          "Confirming replaces the result value, condition, condition limit, and result note shown here. All other saved metadata, including sharing and QA information, stays unchanged. Replacement happens only when you save."
+        ),
+        actionButton(
+          ns("confirm_field_result_overwrite"),
+          "Use this replacement in preview"
+        ),
+        actionButton(ns("cancel_field_result_overwrite"), "Keep saved result")
+      )
+    })
+
+    output$field_result_conflict_values <- renderTable(
+      {
+        conflict <- field_result_conflict()
+        req(conflict)
+        rbind(
+          cbind(
+            Version = "Saved result",
+            field_result_display(conflict$existing)
+          ),
+          cbind(
+            Version = "Proposed replacement",
+            field_result_display(conflict$result)
+          )
+        )
+      },
+      na = ""
+    )
+
+    append_field_result <- function(result, overwrite = NULL) {
+      pending <- pending_field_results()
+      key <- field_visit_result_keys(result)
+      if (key %in% field_visit_result_keys(pending)) {
+        stop(
+          "That measurement is already in this sample preview. Remove it before entering a replacement.",
+          call. = FALSE
+        )
+      }
+      pending_field_results(as.data.frame(data.table::rbindlist(
+        list(pending, result),
+        fill = TRUE,
+        use.names = TRUE
+      )))
+      if (!is.null(overwrite)) {
+        field_result_overwrites(as.data.frame(data.table::rbindlist(
+          list(field_result_overwrites(), overwrite),
+          fill = TRUE,
+          use.names = TRUE
+        )))
+      }
+      field_result_conflict(NULL)
+      updateSelectizeInput(session, "field_parameter", selected = character())
+      updateNumericInput(session, "field_result", value = NA_real_)
+      updateSelectInput(session, "field_result_condition", selected = "")
+      updateNumericInput(
+        session,
+        "field_result_condition_value",
+        value = NA_real_
+      )
+      updateSelectInput(session, "field_sample_fraction", selected = "")
+      updateSelectInput(session, "field_reporting_basis", selected = "")
+      updateTextAreaInput(session, "field_result_note", value = "")
+      showNotification(
+        "Measurement added to the sample preview.",
+        type = "message"
+      )
+    }
+
     output$field_result_preview <- DT::renderDT(
       {
         results <- pending_field_results()
@@ -1627,17 +2026,36 @@ visit <- function(id, language) {
           as.character(results$result)
         )
         display <- data.frame(
+          Action = ifelse(
+            field_visit_result_keys(results) %in%
+              field_visit_result_keys(field_result_overwrites()),
+            "Replace saved result",
+            "New measurement"
+          ),
           Parameter = moduleData$parameters$param_name[parameter_index],
           Result = value_label,
+          Limit = results$result_condition_value,
+          `Value type` = moduleData$result_value_types$result_value_type[
+            match(
+              results$result_value_type,
+              moduleData$result_value_types$result_value_type_id
+            )
+          ],
           `Sample fraction` = moduleData$sample_fractions$sample_fraction[
             fraction_index
           ],
           Descriptor = moduleData$reporting_bases$reporting_basis[
             descriptor_index
           ],
+          Method = moduleData$protocols_methods$protocol_name[
+            match(
+              results$protocol_method,
+              moduleData$protocols_methods$protocol_id
+            )
+          ],
           `Measurement time (UTC)` = format(
             as.POSIXct(results$analysis_datetime, tz = "UTC"),
-            "%Y-%m-%d %H:%M",
+            "%Y-%m-%d %H:%M:%S",
             tz = "UTC"
           ),
           Note = results$note,
@@ -1660,55 +2078,37 @@ visit <- function(id, language) {
       {
         tryCatch(
           {
-            result <- collect_field_result()
-            pending <- pending_field_results()
-            if (nrow(pending)) {
-              key_columns <- c(
-                "parameter_id",
-                "protocol_method",
-                "sample_fraction_id",
-                "result_value_type",
-                "reporting_basis_id",
-                "analysis_datetime"
+            sample <- selected_sample()
+            if (identical(sample_editor_target()$kind, "create")) {
+              sample <- data.frame(
+                media_id = as.integer(input$field_sample_media)
               )
-              make_keys <- function(rows) {
-                values <- lapply(key_columns, function(name) {
-                  value <- as.character(rows[[name]])
-                  value[is.na(value)] <- ""
-                  value
-                })
-                do.call(paste, c(values, sep = "\r"))
-              }
-              if (
-                make_keys(rbind(pending, result))[[nrow(pending) + 1L]] %in%
-                  make_keys(pending)
-              ) {
-                stop(
-                  "That parameter and measurement time are already in this sample preview.",
-                  call. = FALSE
-                )
-              }
             }
-            pending_field_results(rbind(pending, result))
-            updateSelectizeInput(
-              session,
-              "field_parameter",
-              selected = character()
+            req(sample)
+            result <- prepare_field_results(sample, collect_field_result())
+            key <- field_visit_result_keys(result)
+            if (key %in% field_visit_result_keys(pending_field_results())) {
+              stop(
+                "That measurement is already in this sample preview. Remove it before entering a replacement.",
+                call. = FALSE
+              )
+            }
+            existing_index <- match(
+              key,
+              field_visit_result_keys(stored_field_results())
             )
-            updateNumericInput(session, "field_result", value = NA_real_)
-            updateSelectInput(session, "field_result_condition", selected = "")
-            updateNumericInput(
-              session,
-              "field_result_condition_value",
-              value = NA_real_
-            )
-            updateSelectInput(session, "field_sample_fraction", selected = "")
-            updateSelectInput(session, "field_reporting_basis", selected = "")
-            updateTextAreaInput(session, "field_result_note", value = "")
-            showNotification(
-              "Measurement added to the sample preview.",
-              type = "message"
-            )
+            if (!is.na(existing_index)) {
+              field_result_conflict(list(
+                result = result,
+                existing = stored_field_results()[
+                  existing_index,
+                  ,
+                  drop = FALSE
+                ]
+              ))
+            } else {
+              append_field_result(result)
+            }
           },
           error = function(e) {
             showNotification(
@@ -1717,6 +2117,27 @@ visit <- function(id, language) {
             )
           }
         )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$confirm_field_result_overwrite,
+      {
+        conflict <- field_result_conflict()
+        req(conflict)
+        tryCatch(
+          append_field_result(conflict$result, conflict$existing),
+          error = function(e) showNotification(e$message, type = "error")
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$cancel_field_result_overwrite,
+      {
+        field_result_conflict(NULL)
       },
       ignoreInit = TRUE
     )
@@ -1733,7 +2154,16 @@ visit <- function(id, language) {
           )
           return()
         }
-        pending_field_results(pending[-selected, , drop = FALSE])
+        pending <- pending[-selected, , drop = FALSE]
+        pending_field_results(pending)
+        overwrites <- field_result_overwrites()
+        field_result_overwrites(overwrites[
+          field_visit_result_keys(overwrites) %in%
+            field_visit_result_keys(pending),
+          ,
+          drop = FALSE
+        ])
+        field_result_conflict(NULL)
       },
       ignoreInit = TRUE
     )
@@ -1837,7 +2267,7 @@ visit <- function(id, language) {
         }
         available_samples(samples)
         showModal(modalDialog(
-          title = "Associate existing samples",
+          title = "Associate existing samples from this location",
           size = "l",
           DT::DTOutput(ns("available_samples")),
           easyClose = TRUE,
@@ -1965,6 +2395,7 @@ visit <- function(id, language) {
         if (identical(row$entry_type[[1]], "new")) {
           pending$new <- pending$new[-row$entry_index[[1]]]
         } else {
+          pending$existing_results[[as.character(row$sample_id[[1]])]] <- NULL
           pending$existing <- pending$existing[
             pending$existing$sample_id != row$sample_id[[1]],
             ,
@@ -1992,6 +2423,11 @@ visit <- function(id, language) {
           return()
         }
         pending_field_results(data.frame())
+        field_result_overwrites(data.frame())
+        stored_field_results(data.frame())
+        field_result_conflict(NULL)
+        sample_editor_target(list(kind = "create"))
+        selected_sample(NULL)
         showModal(modalDialog(
           title = "Create a field sample with a measurement",
           size = "l",
@@ -2016,6 +2452,7 @@ visit <- function(id, language) {
     observeEvent(
       input$save_field_sample,
       {
+        req(identical(sample_editor_target()$kind, "create"))
         visit <- visitData$current_visit
         visit_id <- selected_visit()
         visit_saved <- !is.null(visit_id) &&
@@ -2103,7 +2540,13 @@ visit <- function(id, language) {
             )
             share_with <- paste0("{", paste(share_groups, collapse = ", "), "}")
             sample$share_with <- share_with
-            results$share_with <- rep(share_with, nrow(results))
+            results <- prepare_field_results(sample, results)
+            if (anyDuplicated(field_visit_result_keys(results))) {
+              stop(
+                "Remove duplicate measurements from the preview before saving.",
+                call. = FALSE
+              )
+            }
             if (staging_for_new_visit) {
               pending <- pending_visit_samples()
               pending$new[[length(pending$new) + 1L]] <- list(
@@ -2149,32 +2592,125 @@ visit <- function(id, language) {
       ignoreInit = TRUE
     )
 
+    open_sample_editor <- function(sample, target) {
+      tryCatch(
+        {
+          if (identical(target$kind, "saved")) {
+            target$visit_id <- selected_visit()
+          }
+          pending <- pending_visit_samples()
+          staged <- if (identical(target$kind, "new")) {
+            pending$new[[target$index]]
+          } else if (identical(target$kind, "existing")) {
+            pending$existing_results[[as.character(sample$sample_id[[1]])]]
+          } else {
+            NULL
+          }
+          stored <- data.frame()
+          if (!identical(target$kind, "new")) {
+            sample <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              "SELECT * FROM discrete.samples WHERE sample_id = $1",
+              params = list(as.integer(sample$sample_id[[1]]))
+            )
+            if (nrow(sample) != 1L) {
+              stop("This sample is no longer available.", call. = FALSE)
+            }
+            stored <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              "SELECT * FROM discrete.results WHERE sample_id = $1 ORDER BY analysis_datetime, result_id",
+              params = list(as.integer(sample$sample_id[[1]]))
+            )
+          }
+          selected_sample(sample)
+          sample_editor_target(target)
+          stored_field_results(stored)
+          pending_field_results(
+            if (is.null(staged)) data.frame() else staged$results
+          )
+          field_result_overwrites(
+            if (is.null(staged$overwrites)) data.frame() else staged$overwrites
+          )
+          field_result_conflict(NULL)
+          showModal(modalDialog(
+            title = if (identical(target$kind, "new")) {
+              "Measurements for staged field sample"
+            } else {
+              paste("Measurements for sample", sample$sample_id[[1]])
+            },
+            size = "l",
+            field_result_inputs(include_sample = FALSE),
+            easyClose = FALSE,
+            footer = tagList(
+              modalButton("Cancel"),
+              actionButton(
+                ns("save_field_result"),
+                if (identical(target$kind, "saved")) {
+                  "Save field results"
+                } else {
+                  "Stage sample measurements"
+                }
+              )
+            )
+          ))
+        },
+        error = function(e) {
+          showNotification(
+            paste("Could not open sample:", e$message),
+            type = "error"
+          )
+        }
+      )
+    }
+
+    open_pending_sample <- function() {
+      selected <- input$pending_visit_samples_rows_selected
+      rows <- pending_sample_rows()
+      if (length(selected) != 1L || selected < 1L || selected > nrow(rows)) {
+        showNotification("Select a staged sample first.", type = "warning")
+        return()
+      }
+      row <- rows[selected, , drop = FALSE]
+      if (identical(row$entry_type[[1]], "new")) {
+        index <- row$entry_index[[1]]
+        open_sample_editor(
+          pending_visit_samples()$new[[index]]$sample,
+          list(kind = "new", index = index)
+        )
+      } else {
+        open_sample_editor(row, list(kind = "existing"))
+      }
+    }
+
+    observeEvent(
+      input$open_pending_sample,
+      {
+        open_pending_sample()
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$pending_visit_samples_rows_selected,
+      {
+        if (length(input$pending_visit_samples_rows_selected) == 1L) {
+          open_pending_sample()
+        }
+      },
+      ignoreInit = TRUE
+    )
+
     observeEvent(
       input$add_field_result,
       {
         sample <- selected_sample()
-        if (is.null(sample)) {
-          showNotification("Select a sample first.", type = "warning")
+        if (
+          is.null(sample) ||
+            !require_saved_visit_context(visitData$current_visit)
+        ) {
           return()
         }
-        pending_field_results(data.frame())
-        showModal(modalDialog(
-          title = paste("Add field result to sample", sample$sample_id[[1]]),
-          size = "l",
-          field_result_inputs(include_sample = FALSE),
-          easyClose = TRUE,
-          footer = tagList(
-            modalButton("Cancel"),
-            actionButton(ns("save_field_result"), "Save field results")
-          )
-        ))
-        sample_datetime <- coerce_utc_datetime(sample$datetime[[1]])
-        shinyWidgets::updateAirDateInput(
-          session,
-          "field_result_datetime",
-          value = sample_datetime,
-          tz = "UTC"
-        )
+        open_sample_editor(sample, list(kind = "saved"))
       },
       ignoreInit = TRUE
     )
@@ -2183,100 +2719,91 @@ visit <- function(id, language) {
       input$save_field_result,
       {
         sample <- selected_sample()
-        if (is.null(sample)) {
-          showNotification("Select a sample first.", type = "warning")
-          return()
-        }
+        target <- sample_editor_target()
+        req(sample, target)
         tryCatch(
           {
-            results <- pending_field_results()
-            if (!nrow(results)) {
+            if (!is.null(field_result_conflict())) {
+              stop(
+                "Confirm the proposed replacement or choose Keep saved result first.",
+                call. = FALSE
+              )
+            }
+            results <- prepare_field_results(sample, pending_field_results())
+            if (!nrow(results) && !identical(target$kind, "existing")) {
               stop("Add at least one field measurement.", call. = FALSE)
             }
-            results <- AquaCache:::normalize_discrete_result_matrix_states(
-              con = session$userData$AquaCache,
-              sample_media_id = as.integer(sample$media_id[[1]]),
-              results = results
-            )
-            share_groups <- array_to_text(sample$share_with[[1]])
-            if (!length(share_groups)) {
-              share_groups <- "public_reader"
+            if (anyDuplicated(field_visit_result_keys(results))) {
+              stop(
+                "Remove duplicate measurements from the preview before saving.",
+                call. = FALSE
+              )
             }
-            share_with <- paste0("{", paste(share_groups, collapse = ", "), "}")
-            DBI::dbWithTransaction(session$userData$AquaCache, {
-              for (i in seq_len(nrow(results))) {
-                result <- results[i, , drop = FALSE]
-                DBI::dbGetQuery(
-                  session$userData$AquaCache,
-                  "INSERT INTO discrete.results (
-               sample_id,
-               result_type,
-               parameter_id,
-               protocol_method,
-               sample_fraction_id,
-               result,
-               result_condition,
-               result_condition_value,
-               result_value_type,
-               reporting_basis_id,
-               laboratory,
-               analysis_datetime,
-               lab_report_no,
-               lab_sample_no,
-               grade_type_id,
-               approval_type_id,
-               matrix_state_id,
-               no_source_update,
-               note,
-               share_with, result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions
-             ) VALUES (
-               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-               $14, $15, $16, $17, $18, $19, $20::text[], $21, $22, $23, $24, $25::jsonb
-             )
-             RETURNING result_id",
-                  params = list(
-                    as.integer(sample$sample_id[[1]]),
-                    as.integer(result$result_type[[1]]),
-                    as.integer(result$parameter_id[[1]]),
-                    as.integer(result$protocol_method[[1]]),
-                    as.integer(result$sample_fraction_id[[1]]),
-                    as.numeric(result$result[[1]]),
-                    as.integer(result$result_condition[[1]]),
-                    as.numeric(result$result_condition_value[[1]]),
-                    as.integer(result$result_value_type[[1]]),
-                    as.integer(result$reporting_basis_id[[1]]),
-                    as.integer(result$laboratory[[1]]),
-                    as.POSIXct(result$analysis_datetime[[1]], tz = "UTC"),
-                    as.character(result$lab_report_no[[1]]),
-                    as.character(result$lab_sample_no[[1]]),
-                    as.integer(result$grade_type_id[[1]]),
-                    as.integer(result$approval_type_id[[1]]),
-                    as.integer(result$matrix_state_id[[1]]),
-                    isTRUE(result$no_source_update[[1]]),
-                    as.character(result$note[[1]]),
-                    as.character(share_with),
-                    as.integer(result$result_speciation_id[[1]]),
-                    as.integer(result$result_target_id[[1]]),
-                    as.character(result$endpoint_mode[[1]]),
-                    as.numeric(result$endpoint_ph[[1]]),
-                    AquaCache::normalizeAnalysisConditions(result$analysis_conditions[[
-                      1
-                    ]])
-                  )
+            if (identical(target$kind, "saved")) {
+              if (
+                !identical(
+                  as.integer(target$visit_id),
+                  as.integer(selected_visit())
+                )
+              ) {
+                stop(
+                  "The selected visit changed. Reopen the sample before saving.",
+                  call. = FALSE
                 )
               }
-            })
-            load_visit_samples(selected_visit(), visitData$current_visit)
+              if (!require_saved_visit_context(visitData$current_visit)) {
+                return()
+              }
+              DBI::dbWithTransaction(session$userData$AquaCache, {
+                field_visit_write_results(
+                  session$userData$AquaCache,
+                  sample$sample_id[[1]],
+                  results,
+                  field_result_overwrites()
+                )
+              })
+              load_visit_samples(selected_visit(), visitData$current_visit)
+            } else {
+              if (!identical(input$mode, "add") || !is.null(selected_visit())) {
+                stop(
+                  "The visit changed while this sample was open. Reopen the sample.",
+                  call. = FALSE
+                )
+              }
+              pending <- pending_visit_samples()
+              if (identical(target$kind, "new")) {
+                pending$new[[target$index]]$results <- results
+              } else if (identical(target$kind, "existing")) {
+                sample_id <- as.character(sample$sample_id[[1]])
+                if (!sample$sample_id[[1]] %in% pending$existing$sample_id) {
+                  stop(
+                    "This sample is no longer staged for the visit.",
+                    call. = FALSE
+                  )
+                }
+                pending$existing_results[[sample_id]] <- list(
+                  results = results,
+                  overwrites = field_result_overwrites()
+                )
+              }
+              pending_visit_samples(pending)
+            }
             pending_field_results(data.frame())
+            field_result_overwrites(data.frame())
+            field_result_conflict(NULL)
             removeModal()
             showNotification(
-              paste(nrow(results), "field result(s) saved."),
+              if (identical(target$kind, "saved")) {
+                "Field results saved."
+              } else {
+                "Measurements staged. Save the visit to apply them."
+              },
               type = "message"
             )
           },
           error = function(e) {
             showNotification(
-              paste("Could not save field result:", e$message),
+              paste("Could not save field results:", e$message),
               type = "error"
             )
           }
@@ -2293,11 +2820,18 @@ visit <- function(id, language) {
         if (
           length(selected) != 1L ||
             is.null(samples) ||
+            selected < 1L ||
             selected > nrow(samples)
         ) {
           selected_sample(NULL)
         } else {
           selected_sample(samples[selected, , drop = FALSE])
+          if (require_saved_visit_context(visitData$current_visit)) {
+            open_sample_editor(
+              samples[selected, , drop = FALSE],
+              list(kind = "saved")
+            )
+          }
         }
       },
       ignoreInit = TRUE
@@ -2677,6 +3211,22 @@ visit <- function(id, language) {
                       call. = FALSE
                     )
                   }
+                  staged <- staged_samples$existing_results[[as.character(
+                    sample_id
+                  )]]
+                  if (!is.null(staged) && nrow(staged$results)) {
+                    sample <- DBI::dbGetQuery(
+                      session$userData$AquaCache,
+                      "SELECT * FROM discrete.samples WHERE sample_id = $1",
+                      params = list(as.integer(sample_id))
+                    )
+                    field_visit_write_results(
+                      session$userData$AquaCache,
+                      sample_id,
+                      prepare_field_results(sample, staged$results),
+                      staged$overwrites
+                    )
+                  }
                 }
                 share_groups <- array_to_text(form$share_with)
                 if (!length(share_groups)) {
@@ -2710,7 +3260,11 @@ visit <- function(id, language) {
             selected_visit(as.integer(created_visit_id))
             load_visit_samples(created_visit_id)
             load_visit_images(created_visit_id)
-            pending_visit_samples(list(new = list(), existing = data.frame()))
+            pending_visit_samples(list(
+              new = list(),
+              existing = data.frame(),
+              existing_results = list()
+            ))
             pending_field_results(data.frame())
             shinyjs::reset(ns("visit_photos"))
             staged_count <- length(staged_samples$new) +

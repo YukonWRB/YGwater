@@ -257,9 +257,12 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
         fluidRow(
           column(
             6,
-            dateInput(ns("valid_from"), "Valid from", value = Sys.Date())
+            dateInput(ns("valid_from"), "Applicable from", value = Sys.Date())
           ),
-          column(6, dateInput(ns("valid_to"), "Valid to", value = as.Date(NA)))
+          column(
+            6,
+            dateInput(ns("valid_to"), "Applicable to", value = as.Date(NA))
+          )
         ),
         fluidRow(
           column(
@@ -300,7 +303,7 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
             6,
             dateInput(
               ns("source_effective_date"),
-              "Effective",
+              "Publication date",
               value = as.Date(NA)
             )
           ),
@@ -308,7 +311,7 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
             6,
             dateInput(
               ns("source_retrieved_date"),
-              "Retrieved",
+              "Retrieved date",
               value = Sys.Date()
             )
           )
@@ -971,7 +974,11 @@ addGuidelines <- function(id, language) {
       "matrix_state_id",
       "sample_fraction_id",
       "reporting_basis_id",
-      "result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions",
+      "result_speciation_id",
+      "result_target_id",
+      "endpoint_mode",
+      "endpoint_ph",
+      "analysis_conditions",
       "result_type",
       "result_type_preference",
       "aggregate_method",
@@ -1062,6 +1069,7 @@ addGuidelines <- function(id, language) {
 
     moduleData <- reactiveValues()
     selected_guideline_id <- reactiveVal(NA_integer_)
+    saved_rules_version <- reactiveVal(0L)
     rule_input_count <- reactiveVal(1L)
     rule_input_seed <- reactiveVal(NULL)
 
@@ -1426,7 +1434,9 @@ addGuidelines <- function(id, language) {
       ]
       nrow(row) && isTRUE(row[[column]][[1]])
     }
-    update_reporting_basis_visibility <- function(parameter_id = input$parameter_id) {
+    update_reporting_basis_visibility <- function(
+      parameter_id = input$parameter_id
+    ) {
       shinyjs::show(id = "reporting_basis_section", anim = FALSE)
     }
     blank_rule_input_rows <- function(n = 1L) {
@@ -1438,8 +1448,11 @@ addGuidelines <- function(id, language) {
         matrix_state_id = rep(NA_integer_, n),
         sample_fraction_id = rep(NA_integer_, n),
         reporting_basis_id = rep(NA_integer_, n),
-        result_speciation_id = rep(NA_integer_, n), result_target_id = rep(NA_integer_, n),
-        endpoint_mode = rep(NA_character_, n), endpoint_ph = rep(NA_real_, n), analysis_conditions = rep("{}", n),
+        result_speciation_id = rep(NA_integer_, n),
+        result_target_id = rep(NA_integer_, n),
+        endpoint_mode = rep(NA_character_, n),
+        endpoint_ph = rep(NA_real_, n),
+        analysis_conditions = rep("{}", n),
         result_type = rep(NA_integer_, n),
         result_type_preference = rep("", n),
         aggregate_method = rep("single", n),
@@ -1517,16 +1530,12 @@ addGuidelines <- function(id, language) {
         if (is.na(matrix_state_id)) {
           matrix_state_id <- integer_or_na(input$matrix_state)
         }
-        sample_fraction_id <- if (
-          identical(input_source, "hardness_helper")
-        ) {
+        sample_fraction_id <- if (identical(input_source, "hardness_helper")) {
           NA_integer_
         } else {
           integer_or_na(input[[rule_input_id("sample_fraction", i)]])
         }
-        reporting_basis_id <- if (
-          identical(input_source, "hardness_helper")
-        ) {
+        reporting_basis_id <- if (identical(input_source, "hardness_helper")) {
           NA_integer_
         } else {
           integer_or_na(input[[rule_input_id("descriptor", i)]])
@@ -1545,7 +1554,10 @@ addGuidelines <- function(id, language) {
           matrix_state_id = matrix_state_id,
           sample_fraction_id = sample_fraction_id,
           reporting_basis_id = reporting_basis_id,
-          YGwater:::chemistry_metadata_values(input, paste0("rule_chem_", i, "_")),
+          YGwater:::chemistry_metadata_values(
+            input,
+            paste0("rule_chem_", i, "_")
+          ),
           result_type = NA_integer_,
           result_type_preference = collapse_id_vector(
             input[[rule_input_id("result_type_preference", i)]]
@@ -1682,8 +1694,11 @@ addGuidelines <- function(id, language) {
     }
 
     format_guideline_conditions <- function(value) {
-      if (is.null(value) || !length(value) ||
-          (is.atomic(value) && all(is.na(value)))) {
+      if (
+        is.null(value) ||
+          !length(value) ||
+          (is.atomic(value) && all(is.na(value)))
+      ) {
         return("")
       }
       normalized <- tryCatch(
@@ -1697,15 +1712,25 @@ addGuidelines <- function(id, language) {
         jsonlite::fromJSON(normalized, simplifyVector = FALSE),
         error = function(e) NULL
       )
-      if (is.list(conditions) && length(conditions) && !is.null(names(conditions))) {
+      if (
+        is.list(conditions) && length(conditions) && !is.null(names(conditions))
+      ) {
         labels <- gsub("_", " ", names(conditions), fixed = TRUE)
-        values <- vapply(conditions, function(item) {
-          if (is.atomic(item)) {
-            paste(as.character(item), collapse = ", ")
-          } else {
-            as.character(jsonlite::toJSON(item, auto_unbox = TRUE, null = "null"))
-          }
-        }, character(1))
+        values <- vapply(
+          conditions,
+          function(item) {
+            if (is.atomic(item)) {
+              paste(as.character(item), collapse = ", ")
+            } else {
+              as.character(jsonlite::toJSON(
+                item,
+                auto_unbox = TRUE,
+                null = "null"
+              ))
+            }
+          },
+          character(1)
+        )
         return(paste(paste0(labels, ": ", values), collapse = "; "))
       }
       normalized
@@ -1717,14 +1742,23 @@ addGuidelines <- function(id, language) {
         "Chemical form / species scope" = "result_speciation",
         "Analytical target / material" = "result_target"
       )
-      pieces <- vapply(names(fields), function(label) {
-        field <- unname(fields[[label]])
-        value <- row[[field]][[1]]
-        if (is.null(value) || !length(value) || is.na(value) || !nzchar(trimws(as.character(value)))) {
-          return("")
-        }
-        paste0(label, ": ", trimws(as.character(value)))
-      }, character(1))
+      pieces <- vapply(
+        names(fields),
+        function(label) {
+          field <- unname(fields[[label]])
+          value <- row[[field]][[1]]
+          if (
+            is.null(value) ||
+              !length(value) ||
+              is.na(value) ||
+              !nzchar(trimws(as.character(value)))
+          ) {
+            return("")
+          }
+          paste0(label, ": ", trimws(as.character(value)))
+        },
+        character(1)
+      )
       endpoint_mode <- as.character(row$endpoint_mode[[1]])
       endpoint_label <- unname(c(
         fixed = "Fixed pH",
@@ -1732,10 +1766,18 @@ addGuidelines <- function(id, language) {
         gran = "Gran",
         other = "Other"
       )[endpoint_mode])
-      if (length(endpoint_label) && !is.na(endpoint_label) && nzchar(endpoint_label)) {
+      if (
+        length(endpoint_label) &&
+          !is.na(endpoint_label) &&
+          nzchar(endpoint_label)
+      ) {
         endpoint_ph <- row$endpoint_ph[[1]]
         if (identical(endpoint_mode, "fixed") && !is.na(endpoint_ph)) {
-          endpoint_label <- paste0(endpoint_label, " ", format(endpoint_ph, trim = TRUE))
+          endpoint_label <- paste0(
+            endpoint_label,
+            " ",
+            format(endpoint_ph, trim = TRUE)
+          )
         }
         pieces <- c(pieces, paste0("Endpoint: ", endpoint_label))
       }
@@ -1744,7 +1786,11 @@ addGuidelines <- function(id, language) {
         pieces <- c(pieces, paste0("Additional conditions: ", conditions))
       }
       pieces <- pieces[nzchar(pieces)]
-      if (!length(pieces)) "No chemistry qualifiers specified" else paste(pieces, collapse = "; ")
+      if (!length(pieces)) {
+        "No chemistry qualifiers specified"
+      } else {
+        paste(pieces, collapse = "; ")
+      }
     }
 
     load_reference_data <- function() {
@@ -1788,7 +1834,9 @@ addGuidelines <- function(id, language) {
          LEFT JOIN public.units una ON una.unit_id = p.units_na
          ORDER BY p.param_name"
       )
-      moduleData$chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(con)
+      moduleData$chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(
+        con
+      )
       moduleData$units <- DBI::dbGetQuery(
         con,
         "SELECT unit_id, unit_name
@@ -2357,6 +2405,19 @@ addGuidelines <- function(id, language) {
       }
       tagList(lapply(seq_len(n), function(i) {
         row <- seed[i, , drop = FALSE]
+        selected_parameter <- if (
+          identical(row$input_source[[1]], "hardness_helper")
+        ) {
+          hardness_helper_choice_value
+        } else {
+          selected_or_empty(row$parameter_id)
+        }
+        # Seed the saved selection in the HTML. A server-side update can arrive
+        # before this dynamic control is bound, leaving an existing input blank.
+        parameter_choices <- parameter_choices_with_helpers()
+        selected_choices <- parameter_choices[
+          parameter_choices %in% selected_parameter
+        ]
         result_type_seed <- if (
           nzchar(text_value(row$result_type_preference))
         ) {
@@ -2380,8 +2441,8 @@ addGuidelines <- function(id, language) {
                   tags$span("Parameter"),
                   "Choose the sample result to use. The hardness helper is a database resolver that picks the preferred hardness value for the sample."
                 ),
-                choices = character(0),
-                selected = character(0),
+                choices = selected_choices,
+                selected = selected_parameter,
                 multiple = TRUE,
                 options = selectize_single_options,
                 width = "100%"
@@ -2470,7 +2531,12 @@ addGuidelines <- function(id, language) {
               )
             )
           ),
-          YGwater:::chemistry_metadata_ui(ns, paste0("rule_chem_", i, "_"), moduleData$chemistry_catalogues, row),
+          YGwater:::chemistry_metadata_ui(
+            ns,
+            paste0("rule_chem_", i, "_"),
+            moduleData$chemistry_catalogues,
+            row
+          ),
           tags$details(
             open = FALSE,
             tags$summary("Input matching options"),
@@ -2562,25 +2628,28 @@ addGuidelines <- function(id, language) {
       if (nrow(seed) < n) {
         seed <- rbind(seed, blank_rule_input_rows(n - nrow(seed)))
       }
-      session$onFlushed(function() {
-        for (i in seq_len(n)) {
-          row <- seed[i, , drop = FALSE]
-          selected_parameter <- if (
-            identical(row$input_source[[1]], "hardness_helper")
-          ) {
-            hardness_helper_choice_value
-          } else {
-            selected_or_empty(row$parameter_id)
+      session$onFlushed(
+        function() {
+          for (i in seq_len(n)) {
+            row <- seed[i, , drop = FALSE]
+            selected_parameter <- if (
+              identical(row$input_source[[1]], "hardness_helper")
+            ) {
+              hardness_helper_choice_value
+            } else {
+              selected_or_empty(row$parameter_id)
+            }
+            updateSelectizeInput(
+              session,
+              rule_input_id("parameter", i),
+              choices = choices,
+              selected = selected_parameter,
+              server = TRUE
+            )
           }
-          updateSelectizeInput(
-            session,
-            rule_input_id("parameter", i),
-            choices = choices,
-            selected = selected_parameter,
-            server = TRUE
-          )
-        }
-      }, once = TRUE)
+        },
+        once = TRUE
+      )
     })
 
     update_rule_field_visibility <- function(type = "constant_upper") {
@@ -2746,9 +2815,13 @@ addGuidelines <- function(id, language) {
       {
         df <- moduleData$guidelines
         chemistry_scope <- if (nrow(df)) {
-          vapply(seq_len(nrow(df)), function(i) {
-            guideline_chemistry_scope(df[i, , drop = FALSE])
-          }, character(1))
+          vapply(
+            seq_len(nrow(df)),
+            function(i) {
+              guideline_chemistry_scope(df[i, , drop = FALSE])
+            },
+            character(1)
+          )
         } else {
           character(0)
         }
@@ -2935,6 +3008,7 @@ addGuidelines <- function(id, language) {
     }
 
     output$selected_rules_table <- DT::renderDT({
+      saved_rules_version()
       guideline_id <- selected_guideline_id()
       if (is.na(guideline_id)) {
         return(DT::datatable(data.frame(), rownames = FALSE))
@@ -2950,9 +3024,14 @@ addGuidelines <- function(id, language) {
       bounds <- c(lower = "Lower limit", upper = "Upper limit")
       bound <- unname(bounds[rules$bound_code])
       bound[is.na(bound)] <- "Narrative"
-      missing_input <- c(no_value = "Show no value", error = "Stop with an error")
+      missing_input <- c(
+        no_value = "Show no value",
+        error = "Stop with an error"
+      )
       missing_label <- unname(missing_input[rules$missing_input_policy])
-      missing_label[is.na(missing_label)] <- rules$missing_input_policy[is.na(missing_label)]
+      missing_label[is.na(missing_label)] <- rules$missing_input_policy[is.na(
+        missing_label
+      )]
       display <- data.frame(
         Bound = bound,
         Calculation = rules$algorithm_name,
@@ -2975,7 +3054,9 @@ addGuidelines <- function(id, language) {
     output$selected_guideline_scope <- renderUI({
       guideline_id <- selected_guideline_id()
       if (is.na(guideline_id)) {
-        return(tags$p("Select a guideline row to review its applicability and chemistry."))
+        return(tags$p(
+          "Select a guideline row to review its applicability and chemistry."
+        ))
       }
       guideline <- moduleData$guidelines[
         moduleData$guidelines$guideline_id == guideline_id,
@@ -2986,7 +3067,12 @@ addGuidelines <- function(id, language) {
         return(tags$p("Guideline details are not available."))
       }
       no_restriction <- function(value) {
-        if (is.null(value) || !length(value) || is.na(value) || !nzchar(trimws(as.character(value)))) {
+        if (
+          is.null(value) ||
+            !length(value) ||
+            is.na(value) ||
+            !nzchar(trimws(as.character(value)))
+        ) {
           "No restriction"
         } else {
           as.character(value)
@@ -2996,10 +3082,17 @@ addGuidelines <- function(id, language) {
         class = "alert alert-light border",
         tags$p(
           tags$strong("Applies to: "),
-          paste0(guideline$parameter[[1]], " in ", no_restriction(guideline$matrix_state[[1]])),
-          "; fractions: ", no_restriction(guideline$fractions[[1]]),
-          "; media: ", no_restriction(guideline$media_types[[1]]),
-          "; locations: ", no_restriction(guideline$locations[[1]])
+          paste0(
+            guideline$parameter[[1]],
+            " in ",
+            no_restriction(guideline$matrix_state[[1]])
+          ),
+          "; fractions: ",
+          no_restriction(guideline$fractions[[1]]),
+          "; media: ",
+          no_restriction(guideline$media_types[[1]]),
+          "; locations: ",
+          no_restriction(guideline$locations[[1]])
         ),
         tags$p(
           tags$strong("Chemistry qualifiers: "),
@@ -3009,6 +3102,7 @@ addGuidelines <- function(id, language) {
     })
 
     output$selected_inputs_table <- DT::renderDT({
+      saved_rules_version()
       guideline_id <- selected_guideline_id()
       if (is.na(guideline_id)) {
         return(DT::datatable(data.frame(), rownames = FALSE))
@@ -3028,24 +3122,27 @@ addGuidelines <- function(id, language) {
         })
       )
       if (is.null(inputs) || !nrow(inputs)) {
-        return(DT::datatable(data.frame(
-          Input = character(),
-          `Input code` = character(),
-          Source = character(),
-          Parameter = character(),
-          Medium = character(),
-          `Sample fraction` = character(),
-          `Reporting basis` = character(),
-          `Chemical form / species scope` = character(),
-          `Analytical target / material` = character(),
-          Endpoint = character(),
-          `Additional conditions` = character(),
-          `Result type` = character(),
-          `Aggregation method` = character(),
-          Required = logical(),
-          Note = character(),
-          check.names = FALSE
-        ), rownames = FALSE))
+        return(DT::datatable(
+          data.frame(
+            Input = character(),
+            `Input code` = character(),
+            Source = character(),
+            Parameter = character(),
+            Medium = character(),
+            `Sample fraction` = character(),
+            `Reporting basis` = character(),
+            `Chemical form / species scope` = character(),
+            `Analytical target / material` = character(),
+            Endpoint = character(),
+            `Additional conditions` = character(),
+            `Result type` = character(),
+            `Aggregation method` = character(),
+            Required = logical(),
+            Note = character(),
+            check.names = FALSE
+          ),
+          rownames = FALSE
+        ))
       }
       endpoint_labels <- c(
         fixed = "Fixed pH",
@@ -3055,11 +3152,18 @@ addGuidelines <- function(id, language) {
       )
       endpoint <- unname(endpoint_labels[inputs$endpoint_mode])
       endpoint[is.na(endpoint)] <- ""
-      fixed_endpoint <- !is.na(inputs$endpoint_ph) & inputs$endpoint_mode == "fixed"
+      fixed_endpoint <- !is.na(inputs$endpoint_ph) &
+        inputs$endpoint_mode == "fixed"
       endpoint[fixed_endpoint] <- paste0(
-        endpoint[fixed_endpoint], " ", format(inputs$endpoint_ph[fixed_endpoint], trim = TRUE)
+        endpoint[fixed_endpoint],
+        " ",
+        format(inputs$endpoint_ph[fixed_endpoint], trim = TRUE)
       )
-      conditions <- vapply(inputs$analysis_conditions, format_guideline_conditions, character(1))
+      conditions <- vapply(
+        inputs$analysis_conditions,
+        format_guideline_conditions,
+        character(1)
+      )
       conditions[!nzchar(conditions)] <- "None"
       source <- gsub("_", " ", inputs$input_source, fixed = TRUE)
       source <- tools::toTitleCase(source)
@@ -3110,7 +3214,13 @@ addGuidelines <- function(id, language) {
     }
 
     clear_form <- function() {
-      output$guideline_chemistry <- renderUI({ YGwater:::chemistry_metadata_ui(ns, "guideline_chem_", moduleData$chemistry_catalogues) })
+      output$guideline_chemistry <- renderUI({
+        YGwater:::chemistry_metadata_ui(
+          ns,
+          "guideline_chem_",
+          moduleData$chemistry_catalogues
+        )
+      })
       selected_guideline_id(NA_integer_)
       updateTextInput(session, "guideline_code", value = "")
       updateTextInput(session, "guideline_name", value = "")
@@ -3252,7 +3362,14 @@ addGuidelines <- function(id, language) {
         },
         server = TRUE
       )
-      output$guideline_chemistry <- renderUI({ YGwater:::chemistry_metadata_ui(ns, "guideline_chem_", moduleData$chemistry_catalogues, g) })
+      output$guideline_chemistry <- renderUI({
+        YGwater:::chemistry_metadata_ui(
+          ns,
+          "guideline_chem_",
+          moduleData$chemistry_catalogues,
+          g
+        )
+      })
       update_reporting_basis_visibility(g$parameter_id[[1]])
       updateSelectizeInput(
         session,
@@ -3738,12 +3855,30 @@ addGuidelines <- function(id, language) {
         ",\n",
         "  reporting_basis_id := ",
         null_or_int_sql(row$reporting_basis_id[[1]]),
-        ",\n  result_speciation_id := ", null_or_int_sql(row$result_speciation_id[[1]]),
-        ",\n  result_target_id := ", null_or_int_sql(row$result_target_id[[1]]),
-        ",\n  endpoint_mode := ", if (is.na(row$endpoint_mode[[1]])) "NULL::TEXT" else as.character(DBI::dbQuoteString(con, row$endpoint_mode[[1]])),
-        ",\n  endpoint_ph := ", if (is.na(row$endpoint_ph[[1]])) "NULL::NUMERIC" else as.character(row$endpoint_ph[[1]]),
-        ",\n  analysis_conditions := ", as.character(DBI::dbQuoteString(con, AquaCache::normalizeAnalysisConditions(row$analysis_conditions[[1]]))), "::JSONB",
-        ",\n  matrix_state_id := ", null_or_int_sql(row$matrix_state_id[[1]]),
+        ",\n  result_speciation_id := ",
+        null_or_int_sql(row$result_speciation_id[[1]]),
+        ",\n  result_target_id := ",
+        null_or_int_sql(row$result_target_id[[1]]),
+        ",\n  endpoint_mode := ",
+        if (is.na(row$endpoint_mode[[1]])) {
+          "NULL::TEXT"
+        } else {
+          as.character(DBI::dbQuoteString(con, row$endpoint_mode[[1]]))
+        },
+        ",\n  endpoint_ph := ",
+        if (is.na(row$endpoint_ph[[1]])) {
+          "NULL::NUMERIC"
+        } else {
+          as.character(row$endpoint_ph[[1]])
+        },
+        ",\n  analysis_conditions := ",
+        as.character(DBI::dbQuoteString(
+          con,
+          AquaCache::normalizeAnalysisConditions(row$analysis_conditions[[1]])
+        )),
+        "::JSONB",
+        ",\n  matrix_state_id := ",
+        null_or_int_sql(row$matrix_state_id[[1]]),
         "\n",
         ") AS ",
         input_code
@@ -4208,17 +4343,38 @@ FROM vals",
       }
       sql_int_literal(parts[[position]])
     }
-    sql_ref_key <- function(parameter_id, sample_fraction_id, reporting_basis_id,
-      result_speciation_id = NA_integer_, result_target_id = NA_integer_,
-      endpoint_mode = NA_character_, endpoint_ph = NA_real_, analysis_conditions = "{}", matrix_state_id = NA_integer_) {
-      if (!length(parameter_id)) return(character())
-      YGwater:::chemistry_accessor_keys(data.frame(parameter_id, sample_fraction_id, reporting_basis_id,
-        result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions, matrix_state_id))
+    sql_ref_key <- function(
+      parameter_id,
+      sample_fraction_id,
+      reporting_basis_id,
+      result_speciation_id = NA_integer_,
+      result_target_id = NA_integer_,
+      endpoint_mode = NA_character_,
+      endpoint_ph = NA_real_,
+      analysis_conditions = "{}",
+      matrix_state_id = NA_integer_
+    ) {
+      if (!length(parameter_id)) {
+        return(character())
+      }
+      YGwater:::chemistry_accessor_keys(data.frame(
+        parameter_id,
+        sample_fraction_id,
+        reporting_basis_id,
+        result_speciation_id,
+        result_target_id,
+        endpoint_mode,
+        endpoint_ph,
+        analysis_conditions,
+        matrix_state_id
+      ))
     }
     format_sql_ref_key <- function(key) key
     sql_scalar_input_refs <- function(sql) {
       scan <- strip_sql_for_input_scan(sql)
-      sample_refs <- YGwater:::chemistry_sql_accessor_refs(clean_sql_scalar(sql))
+      sample_refs <- YGwater:::chemistry_sql_accessor_refs(clean_sql_scalar(
+        sql
+      ))
       list(
         sample_refs = unique(sample_refs),
         uses_hardness = grepl(
@@ -4272,8 +4428,13 @@ FROM vals",
       declared_refs <- unique(sql_ref_key(
         declared_samples$parameter_id,
         declared_samples$sample_fraction_id,
-        declared_samples$reporting_basis_id, declared_samples$result_speciation_id, declared_samples$result_target_id,
-        declared_samples$endpoint_mode, declared_samples$endpoint_ph, declared_samples$analysis_conditions, declared_samples$matrix_state_id
+        declared_samples$reporting_basis_id,
+        declared_samples$result_speciation_id,
+        declared_samples$result_target_id,
+        declared_samples$endpoint_mode,
+        declared_samples$endpoint_ph,
+        declared_samples$analysis_conditions,
+        declared_samples$matrix_state_id
       ))
       declared_refs <- declared_refs[!is.na(declared_samples$parameter_id)]
 
@@ -4427,8 +4588,12 @@ FROM vals",
             numeric_or_na(df$lower_calibrated_bound[i]),
             numeric_or_na(df$upper_calibrated_bound[i]),
             text_default(df$bounds_action[i], "flag"),
-            text_or_na(df$note[i]), integer_or_na(df$result_speciation_id[i]), integer_or_na(df$result_target_id[i]),
-            text_or_na(df$endpoint_mode[i]), numeric_or_na(df$endpoint_ph[i]), AquaCache::normalizeAnalysisConditions(df$analysis_conditions[i])
+            text_or_na(df$note[i]),
+            integer_or_na(df$result_speciation_id[i]),
+            integer_or_na(df$result_target_id[i]),
+            text_or_na(df$endpoint_mode[i]),
+            numeric_or_na(df$endpoint_ph[i]),
+            AquaCache::normalizeAnalysisConditions(df$analysis_conditions[i])
           )
         )
       }
@@ -4649,7 +4814,14 @@ FROM vals",
         validate_sql_scalar_inputs(formula_sql, df)
       }
       sample_rows <- df[!df$input_source %in% "hardness_helper", , drop = FALSE]
-      if (nrow(sample_rows)) AquaCache::validateResultChemistry(NULL, sample_rows, parameters = moduleData$parameters, matrix_states = moduleData$matrix_states)
+      if (nrow(sample_rows)) {
+        AquaCache::validateResultChemistry(
+          NULL,
+          sample_rows,
+          parameters = moduleData$parameters,
+          matrix_states = moduleData$matrix_states
+        )
+      }
       for (i in seq_len(nrow(df))) {
         is_helper <- identical(
           text_default(df$input_source[i], "sample_result"),
@@ -4748,7 +4920,10 @@ FROM vals",
         parameter_id = parameter_id,
         matrix_state_id = matrix_state_id,
         reporting_basis_id = integer_or_na(input$reporting_basis),
-        chemistry = YGwater:::chemistry_metadata_values(input, "guideline_chem_"),
+        chemistry = YGwater:::chemistry_metadata_values(
+          input,
+          "guideline_chem_"
+        ),
         comparison_operator_code = operator,
         jurisdiction = input$jurisdiction,
         protection_goal = input$protection_goal,
@@ -5054,8 +5229,14 @@ FROM vals",
                     } else {
                       txt_value(df$bounds_action[i])
                     },
-                    txt_or_na(df$note[i]), int_or_na(df$result_speciation_id[i]), int_or_na(df$result_target_id[i]),
-                    txt_or_na(df$endpoint_mode[i]), num_or_na(df$endpoint_ph[i]), AquaCache::normalizeAnalysisConditions(df$analysis_conditions[i])
+                    txt_or_na(df$note[i]),
+                    int_or_na(df$result_speciation_id[i]),
+                    int_or_na(df$result_target_id[i]),
+                    txt_or_na(df$endpoint_mode[i]),
+                    num_or_na(df$endpoint_ph[i]),
+                    AquaCache::normalizeAnalysisConditions(df$analysis_conditions[
+                      i
+                    ])
                   )
                 )
               }
@@ -5250,10 +5431,12 @@ FROM vals",
               )
             }
 
-            DBI::dbExecute(con,
+            DBI::dbExecute(
+              con,
               "UPDATE criteria.guidelines SET result_speciation_id = $1, result_target_id = $2,
                 endpoint_mode = $3, endpoint_ph = $4, analysis_conditions = $5::jsonb WHERE guideline_id = $6",
-              params = c(unname(req$chemistry), list(guideline_id)))
+              params = c(unname(req$chemistry), list(guideline_id))
+            )
 
             DBI::dbExecute(
               con,
@@ -5441,6 +5624,9 @@ FROM vals",
       }
       saved_id <- result$guideline_id
       load_reference_data()
+      # Editing a rule does not change the selected guideline ID. Explicitly
+      # refresh both rule tables even when the guideline metadata is unchanged.
+      saved_rules_version(saved_rules_version() + 1L)
       update_choices()
       selected_guideline_id(saved_id)
       load_form(saved_id)
@@ -5556,7 +5742,8 @@ FROM vals",
             guideline_row <- req$guideline_row
             params <- list(
               as.integer(guideline_row$parameter_id[[1]]),
-              as.integer(guideline_row$matrix_state_id[[1]]), as.integer(guideline_row$guideline_id[[1]])
+              as.integer(guideline_row$matrix_state_id[[1]]),
+              as.integer(guideline_row$guideline_id[[1]])
             )
             target_conditions <- c(
               "r.parameter_id = $1",
@@ -5755,8 +5942,10 @@ FROM vals",
                     if (is.na(label) || !nzchar(label)) {
                       label <- values$input_code[[i]]
                     }
-                    if (!is.na(values$bound_code[[i]]) &&
-                        nzchar(values$bound_code[[i]])) {
+                    if (
+                      !is.na(values$bound_code[[i]]) &&
+                        nzchar(values$bound_code[[i]])
+                    ) {
                       label <- paste(values$bound_code[[i]], label)
                     }
                     if (identical(values$status[[i]], "value")) {
@@ -5775,7 +5964,8 @@ FROM vals",
               params <- list(
                 int_or_na(sample_id),
                 as.integer(guideline_row$parameter_id[[1]]),
-                as.integer(guideline_row$matrix_state_id[[1]]), as.integer(guideline_row$guideline_id[[1]])
+                as.integer(guideline_row$matrix_state_id[[1]]),
+                as.integer(guideline_row$guideline_id[[1]])
               )
               conditions <- c(
                 "r.sample_id = $1",
@@ -5838,8 +6028,13 @@ FROM vals",
               } else {
                 int_or_na(result_type_id)
               }
-              defaults <- list(result_speciation_id = NA_integer_, result_target_id = NA_integer_,
-                endpoint_mode = NA_character_, endpoint_ph = NA_real_, analysis_conditions = "{}")
+              defaults <- list(
+                result_speciation_id = NA_integer_,
+                result_target_id = NA_integer_,
+                endpoint_mode = NA_character_,
+                endpoint_ph = NA_real_,
+                analysis_conditions = "{}"
+              )
               chemistry <- utils::modifyList(defaults, chemistry)
               query <- DBI::sqlInterpolate(
                 con,
@@ -5870,8 +6065,11 @@ FROM vals",
                 matrix_state_id = matrix_state_id,
                 result_speciation_id = chemistry$result_speciation_id,
                 result_target_id = chemistry$result_target_id,
-                endpoint_mode = chemistry$endpoint_mode, endpoint_ph = chemistry$endpoint_ph,
-                analysis_conditions = AquaCache::normalizeAnalysisConditions(chemistry$analysis_conditions)
+                endpoint_mode = chemistry$endpoint_mode,
+                endpoint_ph = chemistry$endpoint_ph,
+                analysis_conditions = AquaCache::normalizeAnalysisConditions(
+                  chemistry$analysis_conditions
+                )
               )
               DBI::dbGetQuery(con, query)$result_id[[1]]
             }
@@ -5901,8 +6099,12 @@ FROM vals",
                 data.frame()
               }
               values <- input_values(sample_id)
-              calculation$guideline_code <- req$guideline_row$guideline_code[[1]]
-              calculation$guideline_name <- req$guideline_row$guideline_name[[1]]
+              calculation$guideline_code <- req$guideline_row$guideline_code[[
+                1
+              ]]
+              calculation$guideline_name <- req$guideline_row$guideline_name[[
+                1
+              ]]
               calculation$lower_guideline_value <- ifelse(
                 calculation$bound_code == "lower",
                 calculation$guideline_value,
@@ -6067,7 +6269,17 @@ FROM vals",
               value = req$target_value,
               result_type_id = NA_integer_,
               analysis_datetime = sample_datetime,
-              chemistry = as.list(guideline_row[1, c("result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions"), drop = FALSE])
+              chemistry = as.list(guideline_row[
+                1,
+                c(
+                  "result_speciation_id",
+                  "result_target_id",
+                  "endpoint_mode",
+                  "endpoint_ph",
+                  "analysis_conditions"
+                ),
+                drop = FALSE
+              ])
             )
             inserted_input_count <- 0L
             input_results <- req$input_results
@@ -6089,7 +6301,17 @@ FROM vals",
                   value = input_results$value[[i]],
                   result_type_id = input_results$result_type_id[[i]],
                   analysis_datetime = sample_datetime,
-                  chemistry = as.list(input_results[i, c("result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions"), drop = FALSE])
+                  chemistry = as.list(input_results[
+                    i,
+                    c(
+                      "result_speciation_id",
+                      "result_target_id",
+                      "endpoint_mode",
+                      "endpoint_ph",
+                      "analysis_conditions"
+                    ),
+                    drop = FALSE
+                  ])
                 )
                 inserted_input_count <- inserted_input_count + 1L
               }
@@ -6295,13 +6517,15 @@ FROM vals",
       if ("Guideline bound" %in% names(display)) {
         display[["Guideline bound"]] <- vapply(
           as.character(display[["Guideline bound"]]),
-          function(bound) switch(
-            bound,
-            lower = "Lower limit",
-            upper = "Upper limit",
-            narrative = "Narrative",
-            bound
-          ),
+          function(bound) {
+            switch(
+              bound,
+              lower = "Lower limit",
+              upper = "Upper limit",
+              narrative = "Narrative",
+              bound
+            )
+          },
           character(1)
         )
       }
@@ -6310,17 +6534,26 @@ FROM vals",
         display[["Calculation status"]] <- ifelse(
           status == "no_value",
           "No value returned",
-          ifelse(status == "value", "Value returned", gsub("_", " ", status, fixed = TRUE))
+          ifelse(
+            status == "value",
+            "Value returned",
+            gsub("_", " ", status, fixed = TRUE)
+          )
         )
       }
       if ("Applicability" %in% names(display)) {
         display[["Applicability"]] <- gsub(
-          "_", " ", as.character(display[["Applicability"]]), fixed = TRUE
+          "_",
+          " ",
+          as.character(display[["Applicability"]]),
+          fixed = TRUE
         )
       }
       if ("Rule inputs used" %in% names(display)) {
-        display[["Rule inputs used"]][is.na(display[["Rule inputs used"]]) |
-          !nzchar(display[["Rule inputs used"]])] <- "None"
+        display[["Rule inputs used"]][
+          is.na(display[["Rule inputs used"]]) |
+            !nzchar(display[["Rule inputs used"]])
+        ] <- "None"
       }
       display
     }
@@ -6344,13 +6577,18 @@ FROM vals",
         if (!identical(rules$algorithm_code[[i]], "sql_scalar")) {
           next
         }
-        rule_inputs <- if (i == 1L) primary_inputs else {
+        rule_inputs <- if (i == 1L) {
+          primary_inputs
+        } else {
           load_inputs(rules$rule_id[[i]])
         }
-        input_error <- tryCatch({
-          validate_sql_scalar_inputs(rules$formula_sql[[i]], rule_inputs)
-          NULL
-        }, error = function(e) conditionMessage(e))
+        input_error <- tryCatch(
+          {
+            validate_sql_scalar_inputs(rules$formula_sql[[i]], rule_inputs)
+            NULL
+          },
+          error = function(e) conditionMessage(e)
+        )
         if (is.null(input_error)) {
           next
         }

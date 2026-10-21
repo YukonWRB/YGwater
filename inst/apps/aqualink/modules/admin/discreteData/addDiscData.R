@@ -1,4 +1,6 @@
 # UI and server code for adding discrete samples and results.
+# This module is sourced into Shiny environments as well as the package.
+.datatable.aware <- TRUE
 
 addDiscData_empty_table <- function() {
   data.frame(
@@ -36,6 +38,7 @@ addDiscData_empty_table <- function() {
     source_parameter_code = character(),
     source_parameter_name = character(),
     source_unit = character(),
+    source_matching_values = character(),
     parameter_id = integer(),
     result_type = integer(),
     protocol_method = integer(),
@@ -358,6 +361,21 @@ addDiscData_profile_json <- function(profile, name, default = list()) {
 }
 
 addDiscData_profile_column_specs <- function(parser_family) {
+  if (identical(parser_family, "wide")) {
+    return(list(
+      station_code = c("Station/location column heading", "text"),
+      sample_date = c("Sample date column heading", "text"),
+      sample_time = c("Sample time column heading (optional)", "text"),
+      lab_sample_id = c("Sample ID column heading (optional)", "text"),
+      lab_report_no = c("Lab report column heading (optional)", "text"),
+      group_header_row = c("Analyte group heading row (optional)", "integer"),
+      units_row = c("Unit row (optional; leave blank if units are absent)", "integer"),
+      first_result_column = c("First analyte column number (A = 1)", "integer"),
+      last_result_column = c("Last analyte column number (optional)", "integer"),
+      data_start_row = c("First sample row", "integer"),
+      data_end_row = c("Last sample row (optional; exclude summaries)", "integer")
+    ))
+  }
   if (identical(parser_family, "transposed")) {
     return(list(
       lab_report_row = c("Lab report row", "integer"),
@@ -407,6 +425,10 @@ addDiscData_profile_column_map <- function(input, parser_family) {
     trimws(addDiscData_first(value, ""))
   })
   names(values) <- names(specs)
+  if (parser_family %in% c("long", "xlr", "wide")) {
+    extra <- input$new_profile_match_columns
+    if (length(extra)) values$match_columns <- unique(as.character(extra))
+  }
   values[
     !vapply(
       values,
@@ -427,7 +449,7 @@ addDiscData_parser_family <- function(profile) {
   configured <- validation_rules$parser_family
   if (
     length(configured) == 1L &&
-      configured %in% c("long", "transposed", "xlr")
+      configured %in% c("long", "transposed", "xlr", "wide")
   ) {
     return(configured)
   }
@@ -882,7 +904,34 @@ addDiscData_common_rows <- function(
   )
   out$source_code <- source_code
   out$source_row_number <- source_row_number
+  out$source_matching_values <- rep("{}", nrow(out))
   out
+}
+
+# Preserve only source columns explicitly chosen as discriminators. Serialize
+# distinct tuples once; repeated sample/results rows share the same string.
+# The source. namespace prevents collisions with destination chemistry fields.
+addDiscData_source_matching_values <- function(source, columns) {
+  columns <- as.character(unlist(columns, use.names = FALSE))
+  if (!length(columns)) return(rep("{}", nrow(source)))
+  missing <- setdiff(columns, names(source))
+  if (length(missing)) stop("Matching columns are missing from the worksheet: ", paste(missing, collapse = ", "), call. = FALSE)
+  if (anyDuplicated(names(source)[names(source) %in% columns])) {
+    stop("Matching column headings must be unique in the worksheet.", call. = FALSE)
+  }
+  values <- data.table::as.data.table(lapply(source[columns], function(x) {
+    value <- as.character(x)
+    value[is.na(value)] <- ""
+    value
+  }))
+  unique_values <- unique(values)
+  unique_values[, matching_json := vapply(seq_len(.N), function(i) {
+    tuple <- as.list(unique_values[i, columns, with = FALSE])
+    names(tuple) <- paste0("source.", columns)
+    as.character(jsonlite::toJSON(tuple, auto_unbox = TRUE))
+  }, character(1))]
+  values[unique_values, on = columns, matching_json := i.matching_json]
+  values$matching_json
 }
 
 addDiscData_excel_sheet <- function(path, profile) {
@@ -983,6 +1032,7 @@ addDiscData_parse_als_eqwin <- function(path, profile) {
     analysis_datetime = addDiscData_col(x, cmap$analysis_datetime),
     source_row_number = seq_len(nrow(x)) + header_row
   )
+  out$source_matching_values <- addDiscData_source_matching_values(x, cmap$match_columns)
   out[addDiscData_present(out$source_parameter_code), , drop = FALSE]
 }
 
@@ -1113,6 +1163,7 @@ addDiscData_parse_als_xlr <- function(path, profile) {
   x <- raw[(header_row + 1L):nrow(raw), , drop = FALSE]
   names(x) <- as.character(unlist(raw[header_row, ], use.names = FALSE))
   addDiscData_clean_colnames(x)
+  x$.source_row_number <- seq.int(header_row + 1L, nrow(raw))
   x <- x[
     addDiscData_present(addDiscData_col(x, cmap$lab_sample_id)),
     ,
@@ -1153,9 +1204,95 @@ addDiscData_parse_als_xlr <- function(path, profile) {
     ),
     note = addDiscData_col(x, cmap$result_comment),
     analysis_datetime = addDiscData_col(x, cmap$analysis_datetime),
-    source_row_number = seq_len(nrow(x)) + header_row
+    source_row_number = x$.source_row_number
   )
+  out$source_matching_values <- addDiscData_source_matching_values(x, cmap$match_columns)
   out[addDiscData_present(out$source_parameter_code), , drop = FALSE]
+}
+
+# Read one-sample-per-row workbooks without treating repeated analyte headings
+# as the same measurement. An optional group row qualifies each source key
+# (for example, "Dissolved Metals / Aluminum" versus "Total Metals / Aluminum").
+# Units remain unspecified when the source has no unit row; mapping must then
+# be reviewed against the source documentation. Blank metadata/footer rows are
+# excluded, and explicit row bounds let users omit summaries within a sheet.
+addDiscData_parse_wide <- function(path, profile) {
+  cmap <- profile$column_map[[1]]
+  raw <- as.data.frame(readxl::read_excel(path,
+    sheet = addDiscData_excel_sheet(path, profile), col_names = FALSE,
+    range = readxl::cell_limits(c(1, 1), c(NA, NA)),
+    col_types = "text", .name_repair = "minimal"), check.names = FALSE)
+  header <- addDiscData_int(addDiscData_profile_value(profile, "header_row"), 1L)
+  first_col <- addDiscData_int(cmap$first_result_column)
+  last_col <- addDiscData_int(cmap$last_result_column, ncol(raw))
+  first_row <- addDiscData_int(cmap$data_start_row, header + 1L)
+  last_row <- addDiscData_int(cmap$data_end_row, nrow(raw))
+  if (is.na(first_col) || header < 1L || header >= nrow(raw) ||
+      first_col < 1L || last_col > ncol(raw) || first_col > last_col ||
+      first_row <= header || last_row > nrow(raw) || first_row > last_row) {
+    stop("Check the heading row, analyte columns, and first/last sample rows against the example worksheet.", call. = FALSE)
+  }
+  headers <- trimws(as.character(unlist(raw[header, ], use.names = FALSE)))
+  metadata <- raw[first_row:last_row, , drop = FALSE]
+  names(metadata) <- headers
+  for (field in c("station_code", "sample_date")) {
+    configured <- addDiscData_first(cmap[[field]], "")
+    if (!addDiscData_present(configured) || !configured %in% headers) {
+      stop("The worksheet does not contain the configured ",
+        if (field == "station_code") "station/location" else "sample date",
+        " column heading. Check the heading row and column selection.", call. = FALSE)
+    }
+  }
+  station <- addDiscData_col(metadata, cmap$station_code)
+  sample_id <- addDiscData_col(metadata, cmap$lab_sample_id)
+  sample_rows <- which(addDiscData_present(station) | addDiscData_present(sample_id))
+  if (!length(sample_rows)) return(addDiscData_empty_table())
+  result_cols <- first_col:last_col
+  parameter <- headers[result_cols]
+  groups <- rep("", length(result_cols))
+  group_row <- addDiscData_int(cmap$group_header_row)
+  if (!is.na(group_row)) {
+    if (group_row < 1L || group_row >= first_row) stop("The analyte group row must be above the sample data.", call. = FALSE)
+    groups <- trimws(as.character(unlist(raw[group_row, result_cols], use.names = FALSE)))
+    last_group <- ""
+    for (j in seq_along(groups)) {
+      if (addDiscData_present(groups[[j]])) last_group <- groups[[j]]
+      groups[[j]] <- last_group
+    }
+  }
+  keys <- ifelse(nzchar(groups), paste(groups, parameter, sep = " / "), parameter)
+  populated <- addDiscData_present(parameter)
+  if (anyDuplicated(keys[populated])) {
+    stop("Some analyte columns have the same name. Select the group heading row to distinguish them before saving this format.", call. = FALSE)
+  }
+  units <- rep(NA_character_, length(result_cols))
+  unit_row <- addDiscData_int(cmap$units_row)
+  if (!is.na(unit_row)) {
+    if (unit_row < 1L || unit_row >= first_row) stop("The unit row must be above the sample data.", call. = FALSE)
+    units <- as.character(unlist(raw[unit_row, result_cols], use.names = FALSE))
+  }
+  values <- data.table::as.data.table(raw[first_row:last_row, result_cols, drop = FALSE])
+  data.table::setnames(values, paste0("V", result_cols))
+  values[, source_index := seq_len(.N)]
+  long <- data.table::melt(values[source_index %in% sample_rows], id.vars = "source_index",
+    variable.name = "source_column", value.name = "source_value", variable.factor = FALSE)
+  long <- long[addDiscData_present(source_value)]
+  column_index <- match(long$source_column, paste0("V", result_cols))
+  long <- long[populated[column_index]]
+  if (!nrow(long)) return(addDiscData_empty_table())
+  column_index <- match(long$source_column, paste0("V", result_cols))
+  i <- long$source_index
+  out <- addDiscData_common_rows(source_code = profile$source_code[[1]], profile = profile,
+    source_location_name = station[i],
+    sample_date = addDiscData_col(metadata, cmap$sample_date)[i],
+    sample_time = addDiscData_col(metadata, cmap$sample_time)[i],
+    source_sample_id = sample_id[i],
+    lab_report_no = addDiscData_col(metadata, cmap$lab_report_no)[i],
+    source_parameter_code = keys[column_index], source_parameter_name = keys[column_index],
+    source_unit = units[column_index], result_raw = long$source_value,
+    source_row_number = first_row - 1L + i)
+  out$source_matching_values <- addDiscData_source_matching_values(metadata, cmap$match_columns)[i]
+  out
 }
 
 addDiscData_parse_upload <- function(path, profile) {
@@ -1171,10 +1308,13 @@ addDiscData_parse_upload <- function(path, profile) {
   if (identical(parser_family, "xlr")) {
     return(addDiscData_parse_als_xlr(path, profile))
   }
+  if (identical(parser_family, "wide")) {
+    return(addDiscData_parse_wide(path, profile))
+  }
   stop(
     "Import profile '",
     code,
-    "' does not describe a supported long, transposed, or XLR layout.",
+    "' does not describe a supported long, transposed, wide, or XLR layout.",
     call. = FALSE
   )
 }
@@ -1475,6 +1615,9 @@ addDiscData_mapping_keys <- function(source_match) {
   if (is.null(code)) {
     code <- x$input_param
   }
+  if (is.null(code)) {
+    code <- x$ParamCode
+  }
   unit <- x$unit
   if (is.null(unit)) {
     unit <- x$input_unit
@@ -1486,6 +1629,66 @@ addDiscData_mapping_keys <- function(source_match) {
     key <- c(key, paste(tolower(code), "", sep = "\r"))
   }
   unique(key)
+}
+
+# Match every criterion, using keyed joins for each distinct set of fields.
+# Source columns remain separate from assigned AquaCache metadata. Legacy
+# code/unit aliases retain their case-insensitive workbook matching behavior.
+addDiscData_mapping_indices <- function(rows, mappings) {
+  result <- rep(NA_integer_, nrow(rows))
+  if (!nrow(rows) || !nrow(mappings)) return(result)
+  normalize <- function(x) { x <- tolower(trimws(as.character(x))); x[is.na(x)] <- ""; x }
+  source <- data.table::data.table(row_index = seq_len(nrow(rows)),
+    parameter_code = normalize(rows$source_parameter_code), unit = normalize(rows$source_unit))
+  if ("source_matching_values" %in% names(rows)) {
+    encoded <- rows$source_matching_values
+    encoded[is.na(encoded) | !nzchar(encoded)] <- "{}"
+    distinct <- unique(encoded)
+    fields <- data.table::rbindlist(lapply(seq_along(distinct), function(i) {
+      x <- distinct[[i]]
+      parsed <- jsonlite::fromJSON(x, simplifyVector = FALSE)
+      if (!is.list(parsed) || any(!startsWith(names(parsed), "source."))) {
+        stop("Invalid preserved source matching fields.", call. = FALSE)
+      }
+      c(list(matching_tuple = i), parsed)
+    }), fill = TRUE)
+    fields[, matching_tuple := NULL]
+    if (ncol(fields)) {
+      fields <- fields[match(encoded, distinct)]
+      for (field in names(fields)) source[, (field) := fields[[field]]]
+    }
+  }
+  criteria <- lapply(mappings$source_match, function(x) {
+    values <- jsonlite::fromJSON(x, simplifyVector = FALSE)
+    aliases <- c(ParamCode = "parameter_code", input_param = "parameter_code", input_unit = "unit")
+    replace <- names(values) %in% names(aliases)
+    names(values)[replace] <- unname(aliases[names(values)[replace]])
+    for (field in intersect(names(values), c("parameter_code", "unit"))) values[[field]] <- normalize(values[[field]])
+    values[sort(names(values))]
+  })
+  signatures <- vapply(criteria, function(x) as.character(jsonlite::toJSON(names(x))), character(1))
+  candidates <- lapply(unique(signatures), function(signature) {
+    indices <- which(signatures == signature)
+    columns <- names(criteria[[indices[[1]]]])
+    if (!length(columns) || !all(columns %in% names(source))) return(NULL)
+    lookup <- data.table::rbindlist(criteria[indices], fill = TRUE)
+    lookup[, mapping_index := indices]
+    source[lookup, on = columns, nomatch = 0L, allow.cartesian = TRUE,
+      .(row_index, mapping_index)]
+  })
+  candidates <- data.table::rbindlist(candidates)
+  if (!nrow(candidates)) return(result)
+  candidates[, profile := if ("profile_specific" %in% names(mappings)) mappings$profile_specific[mapping_index] else FALSE]
+  candidates[, priority := if ("priority" %in% names(mappings)) mappings$priority[mapping_index] else 50L]
+  candidates[, specificity := lengths(criteria)[mapping_index]]
+  data.table::setorderv(candidates, c("row_index", "profile", "priority", "specificity"), c(1L, -1L, 1L, -1L))
+  tied <- candidates[, .N, by = c("row_index", "profile", "priority", "specificity")]
+  best <- unique(candidates, by = "row_index")
+  if (any(tied[best, on = c("row_index", "profile", "priority", "specificity")]$N > 1L)) {
+    stop("Multiple parameter mappings match with equal scope, priority and specificity. Review the matching fields or priority before uploading.", call. = FALSE)
+  }
+  result[best$row_index] <- best$mapping_index
+  result
 }
 
 addDiscData_apply_mappings <- function(rows, con, profile_code = NULL) {
@@ -1518,30 +1721,13 @@ addDiscData_apply_mappings <- function(rows, con, profile_code = NULL) {
     if (!nrow(mappings)) {
       next
     }
-    mapping_list <- list()
-    for (i in seq_len(nrow(mappings))) {
-      keys <- addDiscData_mapping_keys(mappings$source_match[[i]])
-      for (key in keys) {
-        if (!nzchar(sub("\r$", "", key))) {
-          next
-        }
-        if (is.null(mapping_list[[key]])) {
-          mapping_list[[key]] <- mappings[i, , drop = FALSE]
-        }
-      }
-    }
-
     hit_rows <- which(rows$source_code == source_code)
-    for (i in hit_rows) {
-      code <- tolower(trimws(rows$source_parameter_code[[i]]))
-      unit <- tolower(trimws(rows$source_unit[[i]]))
-      hit <- mapping_list[[paste(code, unit, sep = "\r")]]
-      if (is.null(hit)) {
-        hit <- mapping_list[[paste(code, "", sep = "\r")]]
-      }
-      if (is.null(hit)) {
-        next
-      }
+    mapping_indices <- addDiscData_mapping_indices(rows[hit_rows, , drop = FALSE], mappings)
+    for (k in seq_along(hit_rows)) {
+      i <- hit_rows[[k]]
+      index <- mapping_indices[[k]]
+      if (is.na(index)) next
+      hit <- mappings[index, , drop = FALSE]
       rows$parameter_id[[i]] <- addDiscData_int(hit$parameter_id[[1]])
       rows$result_type[[i]] <- addDiscData_int(
         hit$result_type[[1]],
@@ -1659,7 +1845,8 @@ addDiscData_upsert_mapping <- function(
   result_offset,
   note,
   profile_code = NULL,
-  chemistry = list()
+  chemistry = list(),
+  source_matching_values = "{}"
 ) {
   mappings <- data.frame(
     parameter_code = as.character(parameter_code),
@@ -1694,6 +1881,11 @@ addDiscData_upsert_mapping <- function(
       stringsAsFactors = FALSE
     )
   )
+  criteria <- jsonlite::fromJSON(addDiscData_first(source_matching_values, "{}"), simplifyVector = FALSE)
+  if (length(criteria)) {
+    if (any(!startsWith(names(criteria), "source."))) stop("Invalid source matching fields.", call. = FALSE)
+    mappings <- cbind(mappings, as.data.frame(criteria, stringsAsFactors = FALSE, check.names = FALSE))
+  }
   AquaCache::upsertImportParameterMappings(
     con = con,
     source_code = source_code,
@@ -1701,7 +1893,7 @@ addDiscData_upsert_mapping <- function(
     source_description = "Created from YGwater add discrete data.",
     profile_code = profile_code,
     mappings = mappings,
-    match_columns = c("parameter_code", "unit"),
+    match_columns = c("parameter_code", "unit", names(criteria)),
     publish = FALSE
   )
 }
@@ -1742,7 +1934,8 @@ addDiscData_run_mapping_save <- function(request) {
             result_offset = request$result_offset,
             note = "Saved from YGwater add discrete data mapping editor.",
             profile_code = request$profile$profile_code[[1]],
-            chemistry = request$chemistry
+            chemistry = request$chemistry,
+            source_matching_values = request$row$source_matching_values
           )
         } else {
           AquaCache::upsertImportLocationMappings(
@@ -1931,18 +2124,20 @@ addDiscData_run_location_create <- function(request) {
 # Plan a partial upload without changing the preview. Unassigned workbook
 # results and explicitly skipped flags can be omitted; malformed mapped results
 # remain in the plan and must pass the ordinary scientific/sample validation.
-addDiscData_upload_plan <- function(rows) {
+addDiscData_upload_plan <- function(rows, sample_key = NULL) {
   rows <- data.table::as.data.table(data.table::copy(rows))
   file_rows <- addDiscData_present(rows$source_code) & rows$source_code != "YGwater-manual"
   missing_parameter <- is.na(rows$parameter_id) | !addDiscData_present(rows$parameter_id)
   shells <- rows$source_code %in% "YGwater-manual" & missing_parameter
-  skipped <- !shells & rows$result_flag_action %in% "skip_result"
-  unmapped <- !shells & !skipped & file_rows & missing_parameter
-  omitted <- skipped | unmapped
+  excluded_sample <- !shells & !is.null(sample_key) & !rows$sample_key %in% sample_key
+  skipped <- !shells & !excluded_sample & rows$result_flag_action %in% "skip_result"
+  unmapped <- !shells & !excluded_sample & !skipped & file_rows & missing_parameter
+  omitted <- excluded_sample | skipped | unmapped
   keep <- !shells & !omitted
   reason <- rep(NA_character_, nrow(rows))
   reason[unmapped] <- "No AquaCache parameter mapping"
   reason[skipped] <- "Skipped by result-flag mapping"
+  reason[excluded_sample] <- "Sample excluded from this upload"
   omissions <- data.table::data.table(
     source = rows$source_code[omitted],
     parameter_code = rows$source_parameter_code[omitted],
@@ -1959,6 +2154,7 @@ addDiscData_upload_plan <- function(rows) {
     df = as.data.frame(rows[keep]), omissions = as.data.frame(omissions),
     total_results = sum(!shells), included_results = sum(keep),
     omitted_results = sum(omitted), unmapped_results = sum(unmapped),
+    sample_excluded_results = sum(excluded_sample),
     flag_skipped_results = sum(skipped), total_samples = length(sample_keys),
     included_samples = length(included_keys), omitted_samples = as.data.frame(omitted_samples)
   )
@@ -2491,6 +2687,7 @@ addDiscData_run_upload <- function(request) {
           "source_parameter_code",
           "source_parameter_name",
           "source_unit",
+          "source_matching_values",
           "source_result_text",
           "lab_report_no",
           "lab_sample_no",
@@ -3118,7 +3315,7 @@ addDiscDataUI <- function(id) {
                   ns = ns,
                   tags$h5("Map source parameter names and units to AquaCache"),
                   helpText(
-                    "After previewing, select any item that needs a mapping, choose what it means in AquaCache, then save it. These preview edits are staged for this workbook format and published when the upload succeeds. Use Discrete data → Import setup to repair draft mappings outside an upload, then publish the completed scope."
+                  "After previewing, select any item that needs a mapping, choose what it means in AquaCache, then save it as a draft. Review and publish these changes in Discrete data → Import setup, then preview this workbook again before uploading. Publication applies every mapping change in the selected source or workbook format."
                   ),
                   checkboxInput(
                     ns("show_all_mappings"),
@@ -3416,6 +3613,8 @@ addDiscDataUI <- function(id) {
           ),
           tags$h5("Results for selected sample"),
           DT::DTOutput(ns("data_table")),
+          checkboxInput(ns("upload_selected_sample_only"), "Upload only the selected sample", FALSE),
+          helpText("Leave unchecked to upload all samples with mapped results. Selecting one sample is useful when reviewing a workbook or avoiding a second upload of the same samples in another format."),
           helpText(
             "Any additional documents selected below will also be attached to every sample created by this upload. HEIC/HEIF files are converted to JPEG when this server supports conversion."
           ),
@@ -5684,7 +5883,7 @@ addDiscData <- function(id, language) {
         summary <- data.frame(
           `Source sample` = df$source_sample_id,
           `Source location` = df$source_location_name,
-          `Sample datetime` = format(
+          `Sample datetime (UTC)` = format(
             df$datetime,
             "%Y-%m-%d %H:%M:%S",
             tz = "UTC"
@@ -6347,6 +6546,7 @@ addDiscData <- function(id, language) {
         df$source_code,
         df$source_parameter_code,
         df$source_unit,
+        df$source_matching_values,
         sep = "\r"
       )
       out <- df[!duplicated(key), , drop = FALSE]
@@ -6395,6 +6595,12 @@ addDiscData <- function(id, language) {
         summary <- data.frame(
           `Source parameter` = source_parameter_label,
           `Source unit` = df$source_unit,
+          `Additional source conditions` = vapply(df$source_matching_values, function(value) {
+            if (is.na(value) || !nzchar(value)) return("")
+            fields <- jsonlite::fromJSON(value, simplifyVector = FALSE)
+            if (!length(fields)) return("")
+            paste(paste0(sub("^source\\.", "", names(fields)), " = ", unlist(fields, use.names = FALSE)), collapse = "; ")
+          }, character(1)),
           `AquaCache parameter` = params()$param_name[parameter_index],
           `Target unit` = addDiscData_target_unit(
             params(),
@@ -8514,7 +8720,8 @@ addDiscData <- function(id, language) {
       invisible(TRUE)
     }
 
-    upload_plan <- reactive(addDiscData_upload_plan(data$df))
+    upload_plan <- reactive(addDiscData_upload_plan(data$df,
+      sample_key = if (isTRUE(input$upload_selected_sample_only)) as.character(selected_sample_key()) else NULL))
     pending_partial_upload <- reactiveVal(NULL)
 
     output$upload_coverage <- renderUI({
@@ -8523,8 +8730,8 @@ addDiscData <- function(id, language) {
       tags$div(class = "alert alert-warning",
         tags$strong(sprintf("%s of %s results are ready for validation; %s will be omitted.",
           plan$included_results, plan$total_results, plan$omitted_results)),
-        tags$p(sprintf("%s have no parameter mapping; %s are excluded by result-flag mappings.",
-          plan$unmapped_results, plan$flag_skipped_results)),
+        tags$p(sprintf("%s have no parameter mapping; %s are excluded by result-flag mappings; %s belong to other samples.",
+          plan$unmapped_results, plan$flag_skipped_results, plan$sample_excluded_results)),
         tags$p("Upload requires acknowledgement of these omissions. Included results must still pass validation."))
     })
 
@@ -8638,6 +8845,8 @@ addDiscData <- function(id, language) {
           omitted_result_rows = plan$omitted_results,
           unmapped_result_rows = plan$unmapped_results,
           flag_skipped_result_rows = plan$flag_skipped_results,
+          sample_excluded_result_rows = plan$sample_excluded_results,
+          selected_sample_key = if (isTRUE(input$upload_selected_sample_only)) selected_sample_key() else NULL,
           source_samples = plan$total_samples, uploaded_samples = plan$included_samples,
           omitted_parameters = plan$omissions, omitted_samples = plan$omitted_samples),
         partial_upload_acknowledged = FALSE,
@@ -8668,9 +8877,11 @@ addDiscData <- function(id, language) {
         tags$p(sprintf("Upload %s of %s results across %s of %s samples.",
           plan$included_results, plan$total_results, plan$included_samples, plan$total_samples)),
         tags$p(class = "text-danger", sprintf("%s results will not be uploaded.", plan$omitted_results)),
-        if (nrow(plan$omitted_samples)) tags$p(sprintf("Samples with no included results will not be created: %s.",
-          paste(ifelse(addDiscData_present(plan$omitted_samples$source_sample_id),
-            plan$omitted_samples$source_sample_id, plan$omitted_samples$sample_key), collapse = ", "))),
+        if (nrow(plan$omitted_samples)) tags$details(
+          tags$summary(sprintf("%s samples have no included results and will not be created. Show sample names.",
+            nrow(plan$omitted_samples))),
+          tags$ul(lapply(ifelse(addDiscData_present(plan$omitted_samples$source_sample_id),
+            plan$omitted_samples$source_sample_id, plan$omitted_samples$sample_key), tags$li))),
         tags$p("The original workbook will still be attached to the imported samples."),
         DT::DTOutput(session$ns("upload_omissions")),
         checkboxInput(session$ns("acknowledge_partial_upload"), sprintf(

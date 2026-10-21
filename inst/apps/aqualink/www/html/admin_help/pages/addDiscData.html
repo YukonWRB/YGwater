@@ -98,8 +98,11 @@
     <li>Use <strong>XLR Detailed Report</strong> for the lab's Detailed Report export with its standard report header.</li>
   </ul>
 
-  <h2>Mappings</h2>
-  <p>Mappings tell the app where to find parameters, units, dates, values, and samples in the uploaded file. Save reusable mappings for common lab exports or repeated field templates. Before saving a mapping, verify that parameter columns resolve to the intended AquaCache parameters. Sample fraction and result descriptor must be selected whenever the chosen parameter requires them.</p>
+  <h2>Workbook formats and mappings</h2>
+  <p>A workbook format tells the parser where to find sample details, analyte labels, units, and results. In <strong>Discrete data → Import setup</strong>, create or edit a format, choose an example workbook, inspect its worksheet, and preview parsed rows before saving. Layout settings save immediately and affect future file previews. The wide-table option reads one sample per row with analytes in separate columns; an optional group heading row preserves repeated analyte names such as dissolved and total metals.</p>
+  <p>Parameter mappings translate the source analyte code/name and unit into an AquaCache parameter and its analytical details. Location mappings translate source station names/codes into AquaCache locations. Shared source mappings can be reused by several workbook formats; mappings for one format override the shared ones for that format.</p>
+  <p>Save mapping changes as a <strong>draft</strong>, then use <strong>Review and publish selected scope</strong> in Import setup. Publication activates all parameter, location, and result-flag changes in that scope and preserves the previous published revision as <strong>retired</strong> history. Retired revisions are read only; open the current version to change future imports. Preview an open workbook again after changing its layout or publishing mappings.</p>
+  <p>Before upload, confirm sample fraction, reporting basis, chemical form, analytical target, and endpoint whenever the chosen parameter requires them. Check the omission summary when only some source analytes are mapped.</p>
 
   <h2>Parameters, units, and values</h2>
   <p>Check parameter names and units before upload. A result should only be saved when the parameter is identified and the value is valid. Avoid uploading ambiguous columns until the mapping is corrected.</p>
@@ -108,6 +111,7 @@
   <p>Attach supporting documents when they should be linked with the uploaded samples, such as lab reports, field sheets, or chain-of-custody documents.</p>
 
   <h2>Before uploading</h2>
-  <p>Review the preview table carefully. Confirm sample dates, location, sub-location, parameter matches, units, values, and attached documents. Upload only after the preview reflects the records that should be added to AquaCache.</p>
+  <p><strong>Mappings can match several source columns.</strong> When name and unit do not uniquely identify an analyte, retain the relevant columns in the workbook format under <em>Additional columns used for matching</em>. In Import setup choose <em>Several source columns</em>, then add one condition for each source value, such as name, unit, sample fraction, chemical form, and result type. Every condition must match. Source conditions and assigned AquaCache metadata are independent: source IDs and names from another AquaCache instance must be mapped to the destination catalogue. Missing matching columns leave results unmapped; they are never silently ignored. Published source mappings are shared by workbook formats and package adapters that provide those source fields.</p>
+  <p>Review the preview table carefully. Confirm sample dates, location, sub-location, parameter matches, units, values, and attached documents. Upload only after the preview reflects the records that should be added to AquaCache. Use <em>Upload only the selected sample</em> for a deliberate sample subset; the partial-upload confirmation and import history record the omitted results.</p>
 </body>
 </html>

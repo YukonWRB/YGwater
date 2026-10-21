@@ -63,3 +63,42 @@ test_that("an unspecified laboratory stays unassigned in workbook defaults", {
   profile$defaults[[1]]$laboratory <- 7L
   expect_identical(env$addDiscData_defaults(profile)$laboratory,7L)
 })
+
+test_that("review labels show source conditions and hide derived storage fields", {
+  env <- import_setup_environment()
+  expect_identical(env$importSetup_criteria_label('{"source.Speciation":"as N","unit":""}'),
+    "Speciation = as N; Unit = (empty)")
+  rows <- data.frame(status="draft", mapping_type="parameter", source_match='{"source.Analyte":"pH"}',
+    definition='{"source_match":{"source.Analyte":"pH"},"analysis_conditions_key":"hash","parameter_id":1}')
+  changes <- env$importSetup_changes(rows)
+  expect_identical(changes$Field,"Parameter")
+  expect_identical(changes$Criteria,"Analyte = pH")
+})
+
+test_that("review context does not label a complete mapping as needing attention", {
+  env <- import_setup_environment()
+  statements <- as.list(body(env$importSetup)[[2]][[3]][[3]])[-1]
+  assignment <- Filter(function(x) is.call(x) && identical(x[[1]],quote(`<-`)) &&
+    identical(x[[2]],quote(output$editing_mapping)),statements)[[1]]
+  render <- function() NULL
+  body(render) <- assignment[[3]][[2]]
+  state <- new.env(parent=env)
+  state$tags <- htmltools::tags
+  state$input <- list(manage_mapping_type="parameter")
+  state$row <- data.frame(import_mapping_id=4L)
+  state$context <- data.frame(source_code="ALS",profile_code="xlr",profile_name="Detailed Report",
+    mapping_type="parameter",issue=NA_character_,status="published",version=3L,
+    source_match='{"source.Analyte":"Conductivity"}')
+  state$manage_mapping_selected <- function() state$row
+  state$opened_review_mapping <- function() state$context
+  environment(render) <- state
+  complete <- as.character(render())
+  expect_false(grepl("Needs attention",complete,fixed=TRUE))
+  expect_match(complete,"alert-info",fixed=TRUE)
+  expect_match(complete,"published revision 3",fixed=TRUE)
+  state$context$issue <- "Unit missing"
+  incomplete <- as.character(render())
+  expect_match(incomplete,"Needs attention",fixed=TRUE)
+  expect_match(incomplete,"Unit missing",fixed=TRUE)
+  expect_match(incomplete,"alert-warning",fixed=TRUE)
+})

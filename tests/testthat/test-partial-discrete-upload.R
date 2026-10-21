@@ -104,3 +104,22 @@ test_that("fully mapped previews retain every result without omissions", {
   expect_equal(nrow(plan$omissions),0)
   expect_equal(nrow(plan$omitted_samples),0)
 })
+
+test_that("selecting one sample records other samples as explicit omissions", {
+  env <- partial_upload_environment()
+  rows <- env$addDiscData_empty_table()[rep(NA_integer_, 4), ]
+  rows$source_code <- "review"
+  rows$sample_key <- rep(c("s1", "s2"), each = 2)
+  rows$source_sample_id <- rows$sample_key
+  rows$parameter_id <- c(36L, NA_integer_, 36L, 37L)
+  original <- rows
+  plan <- env$addDiscData_upload_plan(rows, "s1")
+  expect_identical(rows, original)
+  expect_identical(plan$df$sample_key, "s1")
+  expect_equal(c(plan$total_results, plan$included_results, plan$omitted_results), c(4, 1, 3))
+  expect_equal(c(plan$sample_excluded_results, plan$unmapped_results), c(2, 1))
+  expect_equal(sum(plan$omissions$results), 3)
+  expect_identical(plan$omitted_samples$sample_key, "s2")
+  expect_equal(nrow(env$addDiscData_upload_plan(rows, character())$df), 0)
+  expect_equal(nrow(env$addDiscData_upload_plan(rows, "missing")$df), 0)
+})
