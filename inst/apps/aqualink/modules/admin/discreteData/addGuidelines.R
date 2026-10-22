@@ -754,6 +754,32 @@ addGuidelines <- function(id, language) {
       out <- suppressWarnings(as.numeric(as.character(x[[1]])))
       if (is.na(out)) NA_real_ else out
     }
+    # Preserve the user-facing decimal when writing to PostgreSQL NUMERIC.
+    # Binding an R double directly stores its 17-digit binary round-trip form
+    # (for example, 0.3 as 0.29999999999999999).
+    numeric_parameter_text <- function(x) {
+      value <- numeric_or_na(x)
+      if (is.na(value)) {
+        return(NA_character_)
+      }
+      if (!is.finite(value)) {
+        stop("Guideline numeric values must be finite.")
+      }
+      for (digits in seq_len(17L)) {
+        candidate <- trimws(formatC(
+          value,
+          format = "g",
+          digits = digits,
+          decimal.mark = "."
+        ))
+        round_trip <- suppressWarnings(as.numeric(candidate))
+        if (length(round_trip) == 1L && !is.na(round_trip) &&
+            identical(round_trip, value)) {
+          return(candidate)
+        }
+      }
+      stop("Could not format the guideline numeric value exactly.")
+    }
     date_or_na <- function(x) {
       if (is.null(x) || !length(x) || is.na(x[[1]])) {
         return(as.Date(NA))
@@ -4272,16 +4298,17 @@ FROM vals",
            rounding_method, missing_input_policy, rule_priority,
            precision_note, note
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         VALUES ($1, $2, $3, $4::numeric, $5, $6::numeric, $7::numeric,
+                 $8, $9, $10, $11, $12, $13)
          RETURNING rule_id",
         params = list(
           guideline_id,
           text_or_na(bound_code),
           algorithm_code,
-          fixed_value,
+          numeric_parameter_text(fixed_value),
           text_or_na(formula_sql),
-          numeric_or_na(input$min_output_value),
-          numeric_or_na(input$max_output_value),
+          numeric_parameter_text(input$min_output_value),
+          numeric_parameter_text(input$max_output_value),
           integer_or_na(input$rounding_digits),
           input$rounding_method %||% "none",
           input$missing_input_policy %||% "no_value",
@@ -5155,17 +5182,18 @@ FROM vals",
                    rule_priority, precision_note, note
                  )
                  VALUES (
-                   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+                   $1, $2, $3, $4::numeric, $5, $6::numeric, $7::numeric,
+                   $8, $9, $10, $11, $12, $13
                  )
                  RETURNING rule_id",
                 params = list(
                   guideline_id,
                   txt_or_na(bound_code),
                   algorithm_code,
-                  fixed_value,
+                  numeric_parameter_text(fixed_value),
                   txt_or_na(formula_sql),
-                  req$min_output_value,
-                  req$max_output_value,
+                  numeric_parameter_text(req$min_output_value),
+                  numeric_parameter_text(req$max_output_value),
                   req$rounding_digits,
                   req$rounding_method,
                   req$missing_input_policy,
