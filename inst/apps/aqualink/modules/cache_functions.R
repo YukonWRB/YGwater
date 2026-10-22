@@ -33,8 +33,10 @@ data_table_toggle_all_rows <- function(selected_rows, row_count) {
   }
   selected_rows <- unique(suppressWarnings(as.integer(selected_rows)))
   selected_rows <- selected_rows[!is.na(selected_rows)]
-  if (length(selected_rows) == row_count &&
-      setequal(selected_rows, seq_len(row_count))) {
+  if (
+    length(selected_rows) == row_count &&
+      setequal(selected_rows, seq_len(row_count))
+  ) {
     NULL
   } else {
     seq_len(row_count)
@@ -69,7 +71,14 @@ cont_data_cache_signature <- function(con) {
 }
 
 cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
-  key <- "cont_data.plot_module_data"
+  key <- paste(
+    "cont_data.plot_module_data",
+    info$host,
+    info$port,
+    info$dbname,
+    info$user,
+    sep = ":"
+  )
   ttl <- 60 * 60 * 2
   get_cached(
     key = key,
@@ -325,7 +334,8 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       if (
         as.numeric(
           difftime(Sys.time(), entry$timestamp, units = "secs")
-        ) > ttl
+        ) >
+          ttl
       ) {
         return(FALSE)
       }
@@ -383,20 +393,32 @@ disc_plot_cache_signature <- function(con) {
     disc_plot_table_signature(con, "samples", "sample_id"),
     disc_plot_table_signature(con, "results", "result_id")
   )
-  metadata <- DBI::dbGetQuery(con,
+  metadata <- DBI::dbGetQuery(
+    con,
     "SELECT string_agg(name || ':' || rows || ':' || stamp, ';' ORDER BY name) AS signature FROM (
        SELECT 'parameters' AS name, count(*)::text AS rows,
          COALESCE(max(COALESCE(modified, created))::text, '') AS stamp FROM public.parameters
        UNION ALL SELECT 'reporting_bases', count(*)::text, COALESCE(max(COALESCE(modified, created))::text, '') FROM discrete.reporting_bases
        UNION ALL SELECT 'result_speciations', count(*)::text, COALESCE(max(COALESCE(modified, created))::text, '') FROM discrete.result_speciations
        UNION ALL SELECT 'result_targets', count(*)::text, COALESCE(max(COALESCE(modified, created))::text, '') FROM discrete.result_targets
-     ) reference")$signature[[1]]
-  paste(c(apply(sig, 1, function(row) paste(row, collapse = "=")), metadata), collapse = ";")
+     ) reference"
+  )$signature[[1]]
+  paste(
+    c(apply(sig, 1, function(row) paste(row, collapse = "=")), metadata),
+    collapse = ";"
+  )
 }
 
 
 disc_plot_module_data <- function(con, env = .GlobalEnv) {
-  key <- "disc_plot_module_data_chemistry65"
+  key <- paste(
+    "disc_plot_module_data_chemistry",
+    info$host,
+    info$port,
+    info$dbname,
+    info$user,
+    sep = ":"
+  )
   get_cached(
     key = key,
     env = env,
@@ -494,7 +516,14 @@ disc_plot_module_data <- function(con, env = .GlobalEnv) {
 # discrete data module #####
 disc_data_module_data <- function(con, env = .GlobalEnv) {
   get_cached(
-    key = "disc_data_module_data",
+    key = paste(
+      "disc_data_module_data",
+      info$host,
+      info$port,
+      info$dbname,
+      info$user,
+      sep = ":"
+    ),
     env = env,
     fetch_fun = function() {
       locs <- DBI::dbGetQuery(
@@ -653,8 +682,18 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
 
 # parameter map module #########
 map_params_module_data <- function(con, env = .GlobalEnv) {
+  # Public caches can be shared by apps aimed at different databases/users.
+  # Never reuse one instance's location/parameter IDs in another instance.
+  info <- DBI::dbGetInfo(con)
   get_cached(
-    key = "map_params_module_data",
+    key = paste(
+      "map_params_module_data",
+      info$host,
+      info$port,
+      info$dbname,
+      info$user,
+      sep = ":"
+    ),
     env = env,
     fetch_fun = function() {
       list(
@@ -699,10 +738,8 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
           paste(
             "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
             ac_parameter_unit_select_sql(con, "p", "unit_default"),
-            ", pr.group_id, pr.sub_group_id",
             "FROM public.parameters AS p",
             "RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id",
-            "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id",
             "WHERE",
             continuous_timeseries_has_measurements_sql,
             ";"
@@ -718,7 +755,14 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
 # locations map module #########
 map_location_module_data <- function(con, env = .GlobalEnv) {
   get_cached(
-    key = "map_location_module_data",
+    key = paste(
+      "map_location_module_data",
+      info$host,
+      info$port,
+      info$dbname,
+      info$user,
+      sep = ":"
+    ),
     env = env,
     fetch_fun = function() {
       list(
@@ -878,7 +922,14 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
 # water well registry module #########
 wwr_module_data <- function(con, env = .GlobalEnv) {
   get_cached(
-    key = "wwr_module_data_v2",
+    key = paste(
+      "wwr_module_data",
+      info$host,
+      info$port,
+      info$dbname,
+      info$user,
+      sep = ":"
+    ),
     env = env,
     fetch_fun = function() {
       res <- list(
