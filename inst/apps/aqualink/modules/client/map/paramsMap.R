@@ -1,7 +1,8 @@
 params_map_daily_stats_select_sql <- function(
   con,
   stats_period = "30yr",
-  columns = c("percent_historic_range", "max", "min", "doy_count")
+  columns = c("percent_historic_range", "max", "min", "doy_count"),
+  table_alias = "d"
 ) {
   if (!(stats_period %in% c("30yr", "full"))) {
     stats_period <- "30yr"
@@ -27,21 +28,284 @@ params_map_daily_stats_select_sql <- function(
     columns,
     function(column) {
       source_column <- paste0(column, suffix)
-      source_sql <- as.character(DBI::dbQuoteIdentifier(con, source_column))
-      if (identical(source_column, column)) {
-        source_sql
-      } else {
-        paste0(
-          source_sql,
-          " AS ",
-          as.character(DBI::dbQuoteIdentifier(con, column))
-        )
-      }
+      paste0(
+        table_alias,
+        ".",
+        DBI::dbQuoteIdentifier(con, source_column),
+        " AS ",
+        DBI::dbQuoteIdentifier(con, column)
+      )
     },
     character(1)
   )
-  attr(out, "count_column") <- paste0("doy_count", suffix)
+  attr(out, "count_column") <- paste0(table_alias, ".\"doy_count", suffix, "\"")
+  attr(out, "stats_period") <- if (nzchar(suffix)) "30yr" else "full"
   out
+}
+
+# Read measurements on a worker-owned connection. Only plain snapshots cross
+# the process boundary; neither a DBI connection nor reactiveValues may do so.
+# The same implementation handles both parameters, with secondary values used
+# only at locations without an eligible primary value.
+params_map_fetch_data <- function(con, request, stats_sql_fun) {
+  include_history <- !identical(request$include_history, FALSE)
+  stats_sql <- if (include_history) {
+    stats_sql_fun(con, request$stats_period)
+  } else {
+    character()
+  }
+  count_sql <- attr(stats_sql, "count_column")
+  # Absolute maps have no historical prerequisites, including for new series.
+  history_sql <- if (include_history) {
+    paste(stats_sql[c("max", "min", "doy_count")], collapse = ", ")
+  }
+  timeseries <- data.table::as.data.table(request$timeseries)
+  locations <- data.table::as.data.table(request$locations)
+  collected <- list()
+  covered <- integer()
+
+  for (selection in request$selections) {
+    candidates <- timeseries[
+      timeseries$parameter_id == selection$parameter_id &
+        !timeseries$location_id %in% covered
+    ]
+    ids <- unique(as.integer(candidates$timeseries_id))
+    ids <- ids[!is.na(ids) & ids > 0L]
+    if (!length(ids)) {
+      next
+    }
+    ids_sql <- paste(ids, collapse = ",")
+
+    if (request$latest) {
+      # Date tolerance uses UTC calendar days, including today when days = 0.
+      # Select the indexed newest basic row BEFORE applying its correction.
+      # Compound series still use the canonical corrected resolver so derived
+      # series, member precedence, and corrections retain database semantics.
+      from <- as.POSIXct(
+        as.Date(request$now, tz = "UTC") - selection$days,
+        tz = "UTC"
+      )
+      # The database's normalized calendar excludes February 29. Match its own
+      # daily rows explicitly when the requested window can contain that date.
+      leap_sql <- if (
+        include_history &&
+          any(
+            format(
+              seq(as.Date(from), as.Date(request$now, tz = "UTC"), by = "day"),
+              "%m-%d"
+            ) ==
+              "02-29"
+          )
+      ) {
+        " OR (continuous.normalized_day_of_year((latest.datetime AT TIME ZONE 'UTC')::date) IS NULL
+                AND EXTRACT(MONTH FROM d.date) = 2 AND EXTRACT(DAY FROM d.date) = 29)"
+      } else {
+        ""
+      }
+      sql <- paste0(
+        "WITH requested AS MATERIALIZED (
+           SELECT timeseries_id, timeseries_type,
+                  EXTRACT(EPOCH FROM record_rate)::double precision AS record_rate_seconds,
+                  sensor_priority
+           FROM continuous.timeseries
+           WHERE timeseries_id IN (",
+        ids_sql,
+        ")
+             AND start_datetime <= $2::timestamptz
+             AND end_datetime >= $1::timestamptz
+         ), latest AS MATERIALIZED (
+           SELECT t.timeseries_id, t.record_rate_seconds, t.sensor_priority, m.datetime,
+                  continuous.apply_corrections(t.timeseries_id, m.datetime, m.value) AS value
+           FROM requested t
+           CROSS JOIN LATERAL (
+             SELECT datetime, value
+             FROM continuous.measurements_continuous
+             WHERE timeseries_id = t.timeseries_id
+               AND datetime BETWEEN $1::timestamptz AND $2::timestamptz
+               AND value IS NOT NULL
+             ORDER BY datetime DESC LIMIT 1
+           ) m
+           WHERE t.timeseries_type = 'basic'
+           UNION ALL
+           SELECT t.timeseries_id, t.record_rate_seconds, t.sensor_priority,
+                  m.datetime, m.value_corrected AS value
+           FROM requested t
+           CROSS JOIN LATERAL (
+             SELECT datetime, value_corrected
+             FROM continuous.measurements_continuous_corrected(
+               t.timeseries_id, $1::timestamptz, $2::timestamptz
+             )
+             WHERE value_corrected IS NOT NULL
+             ORDER BY datetime DESC LIMIT 1
+           ) m
+           WHERE t.timeseries_type <> 'basic'
+         )
+         SELECT latest.*, (latest.datetime AT TIME ZONE 'UTC')::date AS date"
+      )
+      params <- list(from, request$now)
+      if (include_history) {
+        sql <- paste0(
+          sql,
+          ", history.max, history.min, history.doy_count
+         FROM latest
+         CROSS JOIN LATERAL (
+           SELECT ",
+          history_sql,
+          "
+           FROM continuous.measurements_calculated_daily d
+           WHERE d.timeseries_id = latest.timeseries_id
+             AND (continuous.normalized_day_of_year(d.date) =
+                 continuous.normalized_day_of_year((latest.datetime AT TIME ZONE 'UTC')::date)",
+          leap_sql,
+          ")
+             AND d.date <= (latest.datetime AT TIME ZONE 'UTC')::date
+           ORDER BY d.date DESC LIMIT 1
+         ) history
+         WHERE history.doy_count >= $3::integer"
+        )
+        params[[3L]] <- selection$years
+      } else {
+        sql <- paste0(sql, " FROM latest")
+      }
+      rows <- data.table::as.data.table(DBI::dbGetQuery(
+        con,
+        sql,
+        params = params
+      ))
+      if (include_history) {
+        rows[,
+          percent_historic_range := data.table::fifelse(
+            max > min,
+            100 * (value - min) / (max - min),
+            NA_real_
+          )
+        ]
+      }
+    } else {
+      # Bounded index lookups avoid sorting an entire timeseries history.
+      # A date tie prefers the more recent daily mean, deterministically.
+      sql <- paste0(
+        "SELECT t.timeseries_id, daily.*
+         FROM continuous.timeseries t
+         CROSS JOIN LATERAL (
+           SELECT d.date, d.value",
+        if (include_history) paste0(", ", paste(stats_sql, collapse = ", ")),
+        "
+           FROM continuous.measurements_calculated_daily d
+           WHERE d.timeseries_id = t.timeseries_id
+             AND d.date BETWEEN $1::date - $2::integer AND $1::date + $2::integer
+             ",
+        if (include_history) paste0("AND ", count_sql, " >= $3::integer"),
+        "
+             AND d.value IS NOT NULL
+           ORDER BY ABS(d.date - $1::date), d.date DESC LIMIT 1
+         ) daily
+         WHERE t.timeseries_id IN (",
+        ids_sql,
+        ")"
+      )
+      params <- list(request$target, selection$days)
+      if (include_history) {
+        params[[3L]] <- selection$years
+      }
+      rows <- data.table::as.data.table(DBI::dbGetQuery(
+        con,
+        sql,
+        params = params
+      ))
+    }
+    if (!nrow(rows)) {
+      next
+    }
+
+    rows <- merge(rows, candidates, by = "timeseries_id")
+    rows <- merge(rows, locations, by = "location_id")
+    rows <- rows[
+      is.finite(rows$value) &
+        is.finite(rows$latitude) &
+        is.finite(rows$longitude) &
+        abs(rows$latitude) <= 90 &
+        abs(rows$longitude) <= 180
+    ]
+    if (!nrow(rows)) {
+      next
+    }
+    if (request$latest) {
+      # Different recording intervals otherwise draw overlapping markers at
+      # the same station. Prefer the most frequent eligible measurement, not
+      # whichever series happens to be drawn last. Read interval/priority from
+      # the live query so older metadata caches cannot change this selection.
+      # Unknown/non-positive intervals rank after known intervals; priority,
+      # newest timestamp and stable ID resolve ties without changing filters.
+      rows[, `:=`(
+        rate_rank = data.table::fifelse(
+          is.finite(record_rate_seconds) & record_rate_seconds > 0,
+          record_rate_seconds,
+          Inf
+        ),
+        priority_rank = data.table::fifelse(
+          is.finite(sensor_priority) & sensor_priority > 0,
+          as.numeric(sensor_priority),
+          Inf
+        )
+      )]
+      data.table::setorderv(
+        rows,
+        c(
+          "location_id",
+          "parameter_id",
+          "rate_rank",
+          "priority_rank",
+          "datetime",
+          "timeseries_id"
+        ),
+        c(1L, 1L, 1L, 1L, -1L, 1L),
+        na.last = TRUE
+      )
+      rows <- unique(rows, by = c("location_id", "parameter_id"))
+      rows[, c("rate_rank", "priority_rank") := NULL]
+    }
+    if (include_history) {
+      rows[
+        !is.finite(rows$percent_historic_range),
+        percent_historic_range := NA_real_
+      ]
+    }
+    collected[[length(collected) + 1L]] <- rows
+    covered <- unique(c(covered, rows$location_id))
+  }
+  list(
+    data = data.table::rbindlist(collected, fill = TRUE),
+    stats_period = attr(stats_sql, "stats_period"),
+    latest = request$latest
+  )
+}
+
+# Use AquaLink's application-wide mirai pool. Transport these sourced functions
+# explicitly so a worker cannot silently use an older installed module copy.
+params_map_start_fetch <- function(request, db, fetch_fun, stats_sql_fun) {
+  mirai::mirai(
+    {
+      con <- DBI::dbConnect(
+        RPostgres::Postgres(),
+        dbname = db$dbName,
+        host = db$dbHost,
+        port = db$dbPort,
+        user = db$dbUser,
+        password = db$dbPass,
+        connect_timeout = 5,
+        options = "-c default_transaction_read_only=on -c statement_timeout=15000 -c timezone=UTC"
+      )
+      on.exit(DBI::dbDisconnect(con), add = TRUE)
+      fetch_fun(con, request, stats_sql_fun)
+    },
+    request = request,
+    db = db,
+    fetch_fun = fetch_fun,
+    stats_sql_fun = stats_sql_fun,
+    .timeout = 60000,
+    .compute = "YGwater_aqualink"
+  )
 }
 
 mapParamsUI <- function(id) {
@@ -67,14 +331,25 @@ mapParamsUI <- function(id) {
     # All UI elements rendered in server function to allow multi-language functionality
     uiOutput(ns("banner")),
     uiOutput(ns("top")),
-    page_sidebar(
+    # This module is embedded in an existing page. A full page_sidebar() adds
+    # page-level sizing/theme rules and clips Leaflet controls on narrow views.
+    layout_sidebar(
+      border = FALSE,
+      border_radius = FALSE,
       sidebar = sidebar(
         title = NULL,
         bg = config$sidebar_bg,
         open = list(mobile = "always-above"),
         uiOutput(ns("sidebar_controls"))
       ),
-      leaflet::leafletOutput(ns("map"), height = '80vh')
+      tagList(
+        tags$div(
+          role = "status",
+          `aria-live` = "polite",
+          uiOutput(ns("map_status"))
+        ),
+        leaflet::leafletOutput(ns("map"), height = "80vh")
+      )
     )
   )
 } # End of mapParamsUI
@@ -83,22 +358,108 @@ mapParams <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    if (session$userData$user_logged_in) {
-      cached <- map_params_module_data(
-        con = session$userData$AquaCache,
-        env = session$userData$app_cache
-      )
-    } else {
-      cached <- map_params_module_data(con = session$userData$AquaCache)
+    load_catalogue <- function() {
+      if (isTRUE(session$userData$user_logged_in)) {
+        map_params_module_data(
+          con = session$userData$AquaCache,
+          env = session$userData$app_cache
+        )
+      } else {
+        map_params_module_data(con = session$userData$AquaCache)
+      }
     }
-
+    cached <- load_catalogue()
+    parameters <- unique(cached$parameters, by = "parameter_id")
     moduleData <- reactiveValues(
       locations = cached$locations,
       timeseries = cached$timeseries,
-      parameters = cached$parameters
+      # Older shared caches can contain one row per catalogue group. Map
+      # labels and selectors need exactly one row per parameter instead.
+      parameters = parameters
     )
 
-    mapCreated <- reactiveVal(FALSE) # Track whether the map has been initialized on the client
+    mapCreated <- reactiveVal(FALSE)
+
+    # Catalogue IDs differ between database instances. Prefer hydrometric
+    # defaults by name, then fall back to parameters actually in this cache.
+    parameter_ids <- parameters$parameter_id
+    parameter_names <- tolower(trimws(parameters$param_name))
+    primary <- parameter_ids[match("water flow", parameter_names)]
+    if (!length(primary) || is.na(primary)) {
+      primary <- parameter_ids[1L]
+    }
+    secondary <- parameter_ids[match("water level", parameter_names)]
+    if (!length(secondary) || is.na(secondary)) {
+      secondary <- setdiff(parameter_ids, primary)[1L]
+    }
+    map_params <- reactiveValues(
+      param1 = primary,
+      param2 = secondary,
+      yrs1 = 10L,
+      yrs2 = 10L,
+      days1 = 1L,
+      days2 = 1L,
+      latest = FALSE,
+      target = Sys.Date(),
+      stats_period = "30yr",
+      params = 1L,
+      bins = c(-Inf, 0, 20, 40, 60, 80, 100, Inf),
+      colors = c(
+        "#8c510a",
+        "#d8b365",
+        "#FEE090",
+        "#74ADD1",
+        "#4575D2",
+        "#313695",
+        "#A50026"
+      )
+    )
+
+    # Login/logout may replace the connection (and the target database).
+    # Refresh scoped metadata before the next worker request, retaining the
+    # selected parameter by name when catalogue IDs differ between instances.
+    observeEvent(
+      if (is.function(session$userData$AquaCache_version)) {
+        session$userData$AquaCache_version()
+      },
+      {
+        request_id <<- request_id + 1L
+        pending_request <<- NULL
+        desired_key <<- NULL
+        map_state$data <- NULL
+        map_state$status <- "idle"
+        if (inherits(active_fetch, "mirai")) {
+          mirai::stop_mirai(active_fetch)
+        }
+        selected_names <- moduleData$parameters$param_name[
+          match(
+            c(map_params$param1, map_params$param2),
+            moduleData$parameters$parameter_id
+          )
+        ]
+        next_cache <- load_catalogue()
+        parameters <- unique(next_cache$parameters, by = "parameter_id")
+        selected_ids <- parameters$parameter_id[match(
+          tolower(trimws(selected_names)),
+          tolower(trimws(parameters$param_name))
+        )]
+        moduleData$locations <- next_cache$locations
+        moduleData$timeseries <- next_cache$timeseries
+        moduleData$parameters <- parameters
+        map_params$param1 <- if (is.na(selected_ids[1L])) {
+          parameters$parameter_id[1L]
+        } else {
+          selected_ids[1L]
+        }
+        map_params$param2 <- if (is.na(selected_ids[2L])) {
+          setdiff(parameters$parameter_id, map_params$param1)[1L]
+        } else {
+          selected_ids[2L]
+        }
+      },
+      ignoreInit = TRUE,
+      priority = 20
+    )
 
     output$banner <- renderUI({
       application_notifications_ui(
@@ -127,7 +488,18 @@ mapParams <- function(id, language) {
       bindEvent(language$language)
 
     output$sidebar_controls <- renderUI({
-      req(moduleData, language)
+      req(language$language)
+      target_input <- dateInput(
+        ns("target"),
+        label = tr("map_target_date", language$language),
+        value = map_params$target,
+        max = Sys.Date(),
+        format = "yyyy-mm-dd",
+        language = language$abbrev
+      )
+      if (map_params$latest) {
+        target_input <- shinyjs::disabled(target_input)
+      }
       tagList(
         selectizeInput(
           ns("mapType"),
@@ -139,34 +511,38 @@ mapParams <- function(id, language) {
               tr("map_actual_values", language$language)
             )
           ),
-          selected = "range",
+          selected = if (is.null(input$mapType)) "range" else input$mapType,
           multiple = FALSE
         ),
-        selectizeInput(
-          ns("stats_period"),
-          label = tr("stats_period", language$language),
-          choices = stats::setNames(
-            c("30yr", "full"),
-            YGwater:::format_stats_period_label(
+        conditionalPanel(
+          condition = "input.mapType != 'actual'",
+          ns = ns,
+          selectizeInput(
+            ns("stats_period"),
+            label = tr("stats_period", language$language),
+            choices = stats::setNames(
               c("30yr", "full"),
-              language$language
-            )
-          ),
-          selected = map_params$stats_period,
-          multiple = FALSE
+              YGwater:::format_stats_period_label(
+                c("30yr", "full"),
+                language$language
+              )
+            ),
+            selected = map_params$stats_period,
+            multiple = FALSE
+          )
         ),
-        dateInput(
-          ns("target"),
-          label = tr("map_target_date", language$language),
-          value = Sys.Date(),
-          max = Sys.Date(),
-          format = "yyyy-mm-dd",
-          language = language$abbrev
-        ),
+        target_input,
         checkboxInput(
           ns("latest"),
-          tr("map_latest_measurements", language$language),
-          value = FALSE
+          tooltip(
+            trigger = tagList(
+              tr("map_latest_measurements", language$language),
+              " ",
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("map_latest_measurements_modal", language$language)
+          ),
+          value = map_params$latest
         ),
         conditionalPanel(
           condition = "input.latest == true",
@@ -174,7 +550,7 @@ mapParams <- function(id, language) {
           checkboxInput(
             ns("auto_update_latest"),
             tr("map_latest_auto_update", language$language),
-            value = FALSE
+            value = isTRUE(input$auto_update_latest)
           )
         ),
         htmlOutput(ns("primary_param")), # Primary parameter information, rendered separately as it needs to update if selections change
@@ -211,7 +587,7 @@ mapParams <- function(id, language) {
       bindEvent(language$language)
 
     output$primary_param <- renderUI({
-      req(map_params, language)
+      req(map_params, language, input$mapType)
       tagList(
         h4(
           if (config$public) {
@@ -227,22 +603,56 @@ mapParams <- function(id, language) {
           ]
         ), # Name of primary parameter
         p(
-          tr("map_min_yrs_selected1", language$language),
-          " ",
-          map_params$yrs1,
-          " ",
-          tr("map_min_yrs_selected2", language$language), # Text for min years selected
-          tr("map_date_within_selected1", language$language),
-          map_params$days1,
-          tr("map_date_within_selected2", language$language)
+          if (input$mapType != "actual") {
+            tagList(
+              tr("map_min_yrs_selected1", language$language),
+              " ",
+              map_params$yrs1,
+              " ",
+              tr("map_min_yrs_selected2", language$language)
+            )
+          },
+          if (map_params$latest) {
+            sprintf(
+              tr(
+                if (input$mapType == "actual") {
+                  "map_latest_within_only"
+                } else {
+                  "map_latest_within_selected"
+                },
+                language$language
+              ),
+              map_params$days1
+            )
+          } else if (input$mapType == "actual") {
+            sprintf(
+              tr("map_date_within_only", language$language),
+              map_params$days1
+            )
+          } else {
+            paste(
+              tr("map_date_within_selected1", language$language),
+              map_params$days1,
+              tr("map_date_within_selected2", language$language)
+            )
+          }
         ) # Text for within x days
       )
     }) |>
-      bindEvent(map_params$param1, language$language)
+      bindEvent(
+        map_params$param1,
+        map_params$yrs1,
+        map_params$days1,
+        map_params$latest,
+        input$mapType,
+        language$language
+      )
 
     output$secondary_param <- renderUI({
-      req(map_params, language)
-      if (config$public || map_params$params == 1) {
+      req(map_params, language, input$mapType)
+      if (
+        config$public || map_params$params == 1 || input$mapType == "actual"
+      ) {
         return(NULL)
       } else {
         tagList(
@@ -259,63 +669,49 @@ mapParams <- function(id, language) {
             map_params$yrs2,
             " ",
             tr("map_min_yrs_selected2", language$language), # Text for min years selected
-            tr("map_date_within_selected1", language$language),
-            map_params$days2,
-            tr("map_date_within_selected2", language$language)
+            if (map_params$latest) {
+              sprintf(
+                tr("map_latest_within_selected", language$language),
+                map_params$days2
+              )
+            } else {
+              paste(
+                tr("map_date_within_selected1", language$language),
+                map_params$days2,
+                tr("map_date_within_selected2", language$language)
+              )
+            }
           ) # Text for within x days
         )
       }
     }) |>
-      bindEvent(map_params$param2, language$language)
-
-    # Create the filter inputs ############################################################################
-    map_params <- reactiveValues(
-      param1 = 1150, # Water flow
-      param2 = 1165, # Water level
-      yrs1 = 10,
-      yrs2 = 10,
-      days1 = 1,
-      days2 = 1,
-      latest = FALSE,
-      target = Sys.Date(),
-      stats_period = "30yr",
-      params = 1,
-      bins = c(-Inf, 0, 20, 40, 60, 80, 100, Inf),
-      colors = c(
-        "#8c510a",
-        "#d8b365",
-        "#FEE090",
-        "#74ADD1",
-        "#4575D2",
-        "#313695",
-        "#A50026"
+      bindEvent(
+        map_params$params,
+        map_params$param2,
+        map_params$yrs2,
+        map_params$days2,
+        map_params$latest,
+        input$mapType,
+        language$language
       )
-    )
 
     observeEvent(input$stats_period, {
-      if (is.null(input$stats_period) || !(input$stats_period %in% c("30yr", "full"))) {
+      if (
+        is.null(input$stats_period) ||
+          !(input$stats_period %in% c("30yr", "full"))
+      ) {
         map_params$stats_period <- "30yr"
       } else {
         map_params$stats_period <- input$stats_period
       }
     })
 
-    # Observe 'map_latest_measurements'. If TRUE, 'target' is adjusted to Sys.Date()
+    # Latest mode preserves the user's historical date for switching back.
     observeEvent(input$latest, {
-      if (input$latest) {
-        # Show the user a modal that explains that the most recent values will be compared against daily means
-        showModal(modalDialog(
-          HTML(tr("map_latest_measurements_modal", language$language)),
-          easyClose = TRUE,
-          footer = modalButton(tr("close", language$language))
-        ))
-        updateDateInput(session, "target", value = Sys.Date())
-        map_params$latest <- TRUE
-        map_params$target <- Sys.Date()
-      } else {
+      map_params$latest <- isTRUE(input$latest)
+      shinyjs::toggleState("target", condition = !map_params$latest)
+      if (!map_params$latest) {
         updateCheckboxInput(session, "auto_update_latest", value = FALSE)
-        map_params$latest <- FALSE
-        map_params$target <- input$target
       }
     })
 
@@ -338,20 +734,22 @@ mapParams <- function(id, language) {
           selected = map_params$param1,
           multiple = FALSE
         ),
-        numericInput(
-          ns("yrs"),
-          label = tooltip(
-            trigger = list(
-              tr("map_min_yrs", language$language),
-              bsicons::bs_icon("info-circle-fill")
+        if (input$mapType != "actual") {
+          numericInput(
+            ns("yrs"),
+            label = tooltip(
+              trigger = list(
+                tr("map_min_yrs", language$language),
+                bsicons::bs_icon("info-circle-fill")
+              ),
+              tr("tooltip_params_map_min_yrs", language$language),
             ),
-            tr("tooltip_params_map_min_yrs", language$language),
-          ),
-          value = map_params$yrs1,
-          min = 3,
-          max = 100,
-          step = 1
-        ),
+            value = map_params$yrs1,
+            min = 3,
+            max = 100,
+            step = 1
+          )
+        },
         numericInput(
           ns("days"),
           label = tooltip(
@@ -373,9 +771,14 @@ mapParams <- function(id, language) {
       ))
     })
     observeEvent(input$save_primary_param, {
-      map_params$param1 <- input$param
-      map_params$yrs1 <- input$yrs
-      map_params$days1 <- input$days
+      if (!valid_selection()) {
+        return()
+      }
+      map_params$param1 <- as.integer(input$param)
+      if (input$mapType != "actual") {
+        map_params$yrs1 <- as.integer(input$yrs)
+      }
+      map_params$days1 <- as.integer(input$days)
       removeModal()
     })
 
@@ -397,14 +800,16 @@ mapParams <- function(id, language) {
           selected = map_params$param2,
           multiple = FALSE
         ),
-        numericInput(
-          ns("yrs"),
-          label = tr("map_min_yrs", language$language),
-          value = map_params$yrs2,
-          min = 3,
-          max = 100,
-          step = 1
-        ),
+        if (input$mapType != "actual") {
+          numericInput(
+            ns("yrs"),
+            label = tr("map_min_yrs", language$language),
+            value = map_params$yrs2,
+            min = 3,
+            max = 100,
+            step = 1
+          )
+        },
         numericInput(
           ns("days"),
           label = tr("map_date_within", language$language),
@@ -430,6 +835,9 @@ mapParams <- function(id, language) {
     })
 
     observeEvent(input$save_secondary_param, {
+      if (!valid_selection()) {
+        return()
+      }
       if (map_params$params == 1) {
         map_params$params <- 2
       }
@@ -438,9 +846,11 @@ mapParams <- function(id, language) {
         "edit_secondary_param",
         tr("map_edit_second_param", language$language)
       )
-      map_params$param2 <- input$param
-      map_params$yrs2 <- input$yrs
-      map_params$days2 <- input$days
+      map_params$param2 <- as.integer(input$param)
+      if (input$mapType != "actual") {
+        map_params$yrs2 <- as.integer(input$yrs)
+      }
+      map_params$days2 <- as.integer(input$days)
       removeModal()
     })
     observeEvent(input$remove_secondary_param, {
@@ -469,510 +879,439 @@ mapParams <- function(id, language) {
           shinyjs::show("edit_secondary_param")
         }
       },
-      ignoreInit = TRUE
+      ignoreInit = FALSE
     )
 
     observeEvent(input$target, {
-      map_params$target <- input$target
+      target <- tryCatch(as.Date(input$target), error = function(e) as.Date(NA))
+      if (length(target) == 1L && !is.na(target) && target <= Sys.Date()) {
+        map_params$target <- target
+      }
     })
 
-    # Listen for input changes and update the map ########################################################
-    updateMap <- function() {
-      map_type <- req(input$mapType)
-      stats_select <- params_map_daily_stats_select_sql(
-        session$userData$AquaCache,
-        stats_period = map_params$stats_period
-      )
-      stats_filter_count <- attr(stats_select, "count_column")
-
-      # integrity checks
-      if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
-        return()
+    # Keep invalid/transient modal inputs out of both state and SQL requests.
+    valid_selection <- function() {
+      values <- suppressWarnings(as.numeric(c(
+        input$param,
+        input$days
+      )))
+      valid <- length(values) == 2L &&
+        all(is.finite(values)) &&
+        all(values == floor(values)) &&
+        values[1L] %in% moduleData$parameters$parameter_id &&
+        values[2L] >= 0L &&
+        values[2L] <= 365L
+      if (input$mapType != "actual") {
+        years <- suppressWarnings(as.numeric(input$yrs))
+        valid <- valid &&
+          length(years) == 1L &&
+          is.finite(years) &&
+          years == floor(years) &&
+          years >= 3L &&
+          years <= 100L
       }
-      if (
-        map_params$params == 2 &&
-          (is.na(map_params$yrs2) || is.na(map_params$days2))
-      ) {
-        return()
-      }
-
-      # Stop if the parameter does not exist; it's possible that the user typed something in themselves
-      if (!map_params$param1 %in% moduleData$parameters$parameter_id) {
-        return()
-      }
-      if (
-        map_params$params == 2 &&
-          !map_params$param2 %in% moduleData$parameters$parameter_id
-      ) {
-        return()
-      }
-
-      # Deal with parameter 1
-      tsids1 <- moduleData$timeseries[
-        moduleData$timeseries$parameter_id == map_params$param1,
-        "timeseries_id"
-      ][[1]]
-      if (length(tsids1) == 0) {
-        return()
-      }
-
-      if (map_params$latest) {
-        # Pull the most recent corrected measurement for each timeseries IF a measurement is available within map_params$days1 days
-        closest_measurements1 <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "WITH requested_timeseries(timeseries_id) AS (
-              SELECT unnest(ARRAY[",
-            paste(tsids1, collapse = ","),
-            "]::integer[])
-            )
-            SELECT m.timeseries_id, m.datetime, m.value
-            FROM requested_timeseries r
-            JOIN LATERAL (
-              SELECT timeseries_id, datetime, value_corrected AS value
-              FROM continuous.measurements_continuous_corrected(
-                r.timeseries_id,
-                '",
-            as.POSIXct(Sys.time(), tz = "UTC") -
-              as.numeric(map_params$days1) -
-              60 * 60 * 24,
-            "'::timestamptz,
-                NULL::timestamptz
-              )
-              ORDER BY datetime DESC
-              LIMIT 1
-            ) m ON TRUE;"
-          )
-        )
-
-        # IF there are no closest measurements, stop and show a notification
-        if (nrow(closest_measurements1) == 0) {
-          leaflet::leafletProxy("map", session) %>%
-            leaflet::clearMarkers() %>%
-            leaflet::clearControls()
-          return()
-        }
-
-        # For timeseries where there was a measurement above, get historical range data and add
-        range1 <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "WITH ranked_data AS (
-                                          SELECT
-                                              timeseries_id, 
-                                              ",
-            paste(stats_select[c("max", "min", "doy_count")], collapse = ",\n                                              "),
-            ",
-                                              ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
-                                          FROM 
-                                              continuous.measurements_calculated_daily
-                                          WHERE 
-                                              ",
-            stats_filter_count,
-            " >= ",
-            as.numeric(map_params$yrs1),
-            " 
-                                          AND timeseries_id IN (",
-            paste(closest_measurements1$timeseries_id, collapse = ","),
-            ")
-                                      )
-                                      SELECT 
-                                          timeseries_id, max, min, doy_count 
-                                      FROM 
-                                          ranked_data
-                                      WHERE 
-                                          row_num = 1;"
-          )
-        )
-
-        # Merge the two sets on timeseries_id so as to get historic range data for each timeseries (this will drop records where there were not enough years of record)
-        closest_measurements1 <- merge(
-          closest_measurements1,
-          range1,
-          by = "timeseries_id",
-          all.y = TRUE
-        )
-        # Calculate the percent of the historic range using the value, max and min
-        closest_measurements1[,
-          percent_historic_range := 100 * (value - min) / (max - min)
-        ]
-      } else {
-        # not requesting latest measurements
-        range1 <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT ",
-            paste(
-              c("timeseries_id", "date", "value", stats_select),
-              collapse = ", "
-            ),
-            " FROM continuous.measurements_calculated_daily WHERE ",
-            stats_filter_count,
-            " >= ",
-            as.numeric(map_params$yrs1),
-            " AND timeseries_id IN (",
-            paste(tsids1, collapse = ","),
-            ") AND date BETWEEN '",
-            map_params$target - as.numeric(map_params$days1),
-            "' AND '",
-            map_params$target + as.numeric(map_params$days1),
-            "';"
-          )
-        )
-
-        # Calculate the absolute difference in days between each date and the target date
-        range1[, date_diff := abs(date - map_params$target)]
-
-        # Order the data by 'timeseries_id' and 'date_diff'
-        data.table::setorder(range1, timeseries_id, date_diff)
-
-        # For each 'timeseries_id', select the row with the smallest 'date_diff'
-        closest_measurements1 <- range1[, .SD[1], by = timeseries_id]
-      }
-
-      locs_tsids1 <- merge(
-        moduleData$locations[, c(
-          "latitude",
-          "longitude",
-          "location_id",
-          "name",
-          "name_fr"
-        )],
-        moduleData$timeseries[
-          moduleData$timeseries$timeseries_id %in%
-            closest_measurements1$timeseries_id,
-          c("timeseries_id", "location_id", "units", "matrix_state")
-        ],
-        by = "location_id"
-      )
-
-      locs_tsids1$param_name <- moduleData$parameters[
-        moduleData$parameters$parameter_id == map_params$param1,
-        get(tr("param_name_col", language$language))
-      ]
-      locs_tsids1$param_unit <- locs_tsids1$units
-
-      # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
-      if (map_params$params == 2) {
-        tsids2 <- moduleData$timeseries[
-          moduleData$timeseries$parameter_id == map_params$param2 &
-            !moduleData$timeseries$location_id %in% locs_tsids1$location_id,
-          "timeseries_id"
-        ][[1]]
-        if (length(tsids2) == 0) {
-          return()
-        }
-
-        if (map_params$latest) {
-          # Pull the most recent corrected measurement for each timeseries IF a measurement is available within map_params$days2 days
-          closest_measurements2 <- dbGetQueryDT(
-            session$userData$AquaCache,
-            paste0(
-              "WITH requested_timeseries(timeseries_id) AS (
-                SELECT unnest(ARRAY[",
-              paste(tsids2, collapse = ","),
-              "]::integer[])
-              )
-              SELECT m.timeseries_id, m.datetime, m.value
-              FROM requested_timeseries r
-              JOIN LATERAL (
-                SELECT timeseries_id, datetime, value_corrected AS value
-                FROM continuous.measurements_continuous_corrected(
-                  r.timeseries_id,
-                  '",
-              as.POSIXct(Sys.time(), tz = "UTC") -
-                as.numeric(map_params$days2) -
-                60 * 60 * 24,
-              "'::timestamptz,
-                  NULL::timestamptz
-                )
-                ORDER BY datetime DESC
-                LIMIT 1
-              ) m ON TRUE;"
-            )
-          )
-
-          # For timeseries where there was a measurement above, get historical range data and add
-          range2 <- dbGetQueryDT(
-            session$userData$AquaCache,
-            paste0(
-              "WITH ranked_data AS (
-                                            SELECT
-                                                timeseries_id, 
-                                                ",
-              paste(stats_select[c("max", "min", "doy_count")], collapse = ",\n                                                "),
-              ",
-                                                ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
-                                            FROM 
-                                                continuous.measurements_calculated_daily
-                                            WHERE 
-                                                ",
-              stats_filter_count,
-              " >= ",
-              as.numeric(map_params$yrs2),
-              " 
-                                            AND timeseries_id IN (",
-              paste(closest_measurements2$timeseries_id, collapse = ","),
-              ")
-                                        )
-                                        SELECT 
-                                            timeseries_id, max, min, doy_count 
-                                        FROM 
-                                            ranked_data
-                                        WHERE 
-                                            row_num = 1;"
-            )
-          )
-
-          # Merge the two sets on timeseries_id so as to get historic range data for each timeseries (this will drop records where there were not enough years of record)
-          closest_measurements2 <- merge(
-            closest_measurements2,
-            range2,
-            by = "timeseries_id",
-            all.y = TRUE
-          )
-          # Calculate the percent of the historic range using the value, max and min
-          closest_measurements2[,
-            percent_historic_range := 100 * (value - min) / (max - min)
-          ]
-        } else {
-          range2 <- dbGetQueryDT(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT ",
-              paste(
-                c("timeseries_id", "date", "value", stats_select),
-                collapse = ", "
-              ),
-              " FROM continuous.measurements_calculated_daily WHERE ",
-              stats_filter_count,
-              " >= ",
-              as.numeric(map_params$yrs2),
-              " AND timeseries_id IN (",
-              paste(tsids2, collapse = ","),
-              ") AND date BETWEEN '",
-              map_params$target - as.numeric(map_params$days2),
-              "' AND '",
-              map_params$target + as.numeric(map_params$days2),
-              "';"
-            )
-          )
-
-          # Calculate the absolute difference in days between each date and the target date
-          range2[, date_diff := abs(date - map_params$target)]
-
-          # Order the data by 'timeseries_id' and 'date_diff'
-          data.table::setorder(range2, timeseries_id, date_diff)
-
-          # For each 'timeseries_id', select the row with the smallest 'date_diff'
-          closest_measurements2 <- range2[, .SD[1], by = timeseries_id]
-        }
-
-        locs_tsids2 <- merge(
-          moduleData$locations[, c(
-            "latitude",
-            "longitude",
-            "location_id",
-            "name",
-            "name_fr"
-          )],
-          moduleData$timeseries[
-            moduleData$timeseries$timeseries_id %in%
-              closest_measurements2$timeseries_id,
-            c("timeseries_id", "location_id", "units", "matrix_state")
-          ],
-          by = "location_id"
-        )
-
-        locs_tsids2$param_name <- moduleData$parameters[
-          moduleData$parameters$parameter_id == map_params$param2,
-          get(tr("param_name_col", language$language))
-        ]
-        locs_tsids2$param_unit <- locs_tsids2$units
-
-        # Merge the two sets of locations and timeseries IDs
-        locs_tsids <- rbind(locs_tsids1, locs_tsids2)
-        closest_measurements <- rbind(
-          closest_measurements1,
-          closest_measurements2
-        )
-      } else {
-        locs_tsids <- locs_tsids1
-        closest_measurements <- closest_measurements1
-      }
-
-      mapping_data <- merge(
-        closest_measurements,
-        locs_tsids,
-        by = "timeseries_id",
-        all.x = TRUE
-      )
-      mapping_data[, percent_historic_range_capped := percent_historic_range]
-
-      if (map_type == "actual") {
-        actual_vals <- mapping_data$value
-
-        if (length(actual_vals) == 0) {
-          leaflet::leafletProxy("map", session) %>%
-            leaflet::clearMarkers() %>%
-            leaflet::clearControls()
-          return()
-        }
-
-        abs_range <- range(actual_vals, na.rm = TRUE)
-
-        # Handle case where all values are identical or range is zero
-        if (
-          abs_range[1] == abs_range[2] ||
-            !is.finite(abs_range[1]) ||
-            !is.finite(abs_range[2])
-        ) {
-          # Create a small range around the single value for binning
-          if (abs_range[1] == 0) {
-            abs_bins <- c(-0.1, 0.1)
-          } else {
-            abs_bins <- c(abs_range[1] * 0.99, abs_range[1] * 1.01)
-          }
-        } else {
-          abs_bins <- seq(
-            abs_range[1],
-            abs_range[2],
-            length.out = length(map_params$colors) + 1
-          )
-        }
-
-        value_palette <- leaflet::colorBin(
-          palette = map_params$colors,
-          domain = actual_vals,
-          bins = abs_bins,
-          pretty = FALSE,
-          na.color = "#808080"
-        )
-        map_values <- actual_vals
-        legend_digits <- function(vals) {
-          if (length(vals) == 0 || all(!is.finite(vals))) {
-            return(0)
-          }
-          max_val <- max(abs(vals), na.rm = TRUE)
-          if (max_val >= 100) {
-            return(0)
-          } else if (max_val >= 10) {
-            return(1)
-          } else {
-            return(2)
-          }
-        }
-        legend_units <- unique(na.omit(mapping_data$param_unit))
-        legend_units <- legend_units[nzchar(legend_units)]
-        lab_format <- leaflet::labelFormat(digits = legend_digits(actual_vals))
-        legend_param <- moduleData$parameters[
-          moduleData$parameters$parameter_id == map_params$param1,
-          get(tr("param_name_col", language$language))
-        ]
-        legend_title <- if (length(legend_units)) {
-          sprintf("%s (%s)", legend_param, paste(legend_units, collapse = ", "))
-        } else {
-          legend_param
-        }
-      } else {
-        value_palette <- leaflet::colorBin(
-          palette = map_params$colors,
-          domain = mapping_data$percent_historic_range_capped,
-          bins = map_params$bins,
-          pretty = FALSE,
-          na.color = "#808080"
-        )
-        map_values <- mapping_data$percent_historic_range_capped
-        lab_format <- leaflet::labelFormat(digits = 0, suffix = "%")
-        legend_title <- tr("map_relative", language$language)
-      }
-
-      leaflet::leafletProxy("map", session) %>%
-        leaflet::clearMarkers() %>%
-        leaflet::clearControls() %>%
-        leaflet::addMapPane("overlay", zIndex = 420) %>%
-        leaflet::addCircleMarkers(
-          data = mapping_data,
-          lng = ~longitude,
-          lat = ~latitude,
-          fillColor = ~ value_palette(
-            if (map_type == "actual") {
-              value
+      if (!valid) {
+        showNotification(
+          tr(
+            if (input$mapType == "actual") {
+              "map_invalid_absolute_selection"
             } else {
-              percent_historic_range_capped
-            }
-          ),
-          color = ~ value_palette(
-            if (map_type == "actual") {
-              value
-            } else {
-              percent_historic_range_capped
-            }
-          ),
-          fillOpacity = 1,
-          stroke = TRUE,
-          weight = 1,
-          radius = 8,
-          options = leaflet::pathOptions(pane = "overlay"),
-          popup = ~ paste0(
-            "<strong>",
-            YGwater:::escape_html_text(
-              get(tr("generic_name_col", language$language))
-            ),
-            "</strong><br/>",
-            YGwater:::escape_html_text(param_name),
-            "<br>",
-            ifelse(
-              is.na(matrix_state) | !nzchar(matrix_state),
-              "",
-              paste0(
-                "Matrix state: ",
-                YGwater:::escape_html_text(matrix_state),
-                "<br>"
-              )
-            ),
-            tr("date", language$language),
-            ": ",
-            if (map_params$latest) {
-              paste0(datetime, " UTC")
-            } else {
-              paste0(date, " (daily mean)")
+              "map_invalid_selection"
             },
-            "<br/>",
-            tr("map_relative", language$language),
-            ": ",
-            round(percent_historic_range, 2),
-            "% <br/>",
-            tr("value", language$language),
-            ": ",
-            round(value, 2),
-            " ",
-            YGwater:::escape_html_text(param_unit),
-            "<br/>",
-            tr("map_actual_hist_range", language$language),
-            ": ",
-            round(min, 2),
-            " ",
-            tr("to", language$language),
-            " ",
-            round(max, 2),
-            " ",
-            YGwater:::escape_html_text(param_unit),
-            "<br/>",
-            tr("map_actual_yrs", language$language),
-            ": ",
-            doy_count
-          )
-        ) %>%
-        leaflet::addLegend(
-          position = "bottomright",
-          pal = value_palette,
-          values = map_values,
-          title = legend_title,
-          labFormat = lab_format,
-          opacity = 1
+            language$language
+          ),
+          type = "error"
         )
+      }
+      valid
     }
+
+    refresh_tick <- reactiveVal(0L)
+    map_state <- reactiveValues(
+      status = "idle",
+      data = NULL,
+      request = NULL,
+      stats_period = NULL,
+      updated = NULL
+    )
+    pending_request <- NULL
+    active_request <- NULL
+    active_fetch <- NULL
+    desired_key <- NULL
+    request_id <- 0L
+
+    # ExtendedTask detaches the promise from Shiny's session busy cycle. A
+    # regular async observer would still prevent that session receiving input.
+    fetch_task <- ExtendedTask$new(function(request, db) {
+      active_fetch <<- params_map_start_fetch(
+        request,
+        db,
+        params_map_fetch_data,
+        params_map_daily_stats_select_sql
+      )
+      active_fetch
+    })
+    start_pending <- function() {
+      active_request <<- pending_request
+      pending_request <<- NULL
+      fetch_task$invoke(active_request$query, active_request$db)
+    }
+
+    map_request <- reactive({
+      req(mapCreated(), input$mapType, map_params$param1, language$language)
+      # Language changes redraw the returned data locally. Absolute maps
+      # request values without historical coverage or statistics queries.
+      # Snapshot only data needed by the worker; never send reactiveValues.
+      selections <- list(list(
+        parameter_id = map_params$param1,
+        years = if (input$mapType != "actual") map_params$yrs1 else NULL,
+        days = map_params$days1
+      ))
+      if (
+        !config$public && input$mapType == "range" && map_params$params == 2L
+      ) {
+        selections[[2L]] <- list(
+          parameter_id = map_params$param2,
+          years = map_params$yrs2,
+          days = map_params$days2
+        )
+      }
+      revision <- if (is.function(session$userData$AquaCache_version)) {
+        session$userData$AquaCache_version()
+      } else {
+        0L
+      }
+      list(
+        query = list(
+          selections = selections,
+          include_history = input$mapType != "actual",
+          latest = map_params$latest,
+          target = if (map_params$latest) NULL else map_params$target,
+          stats_period = if (input$mapType != "actual") {
+            map_params$stats_period
+          } else {
+            NULL
+          },
+          refresh = refresh_tick(),
+          revision = revision,
+          timeseries = data.table::copy(moduleData$timeseries[, c(
+            "timeseries_id",
+            "location_id",
+            "parameter_id",
+            "units",
+            "matrix_state"
+          )]),
+          locations = data.table::copy(moduleData$locations)
+        ),
+        db = session$userData$config[c(
+          "dbName",
+          "dbHost",
+          "dbPort",
+          "dbUser",
+          "dbPass"
+        )]
+      )
+    })
+
+    observeEvent(
+      map_request(),
+      {
+        next_request <- map_request()
+        # Compare scalar selections/identity, not data.table's mutable internal
+        # attributes. Metadata changes are represented by the connection revision.
+        next_key <- next_request
+        next_key$query$timeseries <- NULL
+        next_key$query$locations <- NULL
+        if (identical(next_key, desired_key)) {
+          return()
+        }
+        desired_key <<- next_key
+        request_id <<- request_id + 1L
+        next_request$query$request_id <- request_id
+        next_request$query$now <- Sys.time()
+        pending_request <<- next_request
+        map_state$status <- "loading"
+        map_state$data <- NULL
+        if (identical(fetch_task$status(), "running")) {
+          # Coalesce rapid edits to a single newest request. Interrupted or late
+          # results can never replace the current selection's markers or labels.
+          if (inherits(active_fetch, "mirai")) mirai::stop_mirai(active_fetch)
+        } else {
+          start_pending()
+        }
+      },
+      priority = 10
+    )
+
+    observeEvent(
+      fetch_task$status(),
+      {
+        status <- fetch_task$status()
+        if (!status %in% c("success", "error")) {
+          return()
+        }
+        if (!is.null(pending_request)) {
+          start_pending()
+          return()
+        }
+        if (
+          is.null(active_request) ||
+            active_request$query$request_id != request_id
+        ) {
+          return()
+        }
+        result <- tryCatch(fetch_task$result(), error = function(e) {
+          message("Parameter map request failed: ", conditionMessage(e))
+          NULL
+        })
+        if (is.null(result)) {
+          map_state$status <- "error"
+          map_state$data <- NULL
+        } else {
+          map_state$request <- active_request$query
+          map_state$data <- result$data
+          map_state$stats_period <- result$stats_period
+          map_state$updated <- Sys.time()
+          map_state$status <- "success"
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    session$onSessionEnded(function() {
+      pending_request <<- NULL
+      if (inherits(active_fetch, "mirai")) mirai::stop_mirai(active_fetch)
+    })
+    observeEvent(input$retry_map, refresh_tick(refresh_tick() + 1L))
+
+    output$map_status <- renderUI({
+      req(language$language)
+      if (map_state$status == "loading") {
+        return(tags$p(
+          class = "text-muted",
+          tr("map_loading", language$language)
+        ))
+      }
+      if (map_state$status == "error") {
+        return(tags$p(
+          class = "text-danger",
+          tr("map_load_error", language$language),
+          " ",
+          actionLink(ns("retry_map"), tr("map_retry", language$language))
+        ))
+      }
+      if (!nrow(moduleData$parameters)) {
+        return(tags$p(tr("map_no_measurements", language$language)))
+      }
+      if (map_state$status != "success") {
+        return(NULL)
+      }
+      tagList(
+        if (!nrow(map_state$data)) {
+          tags$p(tr("map_no_measurements", language$language))
+        },
+        tags$p(
+          class = "small text-muted",
+          tr("map_auto_update_notification", language$language),
+          ": ",
+          format(map_state$updated, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+        ),
+        if (
+          isTRUE(map_state$request$include_history) &&
+            !identical(map_state$stats_period, map_state$request$stats_period)
+        ) {
+          tags$p(class = "small", tr("map_stats_fallback", language$language))
+        }
+      )
+    })
+
+    legend_ids <- character()
+    observe({
+      req(mapCreated(), language$language, input$mapType)
+      proxy <- leaflet::leafletProxy("map", session) |>
+        leaflet::clearGroup("measurements")
+      for (legend_id in legend_ids) {
+        proxy <- leaflet::removeControl(proxy, legend_id)
+      }
+      legend_ids <<- character()
+      if (map_state$status != "success" || !nrow(map_state$data)) {
+        return()
+      }
+      # Switching back to relative values needs a fresh historical result.
+      if (
+        input$mapType != "actual" && !isTRUE(map_state$request$include_history)
+      ) {
+        return()
+      }
+      mapping_data <- data.table::copy(map_state$data)
+      if (input$mapType == "actual") {
+        mapping_data <- mapping_data[
+          mapping_data$parameter_id == map_params$param1
+        ]
+        if (!nrow(mapping_data)) return()
+      }
+      param_names <- moduleData$parameters[[tr(
+        "param_name_col",
+        language$language
+      )]]
+      mapping_data[,
+        param_name := param_names[match(
+          parameter_id,
+          moduleData$parameters$parameter_id
+        )]
+      ]
+      mapping_data[, param_unit := data.table::fifelse(is.na(units), "", units)]
+      esc <- YGwater:::escape_html_text
+      names <- mapping_data[[tr("generic_name_col", language$language)]]
+      timestamp <- if (map_state$request$latest) {
+        format(mapping_data$datetime, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+      } else {
+        paste(mapping_data$date, tr("map_daily_mean", language$language))
+      }
+      rate_text <- rep("", nrow(mapping_data))
+      if (
+        map_state$request$latest &&
+          "record_rate_seconds" %in% names(mapping_data)
+      ) {
+        known_rate <- is.finite(mapping_data$record_rate_seconds) &
+          mapping_data$record_rate_seconds > 0
+        rate_text[known_rate] <- paste0(
+          tr("record_rate", language$language),
+          ": ",
+          as.character(lubridate::seconds_to_period(mapping_data$record_rate_seconds[
+            known_rate
+          ])),
+          "<br/>"
+        )
+      }
+      history_text <- rep("", nrow(mapping_data))
+      if (input$mapType != "actual") {
+        history_text <- paste0(
+          "<br/>",
+          tr("map_relative", language$language),
+          ": ",
+          ifelse(
+            is.na(mapping_data$percent_historic_range),
+            "—",
+            paste0(round(mapping_data$percent_historic_range, 2), "%")
+          ),
+          "<br/>",
+          tr("map_actual_hist_range", language$language),
+          ": ",
+          round(mapping_data$min, 2),
+          " ",
+          tr("to", language$language),
+          " ",
+          round(mapping_data$max, 2),
+          " ",
+          esc(mapping_data$param_unit),
+          "<br/>",
+          tr("map_actual_yrs", language$language),
+          ": ",
+          mapping_data$doy_count
+        )
+      }
+      popup <- paste0(
+        "<strong>",
+        esc(names),
+        "</strong><br/>",
+        esc(mapping_data$param_name),
+        "<br/>",
+        rate_text,
+        ifelse(
+          is.na(mapping_data$matrix_state) | !nzchar(mapping_data$matrix_state),
+          "",
+          paste0(esc(mapping_data$matrix_state), "<br/>")
+        ),
+        tr("date", language$language),
+        ": ",
+        timestamp,
+        "<br/>",
+        tr("value", language$language),
+        ": ",
+        round(mapping_data$value, 2),
+        " ",
+        esc(mapping_data$param_unit),
+        history_text
+      )
+      # Different matrix units must not share an absolute numeric scale.
+      groups <- if (input$mapType == "actual") {
+        unique(mapping_data$param_unit)
+      } else {
+        "relative"
+      }
+      for (i in seq_along(groups)) {
+        keep <- if (input$mapType == "actual") {
+          mapping_data$param_unit == groups[i]
+        } else {
+          rep(TRUE, nrow(mapping_data))
+        }
+        rows <- mapping_data[keep]
+        if (input$mapType == "actual") {
+          values <- rows$value
+          limits <- range(values)
+          if (limits[1L] == limits[2L]) {
+            delta <- max(abs(limits[1L]) * 0.01, 0.1)
+            limits <- limits + c(-delta, delta)
+          }
+          bins <- seq(
+            limits[1L],
+            limits[2L],
+            length.out = length(map_params$colors) + 1L
+          )
+          title <- unique(rows$param_name)[1L]
+          if (nzchar(groups[i])) {
+            title <- paste0(title, " (", groups[i], ")")
+          }
+          digits <- if (max(abs(values)) >= 100) {
+            0L
+          } else if (max(abs(values)) >= 10) {
+            1L
+          } else {
+            2L
+          }
+          lab_format <- leaflet::labelFormat(digits = digits)
+        } else {
+          values <- rows$percent_historic_range
+          bins <- map_params$bins
+          title <- tr("map_relative", language$language)
+          lab_format <- leaflet::labelFormat(digits = 0, suffix = "%")
+        }
+        palette <- leaflet::colorBin(
+          map_params$colors,
+          domain = values,
+          bins = bins,
+          pretty = FALSE,
+          na.color = "#808080"
+        )
+        legend_id <- paste0("measurement-legend-", i)
+        proxy <- proxy |>
+          leaflet::addCircleMarkers(
+            lng = rows$longitude,
+            lat = rows$latitude,
+            group = "measurements",
+            layerId = as.character(rows$timeseries_id),
+            fillColor = palette(values),
+            color = palette(values),
+            fillOpacity = 1,
+            stroke = TRUE,
+            weight = 1,
+            radius = 8,
+            options = leaflet::pathOptions(pane = "overlay"),
+            popup = popup[keep]
+          ) |>
+          leaflet::addLegend(
+            position = "bottomright",
+            pal = palette,
+            values = values,
+            title = esc(title),
+            labFormat = lab_format,
+            opacity = 1,
+            layerId = legend_id
+          )
+        legend_ids <<- c(legend_ids, legend_id)
+      }
+    })
 
     # Create the basic map
     output$map <- leaflet::renderLeaflet({
@@ -1005,32 +1344,27 @@ mapParams <- function(id, language) {
           options = leaflet::scaleBarOptions(imperial = FALSE)
         ) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
-      mapCreated(TRUE)
       map
     })
 
+    # Wait for Leaflet's first client bounds event before sending proxy calls.
+    observeEvent(input$map_bounds, mapCreated(TRUE), once = TRUE)
+
     # Auto-update for latest measurements every 15 minutes
-    autoUpdateTimer <- reactiveTimer(15 * 60 * 1000) # 15 minutes in milliseconds
+    autoUpdateTimer <- reactiveTimer(15 * 60 * 1000, session = session)
 
-    observeEvent(autoUpdateTimer(), {
-      req(mapCreated())
-      if (!map_params$latest || !isTRUE(input$auto_update_latest)) {
-        return()
-      }
-      updateDateInput(session, "target", value = Sys.Date())
-      map_params$target <- Sys.Date()
-      updateMap()
-      showNotification(
-        tr("map_auto_update_notification", language$language),
-        type = "message",
-        duration = 5
-      )
-    })
-
-    # Observe the map being created and update it when the parameters change
-    observe({
-      req(mapCreated(), map_params, language$language) # Ensure the map has been created before updating
-      updateMap() # Call the updateMap function to refresh the map with the current parameters
-    })
+    observeEvent(
+      autoUpdateTimer(),
+      {
+        req(mapCreated())
+        if (!map_params$latest || !isTRUE(input$auto_update_latest)) {
+          return()
+        }
+        # One dispatch path handles both input changes and refresh ticks. Enabling
+        # the checkbox itself does not run an extra query or reset any controls.
+        if (fetch_task$status() != "running") refresh_tick(refresh_tick() + 1L)
+      },
+      ignoreInit = TRUE
+    )
   }) # End of moduleServer
 } # End of mapParams server function
