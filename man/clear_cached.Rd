@@ -4,12 +4,16 @@
 \alias{clear_cached}
 \title{Remove a value from the cache}
 \usage{
-clear_cached(key, env = .GlobalEnv)
+clear_cached(key, env = .GlobalEnv, all_scopes = FALSE)
 }
 \arguments{
 \item{key}{The cached key to remove.}
 
 \item{env}{The environment from which to remove the cached key. Defaults to \code{.GlobalEnv}.}
+
+\item{all_scopes}{Also remove entries whose keys begin with \code{key} followed by
+a colon, such as database/user-scoped copies. Defaults to FALSE for exact
+key matching. Unrelated keys with similar names are retained.}
 }
 \description{
 Remove a value from the cache

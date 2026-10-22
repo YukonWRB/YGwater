@@ -49,6 +49,8 @@ format_stats_period_label <- function(
 ) {
   keys <- c(
     `30yr` = "stats_period_last_30_years",
+    `1991_2020` = "stats_period_1991_2020",
+    `1981_2010` = "stats_period_1981_2010",
     full = "stats_period_entire_record"
   )
   stats_period <- as.character(stats_period)
@@ -202,17 +204,32 @@ continuous_trace_uses_corrected_source <- function(
 }
 
 #' Normalize the daily-statistics period selector
-#' @param stats_period One of "full" or "30yr".
+#' @param stats_period A supported historical-statistics period.
 #' @return A normalized period string.
 #' @noRd
 #' @keywords internal
 normalize_daily_stats_period <- function(stats_period) {
-  stats_period <- match.arg(stats_period, c("full", "30yr"))
-  stats_period
+  match.arg(stats_period, c("full", "30yr", "1991_2020", "1981_2010"))
+}
+
+#' Return fixed date boundaries for a historical-statistics period.
+#' @param stats_period A normalized historical-statistics period.
+#' @return NULL for dynamic periods, otherwise a named character vector with
+#'   inclusive `start` and exclusive `end` dates.
+#' @noRd
+#' @keywords internal
+daily_stats_period_bounds <- function(stats_period) {
+  stats_period <- normalize_daily_stats_period(stats_period)
+  switch(
+    stats_period,
+    `1991_2020` = c(start = "1991-01-01", end = "2021-01-01"),
+    `1981_2010` = c(start = "1981-01-01", end = "2011-01-01"),
+    NULL
+  )
 }
 
 #' Resolve the historic-statistics window shown in plot-data exports
-#' @param stats_period One of "full" or "30yr".
+#' @param stats_period A supported historical-statistics period.
 #' @param trace_data Exported trace data with a datetime column.
 #' @param range_data Exported range data with a datetime column.
 #' @param timeseries_start Full record start datetime.
@@ -298,6 +315,14 @@ historic_stats_export_window <- function(
     if (!is.na(full_end) && !is.na(stats_end) && stats_end > full_end) {
       stats_end <- full_end
     }
+  }
+
+  fixed_bounds <- daily_stats_period_bounds(stats_period)
+  if (!is.null(fixed_bounds)) {
+    fixed_start <- as.POSIXct(fixed_bounds[["start"]], tz = "UTC")
+    fixed_end <- as.POSIXct(fixed_bounds[["end"]], tz = "UTC") - 1
+    stats_start <- if (is.na(full_start)) fixed_start else max(full_start, fixed_start)
+    stats_end <- if (is.na(full_end)) fixed_end else min(full_end, fixed_end)
   }
 
   start_text <- if (is.na(stats_start)) {
@@ -456,6 +481,271 @@ continuous_plot_note_windows <- function(req) {
   )
 }
 
+#' Fetch Patch 65 aggregation metadata for selected timeseries
+#' @param con A DBI database connection.
+#' @param timeseries_ids Timeseries IDs to include.
+#' @param windows Optional data.frame/data.table with UTC `start_dt` and
+#'   `end_dt` columns. Methods are retained when their half-open applicability
+#'   period overlaps at least one requested window.
+#' @return A list containing `available`, `methods`, `steps`, and `inputs`.
+#' @noRd
+#' @keywords internal
+fetch_timeseries_aggregation_metadata <- function(
+  con,
+  timeseries_ids,
+  windows = NULL
+) {
+  empty_result <- list(
+    available = FALSE,
+    methods = data.table::data.table(
+      aggregation_method_id = character(),
+      timeseries_id = integer(),
+      applicable_from = character(),
+      applicable_until = character(),
+      source_name = character(),
+      source_reference = character(),
+      note = character()
+    ),
+    steps = data.table::data.table(
+      aggregation_method_id = character(),
+      step_id = character(),
+      stage_number = integer(),
+      operation_type = character(),
+      aggregation_type_id = integer(),
+      aggregation_type = character(),
+      window_start_offset = character(),
+      window_end_offset = character(),
+      evaluation_interval = character(),
+      evaluation_anchor = character(),
+      evaluation_timezone = character(),
+      expected_input_interval = character(),
+      input_weighting = character(),
+      minimum_input_count = integer(),
+      minimum_coverage = numeric(),
+      missing_data_policy = character(),
+      calculation_parameters = character()
+    ),
+    inputs = data.table::data.table(
+      aggregation_method_id = character(),
+      step_id = character(),
+      input_number = integer(),
+      input_step_id = character(),
+      component_weight = character()
+    )
+  )
+
+  timeseries_ids <- suppressWarnings(as.integer(timeseries_ids))
+  timeseries_ids <- sort(unique(timeseries_ids[!is.na(timeseries_ids)]))
+  if (length(timeseries_ids) == 0L) {
+    return(empty_result)
+  }
+
+  schema_tables <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT",
+        "to_regclass('continuous.timeseries_aggregation_methods') IS NOT NULL AS methods,",
+        "to_regclass('continuous.timeseries_aggregation_method_steps') IS NOT NULL AS steps,",
+        "to_regclass('continuous.timeseries_aggregation_method_step_inputs') IS NOT NULL AS inputs"
+      )
+    ),
+    error = function(e) NULL
+  )
+  if (
+    is.null(schema_tables) ||
+      !isTRUE(schema_tables$methods[[1L]]) ||
+      !isTRUE(schema_tables$steps[[1L]]) ||
+      !isTRUE(schema_tables$inputs[[1L]])
+  ) {
+    return(empty_result)
+  }
+
+  result <- empty_result
+  result$available <- TRUE
+  id_sql <- paste(timeseries_ids, collapse = ", ")
+  window_clause <- ""
+  window_params <- list()
+  if (
+    is.data.frame(windows) && nrow(windows) > 0L &&
+      all(c("start_dt", "end_dt") %in% names(windows))
+  ) {
+    windows <- windows[
+      !is.na(windows$start_dt) & !is.na(windows$end_dt),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(windows) > 0L) {
+      window_values <- vapply(seq_len(nrow(windows)), function(i) {
+        start_parameter <- 2L * i - 1L
+        end_parameter <- 2L * i
+        sprintf(
+          "($%d::timestamptz, $%d::timestamptz)",
+          start_parameter,
+          end_parameter
+        )
+      }, character(1))
+      window_clause <- paste0(
+        " AND EXISTS (SELECT 1 FROM (VALUES ",
+        paste(window_values, collapse = ", "),
+        ") AS requested_window(start_dt, end_dt) ",
+        "WHERE method.applicable_from < requested_window.end_dt ",
+        "AND method.applicable_until > requested_window.start_dt)"
+      )
+      window_params <- vector("list", 2L * nrow(windows))
+      for (i in seq_len(nrow(windows))) {
+        window_params[[2L * i - 1L]] <- as.POSIXct(
+          windows$start_dt[[i]],
+          tz = "UTC"
+        )
+        window_params[[2L * i]] <- as.POSIXct(
+          windows$end_dt[[i]],
+          tz = "UTC"
+        )
+      }
+    }
+  }
+
+  method_query <- paste0(
+    "SELECT method.aggregation_method_id::text AS aggregation_method_id, ",
+    "method.timeseries_id, ",
+    "CASE WHEN isfinite(method.applicable_from) THEN ",
+    "to_char(method.applicable_from AT TIME ZONE 'UTC', ",
+    "'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') ",
+    "ELSE method.applicable_from::text END AS applicable_from, ",
+    "CASE WHEN isfinite(method.applicable_until) THEN ",
+    "to_char(method.applicable_until AT TIME ZONE 'UTC', ",
+    "'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') ",
+    "ELSE method.applicable_until::text END AS applicable_until, ",
+    "method.source_name, ",
+    "method.source_reference, method.note ",
+    "FROM continuous.timeseries_aggregation_methods method ",
+    "WHERE method.timeseries_id IN (", id_sql, ")",
+    window_clause,
+    " ORDER BY method.timeseries_id, method.applicable_from, ",
+    "method.aggregation_method_id"
+  )
+  methods <- data.table::as.data.table(if (length(window_params) > 0L) {
+    DBI::dbGetQuery(con, method_query, params = window_params)
+  } else {
+    DBI::dbGetQuery(con, method_query)
+  })
+
+  if (nrow(methods) == 0L) {
+    result$methods <- methods
+    return(result)
+  }
+
+  result$methods <- methods
+  method_ids <- methods$aggregation_method_id
+  method_id_sql <- paste(method_ids, collapse = ", ")
+  result$steps <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT step.aggregation_method_id::text AS aggregation_method_id, ",
+      "step.step_id::text AS step_id, step.stage_number, ",
+      "step.operation_type, step.aggregation_type_id, ",
+      "at.aggregation_type, step.window_start_offset::text AS window_start_offset, ",
+      "step.window_end_offset::text AS window_end_offset, ",
+      "step.evaluation_interval::text AS evaluation_interval, ",
+      "step.evaluation_anchor::text AS evaluation_anchor, ",
+      "step.evaluation_timezone, ",
+      "step.expected_input_interval::text AS expected_input_interval, ",
+      "step.input_weighting, step.minimum_input_count, ",
+      "step.minimum_coverage, step.missing_data_policy, ",
+      "step.calculation_parameters::text AS calculation_parameters ",
+      "FROM continuous.timeseries_aggregation_method_steps step ",
+      "JOIN continuous.aggregation_types at ",
+      "ON at.aggregation_type_id = step.aggregation_type_id ",
+      "WHERE step.aggregation_method_id IN (", method_id_sql, ") ",
+      "ORDER BY step.aggregation_method_id, step.stage_number, step.step_id"
+    )
+  ))
+  if (nrow(result$steps) == 0L) {
+    return(result)
+  }
+
+  result$inputs <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT aggregation_method_id::text AS aggregation_method_id, ",
+      "step_id::text AS step_id, input_number, ",
+      "input_step_id::text AS input_step_id, component_weight::text AS component_weight ",
+      "FROM continuous.timeseries_aggregation_method_step_inputs ",
+      "WHERE aggregation_method_id IN (", method_id_sql, ") ",
+      "ORDER BY aggregation_method_id, step_id, input_number"
+    )
+  ))
+  result
+}
+
+#' Flatten aggregation metadata into one row per calculation operation
+#' @param metadata Result of `fetch_timeseries_aggregation_metadata()`.
+#' @return A data.table suitable for display below a continuous plot.
+#' @noRd
+#' @keywords internal
+continuous_aggregation_method_display_table <- function(metadata) {
+  methods <- data.table::copy(metadata$methods)
+  steps <- data.table::copy(metadata$steps)
+  inputs <- data.table::copy(metadata$inputs)
+
+  if (nrow(methods) == 0L) {
+    return(data.table::data.table())
+  }
+
+  if (nrow(steps) == 0L) {
+    return(methods)
+  }
+
+  steps[, inputs := ""]
+  if (nrow(inputs) > 0L) {
+    input_steps <- steps[, .(
+      aggregation_method_id,
+      input_step_id = step_id,
+      input_stage = stage_number,
+      input_operation = operation_type,
+      input_aggregation_type = aggregation_type
+    )]
+    inputs <- merge(
+      inputs,
+      input_steps,
+      by = c("aggregation_method_id", "input_step_id"),
+      all.x = TRUE,
+      sort = FALSE
+    )
+    inputs[, description := sprintf(
+      "%s: step %s (stage %s, %s, %s), weight %s",
+      input_number,
+      input_step_id,
+      input_stage,
+      input_operation,
+      input_aggregation_type,
+      component_weight
+    )]
+    input_summary <- inputs[, .(
+      inputs = paste(description, collapse = "; ")
+    ), by = .(aggregation_method_id, step_id)]
+    steps[input_summary, on = .(aggregation_method_id, step_id), inputs := i.inputs]
+  }
+
+  display <- merge(
+    methods,
+    steps,
+    by = "aggregation_method_id",
+    all = TRUE,
+    sort = FALSE,
+    suffixes = c("_method", "_step")
+  )
+  data.table::setorder(
+    display,
+    timeseries_id,
+    applicable_from,
+    stage_number,
+    step_id
+  )
+  display[]
+}
+
 #' Fetch notes that overlap a continuous plot request
 #' @param con A DBI database connection.
 #' @param req Plot request list created by the Shiny module.
@@ -534,6 +824,8 @@ fetch_continuous_plot_notes <- function(con, req, lang = "en") {
 #' @param module_data Module lookup data used for metadata labels.
 #' @param language Current application language object.
 #' @param notes Notes returned by `fetch_continuous_plot_notes()`.
+#' @param aggregation_metadata Result of
+#'   `fetch_timeseries_aggregation_metadata()`.
 #' @return A named list of data frames ready for CSV export.
 #' @noRd
 #' @keywords internal
@@ -542,7 +834,8 @@ continuous_plot_export_tables <- function(
   out,
   module_data,
   language,
-  notes = NULL
+  notes = NULL,
+  aggregation_metadata = NULL
 ) {
   safe_first_value <- function(data, key_col, key_value, value_col) {
     if (
@@ -650,6 +943,25 @@ continuous_plot_export_tables <- function(
       }
     }
 
+    invisible(NULL)
+  }
+
+  add_aggregation_tables <- function() {
+    if (is.null(aggregation_metadata)) {
+      return(invisible(NULL))
+    }
+    add_table(
+      "timeseries_aggregation_methods",
+      aggregation_metadata$methods
+    )
+    add_table(
+      "timeseries_aggregation_method_steps",
+      aggregation_metadata$steps
+    )
+    add_table(
+      "timeseries_aggregation_method_step_inputs",
+      aggregation_metadata$inputs
+    )
     invisible(NULL)
   }
 
@@ -773,12 +1085,14 @@ continuous_plot_export_tables <- function(
     add_table("trace_data", trace_data)
     add_table("historic_range_data", range_data)
     add_table("notes", notes)
+    add_aggregation_tables()
     return(tables)
   }
 
   add_table("metadata", base_metadata)
   add_data_recursive(out)
   add_table("notes", notes)
+  add_aggregation_tables()
   tables
 }
 
@@ -827,7 +1141,7 @@ write_continuous_plot_csv_zip <- function(tables, file) {
 }
 
 #' Build the historic-statistics caption used below plot legends
-#' @param stats_period One of "full" or "30yr".
+#' @param stats_period A supported historical-statistics period.
 #' @param plot_data Plot data returned by continuous plotting helpers.
 #' @param timeseries_ids Timeseries IDs included in the plot.
 #' @param timeseries_table Timeseries metadata with start/end datetimes.
@@ -958,7 +1272,7 @@ historic_stats_caption_for_plot_data <- function(
 
 #' Build stable daily-statistics SELECT expressions
 #' @param con A DBI database connection object.
-#' @param stats_period One of "full" or "30yr".
+#' @param stats_period A supported historical-statistics period.
 #' @param columns Base daily-statistics columns to select.
 #' @param table_alias Optional table alias to prefix column references.
 #' @return A character vector of SQL SELECT expressions.
@@ -971,6 +1285,41 @@ daily_stats_select_sql <- function(
   table_alias = NULL
 ) {
   stats_period <- normalize_daily_stats_period(stats_period)
+  has_table_alias <- !is.null(table_alias) && nzchar(table_alias)
+  prefix <- if (has_table_alias) paste0(table_alias, ".") else ""
+  outer_prefix <- if (has_table_alias) prefix else "measurements_calculated_daily."
+  fixed_bounds <- daily_stats_period_bounds(stats_period)
+
+  if (!is.null(fixed_bounds)) {
+    aggregates <- c(
+      min = "MIN(history.value)",
+      max = "MAX(history.value)",
+      q10 = "percentile_cont(0.10) WITHIN GROUP (ORDER BY history.value)",
+      q25 = "percentile_cont(0.25) WITHIN GROUP (ORDER BY history.value)",
+      q50 = "percentile_cont(0.50) WITHIN GROUP (ORDER BY history.value)",
+      q75 = "percentile_cont(0.75) WITHIN GROUP (ORDER BY history.value)",
+      q90 = "percentile_cont(0.90) WITHIN GROUP (ORDER BY history.value)",
+      mean = "AVG(history.value)"
+    )
+    if (!all(columns %in% names(aggregates))) {
+      stop("Unsupported fixed-period daily statistics column.", call. = FALSE)
+    }
+    return(vapply(columns, function(column) {
+      paste0(
+        "(SELECT ", aggregates[[column]],
+        " FROM continuous.measurements_calculated_daily AS history",
+        " WHERE history.timeseries_id = ", outer_prefix, "timeseries_id",
+        " AND history.date >= DATE '", fixed_bounds[["start"]], "'",
+        " AND history.date < DATE '", fixed_bounds[["end"]], "'",
+        " AND EXTRACT(MONTH FROM history.date) = EXTRACT(MONTH FROM ",
+        outer_prefix, "date)",
+        " AND EXTRACT(DAY FROM history.date) = EXTRACT(DAY FROM ",
+        outer_prefix, "date)) AS ",
+        as.character(DBI::dbQuoteIdentifier(con, column))
+      )
+    }, character(1)))
+  }
+
   available <- DBI::dbGetQuery(
     con,
     "SELECT column_name
@@ -985,12 +1334,6 @@ daily_stats_select_sql <- function(
       all(paste0(columns, "_30yr") %in% available)
   ) {
     suffix <- "_30yr"
-  }
-
-  prefix <- if (is.null(table_alias) || !nzchar(table_alias)) {
-    ""
-  } else {
-    paste0(table_alias, ".")
   }
 
   vapply(

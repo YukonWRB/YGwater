@@ -12,6 +12,7 @@
 #' @param dbUser Username for the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
+#' @param workers Number of local mirai daemons. `NULL` (the default) divides the cores available to R, after reserving one, between the two FloodAtlas app processes and uses at least one daemon per app. Set explicitly to tune resource use when the apps share a host or when only one app is running.
 #'
 #' @return Opens a Shiny application.
 #' @export
@@ -25,13 +26,24 @@ floodAtlas <- function(
   dbHost = Sys.getenv("aquacacheHost"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
-  server = FALSE
+  server = FALSE,
+  workers = NULL
 ) {
   rlang::check_installed("shiny", reason = "to use floodAtlas app")
   rlang::check_installed("shinyjs", reason = "to use floodAtlas app")
   rlang::check_installed(
-    "future",
-    reason = "to enable asynchronous operations in floodAtlas apps"
+    "mirai",
+    reason = "to enable asynchronous operations in floodAtlas apps",
+    version = "2.0.0"
+  )
+  rlang::check_installed(
+    "promises",
+    reason = "to connect mirai tasks to Shiny ExtendedTask",
+    version = "1.3.0"
+  )
+  rlang::check_installed(
+    "parallelly",
+    reason = "to determine the available CPU allocation for mirai daemons"
   )
   rlang::check_installed(
     "bslib",
@@ -42,12 +54,20 @@ floodAtlas <- function(
     reason = "to show a 'loading' spinner in the app"
   )
 
-  # If on Windows OR running interactively, use multisession, else use multicore
-  if (Sys.info()["sysname"] == "Windows" | interactive()) {
-    future::plan("multisession")
-  } else {
-    future::plan("multicore")
+  if (is.null(workers)) {
+    workers <- max(1L, floor(parallelly::availableCores(omit = 1L) / 2L))
+  } else if (
+    !is.numeric(workers) ||
+      length(workers) != 1L ||
+      is.na(workers) ||
+      !is.finite(workers) ||
+      workers < 1 ||
+      workers != floor(workers) ||
+      workers > .Machine$integer.max
+  ) {
+    stop("`workers` must be NULL or a positive whole number.", call. = FALSE)
   }
+  workers <- as.integer(workers)
 
   if (app == "overlap") {
     appDir <- system.file("apps/floodAtlas_over", package = "YGwater")
@@ -89,6 +109,13 @@ floodAtlas <- function(
   }
 
   shiny::enableBookmarking("url")
+
+  # Daemons are persistent and shared by sessions in this app process.
+  compute_profile <- paste0("YGwater_floodAtlas_", app)
+  mirai::daemons(n = workers, .compute = compute_profile)
+  shiny::onStop(function() {
+    mirai::daemons(n = 0L, .compute = compute_profile)
+  })
 
   if (server) {
     shiny::shinyAppDir(appDir)

@@ -63,20 +63,20 @@ test_that("guideline SQL scalar validation blocks modifying CTEs", {
 
 test_that("public app SQL and help-page sinks remain parameterized", {
   continuous <- readLines(system.file(
-    "apps/YGwater/modules/client/data/continuousData.R",
+    "apps/aqualink/modules/client/data/continuousData.R",
     package = "YGwater"
   ))
   continuous <- continuous[!grepl("^[[:space:]]*#", continuous)]
   image_map <- readLines(system.file(
-    "apps/YGwater/modules/client/images/image_map_view.R",
+    "apps/aqualink/modules/client/images/image_map_view.R",
     package = "YGwater"
   ))
   help_page <- readLines(system.file(
-    "apps/YGwater/www/html/admin_help/page_help_placeholder.html",
+    "apps/aqualink/www/html/admin_help/page_help_placeholder.html",
     package = "YGwater"
   ))
   wq_report <- readLines(system.file(
-    "apps/YGwater/modules/client/reports/WQReport.R",
+    "apps/aqualink/modules/client/reports/WQReport.R",
     package = "YGwater"
   ))
 

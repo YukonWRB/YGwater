@@ -1,15 +1,15 @@
 test_that("source-function selectors use the database registry by data domain", {
   module_paths <- c(
     continuous = system.file(
-      "apps/YGwater/modules/admin/continuousData/addTimeseries.R",
+      "apps/aqualink/modules/admin/continuousData/addTimeseries.R",
       package = "YGwater"
     ),
     discrete = system.file(
-      "apps/YGwater/modules/admin/discreteData/addSampleSeries.R",
+      "apps/aqualink/modules/admin/discreteData/addSampleSeries.R",
       package = "YGwater"
     ),
     image = system.file(
-      "apps/YGwater/modules/admin/imgupload/addImgSeries.R",
+      "apps/aqualink/modules/admin/imgupload/addImgSeries.R",
       package = "YGwater"
     )
   )

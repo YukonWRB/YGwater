@@ -283,8 +283,8 @@ app_server <- function(input, output, session) {
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
     function(loc, param, yrs, lang, webgl, config) {
-      promises::future_promise({
-        con <- AquaConnect(
+      mirai::mirai({
+        con <- YGwater::AquaConnect(
           name = config$dbName,
           host = config$dbHost,
           port = config$dbPort,
@@ -292,6 +292,7 @@ app_server <- function(input, output, session) {
           password = config$dbPass,
           silent = TRUE
         )
+        on.exit(DBI::dbDisconnect(con), add = TRUE)
 
         loc_name <- DBI::dbGetQuery(
           con,
@@ -317,7 +318,7 @@ app_server <- function(input, output, session) {
           end_day <- 365
         }
 
-        p <- plotOverlap(
+        p <- YGwater::plotOverlap(
           location = loc,
           sub_location = NULL,
           parameter = param,
@@ -341,13 +342,9 @@ app_server <- function(input, output, session) {
           tzone = "MST",
           con = con
         )
-        DBI::dbDisconnect(con)
-
         # Remove the plotly logo and other buttons from the top right of the plot
-        p <- plotly::config(p, displayModeBar = FALSE)
-
-        return(p) # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (which use to be DBI::dbDisconnect(con))
-      })
+        plotly::config(p, displayModeBar = FALSE)
+      }, environment(), .compute = "YGwater_floodAtlas_overlap")
     }
   ) |>
     bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running

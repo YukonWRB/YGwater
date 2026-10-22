@@ -1,6 +1,6 @@
 test_that("Add Location offers automatic elevation lookup", {
   module_path <- system.file(
-    "apps/YGwater/modules/admin/locations/addLocation.R",
+    "apps/aqualink/modules/admin/locations/addLocation.R",
     package = "YGwater"
   )
   module <- paste(readLines(module_path, warn = FALSE), collapse = "\n")

@@ -155,7 +155,7 @@ test_that("tests for API V1", {
     "timeseries_type",
     "timeseries_type_description",
     "last_new_data",
-    "publicly_visible",
+    "default_show",
     "active",
     "default_owner_organization_id",
     "default_owner",

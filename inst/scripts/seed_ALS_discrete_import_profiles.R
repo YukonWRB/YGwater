@@ -163,13 +163,18 @@ upsert_parameter_mappings <- function(con, source_id, key) {
   key <- key[ignore_bool == FALSE]
   key <- key[is_present(input_param) & !is.na(suppressWarnings(as.integer(parameter_id)))]
 
+  # Resolve stable catalogue codes and source-key aliases with the same
+  # resolver used by normal imports, including species and operational targets.
+  key <- AquaCache:::import_mapping_resolve_targets(con, key)
   optional_defaults <- list(
     result_type = 2L,
     matrix_state = 1L,
     sample_fraction = NA_integer_,
     sample_fraction_AC = NA_integer_,
     result_value_type = 1L,
-    result_speciation_id = NA_integer_,
+    reporting_basis_id = NA_integer_,
+    result_speciation_id = NA_integer_, result_target_id = NA_integer_,
+    endpoint_mode = NA_character_, endpoint_ph = NA_real_, analysis_conditions = "{}",
     conversion = 1,
     result_offset = 0,
     FLAG_notes_combined = NA_character_
@@ -203,10 +208,10 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     con,
     "SELECT result_value_type_id FROM discrete.result_value_types;"
   )$result_value_type_id
-  valid_result_speciations <- DBI::dbGetQuery(
+  valid_reporting_bases <- DBI::dbGetQuery(
     con,
-    "SELECT result_speciation_id FROM discrete.result_speciations;"
-  )$result_speciation_id
+    "SELECT reporting_basis_id FROM discrete.reporting_bases;"
+  )$reporting_basis_id
 
   resolved <- vector("list", nrow(key))
   for (i in seq_len(nrow(key))) {
@@ -228,9 +233,9 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     if (!(result_value_type %in% valid_result_value_types)) {
       result_value_type <- 1L
     }
-    result_speciation_id <- scalar_int(key$result_speciation_id[[i]])
-    if (!is.na(result_speciation_id) && !(result_speciation_id %in% valid_result_speciations)) {
-      result_speciation_id <- NA_integer_
+    reporting_basis_id <- scalar_int(key$reporting_basis_id[[i]])
+    if (!is.na(reporting_basis_id) && !(reporting_basis_id %in% valid_reporting_bases)) {
+      stop("Unknown reporting basis in source-key row ", i, ". Migrate legacy descriptors explicitly.")
     }
 
     resolved[[i]] <- data.frame(
@@ -240,8 +245,13 @@ upsert_parameter_mappings <- function(con, source_id, key) {
       result_type = scalar_int(key$result_type[[i]], 2L),
       sample_fraction_id = sample_fraction_id,
       result_value_type = result_value_type,
-      result_speciation_id = result_speciation_id,
-      matrix_state_id = scalar_int(key$matrix_state[[i]], 1L),
+      reporting_basis_id = reporting_basis_id,
+      result_speciation_id = scalar_int(key$result_speciation_id[[i]]),
+      result_target_id = scalar_int(key$result_target_id[[i]]),
+      endpoint_mode = as.character(key$endpoint_mode[[i]]),
+      endpoint_ph = scalar_num(key$endpoint_ph[[i]]),
+      analysis_conditions = AquaCache::normalizeAnalysisConditions(key$analysis_conditions[[i]]),
+      matrix_state_id = scalar_int(key$matrix_state_id[[i]]),
       conversion = scalar_num(key$conversion[[i]], 1),
       result_offset = scalar_num(key$result_offset[[i]], 0),
       priority = 100L,
@@ -327,7 +337,8 @@ upsert_parameter_mappings <- function(con, source_id, key) {
       result_type,
       sample_fraction_id,
       result_value_type,
-      result_speciation_id,
+      reporting_basis_id, result_speciation_id, result_target_id,
+      endpoint_mode, endpoint_ph, analysis_conditions,
       matrix_state_id,
       conversion = 1,
       result_offset = 0,
@@ -387,7 +398,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
           NA_integer_
         },
         result_value_type = 1L,
-        result_speciation_id = NA_integer_,
+        reporting_basis_id = NA_integer_,
         matrix_state_id = 1L,
         conversion = 1,
         result_offset = 0,
@@ -458,7 +469,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     result_type = 2L,
     sample_fraction_id = dissolved_fraction[[1]],
     result_value_type = 1L,
-    result_speciation_id = NA_integer_,
+    reporting_basis_id = NA_integer_,
     matrix_state_id = 1L,
     conversion = 1,
     result_offset = 0,
@@ -505,7 +516,8 @@ profile_definitions <- function() {
     "matrix_state_id",
     "sample_fraction_id",
     "result_value_type",
-    "result_speciation_id",
+    "reporting_basis_id", "result_speciation_id", "result_target_id",
+    "endpoint_mode", "endpoint_ph", "analysis_conditions",
     "laboratory",
     "analysis_datetime"
   )
@@ -730,6 +742,8 @@ required <- DBI::dbGetQuery(
      to_regclass('discrete.import_parameter_mappings') IS NOT NULL AS has_parameter_mappings,
      to_regclass('discrete.import_result_flag_mappings') IS NOT NULL AS has_result_flag_mappings,
      to_regclass('discrete.import_location_mappings') IS NOT NULL AS has_location_mappings,
+     to_regclass('discrete.reporting_bases') IS NOT NULL AS has_reporting_bases,
+     to_regclass('discrete.result_targets') IS NOT NULL AS has_result_targets,
      EXISTS (
        SELECT 1
        FROM information_schema.columns
@@ -740,7 +754,7 @@ required <- DBI::dbGetQuery(
 )
 if (!all(unlist(required))) {
   stop(
-    "The Patch 61 import mapping schema is missing. Apply AquaCache patch 61 before running this script."
+    "The Patch 65 chemistry/import mapping schema is missing. Apply AquaCache patch 65 before running this script."
   )
 }
 
