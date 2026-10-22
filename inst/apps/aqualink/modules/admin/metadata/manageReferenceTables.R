@@ -1696,18 +1696,20 @@ clear_reference_caches <- function(session) {
   cache_keys <- c(
     "cont_data.plot_module_data",
     "disc_data_module_data",
+    "disc_plot_module_data_chemistry",
     "map_params_module_data",
     "map_location_module_data"
   )
 
-  for (cache_key in cache_keys) {
-    clear_cached(cache_key)
-
-    if (
-      !is.null(session$userData$app_cache) &&
-        is.environment(session$userData$app_cache)
-    ) {
-      clear_cached(cache_key, env = session$userData$app_cache)
+  cache_envs <- list(.GlobalEnv)
+  if (is.environment(session$userData$app_cache)) {
+    cache_envs[[2L]] <- session$userData$app_cache
+  }
+  # Reference edits affect all reader roles. Clear both unscoped and scoped
+  # copies in the shared public cache and the editor's private cache.
+  for (env in cache_envs) {
+    for (cache_key in cache_keys) {
+      clear_cached(cache_key, env = env, all_scopes = TRUE)
     }
   }
 }

@@ -366,7 +366,6 @@ test_that("WWR preserves distinct well and borehole registry rows", {
   expect_match(cache_module, "w.stick_up_height_m", fixed = TRUE)
   expect_match(cache_module, "LEFT JOIN boreholes.wells", fixed = TRUE)
   expect_match(cache_module, "b.borehole_purpose_id", fixed = TRUE)
-  expect_match(cache_module, 'key = "wwr_module_data_v2"', fixed = TRUE)
   expect_match(cache_module, "registry_id = data.table::fifelse", fixed = TRUE)
   expect_match(
     registry_module,

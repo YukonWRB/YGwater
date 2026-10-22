@@ -71,6 +71,7 @@ cont_data_cache_signature <- function(con) {
 }
 
 cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
+  info <- DBI::dbGetInfo(con)
   key <- paste(
     "cont_data.plot_module_data",
     info$host,
@@ -411,6 +412,7 @@ disc_plot_cache_signature <- function(con) {
 
 
 disc_plot_module_data <- function(con, env = .GlobalEnv) {
+  info <- DBI::dbGetInfo(con)
   key <- paste(
     "disc_plot_module_data_chemistry",
     info$host,
@@ -515,6 +517,7 @@ disc_plot_module_data <- function(con, env = .GlobalEnv) {
 
 # discrete data module #####
 disc_data_module_data <- function(con, env = .GlobalEnv) {
+  info <- DBI::dbGetInfo(con)
   get_cached(
     key = paste(
       "disc_data_module_data",
@@ -754,6 +757,7 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
 
 # locations map module #########
 map_location_module_data <- function(con, env = .GlobalEnv) {
+  info <- DBI::dbGetInfo(con)
   get_cached(
     key = paste(
       "map_location_module_data",
@@ -921,6 +925,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
 
 # water well registry module #########
 wwr_module_data <- function(con, env = .GlobalEnv) {
+  info <- DBI::dbGetInfo(con)
   get_cached(
     key = paste(
       "wwr_module_data",
