@@ -549,28 +549,6 @@ importSetupUI <- function(id) {
           "Leave the workbook format blank to work with source-wide mappings. Choose a format to work with mappings for that workbook; those mappings override source-wide mappings for the format."
         ),
         uiOutput(ns("manage_import_profile_status")),
-        tags$div(
-          class = "well",
-          tags$h4("Apply saved changes"),
-          uiOutput(ns("mapping_publication_status")),
-          selectInput(
-            ns("manage_publish_scope"),
-            "Draft scope to publish",
-            choices = c(
-              "Source-wide (AquaCache package downloads)" = "source",
-              "This workbook format" = "profile"
-            )
-          ),
-          helpText(
-            "This defaults to the scope you are editing. Publishing applies every draft mapping in the selected scope; drafts in other scopes remain unchanged."
-          ),
-          actionButton(
-            ns("manage_publish_mappings"),
-            "Review and publish selected scope",
-            class = "btn-primary"
-          )
-        ),
-        tags$hr(),
         fluidRow(
           column(
             4,
@@ -958,6 +936,28 @@ importSetupUI <- function(id) {
               ns("manage_save_flag_mapping"),
               "Save result-flag mapping as draft"
             )
+          )
+        ),
+        tags$hr(),
+        tags$div(
+          class = "well",
+          tags$h4("Apply saved changes"),
+          uiOutput(ns("mapping_publication_status")),
+          selectInput(
+            ns("manage_publish_scope"),
+            "Draft scope to publish",
+            choices = c(
+              "Source-wide (AquaCache package downloads)" = "source",
+              "This workbook format" = "profile"
+            )
+          ),
+          helpText(
+            "This defaults to the scope you are editing. Publishing applies every draft mapping in the selected scope; drafts in other scopes remain unchanged."
+          ),
+          actionButton(
+            ns("manage_publish_mappings"),
+            "Review and publish selected scope",
+            class = "btn-primary"
           )
         )
       )
@@ -1653,7 +1653,11 @@ importSetup <- function(id, language) {
           "Saving updates the draft. It remains unpublished until you review and publish the whole scope."
         }
         return(tags$div(
-          class = if (nzchar(issue)) "alert alert-warning" else "alert alert-info",
+          class = if (nzchar(issue)) {
+            "alert alert-warning"
+          } else {
+            "alert alert-info"
+          },
           tags$strong(sprintf(
             "Editing %s mapping %s",
             context$mapping_type[[1]],
@@ -3085,6 +3089,12 @@ importSetup <- function(id, language) {
           "All formats for this source"
         )
         active <- ifelse(as.logical(rows$active), "Included", "Excluded")
+        id_field <- switch(
+          input$manage_mapping_type,
+          parameter = "import_mapping_id",
+          location = "import_location_mapping_id",
+          result_flag = "import_result_flag_mapping_id"
+        )
         if (identical(input$manage_mapping_type, "parameter")) {
           source_match <- lapply(rows$source_match, function(value) {
             tryCatch(
@@ -3094,6 +3104,7 @@ importSetup <- function(id, language) {
           })
           parameter_index <- match(rows$parameter_id, params()$parameter_id)
           summary <- data.frame(
+            `Mapping ID` = rows[[id_field]],
             Scope = scope,
             `Source matching criteria` = vapply(
               rows$source_match,
@@ -3114,6 +3125,7 @@ importSetup <- function(id, language) {
             sub_locations$sub_location_id
           )
           summary <- data.frame(
+            `Mapping ID` = rows[[id_field]],
             Scope = scope,
             `Source location code` = rows$source_location_code,
             `Source location name` = rows$source_location_name,
@@ -3127,6 +3139,7 @@ importSetup <- function(id, language) {
           )
         } else {
           summary <- data.frame(
+            `Mapping ID` = rows[[id_field]],
             Scope = scope,
             `Source flag column` = ifelse(
               addDiscData_present(rows$source_flag_column),
@@ -4309,6 +4322,7 @@ importSetup <- function(id, language) {
           ))
         }
         display <- data.frame(
+          `Mapping ID` = rows$import_mapping_id,
           Source = rows$source_code,
           Scope = ifelse(
             is.na(rows$profile_code),
@@ -4609,6 +4623,7 @@ importSetup <- function(id, language) {
           "import_mapping_set_id",
           "import_source_id",
           "import_profile_id",
+          "import_mapping_id",
           "status",
           "version",
           "mapping_type",
@@ -4629,6 +4644,19 @@ importSetup <- function(id, language) {
         req(!is.null(pending))
         DT::datatable(
           pending$changes,
+          rownames = FALSE,
+          selection = "none",
+          options = list(pageLength = 5, lengthChange = FALSE, scrollX = TRUE)
+        )
+      },
+      server = FALSE
+    )
+    output$publication_incomplete <- DT::renderDT(
+      {
+        pending <- pending_publication()
+        req(!is.null(pending), nrow(pending$incomplete) > 0L)
+        DT::datatable(
+          pending$incomplete,
           rownames = FALSE,
           selection = "none",
           options = list(pageLength = 5, lengthChange = FALSE, scrollX = TRUE)
@@ -4664,6 +4692,19 @@ importSetup <- function(id, language) {
             rows$active &
             !is.na(rows$issue) &
             nzchar(rows$issue)
+          incomplete <- data.frame(
+            `Mapping ID` = rows$import_mapping_id[bad],
+            Type = rows$mapping_type[bad],
+            `Source values` = vapply(
+              rows$source_match[bad],
+              importSetup_criteria_label,
+              ""
+            ),
+            `AquaCache target` = rows$target[bad],
+            `Needs attention` = rows$issue[bad],
+            check.names = FALSE
+          )
+          incomplete[is.na(incomplete)] <- ""
           labels <- mapping_target_labels()
           changes <- importSetup_changes(rows, labels)
           scope_label <- if (is.null(profile_code)) {
@@ -4686,6 +4727,7 @@ importSetup <- function(id, language) {
             scope_label = scope_label,
             impact_note = impact_note,
             rows = rows,
+            incomplete = incomplete,
             changes = changes
           ))
           showModal(modalDialog(
@@ -4714,10 +4756,19 @@ importSetup <- function(id, language) {
             if (any(bad)) {
               tags$div(
                 class = "alert alert-danger",
-                paste(
-                  "Complete or deactivate these draft mappings before publication:",
-                  paste(unique(rows$issue[bad]), collapse = "; ")
+                tags$strong(sprintf(
+                  "%s active draft mapping(s) need attention.",
+                  sum(bad)
+                )),
+                tags$p(
+                  "The table lists each mapping ID, its source values and AquaCache target, and the missing information. Use each ID to find the row in the mappings table. Cancel this review, open each row, complete it or deactivate it, save the draft, then review publication again."
                 )
+              )
+            },
+            if (any(bad)) {
+              tagList(
+                tags$h5("Mappings that need attention"),
+                DT::DTOutput(ns("publication_incomplete"))
               )
             },
             if (!nrow(changes)) {
@@ -4725,6 +4776,7 @@ importSetup <- function(id, language) {
                 "The draft has no definition changes from the current published revision."
               )
             },
+            tags$h5("Draft mapping changes"),
             DT::DTOutput(ns("publication_changes")),
             footer = tagList(
               actionButton(ns("cancel_publication"), "Cancel"),
