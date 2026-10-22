@@ -121,7 +121,7 @@ tooltip_discrete,tool tips,Measurements or samples taken at variable intervals,M
 tooltip_continuous,tool tips,Measurements recorded at regular intervals automatically,Mesures enregistrées automatiquement à intervalles réguliers
 tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Lieu de la prise de la mesure ou de l’échantillon
 tooltip_utc7,table tool tips,UTC-7,UTC-7
-tooltip_params_map_min_yrs,,"Minimum number of years on record to show the point. Especially useful when showing historic range to avoid points with very little data.","Nombre minimum d'années de données pour afficher le point. Utile surtout lors de l'affichage de la plage historique pour éviter les points avec très peu de données."
+tooltip_params_map_min_yrs,,"Minimum number of years on record for historical comparisons. Absolute values do not require historical coverage.","Nombre minimum d'années de données pour les comparaisons historiques. Les valeurs absolues ne nécessitent pas de couverture historique."
 tooltip_params_map_date_within,,"Maximum number of days from the target date to include a measurement. Use a lower threshold for parameters that change quickly (e.g., temperature).","Nombre maximum de jours à partir de la date ciblée pour inclure une mesure. Utilisez un seuil plus bas pour les paramètres qui changent rapidement (par exemple, la température)."
 filters,,Filters,Filtres
 reset_filters,,Reset filters,Réinitialiser les filtres
@@ -333,7 +333,18 @@ map_two_parameter,,Two parameters,Deux paramètres
 map_latest_measurements,,Latest measurements,Plus récentes mesures
 map_latest_auto_update,,Update every 15 minutes,Actualiser toutes les 15 minutes
 map_auto_update_notification,,Measurements updated,Mesures actualisées
-map_latest_measurements_modal,,"<b>Note</b>: Latest measurements are compared to the <i>average</i> values for the same day in past years. Keep this in mind for parameters that change a lot during the day, like temperature.","<b>Remarque</b> : Les mesures les plus récentes sont comparées aux valeurs <i>moyennes</i> de la même journée dans les années passées. Ceci impacte surtout les paramètres qui varient beaucoup au cours d’une journée, comme la température."
+map_latest_measurements_modal,,"The most frequent eligible series is used at each location. Relative values compare its latest corrected measurement to historical daily means for the same UTC calendar day. The date tolerance includes today and the selected number of preceding UTC days.","La série admissible la plus fréquente est utilisée à chaque site. Les valeurs relatives comparent sa plus récente mesure corrigée aux moyennes quotidiennes historiques du même jour du calendrier UTC. La tolérance inclut aujourd’hui et le nombre choisi de jours UTC précédents."
+map_loading,,Loading measurements… You can change the selections while the map updates.,Chargement des mesures… Vous pouvez modifier les sélections pendant l’actualisation de la carte.
+map_load_error,,Measurements could not be loaded. Change the selection or try again.,Impossible de charger les mesures. Modifiez la sélection ou réessayez.
+map_retry,,Try again,Réessayer
+map_no_measurements,,No measurements match these parameters and date limits.,Aucune mesure ne correspond à ces paramètres et limites de date.
+map_stats_fallback,,30-year statistics are unavailable for this database. Showing the full historical record.,Les statistiques sur 30 ans ne sont pas disponibles pour cette base de données. L’historique complet est affiché.
+map_daily_mean,,(daily mean),(moyenne quotidienne)
+map_latest_within_selected,,and a latest measurement from today or the preceding %s UTC day(s),et une dernière mesure datant d’aujourd’hui ou des %s jours UTC précédents
+map_latest_within_only,,Latest measurement from today or the preceding %s UTC day(s),Dernière mesure datant d’aujourd’hui ou des %s jours UTC précédents
+map_date_within_only,,Data within %s day(s) of the target date,Données à moins de %s jours de la date ciblée
+map_invalid_selection,,Select an available parameter with 3–100 years of record and a date tolerance of 0–365 whole days.,Sélectionnez un paramètre disponible avec 3 à 100 années de données et une tolérance de date de 0 à 365 jours entiers.
+map_invalid_absolute_selection,,Select an available parameter and a date tolerance of 0–365 whole days.,Sélectionnez un paramètre disponible et une tolérance de date de 0 à 365 jours entiers.
 map_primary_param,,Primary parameter,Paramètre primaire
 map_edit_primary_param,,Edit primary parameter,Modifer paramètre primaire
 map_edit_primary_param_solo,,Edit parameter,Modifier le paramètre
