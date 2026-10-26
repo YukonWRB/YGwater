@@ -40,6 +40,34 @@ methods::setMethod(
     if (grepl("to_regprocedure", statement, fixed = TRUE)) {
       return(data.frame(available = TRUE))
     }
+    if (
+      grepl("SELECT s.location_id, r.parameter_id", statement, fixed = TRUE)
+    ) {
+      rows <- fixture$results
+      rows <- rows[
+        rows$location_id %in%
+          as.integer(jsonlite::fromJSON(params[[1]])) &
+          rows$parameter_id %in% as.integer(jsonlite::fromJSON(params[[2]])) &
+          !is.na(rows$result),
+        ,
+        drop = FALSE
+      ]
+      return(rows[c(
+        "location_id",
+        "parameter_id",
+        "matrix_state_id",
+        "sample_fraction_id",
+        "reporting_basis_id",
+        "result_speciation_id",
+        "result_target_id",
+        "endpoint_mode",
+        "endpoint_ph",
+        "analysis_conditions_key",
+        "result_type_id",
+        "result_value_type_id",
+        "result"
+      )])
+    }
     if (grepl("FROM criteria.guidelines g", statement, fixed = TRUE)) {
       return(data.frame(
         guideline_id = 30L,
@@ -142,6 +170,9 @@ make_report_fixture <- function() {
   locations <- data.frame(
     location_id = c(1L, 2L, 3L),
     location_code = c("LOC-A", "LOC-B", "LOC-C"),
+    alias = c("OLD-A", NA_character_, "OLD-C"),
+    name = c("Station A", "Station B", "Station C"),
+    name_fr = c("Station A fr", "Station B fr", "Station C fr"),
     stringsAsFactors = FALSE
   )
   parameters <- data.frame(
@@ -191,7 +222,10 @@ make_report_fixture <- function() {
         sample_id = samples$sample_id[[i]],
         location_id = samples$location_id[[i]],
         location = samples$location[[i]],
-        alias = NA_character_,
+        alias = locations$alias[match(
+          samples$location_id[[i]],
+          locations$location_id
+        )],
         location_name = samples$location_name[[i]],
         location_name_fr = NA_character_,
         latitude = 60 + samples$location_id[[i]],
@@ -221,10 +255,14 @@ make_report_fixture <- function() {
         sample_fraction = "Total",
         reporting_basis_id = NA_integer_,
         reporting_basis = NA_character_,
-        result_speciation_id = NA_integer_, result_speciation = NA_character_,
-        result_target_id = NA_integer_, result_target = NA_character_,
-        endpoint_mode = NA_character_, endpoint_ph = NA_real_,
-        analysis_conditions = "{}", analysis_conditions_key = "empty_conditions",
+        result_speciation_id = NA_integer_,
+        result_speciation = NA_character_,
+        result_target_id = NA_integer_,
+        result_target = NA_character_,
+        endpoint_mode = NA_character_,
+        endpoint_ph = NA_real_,
+        analysis_conditions = "{}",
+        analysis_conditions_key = "empty_conditions",
         result_type_id = 1L,
         result_type = "Discrete",
         result_value_type_id = 1L,
@@ -291,8 +329,8 @@ test_that("AquaCacheReport preserves the original single-date matrix and writes 
     colNames = FALSE
   )
   expect_equal(as.character(one_sheet[5, 1]), "Parameter")
-  expect_match(as.character(one_sheet[5, 7]), "LOC-A")
-  expect_equal(as.character(one_sheet[6, 7]), "1.1")
+  expect_match(as.character(one_sheet[5, 8]), "LOC-A")
+  expect_equal(as.character(one_sheet[6, 8]), "1.1")
 
   dates <- as.Date(c("2024-01-01", "2024-01-03"))
   date_tabs <- run_mock_aquacache_report(
@@ -326,7 +364,7 @@ test_that("AquaCacheReport preserves the original single-date matrix and writes 
     "2024-01-02",
     colNames = FALSE
   )
-  expect_equal(as.character(empty_date_sheet[5, 7]), "No eligible samples")
+  expect_equal(as.character(empty_date_sheet[5, 8]), "No eligible samples")
 })
 
 test_that("AquaCacheReport writes location and parameter date matrices", {
@@ -351,10 +389,10 @@ test_that("AquaCacheReport writes location and parameter date matrices", {
   )
   expect_equal(as.character(location_sheet[5, 1]), "Parameter")
   expect_equal(
-    as.character(location_sheet[5, 7:8]),
+    as.character(location_sheet[5, 8:9]),
     c("2024-01-01", "2024-01-03")
   )
-  expect_equal(as.character(location_sheet[6, 7:8]), c("1.1", "1.3"))
+  expect_equal(as.character(location_sheet[6, 8:9]), c("1.1", "1.3"))
 
   by_parameter <- run_mock_aquacache_report(
     con,
@@ -376,10 +414,10 @@ test_that("AquaCacheReport writes location and parameter date matrices", {
   )
   expect_equal(as.character(parameter_sheet[5, 1]), "Location")
   expect_equal(
-    as.character(parameter_sheet[5, 8:9]),
+    as.character(parameter_sheet[5, 9:10]),
     c("2024-01-01", "2024-01-03")
   )
-  expect_equal(as.character(parameter_sheet[6, 8:9]), c("1.1", "1.3"))
+  expect_equal(as.character(parameter_sheet[6, 9:10]), c("1.1", "1.3"))
 
   one_location <- run_mock_aquacache_report(
     con,
@@ -391,8 +429,15 @@ test_that("AquaCacheReport writes location and parameter date matrices", {
   on.exit(unlink(one_location$xlsx_path), add = TRUE)
   expect_equal(
     openxlsx::getSheetNames(one_location$xlsx_path),
-    c("Report", "Result details", "Guideline details")
+    c("LOC-A", "Result details", "Guideline details")
   )
+  one_location_sheet <- openxlsx::read.xlsx(
+    one_location$xlsx_path,
+    "LOC-A",
+    colNames = FALSE
+  )
+  expect_match(as.character(one_location_sheet[1, 1]), "LOC-A - Station A")
+  expect_match(as.character(one_location_sheet[1, 1]), "alias: OLD-A")
   one_parameter <- run_mock_aquacache_report(
     con,
     date = dates,
@@ -445,10 +490,72 @@ test_that("AquaCacheReport retains per-result guideline limits in date-column la
     format = "by_location"
   )
   on.exit(unlink(report$xlsx_path), add = TRUE)
-  sheet <- openxlsx::read.xlsx(report$xlsx_path, "Report", colNames = FALSE)
+  sheet <- openxlsx::read.xlsx(report$xlsx_path, "LOC-A", colNames = FALSE)
   expect_match(as.character(sheet[5, 2]), "TST - Test limit")
   expect_equal(as.character(sheet[6, 2]), "<= 1.2")
-  expect_equal(as.character(sheet[6, 8:9]), c("1.1", "1.3"))
+  expect_equal(as.character(sheet[6, 9:10]), c("1.1", "1.3"))
+  comment_connection <- unz(report$xlsx_path, "xl/comments1.xml")
+  comment_xml <- paste(
+    readLines(comment_connection, warn = FALSE),
+    collapse = ""
+  )
+  close(comment_connection)
+  expect_true(grepl("Guideline TST (Test limit)", comment_xml, fixed = TRUE))
+  expect_true(grepl(
+    "result 1.3 exceeds limit &lt;= 1.2 mg/L",
+    comment_xml,
+    fixed = TRUE
+  ))
+
+  reused_box <- new.env(parent = emptyenv())
+  expect_warning(
+    reused_box$report <- run_mock_aquacache_report(
+      make_report_fixture(),
+      date = as.Date(c("2024-01-01", "2024-01-02")),
+      date_approx = c(0L, 1L),
+      location_ids = 3L,
+      parameter_ids = 10L,
+      guideline_ids = 30L,
+      format = "by_location"
+    ),
+    "same sample for multiple requested dates"
+  )
+  on.exit(unlink(reused_box$report$xlsx_path), add = TRUE)
+  reused_comment_connection <- unz(
+    reused_box$report$xlsx_path,
+    "xl/comments1.xml"
+  )
+  reused_comment_xml <- paste(
+    readLines(reused_comment_connection, warn = FALSE),
+    collapse = ""
+  )
+  close(reused_comment_connection)
+  reused_comment_count <- sum(
+    gregexpr("<comment ref=", reused_comment_xml, fixed = TRUE)[[1]] > 0L
+  )
+  expect_equal(reused_comment_count, 2L)
+
+  sd_report <- run_mock_aquacache_report(
+    make_report_fixture(),
+    date = as.Date(c("2024-01-01", "2024-01-03")),
+    location_ids = 1L,
+    parameter_ids = 10L,
+    sd_multiplier = 0.5,
+    format = "by_location"
+  )
+  on.exit(unlink(sd_report$xlsx_path), add = TRUE)
+  sd_comment_connection <- unz(sd_report$xlsx_path, "xl/comments1.xml")
+  sd_comment_xml <- paste(
+    readLines(sd_comment_connection, warn = FALSE),
+    collapse = ""
+  )
+  close(sd_comment_connection)
+  expect_true(grepl(
+    "Standard-deviation threshold",
+    sd_comment_xml,
+    fixed = TRUE
+  ))
+  expect_true(grepl("0.5-SD threshold", sd_comment_xml, fixed = TRUE))
 
   by_parameter <- run_mock_aquacache_report(
     con,
@@ -464,7 +571,7 @@ test_that("AquaCacheReport retains per-result guideline limits in date-column la
     "Report",
     colNames = FALSE
   )
-  expect_equal(as.character(parameter_sheet[6:7, 8]), c("<= 1.2", "<= 2.2"))
+  expect_equal(as.character(parameter_sheet[6:7, 9]), c("<= 1.2", "<= 2.2"))
 })
 
 test_that("AquaCacheReport validates date and approximation vectors before connecting", {
@@ -536,7 +643,7 @@ test_that("AquaCacheReport supports every format and selection cardinality", {
               format(selected_dates, "%Y-%m-%d")
             },
             by_location = if (location_count == 1L) {
-              "Report"
+              "LOC-A"
             } else {
               c("LOC-A", "LOC-B")[seq_len(location_count)]
             },
@@ -560,19 +667,19 @@ test_that("AquaCacheReport supports every format and selection cardinality", {
           if (report_format == "by_date") {
             expect_equal(as.character(sheet[5, 1]), "Parameter")
             expect_equal(
-              sum(!is.na(sheet[5, 7:ncol(sheet)])),
+              sum(!is.na(sheet[5, 8:ncol(sheet)])),
               location_count
             )
           } else if (report_format == "by_location") {
             expect_equal(as.character(sheet[5, 1]), "Parameter")
             expect_equal(
-              as.character(sheet[5, 7:(6 + date_count)]),
+              as.character(sheet[5, 8:(7 + date_count)]),
               format(selected_dates, "%Y-%m-%d")
             )
           } else {
             expect_equal(as.character(sheet[5, 1]), "Location")
             expect_equal(
-              as.character(sheet[5, 8:(7 + date_count)]),
+              as.character(sheet[5, 9:(8 + date_count)]),
               format(selected_dates, "%Y-%m-%d")
             )
           }
@@ -623,8 +730,13 @@ test_that("AquaCacheReport supports vector tolerances in all three layouts", {
         c("2024-01-01", "2024-01-02")
       )
     } else {
-      sheet <- openxlsx::read.xlsx(report$xlsx_path, "Report", colNames = FALSE)
-      date_columns <- if (report_format == "by_location") 7:8 else 8:9
+      sheet_name <- if (report_format == "by_location") "LOC-C" else "Report"
+      sheet <- openxlsx::read.xlsx(
+        report$xlsx_path,
+        sheet_name,
+        colNames = FALSE
+      )
+      date_columns <- if (report_format == "by_location") 8:9 else 9:10
       expect_equal(
         as.character(sheet[5, date_columns]),
         c("2024-01-01", "2024-01-02")
@@ -669,8 +781,9 @@ test_that("AquaCacheReport keeps empty target dates and resolves ties consistent
       format = report_format
     )
     output_paths <- c(output_paths, report$xlsx_path)
-    sheet <- openxlsx::read.xlsx(report$xlsx_path, "Report", colNames = FALSE)
-    date_columns <- if (report_format == "by_location") 7:8 else 8:9
+    sheet_name <- if (report_format == "by_location") "LOC-A" else "Report"
+    sheet <- openxlsx::read.xlsx(report$xlsx_path, sheet_name, colNames = FALSE)
+    date_columns <- if (report_format == "by_location") 8:9 else 9:10
     expect_equal(
       as.character(sheet[5, date_columns]),
       format(dates, "%Y-%m-%d")
@@ -702,11 +815,25 @@ test_that("report matrices keep endpoints and dry/wet contexts on distinct rows"
   variants$result <- c(10, 20, 30, 40)
   variants$endpoint_mode <- "fixed"
   variants$endpoint_ph <- c(4.5, 8.3, 4.5, 4.5)
-  variants$analysis_conditions <- c("{}", "{}", '{"mass_basis":"dry"}', '{"mass_basis":"wet"}')
-  variants$analysis_conditions_key <- c("empty_conditions", "empty_conditions", "dry_conditions", "wet_conditions")
+  variants$analysis_conditions <- c(
+    "{}",
+    "{}",
+    '{"mass_basis":"dry"}',
+    '{"mass_basis":"wet"}'
+  )
+  variants$analysis_conditions_key <- c(
+    "empty_conditions",
+    "empty_conditions",
+    "dry_conditions",
+    "wet_conditions"
+  )
   con@fixture$results <- rbind(con@fixture$results, variants)
-  report <- run_mock_aquacache_report(con, date = original$sample_date,
-    location_ids = original$location_id, parameter_ids = original$parameter_id)
+  report <- run_mock_aquacache_report(
+    con,
+    date = original$sample_date,
+    location_ids = original$location_id,
+    parameter_ids = original$parameter_id
+  )
   on.exit(unlink(report$xlsx_path), add = TRUE)
   sheet <- openxlsx::read.xlsx(report$xlsx_path, "Report", colNames = FALSE)
   text <- as.character(unlist(sheet))
