@@ -297,16 +297,23 @@ importSetup_suggest_layout <- function(raw) {
       "station code",
       "client sample id",
       "sampling point",
+      "samplingpoint",
       "location"
     ),
     sample_date = c(
       "smpl_collectdate",
       "sample date",
       "sample collect date",
+      "sampleddate",
       "date sampled",
       "date/time"
     ),
-    sample_time = c("smpl_collecttime", "sample time", "time sampled"),
+    sample_time = c(
+      "smpl_collecttime",
+      "sample time",
+      "time sampled",
+      "sampled time"
+    ),
     lab_sample_id = c(
       "lab_smpl_#",
       "lab sample #",
@@ -314,11 +321,26 @@ importSetup_suggest_layout <- function(raw) {
       "lab sample id",
       "sample id"
     ),
-    lab_report_no = c("lab_report_#", "lab report #", "lab report number"),
-    parameter_code = c("lab_param_code", "parameter code", "paramcode"),
-    parameter_name = c("parameter description", "parameter name", "analyte"),
+    lab_report_no = c(
+      "lab_report_#",
+      "lab report #",
+      "lab report number",
+      "report id"
+    ),
+    parameter_code = c(
+      "lab_param_code",
+      "parameter code",
+      "paramcode",
+      "componentname"
+    ),
+    parameter_name = c(
+      "parameter description",
+      "parameter name",
+      "analyte",
+      "componentname"
+    ),
     unit = c("units", "unit"),
-    result = c("result", "results"),
+    result = c("result", "results", "result text", "resulttext"),
     result_flag = c("qual", "qualifier", "result flag"),
     method_detection_limit = c("lab_mdl", "method detection limit"),
     reporting_detection_limit = c(
@@ -339,7 +361,15 @@ importSetup_suggest_layout <- function(raw) {
   ))
   transposed <- which(vapply(
     text,
-    function(x) all(c("parameter name", "parameter code") %in% x),
+    function(x) {
+      als_header <- all(c("parameter name", "parameter code") %in% x)
+      sample_report_header <-
+        "analyte" %in%
+        x &&
+        any(x %in% c("unit", "units")) &&
+        sum(x %in% c("result", "results", "result text")) > 1L
+      als_header || sample_report_header
+    },
     logical(1)
   ))
   if (length(xlr)) {
@@ -371,27 +401,57 @@ importSetup_suggest_layout <- function(raw) {
   })
   columns <- columns[!vapply(columns, is.null, logical(1))]
   if (family == "transposed") {
-    find_row <- function(label) {
-      hit <- which(vapply(text, function(x) label %in% x, logical(1)))
+    find_row <- function(labels) {
+      hit <- which(vapply(text, function(x) any(x %in% labels), logical(1)))
       if (length(hit)) hit[[1]] else NULL
     }
-    columns <- list(
-      lab_report_row = find_row("lab report #"),
-      lab_sample_row = find_row("lab sample #"),
-      station_code_row = find_row("station code"),
-      sample_date_row = find_row("sample date"),
-      sample_time_row = find_row("sample time"),
-      comments_row = find_row("comments"),
-      parameter_name_column = match("parameter name", text[[header]]),
-      parameter_code_column = match("parameter code", text[[header]]),
-      unit_column = match("units", text[[header]])
+    parameter_name_column <- which(
+      text[[header]] %in% c("parameter name", "analyte")
+    )[[1]]
+    parameter_code_column <- which(text[[header]] == "parameter code")
+    if (!length(parameter_code_column)) {
+      parameter_code_column <- parameter_name_column
+    } else {
+      parameter_code_column <- parameter_code_column[[1]]
+    }
+    unit_column <- which(text[[header]] %in% c("units", "unit"))
+    result_columns <- which(
+      text[[header]] %in% c("result", "results", "result text")
     )
-    columns$first_sample_column <- max(unlist(columns[c(
-      "parameter_name_column",
-      "parameter_code_column",
-      "unit_column"
-    )])) +
-      1L
+    first_sample_column <- if (length(result_columns)) {
+      result_columns[[1]]
+    } else {
+      max(c(parameter_name_column, parameter_code_column, unit_column)) + 1L
+    }
+    columns <- list(
+      lab_report_row = find_row(c("lab report #", "report id")),
+      lab_sample_row = find_row(c("lab sample #", "sample id")),
+      station_code_row = find_row(c("station code", "site id")),
+      sample_date_row = find_row(c("sample date", "date sampled")),
+      sample_time_row = find_row(c(
+        "sample time",
+        "time sampled",
+        "sampled time"
+      )),
+      comments_row = find_row("comments"),
+      parameter_name_column = parameter_name_column,
+      parameter_code_column = parameter_code_column,
+      unit_column = if (length(unit_column)) unit_column[[1]] else NULL,
+      data_start_row = header + 1L
+    )
+    columns$first_sample_column <- first_sample_column
+    context_columns <- setdiff(
+      seq_len(first_sample_column - 1L),
+      c(parameter_name_column, parameter_code_column, unit_column)
+    )
+    context_names <- trimws(as.character(unlist(
+      raw[header, context_columns],
+      use.names = FALSE
+    )))
+    context_names <- unique(context_names[addDiscData_present(context_names)])
+    if (length(context_names)) {
+      columns$match_columns <- context_names
+    }
   } else if (family == "wide") {
     columns <- columns[intersect(
       names(columns),
@@ -1992,6 +2052,16 @@ importSetup <- function(id, language) {
       specs <- addDiscData_profile_column_specs(parser_family)
       profile <- new_profile_template()
       column_map <- addDiscData_profile_value(profile, "column_map", list())
+      if (
+        identical(parser_family, "transposed") &&
+          !addDiscData_present(addDiscData_first(
+            column_map$data_start_row,
+            NA_integer_
+          ))
+      ) {
+        # Preserve the historical ALS Samples default when editing old profiles.
+        column_map$data_start_row <- 16L
+      }
       suggested <- new_profile_suggestion()
       if (
         !is.null(suggested) && identical(suggested$parser_family, parser_family)
@@ -2006,6 +2076,29 @@ importSetup <- function(id, language) {
         character()
       }
       header_choices <- unique(headers[addDiscData_present(headers)])
+      match_choices <- header_choices
+      if (identical(parser_family, "transposed") && !is.null(raw)) {
+        first_sample_column <- addDiscData_int(
+          column_map$first_sample_column
+        )
+        if (!is.na(first_sample_column) && first_sample_column > 1L) {
+          context_columns <- setdiff(
+            seq_len(first_sample_column - 1L),
+            c(
+              addDiscData_int(column_map$parameter_name_column),
+              addDiscData_int(column_map$parameter_code_column),
+              addDiscData_int(column_map$unit_column)
+            )
+          )
+          match_choices <- trimws(as.character(unlist(
+            raw[header_row, context_columns],
+            use.names = FALSE
+          )))
+          match_choices <- unique(match_choices[addDiscData_present(
+            match_choices
+          )])
+        }
+      }
       fields <- lapply(names(specs), function(name) {
         value <- column_map[[name]]
         control <- if (identical(specs[[name]][[2]], "integer")) {
@@ -2062,19 +2155,19 @@ importSetup <- function(id, language) {
         ),
         helpText(
           if (identical(parser_family, "transposed")) {
-            "Enter the worksheet row number (starting at 1) for each sample detail. Enter the worksheet column number (starting at 1) for the parameter name, code, unit, and first sample."
+            "Enter the worksheet row number (starting at 1) for each sample detail and the first analyte/result row. Enter the worksheet column number (starting at 1) for the parameter name, code, unit, and first sample."
           } else {
             "Choose headings from the example worksheet, or type a heading when no example is selected. Optional fields can be left blank."
           }
         ),
         do.call(fluidRow, fields),
-        if (parser_family %in% c("long", "xlr", "wide")) {
+        if (parser_family %in% c("long", "transposed", "xlr", "wide")) {
           tagList(
             selectizeInput(
               ns("new_profile_match_columns"),
               "Additional columns used for matching",
               choices = unique(c(
-                header_choices,
+                match_choices,
                 unlist(column_map$match_columns, use.names = FALSE)
               )),
               selected = unlist(column_map$match_columns, use.names = FALSE),
@@ -2082,7 +2175,7 @@ importSetup <- function(id, language) {
               options = list(create = TRUE)
             ),
             helpText(
-              "Retain source columns needed to distinguish results, such as parameter name, unit, sample fraction, chemical form, or result type. Mapping conditions can use any combination of these columns. They are kept as source values and do not automatically set AquaCache metadata."
+              "Retain source fields needed to distinguish results, such as report group, descriptor, sample fraction, chemical form, or result type. Mapping conditions can use any combination of these fields. They are kept as source values and do not automatically set AquaCache metadata."
             )
           )
         }
@@ -2208,7 +2301,7 @@ importSetup <- function(id, language) {
               selected = defaults$result_value_type
             )
           )
-        )
+        ),
       )
     })
     open_profile_editor <- function(mode = "create") {
@@ -2389,7 +2482,7 @@ importSetup <- function(id, language) {
             4,
             numericInput(
               ns("new_profile_header_row"),
-              "Column heading row (long or wide table)",
+              "Column heading row (long, transposed, or wide table)",
               value = addDiscData_int(
                 addDiscData_profile_value(profile, "header_row", 1L),
                 1L
@@ -2400,7 +2493,7 @@ importSetup <- function(id, language) {
           )
         ),
         helpText(
-          "Choose the worksheet with the results, then inspect its row and column labels below. The heading row supplies column names for long and wide tables. The XLR parser finds its report header automatically."
+          "Choose the worksheet with the results, then inspect its row and column labels below. The heading row supplies column names for long, transposed, and wide tables. The XLR parser finds its report header automatically."
         ),
         actionButton(
           ns("suggest_profile_layout"),
@@ -2537,8 +2630,8 @@ importSetup <- function(id, language) {
               "station_code_row",
               "sample_date_row",
               "parameter_code_column",
-              "unit_column",
-              "first_sample_column"
+              "first_sample_column",
+              "data_start_row"
             )
           } else if (identical(parser_family, "wide")) {
             c(
@@ -2562,7 +2655,6 @@ importSetup <- function(id, language) {
               "sample_date",
               "lab_sample_id",
               "parameter_code",
-              "unit",
               "result"
             )
           }
