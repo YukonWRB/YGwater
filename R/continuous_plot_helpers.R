@@ -49,9 +49,9 @@ format_stats_period_label <- function(
 ) {
   keys <- c(
     `30yr` = "stats_period_last_30_years",
+    full = "plot_all_record",
     `1991_2020` = "stats_period_1991_2020",
-    `1981_2010` = "stats_period_1981_2010",
-    full = "stats_period_entire_record"
+    `1981_2010` = "stats_period_1981_2010"
   )
   stats_period <- as.character(stats_period)
   matched <- stats_period %in% names(keys)
@@ -183,10 +183,12 @@ continuous_trace_uses_corrected_source <- function(
     return(TRUE)
   }
 
-  if (!DBI::dbExistsTable(
-    con,
-    DBI::Id(schema = "continuous", table = "measurements_continuous")
-  )) {
+  if (
+    !DBI::dbExistsTable(
+      con,
+      DBI::Id(schema = "continuous", table = "measurements_continuous")
+    )
+  ) {
     return(TRUE)
   }
 
@@ -321,7 +323,11 @@ historic_stats_export_window <- function(
   if (!is.null(fixed_bounds)) {
     fixed_start <- as.POSIXct(fixed_bounds[["start"]], tz = "UTC")
     fixed_end <- as.POSIXct(fixed_bounds[["end"]], tz = "UTC") - 1
-    stats_start <- if (is.na(full_start)) fixed_start else max(full_start, fixed_start)
+    stats_start <- if (is.na(full_start)) {
+      fixed_start
+    } else {
+      max(full_start, fixed_start)
+    }
     stats_end <- if (is.na(full_end)) fixed_end else min(full_end, fixed_end)
   }
 
@@ -567,7 +573,8 @@ fetch_timeseries_aggregation_metadata <- function(
   window_clause <- ""
   window_params <- list()
   if (
-    is.data.frame(windows) && nrow(windows) > 0L &&
+    is.data.frame(windows) &&
+      nrow(windows) > 0L &&
       all(c("start_dt", "end_dt") %in% names(windows))
   ) {
     windows <- windows[
@@ -576,15 +583,19 @@ fetch_timeseries_aggregation_metadata <- function(
       drop = FALSE
     ]
     if (nrow(windows) > 0L) {
-      window_values <- vapply(seq_len(nrow(windows)), function(i) {
-        start_parameter <- 2L * i - 1L
-        end_parameter <- 2L * i
-        sprintf(
-          "($%d::timestamptz, $%d::timestamptz)",
-          start_parameter,
-          end_parameter
-        )
-      }, character(1))
+      window_values <- vapply(
+        seq_len(nrow(windows)),
+        function(i) {
+          start_parameter <- 2L * i - 1L
+          end_parameter <- 2L * i
+          sprintf(
+            "($%d::timestamptz, $%d::timestamptz)",
+            start_parameter,
+            end_parameter
+          )
+        },
+        character(1)
+      )
       window_clause <- paste0(
         " AND EXISTS (SELECT 1 FROM (VALUES ",
         paste(window_values, collapse = ", "),
@@ -620,16 +631,20 @@ fetch_timeseries_aggregation_metadata <- function(
     "method.source_name, ",
     "method.source_reference, method.note ",
     "FROM continuous.timeseries_aggregation_methods method ",
-    "WHERE method.timeseries_id IN (", id_sql, ")",
+    "WHERE method.timeseries_id IN (",
+    id_sql,
+    ")",
     window_clause,
     " ORDER BY method.timeseries_id, method.applicable_from, ",
     "method.aggregation_method_id"
   )
-  methods <- data.table::as.data.table(if (length(window_params) > 0L) {
-    DBI::dbGetQuery(con, method_query, params = window_params)
-  } else {
-    DBI::dbGetQuery(con, method_query)
-  })
+  methods <- data.table::as.data.table(
+    if (length(window_params) > 0L) {
+      DBI::dbGetQuery(con, method_query, params = window_params)
+    } else {
+      DBI::dbGetQuery(con, method_query)
+    }
+  )
 
   if (nrow(methods) == 0L) {
     result$methods <- methods
@@ -657,7 +672,9 @@ fetch_timeseries_aggregation_metadata <- function(
       "FROM continuous.timeseries_aggregation_method_steps step ",
       "JOIN continuous.aggregation_types at ",
       "ON at.aggregation_type_id = step.aggregation_type_id ",
-      "WHERE step.aggregation_method_id IN (", method_id_sql, ") ",
+      "WHERE step.aggregation_method_id IN (",
+      method_id_sql,
+      ") ",
       "ORDER BY step.aggregation_method_id, step.stage_number, step.step_id"
     )
   ))
@@ -672,7 +689,9 @@ fetch_timeseries_aggregation_metadata <- function(
       "step_id::text AS step_id, input_number, ",
       "input_step_id::text AS input_step_id, component_weight::text AS component_weight ",
       "FROM continuous.timeseries_aggregation_method_step_inputs ",
-      "WHERE aggregation_method_id IN (", method_id_sql, ") ",
+      "WHERE aggregation_method_id IN (",
+      method_id_sql,
+      ") ",
       "ORDER BY aggregation_method_id, step_id, input_number"
     )
   ))
@@ -713,19 +732,28 @@ continuous_aggregation_method_display_table <- function(metadata) {
       all.x = TRUE,
       sort = FALSE
     )
-    inputs[, description := sprintf(
-      "%s: step %s (stage %s, %s, %s), weight %s",
-      input_number,
-      input_step_id,
-      input_stage,
-      input_operation,
-      input_aggregation_type,
-      component_weight
-    )]
-    input_summary <- inputs[, .(
-      inputs = paste(description, collapse = "; ")
-    ), by = .(aggregation_method_id, step_id)]
-    steps[input_summary, on = .(aggregation_method_id, step_id), inputs := i.inputs]
+    inputs[,
+      description := sprintf(
+        "%s: step %s (stage %s, %s, %s), weight %s",
+        input_number,
+        input_step_id,
+        input_stage,
+        input_operation,
+        input_aggregation_type,
+        component_weight
+      )
+    ]
+    input_summary <- inputs[,
+      .(
+        inputs = paste(description, collapse = "; ")
+      ),
+      by = .(aggregation_method_id, step_id)
+    ]
+    steps[
+      input_summary,
+      on = .(aggregation_method_id, step_id),
+      inputs := i.inputs
+    ]
   }
 
   display <- merge(
@@ -809,12 +837,16 @@ fetch_continuous_plot_notes <- function(con, req, lang = "en") {
     return(empty_notes())
   }
 
-  keep <- vapply(seq_len(nrow(notes)), function(i) {
-    any(
-      notes$start_datetime_utc[[i]] < windows$end_dt &
-        notes$end_datetime_utc[[i]] >= windows$start_dt
-    )
-  }, logical(1))
+  keep <- vapply(
+    seq_len(nrow(notes)),
+    function(i) {
+      any(
+        notes$start_datetime_utc[[i]] < windows$end_dt &
+          notes$end_datetime_utc[[i]] >= windows$start_dt
+      )
+    },
+    logical(1)
+  )
   notes[keep]
 }
 
@@ -1270,6 +1302,154 @@ historic_stats_caption_for_plot_data <- function(
   caption
 }
 
+#' Fetch fixed-period daily statistics grouped by timeseries and calendar day
+#' @param con A DBI database connection object.
+#' @param bounds Timeseries IDs and inclusive start/end datetimes to fetch.
+#' @param stats_period A fixed historical-statistics period.
+#' @param include_value Whether to include the current daily value.
+#' @return A data.table with daily values and their fixed-period statistics.
+#' @noRd
+#' @keywords internal
+fetch_fixed_daily_stats <- function(
+  con,
+  bounds,
+  stats_period,
+  include_value = FALSE
+) {
+  fixed_bounds <- daily_stats_period_bounds(stats_period)
+  if (is.null(fixed_bounds)) {
+    stop(
+      "`stats_period` must use a fixed daily-statistics period.",
+      call. = FALSE
+    )
+  }
+
+  bounds <- data.table::as.data.table(bounds)
+  required_columns <- c("timeseries_id", "range_start", "range_end")
+  missing_columns <- setdiff(required_columns, names(bounds))
+  if (length(missing_columns)) {
+    stop(
+      "`bounds` is missing required columns: ",
+      paste(missing_columns, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  bounds <- bounds[, ..required_columns]
+  bounds[, timeseries_id := suppressWarnings(as.integer(timeseries_id))]
+  bounds <- bounds[
+    !is.na(timeseries_id) &
+      !is.na(range_start) &
+      !is.na(range_end) &
+      range_end >= range_start
+  ]
+  empty_result <- function() {
+    out <- data.table::data.table(
+      timeseries_id = integer(),
+      datetime = as.Date(character()),
+      min = numeric(),
+      max = numeric(),
+      q75 = numeric(),
+      q25 = numeric()
+    )
+    if (isTRUE(include_value)) {
+      out[, value := numeric()]
+      data.table::setcolorder(
+        out,
+        c("timeseries_id", "datetime", "value", "min", "max", "q75", "q25")
+      )
+    }
+    return(out)
+  }
+  if (!nrow(bounds)) {
+    return(empty_result())
+  }
+
+  ids_sql <- paste(sort(unique(bounds$timeseries_id)), collapse = ",")
+  daily_value_select <- if (isTRUE(include_value)) {
+    ", value"
+  } else {
+    ""
+  }
+  daily <- YGwater::dbGetQueryDT(
+    con,
+    paste0(
+      "SELECT timeseries_id, date AS datetime",
+      daily_value_select,
+      " FROM continuous.measurements_calculated_daily ",
+      "WHERE timeseries_id IN (",
+      ids_sql,
+      ") ",
+      "AND date BETWEEN $1 AND $2 ",
+      "ORDER BY timeseries_id, date ASC;"
+    ),
+    params = list(min(bounds$range_start), max(bounds$range_end))
+  )
+  if (!nrow(daily)) {
+    return(empty_result())
+  }
+
+  daily[, row_datetime_utc := as.POSIXct(datetime, tz = "UTC")]
+  daily <- daily[bounds, on = .(timeseries_id), nomatch = 0L][
+    row_datetime_utc >= range_start & row_datetime_utc <= range_end
+  ]
+  daily[, c("row_datetime_utc", "range_start", "range_end") := NULL]
+  if (!nrow(daily)) {
+    return(empty_result())
+  }
+
+  daily[, `:=`(
+    month = as.integer(format(datetime, "%m")),
+    day = as.integer(format(datetime, "%d")),
+    row_order = .I
+  )]
+  history <- YGwater::dbGetQueryDT(
+    con,
+    paste0(
+      "SELECT timeseries_id, ",
+      "EXTRACT(MONTH FROM date)::integer AS month, ",
+      "EXTRACT(DAY FROM date)::integer AS day, ",
+      "MIN(value) AS min, MAX(value) AS max, ",
+      "percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS q75, ",
+      "percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS q25 ",
+      "FROM continuous.measurements_calculated_daily ",
+      "WHERE timeseries_id IN (",
+      ids_sql,
+      ") ",
+      "AND date >= DATE '",
+      fixed_bounds[["start"]],
+      "' ",
+      "AND date < DATE '",
+      fixed_bounds[["end"]],
+      "' ",
+      "GROUP BY timeseries_id, EXTRACT(MONTH FROM date), ",
+      "EXTRACT(DAY FROM date);"
+    )
+  )
+  out <- merge(
+    daily,
+    history,
+    by = c("timeseries_id", "month", "day"),
+    all.x = TRUE,
+    sort = FALSE
+  )
+  data.table::setorder(out, row_order)
+  out[, c("month", "day", "row_order") := NULL]
+  data.table::setcolorder(
+    out,
+    c(
+      "timeseries_id",
+      "datetime",
+      if (isTRUE(include_value)) "value",
+      "min",
+      "max",
+      "q75",
+      "q25"
+    )
+  )
+  out
+}
+
 #' Build stable daily-statistics SELECT expressions
 #' @param con A DBI database connection object.
 #' @param stats_period A supported historical-statistics period.
@@ -1287,7 +1467,11 @@ daily_stats_select_sql <- function(
   stats_period <- normalize_daily_stats_period(stats_period)
   has_table_alias <- !is.null(table_alias) && nzchar(table_alias)
   prefix <- if (has_table_alias) paste0(table_alias, ".") else ""
-  outer_prefix <- if (has_table_alias) prefix else "measurements_calculated_daily."
+  outer_prefix <- if (has_table_alias) {
+    prefix
+  } else {
+    "measurements_calculated_daily."
+  }
   fixed_bounds <- daily_stats_period_bounds(stats_period)
 
   if (!is.null(fixed_bounds)) {
@@ -1304,20 +1488,33 @@ daily_stats_select_sql <- function(
     if (!all(columns %in% names(aggregates))) {
       stop("Unsupported fixed-period daily statistics column.", call. = FALSE)
     }
-    return(vapply(columns, function(column) {
-      paste0(
-        "(SELECT ", aggregates[[column]],
-        " FROM continuous.measurements_calculated_daily AS history",
-        " WHERE history.timeseries_id = ", outer_prefix, "timeseries_id",
-        " AND history.date >= DATE '", fixed_bounds[["start"]], "'",
-        " AND history.date < DATE '", fixed_bounds[["end"]], "'",
-        " AND EXTRACT(MONTH FROM history.date) = EXTRACT(MONTH FROM ",
-        outer_prefix, "date)",
-        " AND EXTRACT(DAY FROM history.date) = EXTRACT(DAY FROM ",
-        outer_prefix, "date)) AS ",
-        as.character(DBI::dbQuoteIdentifier(con, column))
-      )
-    }, character(1)))
+    return(vapply(
+      columns,
+      function(column) {
+        paste0(
+          "(SELECT ",
+          aggregates[[column]],
+          " FROM continuous.measurements_calculated_daily AS history",
+          " WHERE history.timeseries_id = ",
+          outer_prefix,
+          "timeseries_id",
+          " AND history.date >= DATE '",
+          fixed_bounds[["start"]],
+          "'",
+          " AND history.date < DATE '",
+          fixed_bounds[["end"]],
+          "'",
+          " AND EXTRACT(MONTH FROM history.date) = EXTRACT(MONTH FROM ",
+          outer_prefix,
+          "date)",
+          " AND EXTRACT(DAY FROM history.date) = EXTRACT(DAY FROM ",
+          outer_prefix,
+          "date)) AS ",
+          as.character(DBI::dbQuoteIdentifier(con, column))
+        )
+      },
+      character(1)
+    ))
   }
 
   available <- DBI::dbGetQuery(

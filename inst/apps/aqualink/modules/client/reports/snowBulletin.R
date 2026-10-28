@@ -155,8 +155,8 @@ snowBulletinMod <- function(id, language) {
             c(
               tr("gen_snowBul_period1", language$language),
               tr("all_yrs_record", language$language),
-              tr("gen_snowBul_period3", language$language),
-              tr("gen_snowBul_period4", language$language)
+              tr("stats_period_1981_2010", language$language),
+              tr("stats_period_1991_2020", language$language)
             )
           ),
           selected = selections$precip_period,
@@ -172,8 +172,8 @@ snowBulletinMod <- function(id, language) {
             c(
               tr("gen_snowBul_period1", language$language),
               tr("all_yrs_record", language$language),
-              tr("gen_snowBul_period3", language$language),
-              tr("gen_snowBul_period4", language$language)
+              tr("stats_period_1981_2010", language$language),
+              tr("stats_period_1991_2020", language$language)
             )
           ),
           selected = selections$cddf_period,
@@ -355,7 +355,10 @@ snowBulletinMod <- function(id, language) {
           is.na(selections$month) ||
           !selections$month %in% 3:5
       ) {
-        issues <- c(issues, tr("snow_bulletin_month_invalid", language$language))
+        issues <- c(
+          issues,
+          tr("snow_bulletin_month_invalid", language$language)
+        )
       }
 
       if (
@@ -377,7 +380,10 @@ snowBulletinMod <- function(id, language) {
             anyNA(selections$language) ||
             !nzchar(selections$language[[1]])
         ) {
-          issues <- c(issues, tr("snow_bulletin_language_required", language$language))
+          issues <- c(
+            issues,
+            tr("snow_bulletin_language_required", language$language)
+          )
         }
 
         if (
@@ -386,7 +392,10 @@ snowBulletinMod <- function(id, language) {
             anyNA(selections$precip_period) ||
             !nzchar(selections$precip_period[[1]])
         ) {
-          issues <- c(issues, tr("snow_bulletin_precip_period_required", language$language))
+          issues <- c(
+            issues,
+            tr("snow_bulletin_precip_period_required", language$language)
+          )
         }
 
         if (
@@ -395,7 +404,10 @@ snowBulletinMod <- function(id, language) {
             anyNA(selections$cddf_period) ||
             !nzchar(selections$cddf_period[[1]])
         ) {
-          issues <- c(issues, tr("snow_bulletin_cddf_period_required", language$language))
+          issues <- c(
+            issues,
+            tr("snow_bulletin_cddf_period_required", language$language)
+          )
         }
 
         if (
@@ -485,7 +497,10 @@ snowBulletinMod <- function(id, language) {
 
                 files <- list.files(work_dir, full.names = FALSE)
                 if (!length(files)) {
-                  stop(tr("report_error_no_files", req$ui_language), call. = FALSE)
+                  stop(
+                    tr("report_error_no_files", req$ui_language),
+                    call. = FALSE
+                  )
                 }
 
                 zip_path <- file.path(work_dir, "report.zip")

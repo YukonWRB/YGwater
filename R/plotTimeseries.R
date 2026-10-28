@@ -1121,46 +1121,62 @@ plotTimeseries <- function(
         )
       }
     } else {
-      range_select <- paste(
-        c(
-          "date AS datetime",
-          daily_stats_select_sql(
-            con,
-            stats_period = stats_period,
-            columns = c("min", "max", "q75", "q25")
-          )
-        ),
-        collapse = ", "
-      )
       # Get historic-range values, extending by one day so ribbons reach the
       # visible trace bounds.
       range_end <- end_date + 1 * 24 * 60 * 60
       range_start <- start_date - 1 * 24 * 60 * 60
-      if (is.null(as_of)) {
-        range_data <- dbGetQueryDT(
+      if (
+        is.null(as_of) &&
+          !is.null(daily_stats_period_bounds(stats_period))
+      ) {
+        range_data <- fetch_fixed_daily_stats(
           con,
-          paste0(
-            "SELECT ",
-            range_select,
-            " FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;"
+          bounds = data.table::data.table(
+            timeseries_id = tsid,
+            range_start = range_start,
+            range_end = range_end
           ),
-          params = list(tsid, range_start, range_end)
+          stats_period = stats_period
         )
+        range_data[, timeseries_id := NULL]
       } else {
-        range_data <- dbGetQueryDT(
-          con,
-          paste(
-            paste0("SELECT ", range_select),
-            "FROM continuous.measurements_calculated_daily_at(",
-            "  $1,",
-            "  ARRAY[$2]::INTEGER[],",
-            "  $3::DATE,",
-            "  $4::DATE",
-            ")",
-            "ORDER BY date ASC;"
+        range_select <- paste(
+          c(
+            "date AS datetime",
+            daily_stats_select_sql(
+              con,
+              stats_period = stats_period,
+              columns = c("min", "max", "q75", "q25")
+            )
           ),
-          params = list(as_of, tsid, range_start, range_end)
+          collapse = ", "
         )
+        if (is.null(as_of)) {
+          range_data <- dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT ",
+              range_select,
+              " FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;"
+            ),
+            params = list(tsid, range_start, range_end)
+          )
+        } else {
+          range_data <- dbGetQueryDT(
+            con,
+            paste(
+              paste0("SELECT ", range_select),
+              "FROM continuous.measurements_calculated_daily_at(",
+              "  $1,",
+              "  ARRAY[$2]::INTEGER[],",
+              "  $3::DATE,",
+              "  $4::DATE",
+              ")",
+              "ORDER BY date ASC;"
+            ),
+            params = list(as_of, tsid, range_start, range_end)
+          )
+        }
       }
     }
     range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")

@@ -239,7 +239,6 @@ sensor_priority_secondary,,Secondary,Secondaire
 sensor_priority_tertiary,,Tertiary,Tertiaire
 stats_period,,Stats period,Période des statistiques
 stats_period_last_30_years,,Last 30 years,30 dernières années
-stats_period_entire_record,,Entire record,Toute la période
 stats_period_1991_2020,,1991-2020,1991-2020
 stats_period_1981_2010,,1981-2010,1981-2010
 timeseries_already_selected,,Timeseries %s is already selected. Choose a different timeseries.,La série chronologique %s est déjà sélectionnée. Choisissez-en une autre.
@@ -386,8 +385,6 @@ gen_snowBul_cddf_period,,Period of record for CDDF stats,Période à utiliser po
 gen_snowBul_period1,,Last 40 years,40 dernières années
 all_yrs_record,,All years of record,Toutes les années disponibles
 last_yr_only,,Up to last plotted year,Jusqu'à la dernière année tracée
-gen_snowBul_period3,,1981-2010,1981-2010
-gen_snowBul_period4,,1991-2020,1991-2020
 gen_snowBul_scale,,Plot scale,Échelle des graphiques
 gen_snowBul_error_stats,,Error generating snow bulletin stats Excel tables,Échec lors de la création des tableaux de statistiques
 gen_snowBul_error_report,,Error generating snow bulletin Word document,Échec lors de la création du rapport Word

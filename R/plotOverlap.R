@@ -766,7 +766,23 @@ plotOverlap <- function(
     daily_end <- daily_end + 60 * 60 * 24
   }
 
-  if (is.null(as_of)) {
+  if (
+    is.null(as_of) &&
+      !is.null(daily_stats_period_bounds(stats_period))
+  ) {
+    daily <- fetch_fixed_daily_stats(
+      con,
+      bounds = data.table::data.table(
+        timeseries_id = tsid,
+        range_start = daily_start,
+        range_end = daily_end
+      ),
+      stats_period = stats_period,
+      include_value = TRUE
+    )
+    daily[, timeseries_id := NULL]
+    data.table::setnames(daily, "datetime", "date")
+  } else if (is.null(as_of)) {
     daily_select <- paste(
       c(
         "date",
@@ -1098,10 +1114,10 @@ plotOverlap <- function(
   if (overlaps) {
     # This section sorts out the overlap years, builds the plotting column
     temp <- data.frame(date = day_seq)
-    temp$year = lubridate::year(temp$date)
+    temp$year <- lubridate::year(temp$date)
     temp <- temp[!(temp$year == max(temp$year)), ] #Remove the rows for days after the new year
-    temp$month = lubridate::month(temp$date)
-    temp$day = lubridate::day(temp$date)
+    temp$month <- lubridate::month(temp$date)
+    temp$day <- lubridate::day(temp$date)
     temp$day <- stringr::str_pad(temp$day, 2, side = "left", pad = "0")
 
     # Column md is built in both temp and realtime dfs to be able to differentiate the previous year from the next and assign proper plot years (i.e. 2022-2023) and fake datetimes (since every year needs the same "fake year" to plot together)
