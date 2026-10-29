@@ -499,7 +499,8 @@ importSetupUI <- function(id) {
         "Mapping overview",
         value = "overview",
         helpText(
-          "Review saved mappings across all sources and formats. Published revisions are in use; drafts are not used until you publish their full source or workbook-format scope. Published issues can cause results to be omitted, and draft issues must be fixed before publication. Retired revisions are preserved as history."
+          "Review saved mappings across all sources and formats. Published revisions are in use; drafts are not used until you publish their full source or workbook-format scope. Published issues can cause results to be omitted, and draft issues must be fixed before publication. Retired revisions are preserved as history.",
+          "With 'Needs attention only' selected, a published issue remains listed until its draft is published. Choose Revision: Draft to inspect saved draft mappings."
         ),
         uiOutput(ns("review_summary")),
         fluidRow(
@@ -1660,7 +1661,7 @@ importSetup <- function(id, language) {
     output$editing_mapping <- renderUI({
       row <- manage_mapping_selected()
       context <- opened_review_mapping()
-      issue <- if (!is.null(context) && !is.na(context$issue[[1]])) {
+      context_issue <- if (!is.null(context) && !is.na(context$issue[[1]])) {
         trimws(as.character(context$issue[[1]]))
       } else {
         ""
@@ -1698,6 +1699,30 @@ importSetup <- function(id, language) {
         result_flag = "import_result_flag_mapping_id"
       )
       mapping_id <- row[[id_field]][[1]]
+      status <- row$mapping_set_status[[1]]
+      version <- row$mapping_set_version[[1]]
+      current_rows <- review_rows()
+      current_issue <- ""
+      current_review_checked <- FALSE
+      if (!inherits(current_rows, "error") && nrow(current_rows)) {
+        same_scope <- current_rows$source_code == row$source_code[[1]] &
+          current_rows$mapping_type == input$manage_mapping_type &
+          current_rows$import_mapping_id == mapping_id
+        if ("profile_code" %in% names(row)) {
+          same_scope <- same_scope & if (is.na(row$profile_code[[1]])) {
+            is.na(current_rows$profile_code)
+          } else {
+            !is.na(current_rows$profile_code) &
+              current_rows$profile_code == row$profile_code[[1]]
+          }
+        }
+        current_match <- which(same_scope)
+        if (length(current_match) == 1L) {
+          current_review_checked <- TRUE
+          value <- current_rows$issue[[current_match]]
+          if (!is.na(value)) current_issue <- trimws(as.character(value))
+        }
+      }
       if (!is.null(context)) {
         scope <- if (is.na(context$profile_code[[1]])) {
           "Source-wide / package downloads"
@@ -1707,30 +1732,60 @@ importSetup <- function(id, language) {
             context$profile_code[[1]]
           )
         }
-        save_note <- if (identical(context$status[[1]], "published")) {
+        save_note <- if (identical(status, "published")) {
           "Saving your changes stages them in a draft. The published mapping stays in use until you review and publish the whole scope."
         } else {
           "Saving updates the draft. It remains unpublished until you review and publish the whole scope."
         }
+        opened_different_revision <-
+          !identical(as.character(context$import_mapping_id[[1]]), as.character(mapping_id)) ||
+          !identical(as.character(context$status[[1]]), as.character(status)) ||
+          !identical(as.character(context$version[[1]]), as.character(version))
         return(tags$div(
-          class = if (nzchar(issue)) {
+          class = if (nzchar(current_issue) || nzchar(context_issue)) {
             "alert alert-warning"
           } else {
             "alert alert-info"
           },
           tags$strong(sprintf(
-            "Editing %s mapping %s",
-            context$mapping_type[[1]],
+            "Editing %s %s mapping %s",
+            status,
+            input$manage_mapping_type,
             mapping_id
           )),
           tags$p(sprintf(
-            "%s | %s | %s revision %s",
-            context$source_code[[1]],
+            "%s | %s | revision %s",
+            row$source_code[[1]],
             scope,
-            context$status[[1]],
-            context$version[[1]]
+            version
           )),
-          if (nzchar(issue)) tags$p(tags$strong("Needs attention: "), issue),
+          if (opened_different_revision) {
+            tags$p(
+              "Opened from ",
+              context$status[[1]],
+              " mapping ",
+              context$import_mapping_id[[1]],
+              " (revision ",
+              context$version[[1]],
+              ").",
+              if (nzchar(context_issue)) {
+                paste("It needs attention:", context_issue)
+              }
+            )
+          },
+          if (nzchar(current_issue)) {
+            tags$p(tags$strong("This mapping needs attention: "), current_issue)
+          } else if (
+            opened_different_revision &&
+              identical(status, "draft") &&
+              identical(context$status[[1]], "published") &&
+              nzchar(context_issue) &&
+              current_review_checked
+          ) {
+            tags$p(
+              "The selected draft mapping has no current validation issue; the issue above belongs to the published revision."
+            )
+          },
           tags$p(
             tags$strong("Match these source values: "),
             importSetup_criteria_label(context$source_match[[1]])
@@ -1738,7 +1793,6 @@ importSetup <- function(id, language) {
           tags$p(save_note)
         ))
       }
-      status <- row$mapping_set_status[[1]]
       save_note <- if (identical(status, "published")) {
         "Saving stages your change in a draft. This published revision stays unchanged until you review and publish the scope."
       } else {

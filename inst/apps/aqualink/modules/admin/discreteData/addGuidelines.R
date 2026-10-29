@@ -135,6 +135,15 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
           )
         ),
         selectizeInput(
+          ns("media_type"),
+          "Applicable media types for guideline",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = list(placeholder = "Select one or more media types")
+        ),
+        selectizeInput(
           ns("parameter_id"),
           "Parameter",
           choices = NULL,
@@ -180,15 +189,6 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
           options = list(placeholder = "Leave empty to apply to all fractions")
         ),
         uiOutput(ns("fraction_descriptor_applicability_note")),
-        selectizeInput(
-          ns("media_type"),
-          "Guideline media types",
-          choices = NULL,
-          width = "100%",
-          selected = character(0),
-          multiple = TRUE,
-          options = list(placeholder = "Select one or more media types")
-        ),
 
         h4("Applicability"),
         selectInput(ns("comparison_operator"), "Comparison", choices = NULL),
@@ -773,8 +773,11 @@ addGuidelines <- function(id, language) {
           decimal.mark = "."
         ))
         round_trip <- suppressWarnings(as.numeric(candidate))
-        if (length(round_trip) == 1L && !is.na(round_trip) &&
-            identical(round_trip, value)) {
+        if (
+          length(round_trip) == 1L &&
+            !is.na(round_trip) &&
+            identical(round_trip, value)
+        ) {
           return(candidate)
         }
       }
