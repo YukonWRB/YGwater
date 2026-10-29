@@ -634,12 +634,18 @@ v2_parse_datetime <- function(value) {
   out
 }
 
+v2_split_query_csv <- function(value) {
+  values <- as.character(unlist(value, use.names = FALSE))
+  values <- utils::URLdecode(values)
+  trimws(unlist(strsplit(values, ",", fixed = TRUE), use.names = FALSE))
+}
+
 v2_parse_integer_csv <- function(value) {
   if (v2_query_missing(value)) {
     return(integer())
   }
 
-  values <- trimws(strsplit(as.character(value[[1]]), ",", fixed = TRUE)[[1L]])
+  values <- v2_split_query_csv(value)
   out <- suppressWarnings(as.integer(values))
   out[!is.na(out)]
 }
@@ -649,7 +655,7 @@ v2_parse_id_csv <- function(value, parameter) {
     return(list(ids = integer(), error = NULL))
   }
 
-  values <- trimws(strsplit(as.character(value[[1L]]), ",", fixed = TRUE)[[1L]])
+  values <- v2_split_query_csv(value)
   ids <- suppressWarnings(as.integer(values))
   if (length(ids) == 0L || anyNA(ids) || any(ids <= 0L)) {
     return(list(
@@ -1860,6 +1866,10 @@ function(client_id, query) {
       basic_modified_filter_sql
     )
   }
+  # Basic corrections change values, not the datetime/timeseries ordering keys.
+  # Select the global earliest rows before applying them; modifiedSince filters
+  # are applied in the source CTEs first. Compound rows keep their existing
+  # corrected measurement function.
   # Apply common correction types set-wise and prefetch range metadata once per
   # request. This avoids per-row correction function calls and repeated RLS work.
   # timeseries_id is pasted into SQL only after conversion to integer.
@@ -2030,11 +2040,7 @@ function(client_id, query) {
              mc.timeseries_id,
              mc.datetime,
              mc.value AS value_raw,
-             continuous.apply_corrections(
-               mc.timeseries_id,
-               mc.datetime,
-               mc.value
-             ) AS value_corrected,
+             mc.value AS value_corrected,
              mc.period,
              mc.imputed,
              mc.created,
@@ -2046,6 +2052,73 @@ function(client_id, query) {
     "
            WHERE st.timeseries_type = 'basic'",
     basic_measurement_filter_sql,
+    "
+         ),
+         measurement_candidates AS MATERIALIZED (
+           SELECT
+             timeseries_id,
+             datetime,
+             value_raw,
+             value_corrected,
+             period,
+             imputed,
+             created,
+             modified,
+             'fast'::text AS correction_mode
+           FROM basic_measurements_fast
+
+           UNION ALL
+
+           SELECT
+             timeseries_id,
+             datetime,
+             value_raw,
+             value_corrected,
+             period,
+             imputed,
+             created,
+             modified,
+             'slow'::text AS correction_mode
+           FROM basic_measurements_slow
+
+           UNION ALL
+
+           SELECT
+             m.timeseries_id,
+             m.datetime,
+             m.value_raw,
+             m.value_corrected,
+             m.period,
+             m.imputed,
+             source_stamp.created,
+             source_stamp.modified,
+             'compound'::text AS correction_mode
+           FROM selected_timeseries st
+           JOIN LATERAL continuous.measurements_continuous_corrected(
+             st.timeseries_id,
+             $1,
+             $2
+           ) m ON TRUE
+           LEFT JOIN LATERAL (
+             SELECT
+               MAX(mc.created) AS created,
+               MAX(mc.modified) AS modified
+             FROM timeseries_sources src
+             JOIN continuous.measurements_continuous mc
+               ON src.source_timeseries_id = mc.timeseries_id
+              AND mc.datetime = m.datetime
+             WHERE src.root_timeseries_id = m.timeseries_id
+           ) source_stamp ON TRUE
+           WHERE st.timeseries_type <> 'basic'",
+    compound_modified_filter_sql,
+    "
+         ),
+         limited_measurement_candidates AS MATERIALIZED (
+           SELECT *
+           FROM measurement_candidates
+           ORDER BY datetime ASC, timeseries_id ASC
+           LIMIT ",
+    limit_param,
     "
          ),
          basic_corrections AS MATERIALIZED (
@@ -2091,7 +2164,8 @@ function(client_id, query) {
              m.imputed,
              m.created,
              m.modified
-           FROM basic_measurements_fast m
+           FROM limited_measurement_candidates m
+           WHERE m.correction_mode = 'fast'
 
            UNION ALL
 
@@ -2172,6 +2246,24 @@ function(client_id, query) {
            UNION ALL
 
            SELECT
+             m.timeseries_id,
+             m.datetime,
+             m.value_raw,
+             continuous.apply_corrections(
+               m.timeseries_id,
+               m.datetime,
+               m.value_raw
+             ) AS value_corrected,
+             m.period,
+             m.imputed,
+             m.created,
+             m.modified
+           FROM limited_measurement_candidates m
+           WHERE m.correction_mode = 'slow'
+
+           UNION ALL
+
+           SELECT
              timeseries_id,
              datetime,
              value_raw,
@@ -2180,52 +2272,13 @@ function(client_id, query) {
              imputed,
              created,
              modified
-           FROM basic_measurements_slow
-
-
-           UNION ALL
-
-           SELECT
-             m.timeseries_id,
-             m.datetime,
-             m.value_raw,
-             m.value_corrected,
-             m.period,
-             m.imputed,
-             source_stamp.created,
-             source_stamp.modified
-           FROM selected_timeseries st
-           JOIN LATERAL continuous.measurements_continuous_corrected(
-             st.timeseries_id,
-             $1,
-             $2
-           ) m ON TRUE
-           LEFT JOIN LATERAL (
-             SELECT
-               MAX(mc.created) AS created,
-               MAX(mc.modified) AS modified
-             FROM timeseries_sources src
-             JOIN continuous.measurements_continuous mc
-               ON src.source_timeseries_id = mc.timeseries_id
-              AND mc.datetime = m.datetime
-             WHERE src.root_timeseries_id = m.timeseries_id
-           ) source_stamp ON TRUE
-           WHERE st.timeseries_type <> 'basic'",
-    compound_modified_filter_sql,
-    "
-         ),
-         limited_measurement_rows AS MATERIALIZED (
-           SELECT *
-           FROM measurement_rows
-           ORDER BY datetime ASC, timeseries_id ASC
-           LIMIT ",
-    limit_param,
-    "
+           FROM limited_measurement_candidates
+           WHERE correction_mode = 'compound'
          )
          ",
     measurement_select_sql,
     "
-         FROM limited_measurement_rows m",
+         FROM measurement_rows m",
     measurement_join_sql,
     "ORDER BY m.datetime ASC, m.timeseries_id ASC"
   )
@@ -3302,7 +3355,7 @@ v2_finalize_tabular_response
 
 #* Return sample results
 #*
-#* Returns results for the specified sample IDs and parameters. Each row represents a single result for a specific parameter in a sample. Use the `samples` endpoint to retrieve sample metadata, including the `sample_id` values needed to query this endpoint.
+#* Returns results for the specified sample IDs and parameters. Each row represents a single result for a specific parameter in a sample. Use the `samples` endpoint to retrieve sample metadata, including the `sample_id` values needed to query this endpoint. Use POST /samples/results if the number of sample_ids requested results in an excessively long URL.
 #*
 #* @get /samples/results
 #* @query sample_ids:string* Up to 100000 sample IDs, separated by commas.
@@ -3313,8 +3366,42 @@ v2_finalize_tabular_response
 #* @serializer text/plain v2_identity_serializer()
 #* @async
 function(client_id, query) {
-  sample_ids <- v2_query_value(query, "sample_ids")
-  if (is.null(sample_ids)) {
+  v2_samples_results_response(
+    client_id,
+    query,
+    v2_query_value(query, "sample_ids")
+  )
+}
+#* @then
+v2_finalize_tabular_response
+
+#* Query sample results with a JSON body for large sample ID lists
+#*
+#* Use this POST form when the sample ID list would make a GET URL too long for GET /samples/results/.
+#* It returns the same result rows and accepts `parameters`, `limit`,
+#* `modifiedSince`, and `format` as query parameters, like GET /samples/results/.
+#*
+#* @post /samples/results
+#* @parser json
+#* @body sample_ids:[integer]* Up to 100000 sample IDs as a JSON array.
+#* @query parameters:string Parameter IDs to target, separated by commas.
+#* @query limit:integer(100000) Maximum number of records to return.
+#* @query modifiedSince:string Only return results created or modified since this ISO 8601 date/time.
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
+#* @async
+function(client_id, query, body) {
+  v2_samples_results_response(
+    client_id,
+    query,
+    body[["sample_ids"]]
+  )
+}
+#* @then
+v2_finalize_tabular_response
+
+v2_samples_results_response <- function(client_id, query, sample_ids) {
+  if (v2_query_missing(sample_ids)) {
     return(v2_response(
       v2_error_df("Missing required 'sample_ids' parameter."),
       status = 400L,
@@ -3434,8 +3521,6 @@ function(client_id, query) {
     query = query
   ))
 }
-#* @then
-v2_finalize_tabular_response
 
 #* Return image(s)
 #*
