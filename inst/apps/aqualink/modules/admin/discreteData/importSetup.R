@@ -487,12 +487,12 @@ importSetup_suggest_layout <- function(raw) {
 importSetupUI <- function(id) {
   ns <- NS(id)
   page_fluid(
-    tags$h3("Import setup"),
+    tags$h3("Import setup manager"),
     helpText(
       "Create a workbook format from an example file, then map its analytes and locations. Layout settings save immediately and affect future previews. Mapping changes are saved as drafts and become active when you publish them."
     ),
     uiOutput(ns("banner")),
-    actionButton(ns("refresh_setup"), "Refresh saved setup"),
+    actionButton(ns("refresh_setup"), "Refresh saved setups"),
     tabsetPanel(
       id = ns("setup_tabs"),
       tabPanel(
@@ -2826,7 +2826,7 @@ importSetup <- function(id, language) {
               } else {
                 TRUE
               },
-              note = "Saved from AquaLink Import setup."
+              note = "Saved from AquaLink Import setup manager."
             )
           })
           reload_profiles(selected = new_profile_key)

@@ -2951,7 +2951,7 @@ addDiscData_upload_plan <- function(rows, sample_key = NULL) {
 
 # Capture both mapping scopes so a preview cannot be uploaded against a newer
 # published revision. Drafts may be previewed while editing, but publication is
-# an explicit reviewed action in Import setup.
+# an explicit reviewed action in Import setup manager.
 addDiscData_mapping_snapshot <- function(con, profile, lock = FALSE) {
   if (isTRUE(lock)) {
     source_id <- profile$import_source_id[[1]]
@@ -3286,7 +3286,7 @@ addDiscData_run_upload <- function(request) {
         snapshot <- addDiscData_mapping_snapshot(con, profile, lock = TRUE)
         if (any(snapshot$status == "draft")) {
           stop(
-            "Review and publish the source and workbook drafts in Import setup, then preview the workbook again."
+            "Review and publish the source and workbook drafts in Manage import setups, then preview the workbook again."
           )
         }
         if (
@@ -4125,7 +4125,7 @@ addDiscDataUI <- function(id) {
                       style = "padding-top: 25px;",
                       actionButton(
                         ns("open_import_setup"),
-                        "Open Import setup"
+                        "Open Import setup manager"
                       )
                     )
                   )
@@ -4165,7 +4165,7 @@ addDiscDataUI <- function(id) {
                   ns = ns,
                   tags$h5("Map source parameter names and units to AquaCache"),
                   helpText(
-                    "After previewing, select any item that needs a mapping, choose what it means in AquaCache, then save it as a draft. Review and publish these changes in Discrete data → Import setup, then preview this workbook again before uploading. Publication applies every mapping change in the selected source or workbook format."
+                    "After previewing, select any item that needs a mapping, choose what it means in AquaCache, then save it as a draft. Review and publish these changes in Discrete data → Manage import setups, then preview this workbook again before uploading. Publication applies every mapping change in the selected source or workbook format."
                   ),
                   checkboxInput(
                     ns("show_all_mappings"),
@@ -5395,7 +5395,7 @@ addDiscData <- function(id, language) {
       if (!nrow(import_profiles())) {
         return(tags$div(
           class = "alert alert-warning",
-          "No workbook formats are saved yet. Use Discrete data → Import setup to create one."
+          "No workbook formats are saved yet. Use Discrete data → Manage import setups to create one."
         ))
       }
       NULL
@@ -5698,7 +5698,7 @@ addDiscData <- function(id, language) {
       }
       message <- paste(
         message,
-        "Review and publish the draft in Import setup before uploading."
+        "Review and publish the draft in the Import setup manager before uploading."
       )
       showNotification(
         message,
@@ -9898,7 +9898,7 @@ addDiscData <- function(id, language) {
         snapshot <- addDiscData_mapping_snapshot(con, selected_profile())
         if (any(snapshot$status == "draft")) {
           stop(
-            "Review and publish the source and workbook drafts in Import setup, then preview the workbook again.",
+            "Review and publish the source and workbook drafts in the Import setup manager, then preview the workbook again.",
             call. = FALSE
           )
         }
