@@ -1557,7 +1557,10 @@ daily_stats_select_sql <- function(
 
 #' Normalize the as_of input to a POSIXct object in UTC timezone
 #' @param as_of The input value for as_of, which can be NULL, character, Date, or POSIXct.
-#' @param tzone The timezone to use for parsing character inputs, which can be a string or numeric offset.
+#' @param tzone The timezone to use for parsing character inputs. Use an IANA
+#'   name recognized by R (see `OlsonNames()` and the IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab)) or a
+#'   numeric offset.
 #' @return A POSIXct object in UTC timezone, or NULL if as_of is NULL.
 #' @noRd
 #' @keywords internal
@@ -1618,7 +1621,9 @@ normalize_as_of_input <- function(as_of, tzone) {
 
 #' Normalize a plot date or datetime range bound
 #' @param value Single character, Date, or POSIXct range bound.
-#' @param tzone Timezone used to interpret date-only values.
+#' @param tzone Timezone used to interpret date-only values. Use an IANA name
+#'   recognized by R (see `OlsonNames()` and the IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab)).
 #' @param bound Either "start" or "end". Date-only start bounds resolve to the
 #'   start of the selected day; date-only end bounds resolve to the start of
 #'   the following day so the selected end day is included.
@@ -1687,7 +1692,10 @@ normalize_plot_datetime_bound <- function(
 
 #' Format the as_of value for use in plot titles, respecting the specified timezone and language
 #' @param as_of A POSIXct object representing the as_of datetime, or NULL.
-#' @param tzone The timezone to use for formatting the datetime, which can be a string or numeric offset.
+#' @param tzone The timezone to use for formatting the datetime. Use an IANA
+#'   name recognized by R (see `OlsonNames()` and the IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab)) or a
+#'   numeric offset.
 #' @param lang The language code for formatting the title, either "en" for English or "fr" for French.
 #' @return A formatted string for the plot title, or NULL if as_of is NULL.
 #' @noRd

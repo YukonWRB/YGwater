@@ -215,61 +215,65 @@ app_server <- function(input, output, session) {
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
     function(loc, param, lang, webgl, config, resolution) {
-      mirai::mirai({
-        con <- YGwater::AquaConnect(
-          name = config$dbName,
-          host = config$dbHost,
-          port = config$dbPort,
-          username = config$dbUser,
-          password = config$dbPass,
-          silent = TRUE
-        )
-        on.exit(DBI::dbDisconnect(con), add = TRUE)
-
-        loc_name <- DBI::dbGetQuery(
-          con,
-          paste0(
-            "SELECT ",
-            if (lang == "en") "name" else "name_fr",
-            " FROM public.locations WHERE location_code = $1;"
-          ),
-          params = list(
-            loc
+      mirai::mirai(
+        {
+          con <- YGwater::AquaConnect(
+            name = config$dbName,
+            host = config$dbHost,
+            port = config$dbPort,
+            username = config$dbUser,
+            password = config$dbPass,
+            silent = TRUE
           )
-        )[1, 1]
-        if (nchar(loc_name) > 30) {
-          loc_name <- paste0(substr(loc_name, 1, 25), "...")
-        }
+          on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-        p <- YGwater::plotTimeseries(
-          location = loc,
-          sub_location = NULL,
-          parameter = param,
-          start_date = Sys.Date() - 30,
-          datum = TRUE,
-          # filter = 20,
-          resolution = resolution,
-          lang = lang,
-          line_scale = 1,
-          axis_scale = 1,
-          legend_scale = 1,
-          gridx = FALSE,
-          gridy = FALSE,
-          slider = FALSE,
-          webgl = webgl,
-          title = TRUE,
-          hover = FALSE,
-          tzone = "MST",
-          custom_title = paste0(
-            if (lang == "en") "Last 30 days: " else "30 derniers jours: ",
-            loc_name
-          ),
-          con = con
-        )
+          loc_name <- DBI::dbGetQuery(
+            con,
+            paste0(
+              "SELECT ",
+              if (lang == "en") "name" else "name_fr",
+              " FROM public.locations WHERE location_code = $1;"
+            ),
+            params = list(
+              loc
+            )
+          )[1, 1]
+          if (nchar(loc_name) > 30) {
+            loc_name <- paste0(substr(loc_name, 1, 25), "...")
+          }
 
-        # Remove the plotly logo and other buttons from the top right of the plot
-        plotly::config(p, displayModeBar = FALSE)
-      }, environment(), .compute = "YGwater_floodAtlas_timeseries")
+          p <- YGwater::plotTimeseries(
+            location = loc,
+            sub_location = NULL,
+            parameter = param,
+            start_date = Sys.Date() - 30,
+            datum = TRUE,
+            # filter = 20,
+            resolution = resolution,
+            lang = lang,
+            line_scale = 1,
+            axis_scale = 1,
+            legend_scale = 1,
+            gridx = FALSE,
+            gridy = FALSE,
+            slider = FALSE,
+            webgl = webgl,
+            title = TRUE,
+            hover = FALSE,
+            tzone = config$timezone,
+            custom_title = paste0(
+              if (lang == "en") "Last 30 days: " else "30 derniers jours: ",
+              loc_name
+            ),
+            con = con
+          )
+
+          # Remove the plotly logo and other buttons from the top right of the plot
+          plotly::config(p, displayModeBar = FALSE)
+        },
+        environment(),
+        .compute = "YGwater_floodAtlas_timeseries"
+      )
     }
   )
 

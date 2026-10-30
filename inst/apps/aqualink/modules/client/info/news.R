@@ -57,16 +57,19 @@ news <- function(id, language) {
             params = list(row$content_id)
           )
           if (nrow(image_data) > 0) {
-            # Convert the BYTEA data to a base64 string
-            image_binary <- image_data$image[[1]]
-            image_format <- image_data$format[[1]]
-            base64_string <- base64enc::base64encode(image_binary)
-            data_url <- sprintf(
-              "data:image/%s;base64,%s",
-              image_format,
-              base64_string
+            data_url <- application_image_data_url(
+              image_data$image[[1]],
+              image_data$format[1]
             )
-            tags$img(src = data_url, style = "max-width:100%;")
+            if (is.null(data_url)) {
+              tags$p(tr("image_content_not_found", language$language))
+            } else {
+              tags$img(
+                src = data_url,
+                alt = row$content_id,
+                style = "max-width: 100%; height: auto;"
+              )
+            }
           } else {
             tags$p(tr("image_content_not_found", language$language))
           }

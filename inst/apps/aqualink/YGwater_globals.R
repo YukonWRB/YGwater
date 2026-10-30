@@ -960,13 +960,42 @@ YGwater_globals <- function(
     }
   }
 
+  # Convert entity-escaped tag boundaries back to markup before sanitizing.
+  # This repairs content pasted as, for example, &lt;h3&gt;...&lt;/h3&gt;.
+  decode_escaped_html_tags <<- function(text) {
+    if (is.null(text) || length(text) == 0 || all(is.na(text))) {
+      return("")
+    }
+
+    text_value <- as.character(text[[1]])
+    if (is.na(text_value) || !nzchar(text_value)) {
+      return(if (is.na(text_value)) "" else text_value)
+    }
+
+    matches <- gregexpr(
+      "&lt;/?[[:alpha:]][^<>]*?&gt;",
+      text_value,
+      ignore.case = TRUE,
+      perl = TRUE
+    )
+    if (matches[[1]][1] < 0L) {
+      return(text_value)
+    }
+
+    encoded_tags <- regmatches(text_value, matches)[[1]]
+    decoded_tags <- gsub("&lt;", "<", encoded_tags, ignore.case = TRUE)
+    decoded_tags <- gsub("&gt;", ">", decoded_tags, ignore.case = TRUE)
+    regmatches(text_value, matches) <- list(decoded_tags)
+    text_value
+  }
+
   # Render a restricted HTML fragment while stripping executable markup.
   sanitize_html_fragment <<- function(text) {
     if (is.null(text) || length(text) == 0 || all(is.na(text))) {
       return("")
     }
 
-    text_value <- as.character(text[[1]])
+    text_value <- decode_escaped_html_tags(text)
     if (is.na(text_value) || !nzchar(text_value)) {
       return("")
     }
@@ -1097,6 +1126,50 @@ YGwater_globals <- function(
     }
 
     tags$div(class = class, style = style, HTML(html_text))
+  }
+
+  # Build a browser-safe data URL for the raster formats supported by the app.
+  # SVG is intentionally excluded because it can contain active content.
+  application_image_data_url <<- function(image_binary, image_format) {
+    if (
+      !is.raw(image_binary) ||
+        length(image_binary) == 0L ||
+        length(image_format) != 1L ||
+        is.na(image_format)
+    ) {
+      return(NULL)
+    }
+
+    format <- tolower(sub("^\\.", "", trimws(as.character(image_format)[1])))
+    if (is.na(format) || !nzchar(format)) {
+      return(NULL)
+    }
+    if (format %in% c("jpg", "jpe")) {
+      format <- "jpeg"
+    } else if (format == "tif") {
+      format <- "tiff"
+    }
+
+    mime_types <- c(
+      jpeg = "image/jpeg",
+      png = "image/png",
+      gif = "image/gif",
+      webp = "image/webp",
+      bmp = "image/bmp",
+      tiff = "image/tiff",
+      avif = "image/avif"
+    )
+    mime_type <- unname(mime_types[format])
+    if (length(mime_type) != 1L || is.na(mime_type)) {
+      return(NULL)
+    }
+
+    paste0(
+      "data:",
+      mime_type,
+      ";base64,",
+      base64enc::base64encode(image_binary)
+    )
   }
 
   # Create a dismissible banner that can be used for site-wide notifications or module-specific notices. The banner state is stored in localStorage so that it remains dismissed across sessions until the version changes.

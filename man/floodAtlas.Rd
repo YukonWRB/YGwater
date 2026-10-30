@@ -14,7 +14,8 @@ floodAtlas(
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
   server = FALSE,
-  workers = NULL
+  workers = NULL,
+  timezone = "Etc/GMT+7"
 )
 }
 \arguments{
@@ -37,6 +38,15 @@ floodAtlas(
 \item{server}{Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.}
 
 \item{workers}{Number of local mirai daemons. \code{NULL} (the default) divides the cores available to R, after reserving one, between the two FloodAtlas app processes and uses at least one daemon per app. Set explicitly to tune resource use when the apps share a host or when only one app is running.}
+
+\item{timezone}{IANA timezone name used for plotting in either app.
+Defaults to \code{"Etc/GMT+7"} (fixed UTC-7 year-round). Use a region/city
+name such as \code{"America/Yellowknife"} to apply local daylight-saving rules.
+Run \code{OlsonNames()} to see names installed in this R environment. The
+IANA \href{https://data.iana.org/time-zones/tzdb/zone1970.tab}{zone1970.tab}
+lists geographic zone names. Legacy aliases and abbreviations such as
+\code{"MST"} and \code{"US/Pacific"} are rejected because their availability varies
+across systems.}
 }
 \value{
 Opens a Shiny application.

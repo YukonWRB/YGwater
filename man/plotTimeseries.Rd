@@ -112,7 +112,13 @@ plotTimeseries(
 
 \item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
-\item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).}
+\item{tzone}{The timezone to use for the plot. Default is "auto", which uses
+the system timezone. Otherwise pass a name returned by \code{OlsonNames()} or a
+numeric UTC offset in hours. The IANA
+\href{https://data.iana.org/time-zones/tzdb/zone1970.tab}{zone1970.tab} lists
+geographic zone names. Prefer these over abbreviations such as \code{"MST"};
+abbreviations may not be recognized on every operating system. Named zones
+follow local daylight-saving rules; numeric offsets are fixed.}
 
 \item{raw}{Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.}
 

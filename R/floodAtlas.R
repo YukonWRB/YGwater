@@ -13,6 +13,14 @@
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
 #' @param workers Number of local mirai daemons. `NULL` (the default) divides the cores available to R, after reserving one, between the two FloodAtlas app processes and uses at least one daemon per app. Set explicitly to tune resource use when the apps share a host or when only one app is running.
+#' @param timezone IANA timezone name used for plotting in either app.
+#'   Defaults to `"Etc/GMT+7"` (fixed UTC-7 year-round). Use a region/city
+#'   name such as `"America/Yellowknife"` to apply local daylight-saving rules.
+#'   Run `OlsonNames()` to see names installed in this R environment. The
+#'   IANA [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab)
+#'   lists geographic zone names. Legacy aliases and abbreviations such as
+#'   `"MST"` and `"US/Pacific"` are rejected because their availability varies
+#'   across systems.
 #'
 #' @return Opens a Shiny application.
 #' @export
@@ -27,8 +35,48 @@ floodAtlas <- function(
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
   server = FALSE,
-  workers = NULL
+  workers = NULL,
+  timezone = "Etc/GMT+7"
 ) {
+  portable_timezone_roots <- c(
+    "Africa/",
+    "America/",
+    "Antarctica/",
+    "Arctic/",
+    "Asia/",
+    "Atlantic/",
+    "Australia/",
+    "Europe/",
+    "Indian/",
+    "Pacific/",
+    "Etc/"
+  )
+  portable_timezone <- FALSE
+  if (
+    is.character(timezone) &&
+      length(timezone) == 1L &&
+      !is.na(timezone) &&
+      nzchar(timezone)
+  ) {
+    portable_timezone <- timezone %in%
+      c("UTC", "GMT") ||
+      any(startsWith(timezone, portable_timezone_roots))
+  }
+
+  if (
+    !is.character(timezone) ||
+      length(timezone) != 1L ||
+      is.na(timezone) ||
+      !nzchar(timezone) ||
+      !portable_timezone ||
+      !(timezone %in% OlsonNames())
+  ) {
+    stop(
+      "`timezone` must be an installed IANA region/city or Etc name, e.g. `America/Yellowknife` or `Etc/GMT+7`.",
+      call. = FALSE
+    )
+  }
+
   rlang::check_installed("shiny", reason = "to use floodAtlas app")
   rlang::check_installed("shinyjs", reason = "to use floodAtlas app")
   rlang::check_installed(
@@ -92,7 +140,8 @@ floodAtlas <- function(
       dbHost = dbHost,
       dbPort = dbPort,
       dbUser = dbUser,
-      dbPass = dbPass
+      dbPass = dbPass,
+      timezone = timezone
     )
   } else if (app == "timeseries") {
     source(system.file(
@@ -104,7 +153,8 @@ floodAtlas <- function(
       dbHost = dbHost,
       dbPort = dbPort,
       dbUser = dbUser,
-      dbPass = dbPass
+      dbPass = dbPass,
+      timezone = timezone
     )
   }
 

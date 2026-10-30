@@ -746,7 +746,7 @@ EQWinReport <- function(
   # Make the workbook ###############################################################################################
   wb <- openxlsx::createWorkbook(title = "Water Quality Report")
   time <- Sys.time()
-  attr(time, "tzone") <- "MST"
+  attr(time, "tzone") <- "Etc/GMT+7"
   top <- data.frame(
     tmp = c(
       paste0(

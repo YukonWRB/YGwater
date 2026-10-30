@@ -283,68 +283,72 @@ app_server <- function(input, output, session) {
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
     function(loc, param, yrs, lang, webgl, config) {
-      mirai::mirai({
-        con <- YGwater::AquaConnect(
-          name = config$dbName,
-          host = config$dbHost,
-          port = config$dbPort,
-          username = config$dbUser,
-          password = config$dbPass,
-          silent = TRUE
-        )
-        on.exit(DBI::dbDisconnect(con), add = TRUE)
-
-        loc_name <- DBI::dbGetQuery(
-          con,
-          paste0(
-            "SELECT ",
-            if (lang == "en") "name" else "name_fr",
-            " FROM public.locations WHERE location_code = $1;"
-          ),
-          params = list(
-            loc
+      mirai::mirai(
+        {
+          con <- YGwater::AquaConnect(
+            name = config$dbName,
+            host = config$dbHost,
+            port = config$dbPort,
+            username = config$dbUser,
+            password = config$dbPass,
+            silent = TRUE
           )
-        )[1, 1]
-        if (nchar(loc_name) > 30) {
-          loc_name <- paste0(substr(loc_name, 1, 25), "...")
-        }
+          on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-        # If parameter is SWE or snow depth, startDay should be Aug 1 (day 213)
-        if (param %in% c(21, 1220)) {
-          start_day <- 213
-          end_day <- 212
-        } else {
-          start_day <- 1
-          end_day <- 365
-        }
+          loc_name <- DBI::dbGetQuery(
+            con,
+            paste0(
+              "SELECT ",
+              if (lang == "en") "name" else "name_fr",
+              " FROM public.locations WHERE location_code = $1;"
+            ),
+            params = list(
+              loc
+            )
+          )[1, 1]
+          if (nchar(loc_name) > 30) {
+            loc_name <- paste0(substr(loc_name, 1, 25), "...")
+          }
 
-        p <- YGwater::plotOverlap(
-          location = loc,
-          sub_location = NULL,
-          parameter = param,
-          startDay = start_day,
-          endDay = end_day,
-          years = yrs,
-          resolution = "day",
-          datum = TRUE,
-          # filter = 20,
-          lang = lang,
-          line_scale = 1,
-          axis_scale = 1,
-          legend_scale = 1,
-          title = TRUE,
-          custom_title = loc_name,
-          gridx = FALSE,
-          gridy = FALSE,
-          slider = FALSE,
-          webgl = webgl,
-          hover = FALSE,
-          tzone = "MST",
-          con = con
-        )
-        # Remove the plotly logo and other buttons from the top right of the plot
-        plotly::config(p, displayModeBar = FALSE)
-      }, environment(), .compute = "YGwater_floodAtlas_overlap")
+          # If parameter is SWE or snow depth, startDay should be Aug 1 (day 213)
+          if (param %in% c(21, 1220)) {
+            start_day <- 213
+            end_day <- 212
+          } else {
+            start_day <- 1
+            end_day <- 365
+          }
+
+          p <- YGwater::plotOverlap(
+            location = loc,
+            sub_location = NULL,
+            parameter = param,
+            startDay = start_day,
+            endDay = end_day,
+            years = yrs,
+            resolution = "day",
+            datum = TRUE,
+            # filter = 20,
+            lang = lang,
+            line_scale = 1,
+            axis_scale = 1,
+            legend_scale = 1,
+            title = TRUE,
+            custom_title = loc_name,
+            gridx = FALSE,
+            gridy = FALSE,
+            slider = FALSE,
+            webgl = webgl,
+            hover = FALSE,
+            tzone = config$timezone,
+            con = con
+          )
+          # Remove the plotly logo and other buttons from the top right of the plot
+          plotly::config(p, displayModeBar = FALSE)
+        },
+        environment(),
+        .compute = "YGwater_floodAtlas_overlap"
+      )
     }
   ) |>
     bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running

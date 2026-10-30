@@ -20,7 +20,12 @@ getWeather(
 
 \item{end}{The end date for which you want data. Input either a character vector of form "2022-12-30" or a Date formatted object.}
 
-\item{tzone}{Choose from "local" or "UTC". Note that "local" is whatever ECCC thinks the station local TZ is: this might be inaccurate in Yukon, where many (maybe even all) stations report in UTC-8.}
+\item{tzone}{Choose "local" or "UTC". "Local" uses ECCC's station timezone,
+which may not match Yukon civil time; many Yukon stations report in UTC-8.
+This is a weathercan display mode, not a general R timezone name, so other
+IANA names are not accepted here. Run \code{OlsonNames()} to see standard names
+accepted by other R functions. The IANA \href{https://data.iana.org/time-zones/tzdb/zone1970.tab}{zone1970.tab}
+lists geographic zone names.}
 
 \item{interval}{Select from 'hour', 'day', or 'month'. However, if requesting a location by name you will need to select your chosen interval  interactively (so don't bother modifying the default).}
 

@@ -1532,7 +1532,7 @@ ORDER BY v.location_name, v.timeseries_id;
               NA
             },
             "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -1590,7 +1590,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = yesterday_comment_levels
@@ -1660,7 +1660,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -1756,7 +1756,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -1928,7 +1928,7 @@ ORDER BY v.location_name, v.timeseries_id;
             "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
             "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
             "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -1978,7 +1978,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2047,7 +2047,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2135,7 +2135,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2307,7 +2307,7 @@ ORDER BY v.location_name, v.timeseries_id;
             "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
             "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
             "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2357,7 +2357,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2426,7 +2426,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2514,7 +2514,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2699,7 +2699,7 @@ ORDER BY v.location_name, v.timeseries_id;
               NA
             },
             "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2757,7 +2757,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2834,7 +2834,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -2930,7 +2930,7 @@ ORDER BY v.location_name, v.timeseries_id;
             } else {
               NA
             },
-            "age" = substr(format(last_time, tz = "MST"), 1, 16),
+            "age" = substr(format(last_time, tz = "Etc/GMT+7"), 1, 16),
             "Hrs" = as.numeric(paste0(round(age[1], 1))),
             "location_comment" = NA,
             "yesterday_comments" = if (
@@ -3030,7 +3030,7 @@ ORDER BY v.location_name, v.timeseries_id;
   )
   time <- report_time
   head <- data.frame(
-    paste0("Issued at ", substr(format(time, tz = "MST"), 1, 16), " MST"),
+    paste0("Issued at ", substr(format(time, tz = "Etc/GMT+7"), 1, 16), " MST"),
     NA,
     "Forecaster name:",
     NA,

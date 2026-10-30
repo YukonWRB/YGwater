@@ -110,7 +110,12 @@ to FALSE to force standard scatter traces.}
 
 \item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
-\item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.}
+\item{tzone}{The timezone to use for the plot. Default is "auto", which uses
+the system timezone. Otherwise pass a name returned by \code{OlsonNames()}.
+The IANA \href{https://data.iana.org/time-zones/tzdb/zone1970.tab}{zone1970.tab}
+lists geographic zone names. Prefer these over abbreviations such as
+\code{"MST"}, which may not be recognized on every operating system. Region
+names follow local daylight-saving rules.}
 
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 

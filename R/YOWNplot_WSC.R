@@ -73,7 +73,7 @@ YOWNplot_WSC <- function(
     ] <- NA
 
     # Change timestamps from UTC to MST
-    attr(timeseries$datetime, "tzone") <- "MST"
+    attr(timeseries$datetime, "tzone") <- "Etc/GMT+7"
     names(timeseries)[names(timeseries) == "datetime"] <- "timestamp_MST"
 
     #Find data gaps of greater than 6 hours (indicative of logger failure) and generate value NA data sets to fill in gaps
@@ -143,7 +143,7 @@ YOWNplot_WSC <- function(
     timeseries <- datalist$timeseries
 
     # Change timestamps from UTC to MST
-    attr(timeseries$datetime, "tzone") <- "MST"
+    attr(timeseries$datetime, "tzone") <- "Etc/GMT+7"
     names(timeseries)[names(timeseries) == "datetime"] <- "timestamp_MST"
 
     #Filter out all observations not taken on the hour

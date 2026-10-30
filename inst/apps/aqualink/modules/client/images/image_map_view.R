@@ -72,11 +72,11 @@ imgMapView <- function(id, language) {
       strsplit(inner, ",", fixed = TRUE)[[1]]
     })
 
-    attr(images$images$datetime, "tzone") <- "MST"
+    attr(images$images$datetime, "tzone") <- "Etc/GMT+7"
 
-    selections = reactiveValues()
+    selections <- reactiveValues()
     selections$filter <- rep(TRUE, nrow(images$images))
-    selected_colour = rgb(0, 1, 1, 0.8) # Cyan with 0.5 transparency for the selected image in the mini timeline plot
+    selected_colour <- rgb(0, 1, 1, 0.8) # Cyan with 0.5 transparency for the selected image in the mini timeline plot
 
     renderSelectedImage <- function(id) {
       id <- suppressWarnings(as.integer(id))
@@ -548,9 +548,9 @@ imgMapView <- function(id, language) {
            FROM files.images i
            LEFT JOIN files.image_types it ON i.image_type = it.image_type_id
            WHERE datetime > $1",
-          params = list(as.POSIXct(input$dates[1], tz = "MST") - 7 * 60)
+          params = list(as.POSIXct(input$dates[1], tz = "Etc/GMT+7") - 7 * 60)
         )
-        attr(images$images$datetime, "tzone") <- "MST"
+        attr(images$images$datetime, "tzone") <- "Etc/GMT+7"
         images$unique_types <- images$images[
           !duplicated(images$images$image_type),
           c("image_type_id", "image_type")
@@ -588,7 +588,7 @@ imgMapView <- function(id, language) {
           datesControl(TRUE)
         }
         if (
-          as.POSIXct(input$dates[1], tz = "MST") - 7 * 60 <
+          as.POSIXct(input$dates[1], tz = "Etc/GMT+7") - 7 * 60 <
             min(images$images$datetime, na.rm = TRUE)
         ) {
           images$images <- DBI::dbGetQuery(
@@ -597,9 +597,9 @@ imgMapView <- function(id, language) {
              FROM files.images i
              LEFT JOIN files.image_types it ON i.image_type = it.image_type_id
              WHERE datetime > $1",
-            params = list(as.POSIXct(input$dates[1], tz = "MST") - 7 * 60)
+            params = list(as.POSIXct(input$dates[1], tz = "Etc/GMT+7") - 7 * 60)
           )
-          attr(images$images$datetime, "tzone") <- "MST"
+          attr(images$images$datetime, "tzone") <- "Etc/GMT+7"
           images$unique_types <- images$images[
             !duplicated(images$images$image_type),
             c("image_type_id", "image_type")
