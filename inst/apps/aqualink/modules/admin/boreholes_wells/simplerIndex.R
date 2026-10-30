@@ -616,6 +616,7 @@ simplerIndexUI <- function(id) {
               icon = icon("map-location-dot"),
               width = "100%"
             ),
+            uiOutput(ns("nearby_borehole_warning")),
             selectizeInput(
               ns("location_source"),
               "Location source *",
@@ -2894,10 +2895,81 @@ simplerIndex <- function(id, language) {
 
     coordinate_map_center <- reactiveVal(list(lat = 64, lon = -135, zoom = 4))
     coordinate_map_selection <- reactiveVal(NULL)
+    existing_boreholes <- reactiveVal(NULL)
+
+    load_existing_boreholes <- function() {
+      if (!is.null(existing_boreholes())) return(invisible(existing_boreholes()))
+      boreholes <- tryCatch(
+        DBI::dbGetQuery(
+          session$userData$AquaCache,
+          paste(
+            'SELECT borehole_id, borehole_name, latitude, longitude',
+            'FROM boreholes.boreholes',
+            'WHERE latitude IS NOT NULL AND longitude IS NOT NULL;'
+          )
+        ),
+        error = function(error) {
+          showNotification(
+            paste('Could not load existing boreholes:', conditionMessage(error)),
+            type = 'warning'
+          )
+          data.frame()
+        }
+      )
+      if (nrow(boreholes)) {
+        boreholes$latitude <- suppressWarnings(as.numeric(boreholes$latitude))
+        boreholes$longitude <- suppressWarnings(as.numeric(boreholes$longitude))
+        boreholes <- boreholes[
+          is.finite(boreholes$latitude) & is.finite(boreholes$longitude) &
+            boreholes$latitude >= -90 & boreholes$latitude <= 90 &
+            boreholes$longitude >= -180 & boreholes$longitude <= 180,
+          , drop = FALSE
+        ]
+        name <- as.character(boreholes$borehole_name)
+        name[is.na(name) | !nzchar(name)] <- 'Unnamed borehole'
+        boreholes$map_label <- name
+        boreholes$map_popup <- sprintf(
+          '<strong>%s</strong><br/>Borehole ID: %s',
+          htmltools::htmlEscape(name), boreholes$borehole_id
+        )
+      }
+      existing_boreholes(boreholes)
+      invisible(boreholes)
+    }
+    observe({ load_existing_boreholes() })
+
+    nearby_boreholes <- reactive({
+      coordinates <- form_latlon()
+      boreholes <- existing_boreholes()
+      if (is.null(coordinates) || is.null(boreholes) || !nrow(boreholes)) return(data.frame())
+      earth_radius_m <- 6371008.8
+      lat1 <- coordinates$lat * pi / 180
+      lat2 <- boreholes$latitude * pi / 180
+      d_lat <- lat2 - lat1
+      d_lon <- (boreholes$longitude - coordinates$lon) * pi / 180
+      a <- sin(d_lat / 2)^2 + cos(lat1) * cos(lat2) * sin(d_lon / 2)^2
+      boreholes$distance_m <- 2 * earth_radius_m * atan2(sqrt(a), sqrt(pmax(0, 1 - a)))
+      boreholes[order(boreholes$distance_m), , drop = FALSE]
+    })
+
+    output$nearby_borehole_warning <- renderUI({
+      nearby <- nearby_boreholes()
+      if (!nrow(nearby) || nearby$distance_m[[1]] > 50) return(NULL)
+      closest <- nearby[1, , drop = FALSE]
+      warning_colour <- if (closest$distance_m[[1]] <= 20) '#b42318' else '#b54708'
+      div(
+        style = paste0('color: ', warning_colour, '; font-weight: 600; margin-top: 0.5rem;'),
+        sprintf(
+          'Existing borehole nearby: %s (ID %s), %.1f m away.',
+          closest$map_label[[1]], closest$borehole_id[[1]], closest$distance_m[[1]]
+        )
+      )
+    })
 
     output$coordinates_map <- leaflet::renderLeaflet({
       center <- coordinate_map_center()
       selection <- isolate(coordinate_map_selection())
+      boreholes <- isolate(existing_boreholes())
 
       map <- leaflet::leaflet(
         options = leaflet::leafletOptions(maxZoom = 19)
@@ -2920,6 +2992,26 @@ simplerIndex <- function(id, language) {
           zoom = center$zoom
         )
 
+      if (!is.null(boreholes) && nrow(boreholes)) {
+        map <- map %>%
+          leaflet::addCircleMarkers(
+            data = boreholes,
+            lng = ~longitude,
+            lat = ~latitude,
+            radius = 4,
+            color = '#DC4405',
+            weight = 1,
+            opacity = 0.8,
+            fillColor = '#F2A900',
+            fillOpacity = 0.55,
+            group = 'Existing boreholes',
+            label = ~map_label,
+            popup = ~map_popup,
+            layerId = ~paste0('existing_borehole_', borehole_id),
+            labelOptions = leaflet::labelOptions(direction = 'auto')
+          )
+      }
+
       if (!is.null(selection)) {
         map <- map %>%
           leaflet::addCircleMarkers(
@@ -2934,6 +3026,24 @@ simplerIndex <- function(id, language) {
               selection$lat,
               selection$lon
             )
+          ) %>%
+          leaflet::addCircles(
+            lng = selection$lon,
+            lat = selection$lat,
+            radius = 50,
+            color = '#f0ad4e',
+            weight = 2,
+            fill = FALSE,
+            group = 'proximity_rings'
+          ) %>%
+          leaflet::addCircles(
+            lng = selection$lon,
+            lat = selection$lat,
+            radius = 20,
+            color = '#b42318',
+            weight = 2,
+            fill = FALSE,
+            group = 'proximity_rings'
           ) %>%
           leaflet::addLegend(
             position = "bottomright",
@@ -2965,6 +3075,7 @@ simplerIndex <- function(id, language) {
     })
 
     observeEvent(input$open_coordinates_map, {
+      load_existing_boreholes()
       selection <- form_latlon()
       coordinate_map_selection(selection)
       if (is.null(selection)) {
@@ -2987,6 +3098,12 @@ simplerIndex <- function(id, language) {
           }
         ),
         leaflet::leafletOutput(ns("coordinates_map"), height = "400px"),
+        tags$div(
+          style = "margin-top: 0.5rem; font-size: 0.9rem;",
+          tags$span(style = "color: #b42318; font-weight: 600;", "Red buffer: 20 metres"),
+          tags$span("; "),
+          tags$span(style = "color: #b54708; font-weight: 600;", "orange buffer: 50 metres.")
+        ),
         uiOutput(ns("coordinate_map_zoom_note")),
         footer = tagList(
           modalButton("Close"),
@@ -3016,6 +3133,7 @@ simplerIndex <- function(id, language) {
       coordinate_map_selection(selection)
       leaflet::leafletProxy(ns("coordinates_map"), session = session) %>%
         leaflet::clearGroup("selected_point") %>%
+        leaflet::clearGroup("proximity_rings") %>%
         leaflet::addCircleMarkers(
           lng = selection$lon,
           lat = selection$lat,
@@ -3028,6 +3146,24 @@ simplerIndex <- function(id, language) {
             selection$lat,
             selection$lon
           )
+        ) %>%
+        leaflet::addCircles(
+          lng = selection$lon,
+          lat = selection$lat,
+          radius = 50,
+          color = '#f0ad4e',
+          weight = 2,
+          fill = FALSE,
+          group = 'proximity_rings'
+        ) %>%
+        leaflet::addCircles(
+          lng = selection$lon,
+          lat = selection$lat,
+          radius = 20,
+          color = '#b42318',
+          weight = 2,
+          fill = FALSE,
+          group = 'proximity_rings'
         )
     }, ignoreInit = TRUE)
 
@@ -3049,6 +3185,7 @@ simplerIndex <- function(id, language) {
       updateRadioButtons(session, "coordinate_system", selected = "latlon")
       updateNumericInput(session, "latitude", value = selection$lat)
       updateNumericInput(session, "longitude", value = selection$lon)
+      updateSelectizeInput(session, "location_source", selected = "Map")
       removeModal()
     }, ignoreInit = TRUE)
 

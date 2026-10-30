@@ -210,7 +210,16 @@ yec_dashboard_data <- function(
             "LEFT JOIN LATERAL (",
             "    SELECT l.location_id, l.name, l.latitude, l.longitude",
             "    FROM public.locations l WHERE l.location_code = r.location_code",
-            "    ORDER BY l.location_id LIMIT 1",
+            "    ORDER BY (",
+            "      SELECT max(mc.datetime)",
+            "      FROM continuous.timeseries ts",
+            "      JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
+            "      JOIN continuous.measurements_continuous mc ON mc.timeseries_id = ts.timeseries_id",
+            "      WHERE ts.location_id = l.location_id",
+            "        AND p.param_name = rp.param_name",
+            "        AND mc.value IS NOT NULL",
+            "    ) DESC NULLS LAST, l.location_id",
+            "    LIMIT 1",
             ") loc ON TRUE",
             "LEFT JOIN LATERAL (",
             "    SELECT ts.timeseries_id, reading.value AS latest_value,",
@@ -513,15 +522,11 @@ yec_dashboard_threshold_segments <- function(
     result
 }
 
-#' Keep station-parameter rows with a valid reading in the last 365 days
+#' Keep all configured station-parameter rows, including those without recent data
 #' @keywords internal
 #' @noRd
 yec_dashboard_recent_rows <- function(dat) {
-    keep <- is.finite(dat$latest_value) &
-        !is.na(dat$latest_time) &
-        is.finite(dat$data_age_hours) &
-        dat$data_age_hours < 365 * 24
-    dat[keep, , drop = FALSE]
+    dat
 }
 
 #' Calculate signed margins against thresholds valid at each latest reading
@@ -1139,7 +1144,7 @@ yecDashboardMod <- function(id, language, inputs = NULL) {
                             scrollX = TRUE,
                             ordering = FALSE,
                             language = list(
-                                emptyTable = "No readings within the last 365 days."
+                                emptyTable = "No configured stations are available."
                             ),
                             columnDefs = list(list(
                                 targets = "_all",

@@ -437,7 +437,7 @@ app_ui <- function(request) {
               uiOutput("floodDashboard_ui")
             ),
             nav_panel(
-              title = "YEC Dashboard",
+              title = "Reservoir monitoring",
               value = "yecDashboard",
               uiOutput("yecDashboard_ui")
             ),
@@ -695,6 +695,11 @@ app_ui <- function(request) {
               title = "Manage borehole documents",
               value = "manageBoreholeDocuments",
               uiOutput("manageBoreholeDocuments_ui")
+            ),
+            nav_panel(
+              title = "Manage duplicate records",
+              value = "manageDuplicateBoreholes",
+              uiOutput("manageDuplicateBoreholes_ui")
             )
           )
         },

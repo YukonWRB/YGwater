@@ -161,7 +161,7 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
-      "apps/aqualink/modules/client/reports/yecDashboard.R",
+      "apps/aqualink/modules/client/reports/reservoirMonitoring.R",
       package = "YGwater"
     ))
 
@@ -287,6 +287,10 @@ YGwater_globals <- function(
     ))
     source(system.file(
       "apps/aqualink/modules/admin/boreholes_wells/manageBoreholeDocuments.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/aqualink/modules/admin/boreholes_wells/manageDuplicateBoreholes.R",
       package = "YGwater"
     ))
 

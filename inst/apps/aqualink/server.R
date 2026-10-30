@@ -160,7 +160,8 @@ app_server <- function(input, output, session) {
     "manageTransmissionComponents",
     "simplerIndex",
     "editBoreholesWells",
-    "manageBoreholeDocuments"
+    "manageBoreholeDocuments",
+    "manageDuplicateBoreholes"
   )
 
   admin_nav_values <- c(
@@ -200,6 +201,7 @@ app_server <- function(input, output, session) {
     "simplerIndex",
     "editBoreholesWells",
     "manageBoreholeDocuments",
+    "manageDuplicateBoreholes",
     "addDiscData",
     "importSetup",
     "addContData",
@@ -254,7 +256,8 @@ app_server <- function(input, output, session) {
         c(
           "simplerIndex",
           "editBoreholesWells",
-          "manageBoreholeDocuments"
+          "manageBoreholeDocuments",
+          "manageDuplicateBoreholes"
         )
     ) {
       return("boreholes_wells")
@@ -1779,6 +1782,7 @@ app_server <- function(input, output, session) {
     ui_loaded$simplerIndex <- FALSE
     ui_loaded$editBoreholesWells <- FALSE
     ui_loaded$manageBoreholeDocuments <- FALSE
+    ui_loaded$manageDuplicateBoreholes <- FALSE
 
     ui_loaded$manageOrganizations <- FALSE
     ui_loaded$manageNetworks <- FALSE
@@ -1868,6 +1872,7 @@ app_server <- function(input, output, session) {
     "simplerIndex",
     "editBoreholesWells",
     "manageBoreholeDocuments",
+    "manageDuplicateBoreholes",
     "manageOrganizations",
     "manageNetworks",
     "manageProjects",
@@ -2857,9 +2862,7 @@ WHERE rolname = current_user;"
             footer = modalButton(tr("close", languageSelection$language))
           ))
           # attempt a disconnect of the new connection
-          try({
-            DBI::dbDisconnect(session$userData$AquaCache_new)
-          })
+          safe_disconnect(session$userData$AquaCache_new)
           return()
         }
       },
@@ -2873,9 +2876,7 @@ WHERE rolname = current_user;"
           footer = modalButton(tr("close", languageSelection$language))
         ))
         # attempt a disconnect of the new connection
-        try({
-          DBI::dbDisconnect(session$userData$AquaCache_new)
-        })
+        safe_disconnect(session$userData$AquaCache_new)
         return()
       }
     )
@@ -3554,6 +3555,18 @@ WHERE rolname = current_user;"
         ui_loaded$manageBoreholeDocuments <- TRUE
         manageBoreholeDocuments(
           "manageBoreholeDocuments",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageDuplicateBoreholes") {
+      if (!ui_loaded$manageDuplicateBoreholes) {
+        output$manageDuplicateBoreholes_ui <- renderUI(
+          manageDuplicateBoreholesUI("manageDuplicateBoreholes")
+        )
+        ui_loaded$manageDuplicateBoreholes <- TRUE
+        manageDuplicateBoreholes(
+          "manageDuplicateBoreholes",
           language = languageSelection
         )
       }
