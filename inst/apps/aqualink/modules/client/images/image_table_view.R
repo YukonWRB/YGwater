@@ -225,7 +225,7 @@ imgTableView <- function(id, language) {
       # create sorting column for datetimes
       tbl[, sort.dt := datetime]
       # Nicely format datetimes (makes them a character object)
-      attr(tbl$datetime, "tzone") <- "MST"
+      attr(tbl$datetime, "tzone") <- "Etc/GMT+7"
       tbl[, datetime := format(datetime, format = "%Y-%m-%d %H:%M")]
 
       # Rename columns

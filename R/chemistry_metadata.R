@@ -17,8 +17,14 @@
 #' @keywords internal
 chemistry_metadata_catalogues <- function(con) {
   list(
-    result_speciations = DBI::dbGetQuery(con, "SELECT * FROM discrete.result_speciations ORDER BY result_speciation"),
-    result_targets = DBI::dbGetQuery(con, "SELECT * FROM discrete.result_targets ORDER BY result_target")
+    result_speciations = DBI::dbGetQuery(
+      con,
+      "SELECT * FROM discrete.result_speciations ORDER BY result_speciation"
+    ),
+    result_targets = DBI::dbGetQuery(
+      con,
+      "SELECT * FROM discrete.result_targets ORDER BY result_target"
+    )
   )
 }
 
@@ -48,69 +54,190 @@ chemistry_metadata_catalogues <- function(con) {
 #'   application modules sourced outside the package namespace.
 #' @family analytical metadata helpers
 #' @keywords internal
-chemistry_metadata_ui <- function(ns, prefix, catalogues = list(), value = list(), lang = "en") {
+chemistry_metadata_ui <- function(
+  ns,
+  prefix,
+  catalogues = list(),
+  value = list(),
+  lang = "en"
+) {
   french <- identical(lang, "fr")
   label <- function(en, fr) if (french) fr else en
   selected <- function(field) {
     x <- value[[field]]
-    if (is.null(x) || !length(x) || is.na(x[[1]])) return(NULL)
+    if (is.null(x) || !length(x) || is.na(x[[1]])) {
+      return(NULL)
+    }
     x[[1]]
   }
   choices <- function(table, field) {
     rows <- catalogues[[table]]
-    if (is.null(rows) || !nrow(rows)) return(NULL)
+    if (is.null(rows) || !nrow(rows)) {
+      return(NULL)
+    }
     id <- paste0(field, "_id")
     rows <- rows[rows$active | rows[[id]] %in% selected(id), , drop = FALSE]
     labels <- rows[[field]]
     fr <- paste0(field, "_fr")
-    if (french && fr %in% names(rows)) labels <- ifelse(is.na(rows[[fr]]), labels, rows[[fr]])
-    stats::setNames(as.character(rows[[id]]), ifelse(rows$active, labels, paste0(labels, " (inactive)")))
+    if (french && fr %in% names(rows)) {
+      labels <- ifelse(is.na(rows[[fr]]), labels, rows[[fr]])
+    }
+    stats::setNames(
+      as.character(rows[[id]]),
+      ifelse(rows$active, labels, paste0(labels, " (inactive)"))
+    )
   }
   raw_conditions <- value$analysis_conditions
-  if (inherits(value, "data.frame") && length(raw_conditions)) raw_conditions <- raw_conditions[[1]]
+  if (inherits(value, "data.frame") && length(raw_conditions)) {
+    raw_conditions <- raw_conditions[[1]]
+  }
   conditions <- AquaCache::normalizeAnalysisConditions(raw_conditions)
   context <- jsonlite::fromJSON(conditions, simplifyVector = FALSE)
-  common <- c("mass_basis", "gas_basis", "reference_temperature_kelvin", "reference_pressure_kpa")
+  common <- c(
+    "mass_basis",
+    "gas_basis",
+    "reference_temperature_kelvin",
+    "reference_pressure_kpa"
+  )
   additional <- context[setdiff(names(context), common)]
   additional <- AquaCache::normalizeAnalysisConditions(additional)
   shiny::tagList(
     shiny::fluidRow(
-      shiny::column(3, shiny::selectizeInput(ns(paste0(prefix, "result_speciation_id")),
-        label("Chemical form / species scope", "Forme chimique / especes"),
-        choices = choices("result_speciations", "result_speciation"), selected = selected("result_speciation_id"),
-        multiple = TRUE, options = list(maxItems = 1, placeholder = label("Unspecified", "Non precise")))),
-      shiny::column(3, shiny::selectizeInput(ns(paste0(prefix, "result_target_id")),
-        label("Analytical target / material", "Cible analytique / matiere"),
-        choices = choices("result_targets", "result_target"), selected = selected("result_target_id"),
-        multiple = TRUE, options = list(maxItems = 1, placeholder = label("Unspecified", "Non precise")))),
-      shiny::column(3, shiny::selectInput(ns(paste0(prefix, "endpoint_mode")),
-        label("Endpoint determination", "Determination du point final"),
-        choices = c("Unspecified" = "", "Fixed pH" = "fixed", "Inflection" = "inflection", "Gran" = "gran", "Other" = "other"),
-        selected = selected("endpoint_mode"))),
-      shiny::column(3, shiny::numericInput(ns(paste0(prefix, "endpoint_ph")),
-        label("Endpoint pH", "pH du point final"), value = if (is.null(selected("endpoint_ph"))) NA_real_ else selected("endpoint_ph")))
+      shiny::column(
+        3,
+        shiny::selectizeInput(
+          ns(paste0(prefix, "result_speciation_id")),
+          label("Chemical form / species scope", "Forme chimique / especes"),
+          choices = choices("result_speciations", "result_speciation"),
+          selected = selected("result_speciation_id"),
+          multiple = TRUE,
+          options = list(
+            maxItems = 1,
+            placeholder = label("Unspecified", "Non precise")
+          )
+        )
+      ),
+      shiny::column(
+        3,
+        shiny::selectizeInput(
+          ns(paste0(prefix, "result_target_id")),
+          label("Analytical target / material", "Cible analytique / matiere"),
+          choices = choices("result_targets", "result_target"),
+          selected = selected("result_target_id"),
+          multiple = TRUE,
+          options = list(
+            maxItems = 1,
+            placeholder = label("Unspecified", "Non precise")
+          )
+        )
+      ),
+      shiny::column(
+        3,
+        shiny::selectInput(
+          ns(paste0(prefix, "endpoint_mode")),
+          label("Endpoint determination", "Determination du point final"),
+          choices = c(
+            "Unspecified" = "",
+            stats::setNames(
+              "unknown",
+              label("Unknown / not reported", "Inconnu / non indique")
+            ),
+            "Fixed pH" = "fixed",
+            "Inflection" = "inflection",
+            "Gran" = "gran",
+            "Other" = "other"
+          ),
+          selected = selected("endpoint_mode")
+        )
+      ),
+      shiny::column(
+        3,
+        shiny::numericInput(
+          ns(paste0(prefix, "endpoint_ph")),
+          label("Endpoint pH", "pH du point final"),
+          value = if (is.null(selected("endpoint_ph"))) {
+            NA_real_
+          } else {
+            selected("endpoint_ph")
+          }
+        )
+      )
     ),
+    shiny::helpText(label(
+      "Use Unknown / not reported when the source does not state the endpoint method; leave endpoint pH blank when the endpoint is unknown.",
+      "Utiliser Inconnu / non indique si la methode du point final n'est pas precisee; laisser le pH vide si le point final est inconnu."
+    )),
     shiny::fluidRow(
-      shiny::column(3, shiny::selectInput(ns(paste0(prefix, "mass_basis")),
-        label("Solid mass basis", "Base de masse solide"),
-        choices = c("Unspecified" = "", "Dry" = "dry", "Wet" = "wet", "Ash" = "ash", "Other" = "other"),
-        selected = context$mass_basis)),
-      shiny::column(3, shiny::selectInput(ns(paste0(prefix, "gas_basis")),
-        label("Gas moisture basis", "Base d'humidite du gaz"),
-        choices = c("Unspecified" = "", "Dry" = "dry", "Wet" = "wet", "Other" = "other"), selected = context$gas_basis)),
-      shiny::column(3, shiny::numericInput(ns(paste0(prefix, "reference_temperature_kelvin")),
-        label("Reference temperature (K)", "Temperature de reference (K)"),
-        value = if (is.null(context$reference_temperature_kelvin)) NA_real_ else context$reference_temperature_kelvin)),
-      shiny::column(3, shiny::numericInput(ns(paste0(prefix, "reference_pressure_kpa")),
-        label("Reference pressure (kPa)", "Pression de reference (kPa)"),
-        value = if (is.null(context$reference_pressure_kpa)) NA_real_ else context$reference_pressure_kpa))
+      shiny::column(
+        3,
+        shiny::selectInput(
+          ns(paste0(prefix, "mass_basis")),
+          label("Solid mass basis", "Base de masse solide"),
+          choices = c(
+            "Unspecified" = "",
+            "Dry" = "dry",
+            "Wet" = "wet",
+            "Ash" = "ash",
+            "Other" = "other"
+          ),
+          selected = context$mass_basis
+        )
+      ),
+      shiny::column(
+        3,
+        shiny::selectInput(
+          ns(paste0(prefix, "gas_basis")),
+          label("Gas moisture basis", "Base d'humidite du gaz"),
+          choices = c(
+            "Unspecified" = "",
+            "Dry" = "dry",
+            "Wet" = "wet",
+            "Other" = "other"
+          ),
+          selected = context$gas_basis
+        )
+      ),
+      shiny::column(
+        3,
+        shiny::numericInput(
+          ns(paste0(prefix, "reference_temperature_kelvin")),
+          label("Reference temperature (K)", "Temperature de reference (K)"),
+          value = if (is.null(context$reference_temperature_kelvin)) {
+            NA_real_
+          } else {
+            context$reference_temperature_kelvin
+          }
+        )
+      ),
+      shiny::column(
+        3,
+        shiny::numericInput(
+          ns(paste0(prefix, "reference_pressure_kpa")),
+          label("Reference pressure (kPa)", "Pression de reference (kPa)"),
+          value = if (is.null(context$reference_pressure_kpa)) {
+            NA_real_
+          } else {
+            context$reference_pressure_kpa
+          }
+        )
+      )
     ),
-    shiny::tags$details(shiny::tags$summary(label("Additional analysis conditions", "Autres conditions analytiques")),
-      shiny::textAreaInput(ns(paste0(prefix, "analysis_conditions")),
-        label("Named conditions", "Conditions nommees"), value = additional, rows = 2, width = "100%"),
+    shiny::tags$details(
+      shiny::tags$summary(label(
+        "Additional analysis conditions",
+        "Autres conditions analytiques"
+      )),
+      shiny::textAreaInput(
+        ns(paste0(prefix, "analysis_conditions")),
+        label("Named conditions", "Conditions nommees"),
+        value = additional,
+        rows = 2,
+        width = "100%"
+      ),
       shiny::helpText(label(
         'Additional conditions use a JSON object, for example {"isotope_reference_standard":"VSMOW"}. Use {} when unspecified. Laboratory and method belong in their own fields.',
-        'Les autres conditions utilisent un objet JSON, par exemple {"isotope_reference_standard":"VSMOW"}. Utiliser {} si les conditions ne sont pas precisees.'))
+        'Les autres conditions utilisent un objet JSON, par exemple {"isotope_reference_standard":"VSMOW"}. Utiliser {} si les conditions ne sont pas precisees.'
+      ))
     )
   )
 }
@@ -142,29 +269,68 @@ chemistry_metadata_ui <- function(ns, prefix, catalogues = list(), value = list(
 #' @family analytical metadata helpers
 #' @keywords internal
 chemistry_metadata_values <- function(input, prefix) {
-  fields <- c("result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions")
-  out <- stats::setNames(lapply(fields, function(field) input[[paste0(prefix, field)]]), fields)
+  fields <- c(
+    "result_speciation_id",
+    "result_target_id",
+    "endpoint_mode",
+    "endpoint_ph",
+    "analysis_conditions"
+  )
+  out <- stats::setNames(
+    lapply(fields, function(field) input[[paste0(prefix, field)]]),
+    fields
+  )
   for (field in c("result_speciation_id", "result_target_id")) {
     value <- out[[field]]
-    if (is.null(value) || !length(value) || (length(value) == 1L && (is.na(value) || !nzchar(value)))) {
+    if (
+      is.null(value) ||
+        !length(value) ||
+        (length(value) == 1L && (is.na(value) || !nzchar(value)))
+    ) {
       out[[field]] <- NA_integer_
     } else {
       number <- suppressWarnings(as.numeric(value))
-      if (length(number) != 1L || !is.finite(number) || number < 1 || number != trunc(number) || number > .Machine$integer.max) {
+      if (
+        length(number) != 1L ||
+          !is.finite(number) ||
+          number < 1 ||
+          number != trunc(number) ||
+          number > .Machine$integer.max
+      ) {
         stop("Choose one valid ", field, ".")
       }
       out[[field]] <- as.integer(number)
     }
   }
   mode <- out$endpoint_mode
-  out$endpoint_mode <- if (is.null(mode) || !length(mode) || !nzchar(mode[[1]])) NA_character_ else mode[[1]]
+  out$endpoint_mode <- if (
+    is.null(mode) || !length(mode) || !nzchar(mode[[1]])
+  ) {
+    NA_character_
+  } else {
+    mode[[1]]
+  }
   ph <- out$endpoint_ph
   out$endpoint_ph <- if (is.null(ph) || !length(ph)) NA_real_ else ph[[1]]
-  context <- jsonlite::fromJSON(AquaCache::normalizeAnalysisConditions(out$analysis_conditions), simplifyVector = FALSE)
-  for (field in c("mass_basis", "gas_basis", "reference_temperature_kelvin", "reference_pressure_kpa")) {
+  context <- jsonlite::fromJSON(
+    AquaCache::normalizeAnalysisConditions(out$analysis_conditions),
+    simplifyVector = FALSE
+  )
+  for (field in c(
+    "mass_basis",
+    "gas_basis",
+    "reference_temperature_kelvin",
+    "reference_pressure_kpa"
+  )) {
     value <- input[[paste0(prefix, field)]]
-    if (is.null(value)) next
-    if (!length(value) || is.na(value[[1]]) || identical(value[[1]], "")) context[[field]] <- NULL else context[[field]] <- value[[1]]
+    if (is.null(value)) {
+      next
+    }
+    if (!length(value) || is.na(value[[1]]) || identical(value[[1]], "")) {
+      context[[field]] <- NULL
+    } else {
+      context[[field]] <- value[[1]]
+    }
   }
   out$analysis_conditions <- AquaCache::normalizeAnalysisConditions(context)
   out
@@ -185,8 +351,16 @@ chemistry_metadata_values <- function(input, prefix) {
 #'   interface does not display it. This function does not group or validate data.
 #' @family analytical metadata helpers
 #' @keywords internal
-chemistry_identity_columns <- function() c("reporting_basis_id", "result_speciation_id",
-  "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions_key")
+chemistry_identity_columns <- function() {
+  c(
+    "reporting_basis_id",
+    "result_speciation_id",
+    "result_target_id",
+    "endpoint_mode",
+    "endpoint_ph",
+    "analysis_conditions_key"
+  )
+}
 
 #' Format analytical metadata as readable result labels
 #'
@@ -210,12 +384,27 @@ chemistry_identity_columns <- function() c("reporting_basis_id", "result_speciat
 #' @keywords internal
 chemistry_result_labels <- function(rows) {
   labels <- rep("", nrow(rows))
-  for (field in c("reporting_basis", "result_speciation", "result_target", "endpoint_mode", "endpoint_ph", "analysis_conditions")) {
-    if (!field %in% names(rows)) next
+  for (field in c(
+    "reporting_basis",
+    "result_speciation",
+    "result_target",
+    "endpoint_mode",
+    "endpoint_ph",
+    "analysis_conditions"
+  )) {
+    if (!field %in% names(rows)) {
+      next
+    }
     values <- as.character(rows[[field]])
     present <- !is.na(values) & nzchar(values) & values != "{}"
-    if (field == "endpoint_ph") values <- paste0("endpoint pH ", values)
-    labels[present] <- ifelse(nzchar(labels[present]), paste0(labels[present], "; ", values[present]), values[present])
+    if (field == "endpoint_ph") {
+      values <- paste0("endpoint pH ", values)
+    }
+    labels[present] <- ifelse(
+      nzchar(labels[present]),
+      paste0(labels[present], "; ", values[present]),
+      values[present]
+    )
   }
   labels
 }
@@ -243,20 +432,53 @@ chemistry_result_labels <- function(rows) {
 #' @family analytical metadata helpers
 #' @keywords internal
 chemistry_accessor_keys <- function(rows) {
-  if (!nrow(rows)) return(character())
-  fields <- c("parameter_id", "matrix_state_id", "sample_fraction_id", "reporting_basis_id",
-    "result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions")
+  if (!nrow(rows)) {
+    return(character())
+  }
+  fields <- c(
+    "parameter_id",
+    "matrix_state_id",
+    "sample_fraction_id",
+    "reporting_basis_id",
+    "result_speciation_id",
+    "result_target_id",
+    "endpoint_mode",
+    "endpoint_ph",
+    "analysis_conditions"
+  )
   rows <- as.data.frame(rows)
-  for (field in setdiff(fields, names(rows))) rows[[field]] <- if (field == "analysis_conditions") "{}" else NA
-  vapply(seq_len(nrow(rows)), function(i) {
-    record <- as.list(rows[i, fields, drop = FALSE])
-    for (field in c("parameter_id", "matrix_state_id", "sample_fraction_id", "reporting_basis_id", "result_speciation_id", "result_target_id")) {
-      record[[field]] <- as.integer(record[[field]])
-    }
-    record$endpoint_ph <- as.numeric(record$endpoint_ph)
-    record$analysis_conditions <- jsonlite::fromJSON(AquaCache::normalizeAnalysisConditions(record$analysis_conditions), simplifyVector = FALSE)
-    as.character(jsonlite::toJSON(record, auto_unbox = TRUE, na = "null", null = "null", digits = NA))
-  }, character(1))
+  for (field in setdiff(fields, names(rows))) {
+    rows[[field]] <- if (field == "analysis_conditions") "{}" else NA
+  }
+  vapply(
+    seq_len(nrow(rows)),
+    function(i) {
+      record <- as.list(rows[i, fields, drop = FALSE])
+      for (field in c(
+        "parameter_id",
+        "matrix_state_id",
+        "sample_fraction_id",
+        "reporting_basis_id",
+        "result_speciation_id",
+        "result_target_id"
+      )) {
+        record[[field]] <- as.integer(record[[field]])
+      }
+      record$endpoint_ph <- as.numeric(record$endpoint_ph)
+      record$analysis_conditions <- jsonlite::fromJSON(
+        AquaCache::normalizeAnalysisConditions(record$analysis_conditions),
+        simplifyVector = FALSE
+      )
+      as.character(jsonlite::toJSON(
+        record,
+        auto_unbox = TRUE,
+        na = "null",
+        null = "null",
+        digits = NA
+      ))
+    },
+    character(1)
+  )
 }
 
 # Scan literal selectors in supported get_sample_val calls. Quotes and comments
@@ -291,76 +513,166 @@ chemistry_accessor_keys <- function(rows) {
 #' @keywords internal
 chemistry_sql_accessor_refs <- function(sql) {
   sql <- as.character(sql)
-  tokens <- gregexpr("'(?:[^']|'')*'|--[^\\r\\n]*|/\\*(?s:.*?)\\*/", sql, perl = TRUE)
+  tokens <- gregexpr(
+    "'(?:[^']|'')*'|--[^\\r\\n]*|/\\*(?s:.*?)\\*/",
+    sql,
+    perl = TRUE
+  )
   pieces <- regmatches(sql, tokens)[[1]]
   positions <- tokens[[1]]
   lengths <- attr(positions, "match.length")
   if (length(pieces)) {
     comments <- startsWith(pieces, "--") | startsWith(pieces, "/*")
-    pieces[comments] <- vapply(lengths[comments], function(n) strrep(" ", n), character(1))
+    pieces[comments] <- vapply(
+      lengths[comments],
+      function(n) strrep(" ", n),
+      character(1)
+    )
     regmatches(sql, tokens) <- list(pieces)
   }
-  quoted <- if (length(pieces)) positions[startsWith(pieces, "'")] else integer()
-  quote_lengths <- if (length(pieces)) lengths[startsWith(pieces, "'")] else integer()
-  hits <- gregexpr("(?i)\\bdiscrete\\.get_sample_val\\s*\\((?:'(?:[^']|'')*'|[^'()])*\\)", sql, perl = TRUE)
+  quoted <- if (length(pieces)) {
+    positions[startsWith(pieces, "'")]
+  } else {
+    integer()
+  }
+  quote_lengths <- if (length(pieces)) {
+    lengths[startsWith(pieces, "'")]
+  } else {
+    integer()
+  }
+  hits <- gregexpr(
+    "(?i)\\bdiscrete\\.get_sample_val\\s*\\((?:'(?:[^']|'')*'|[^'()])*\\)",
+    sql,
+    perl = TRUE
+  )
   calls <- regmatches(sql, hits)[[1]]
-  if (!length(calls)) return(character())
+  if (!length(calls)) {
+    return(character())
+  }
   starts <- hits[[1]]
-  calls <- calls[!vapply(starts, function(pos) any(pos >= quoted & pos < quoted + quote_lengths), logical(1))]
-  fields <- c("sample_id", "parameter_id", "sample_fraction_id", "reporting_basis_id",
-    "result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions", "matrix_state_id")
-  vapply(calls, function(call) {
-    args <- sub("(?s)^.*?\\((.*)\\)$", "\\1", call, perl = TRUE)
-    chars <- strsplit(args, "", fixed = TRUE)[[1]]
-    quote <- FALSE
-    separators <- integer()
-    i <- 1L
-    while (i <= length(chars)) {
-      if (chars[[i]] == "'") {
-        if (quote && i < length(chars) && chars[[i + 1L]] == "'") {
-          i <- i + 2L
-          next
+  calls <- calls[
+    !vapply(
+      starts,
+      function(pos) any(pos >= quoted & pos < quoted + quote_lengths),
+      logical(1)
+    )
+  ]
+  fields <- c(
+    "sample_id",
+    "parameter_id",
+    "sample_fraction_id",
+    "reporting_basis_id",
+    "result_speciation_id",
+    "result_target_id",
+    "endpoint_mode",
+    "endpoint_ph",
+    "analysis_conditions",
+    "matrix_state_id"
+  )
+  vapply(
+    calls,
+    function(call) {
+      args <- sub("(?s)^.*?\\((.*)\\)$", "\\1", call, perl = TRUE)
+      chars <- strsplit(args, "", fixed = TRUE)[[1]]
+      quote <- FALSE
+      separators <- integer()
+      i <- 1L
+      while (i <= length(chars)) {
+        if (chars[[i]] == "'") {
+          if (quote && i < length(chars) && chars[[i + 1L]] == "'") {
+            i <- i + 2L
+            next
+          }
+          quote <- !quote
+        } else if (!quote && chars[[i]] == ",") {
+          separators <- c(separators, i)
         }
-        quote <- !quote
-      } else if (!quote && chars[[i]] == ",") separators <- c(separators, i)
-      i <- i + 1L
-    }
-    begins <- c(1L, separators + 1L)
-    ends <- c(separators - 1L, length(chars))
-    parts <- trimws(vapply(seq_along(begins), function(j) paste0(chars[begins[[j]]:ends[[j]]], collapse = ""), character(1)))
-    values <- stats::setNames(rep("NULL", length(fields)), fields)
-    assigned <- character()
-    named_seen <- FALSE
-    for (j in seq_along(parts)) {
-      part <- parts[[j]]
-      named <- grepl("^[a-z_]+\\s*(?::=|=>)", part, perl = TRUE, ignore.case = TRUE)
-      if (named) {
-        named_seen <- TRUE
-        field <- tolower(sub("^([a-z_]+)\\s*(?::=|=>).*$", "\\1", part, perl = TRUE, ignore.case = TRUE))
-        value <- sub("^[a-z_]+\\s*(?::=|=>)\\s*", "", part, perl = TRUE, ignore.case = TRUE)
-      } else {
-        if (named_seen || j > length(fields)) stop("Review sample accessor argument order.")
-        field <- fields[[j]]
-        value <- part
+        i <- i + 1L
       }
-      if (!field %in% fields || field %in% assigned) stop("Unknown or repeated sample accessor argument: ", field)
-      assigned <- c(assigned, field)
-      values[[field]] <- trimws(sub("::\\s*(integer|int|numeric|text|jsonb)\\s*$", "", value, perl = TRUE, ignore.case = TRUE))
-    }
-    record <- list()
-    for (field in fields[-1L]) {
-      literal <- values[[field]]
-      if (grepl("^NULL$", literal, ignore.case = TRUE)) {
-        record[[field]] <- if (field == "analysis_conditions") "{}" else NA
-      } else if (field %in% c("endpoint_mode", "analysis_conditions")) {
-        if (!grepl("^'(?:[^']|'')*'$", literal, perl = TRUE)) stop("Use a literal ", field, " in a sample accessor.")
-        record[[field]] <- gsub("''", "'", substr(literal, 2L, nchar(literal) - 1L), fixed = TRUE)
-      } else {
-        number <- suppressWarnings(as.numeric(literal))
-        if (!is.finite(number) || (field != "endpoint_ph" && (number < 1 || number != trunc(number)))) stop("Use a literal valid ", field, " in a sample accessor.")
-        record[[field]] <- number
+      begins <- c(1L, separators + 1L)
+      ends <- c(separators - 1L, length(chars))
+      parts <- trimws(vapply(
+        seq_along(begins),
+        function(j) paste0(chars[begins[[j]]:ends[[j]]], collapse = ""),
+        character(1)
+      ))
+      values <- stats::setNames(rep("NULL", length(fields)), fields)
+      assigned <- character()
+      named_seen <- FALSE
+      for (j in seq_along(parts)) {
+        part <- parts[[j]]
+        named <- grepl(
+          "^[a-z_]+\\s*(?::=|=>)",
+          part,
+          perl = TRUE,
+          ignore.case = TRUE
+        )
+        if (named) {
+          named_seen <- TRUE
+          field <- tolower(sub(
+            "^([a-z_]+)\\s*(?::=|=>).*$",
+            "\\1",
+            part,
+            perl = TRUE,
+            ignore.case = TRUE
+          ))
+          value <- sub(
+            "^[a-z_]+\\s*(?::=|=>)\\s*",
+            "",
+            part,
+            perl = TRUE,
+            ignore.case = TRUE
+          )
+        } else {
+          if (named_seen || j > length(fields)) {
+            stop("Review sample accessor argument order.")
+          }
+          field <- fields[[j]]
+          value <- part
+        }
+        if (!field %in% fields || field %in% assigned) {
+          stop("Unknown or repeated sample accessor argument: ", field)
+        }
+        assigned <- c(assigned, field)
+        values[[field]] <- trimws(sub(
+          "::\\s*(integer|int|numeric|text|jsonb)\\s*$",
+          "",
+          value,
+          perl = TRUE,
+          ignore.case = TRUE
+        ))
       }
-    }
-    chemistry_accessor_keys(as.data.frame(record, stringsAsFactors = FALSE))[[1]]
-  }, character(1))
+      record <- list()
+      for (field in fields[-1L]) {
+        literal <- values[[field]]
+        if (grepl("^NULL$", literal, ignore.case = TRUE)) {
+          record[[field]] <- if (field == "analysis_conditions") "{}" else NA
+        } else if (field %in% c("endpoint_mode", "analysis_conditions")) {
+          if (!grepl("^'(?:[^']|'')*'$", literal, perl = TRUE)) {
+            stop("Use a literal ", field, " in a sample accessor.")
+          }
+          record[[field]] <- gsub(
+            "''",
+            "'",
+            substr(literal, 2L, nchar(literal) - 1L),
+            fixed = TRUE
+          )
+        } else {
+          number <- suppressWarnings(as.numeric(literal))
+          if (
+            !is.finite(number) ||
+              (field != "endpoint_ph" &&
+                (number < 1 || number != trunc(number)))
+          ) {
+            stop("Use a literal valid ", field, " in a sample accessor.")
+          }
+          record[[field]] <- number
+        }
+      }
+      chemistry_accessor_keys(as.data.frame(record, stringsAsFactors = FALSE))[[
+        1
+      ]]
+    },
+    character(1)
+  )
 }

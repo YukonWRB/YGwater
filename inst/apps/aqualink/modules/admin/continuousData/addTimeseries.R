@@ -3058,7 +3058,7 @@ addTimeseries <- function(id, language) {
               width = "100%"
             ) |>
               tooltip(
-                "The aggregation type defines how the raw data is collected. For example, 'Instantaneous' means the data is collected at specific time points, while 'Mean' indicates that the data represents an average over the period between measurements. Choosing the correct aggregation type is crucial for accurate data analysis and interpretation."
+                "Choose what each stored value represents: a direct reading or a period summary. Use Configure value derivation methods to define how raw readings become that value."
               ),
             uiOutput(ns("aggregation_method_button_ui"))
           ),
@@ -4291,6 +4291,30 @@ addTimeseries <- function(id, language) {
       df$time_zone <- as.factor(df$time_zone)
       df$z_id <- NULL # remove z_id as it's not useful to the user
 
+      column_labels <- c(
+        timeseries_id = "Timeseries ID",
+        location_name = "Location",
+        sub_location_name = "Sub-location",
+        time_zone = "Daily calculation time zone",
+        parameter = "Parameter",
+        units = "Units",
+        matrix_state = "Matrix",
+        media = "Medium",
+        aggregation_type = "Aggregation type",
+        depth_height_m = "Depth/height (m)",
+        sensor_priority = "Sensor priority",
+        owner = "Owner",
+        record_rate = "Recording interval"
+      )
+      labels <- unname(column_labels[names(df)])
+      missing_labels <- is.na(labels)
+      if (any(missing_labels)) {
+        labels[missing_labels] <- tools::toTitleCase(gsub(
+          "_", " ", names(df)[missing_labels], fixed = TRUE
+        ))
+      }
+      names(df) <- labels
+
       DT::datatable(
         df,
         selection = "single",
@@ -5283,6 +5307,30 @@ addTimeseries <- function(id, language) {
           rows = 2,
           width = "100%"
         ),
+        tags$div(
+          class = "alert alert-info",
+          tags$h5(tr("aggregation_quick_start", language$language)),
+          tags$p(tr("aggregation_quick_start_help", language$language)),
+          fluidRow(
+            column(
+              width = 6,
+              actionButton(
+                ns("use_hourly_mean_example"),
+                tr("aggregation_hourly_mean", language$language),
+                icon = icon("clock")
+              )
+            ),
+            column(
+              width = 6,
+              actionButton(
+                ns("use_daily_mean_example"),
+                tr("aggregation_daily_mean", language$language),
+                icon = icon("calendar")
+              )
+            )
+          ),
+          tags$small(tr("aggregation_quick_start_assumptions", language$language))
+        ),
         tags$p(
           "Add ordered steps below. Steps without input links read source values; linked steps use earlier outputs. Calculation stages are assigned automatically from these links. The final step's aggregation type must match the timeseries.",
           class = "text-muted"
@@ -5358,6 +5406,114 @@ addTimeseries <- function(id, language) {
         "aggregation_method_id",
         selected = "__new__"
       )
+    }, ignoreInit = TRUE)
+
+    apply_aggregation_mean_example <- function(window_offset, interval) {
+      editor <- aggregation_method_editor()
+      if (is.null(editor)) {
+        return()
+      }
+      if (!identical(as.character(editor$selected_method_id), "__new__")) {
+        showNotification(
+          tr("aggregation_quick_start_new_method", language$language),
+          type = "warning"
+        )
+        return()
+      }
+
+      aggregation_types <- moduleData$aggregation_types
+      mean_rows <- aggregation_types[
+        tolower(trimws(aggregation_types$aggregation_type)) == "mean",
+        ,
+        drop = FALSE
+      ]
+      parent_id <- nullable_integer(input$aggregation_type)
+      if (is.na(parent_id)) {
+        showNotification(
+          tr("aggregation_quick_start_requires_mean", language$language),
+          type = "warning"
+        )
+        return()
+      }
+      parent_row <- aggregation_types[
+        aggregation_types$aggregation_type_id == parent_id,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(mean_rows) != 1L || nrow(parent_row) != 1L ||
+          tolower(trimws(parent_row$aggregation_type[[1L]])) != "mean") {
+        showNotification(
+          tr("aggregation_quick_start_requires_mean", language$language),
+          type = "warning",
+          duration = 10
+        )
+        return()
+      }
+
+      current_steps <- aggregation_step_drafts_from_input(editor)
+      starter_step <- if (length(current_steps) == 1L) {
+        current_steps[[1L]]
+      } else {
+        NULL
+      }
+      is_untouched_starter <- !is.null(starter_step) &&
+        identical(starter_step$stage_number, 1L) &&
+        identical(starter_step$operation_type, "window_aggregate") &&
+        identical(
+          as.integer(starter_step$aggregation_type_id),
+          as.integer(parent_id)
+        ) &&
+        identical(starter_step$window_start_offset, "-1 day") &&
+        identical(starter_step$window_end_offset, "0 seconds") &&
+        is.na(starter_step$evaluation_interval) &&
+        is.na(starter_step$evaluation_anchor) &&
+        identical(starter_step$evaluation_timezone, "UTC") &&
+        is.na(starter_step$expected_input_interval) &&
+        identical(starter_step$input_weighting, "equal") &&
+        is.na(starter_step$minimum_input_count) &&
+        is.na(starter_step$minimum_coverage) &&
+        identical(starter_step$missing_data_policy, "ignore") &&
+        identical(starter_step$calculation_parameters_json, "{}") &&
+        !length(starter_step$inputs)
+      if (length(current_steps) && !is_untouched_starter) {
+        showNotification(
+          tr("aggregation_quick_start_has_steps", language$language),
+          type = "warning",
+          duration = 10
+        )
+        return()
+      }
+      key <- paste0(
+        "quick_", gsub("[^a-z0-9]", "_", interval), "_",
+        "1_", as.integer(Sys.time())
+      )
+      step <- default_aggregation_step(
+        1L,
+        as.integer(mean_rows$aggregation_type_id[[1L]]),
+        key = key
+      )
+      step$window_start_offset <- window_offset
+      step$window_end_offset <- "0 seconds"
+      step$evaluation_interval <- interval
+      step$evaluation_anchor <- "1970-01-01 00:00:00"
+      step$evaluation_timezone <- "UTC"
+      step$input_weighting <- "equal"
+      step$missing_data_policy <- "ignore"
+      editor$steps <- list(step)
+      aggregation_method_editor(editor)
+      showNotification(
+        tr("aggregation_quick_start_staged", language$language),
+        type = "message",
+        duration = 8
+      )
+    }
+
+    observeEvent(input$use_hourly_mean_example, {
+      apply_aggregation_mean_example("-1 hour", "1 hour")
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$use_daily_mean_example, {
+      apply_aggregation_mean_example("-1 day", "1 day")
     }, ignoreInit = TRUE)
 
     observeEvent(input$add_aggregation_step, {

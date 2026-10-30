@@ -267,14 +267,6 @@ reference_table_configs <- function() {
       order_by = "result_target", audit_columns = audit_cols,
       insert_only = c("result_target_code", "result_target", "description", "target_kind"),
       columns = list(reference_text_field("result_target_code", "Stable code", required = TRUE), reference_text_field("result_target", "Name", required = TRUE), reference_text_field("result_target_fr", "Name (French)"), reference_text_field("target_kind", "Kind", required = TRUE), reference_textarea_field("description", "Definition", required = TRUE), reference_textarea_field("description_fr", "Definition (French)"), reference_checkbox_field("active", "Active for new selections", default = TRUE))),
-    chemistry_crosswalk = list(
-      key = "chemistry_crosswalk", title = "Legacy chemistry crosswalk",
-      description = "Read-only Patch 65 dictionary preserving the interpretation of historical catalogue IDs.",
-      schema = "information", table = "patch65_result_descriptor_crosswalk",
-      pk = "legacy_id", id_label = "Legacy ID", editable = FALSE,
-      order_by = c("legacy_catalogue", "legacy_id"),
-      display_columns = c("legacy_catalogue", "legacy_label", "sample_fraction_id",
-        "reporting_basis_id", "result_speciation_id", "result_target_id"), columns = list()),
     organizations = list(
       key = "organizations",
       title = "Organizations",
@@ -1704,18 +1696,20 @@ clear_reference_caches <- function(session) {
   cache_keys <- c(
     "cont_data.plot_module_data",
     "disc_data_module_data",
+    "disc_plot_module_data_chemistry",
     "map_params_module_data",
     "map_location_module_data"
   )
 
-  for (cache_key in cache_keys) {
-    clear_cached(cache_key)
-
-    if (
-      !is.null(session$userData$app_cache) &&
-        is.environment(session$userData$app_cache)
-    ) {
-      clear_cached(cache_key, env = session$userData$app_cache)
+  cache_envs <- list(.GlobalEnv)
+  if (is.environment(session$userData$app_cache)) {
+    cache_envs[[2L]] <- session$userData$app_cache
+  }
+  # Reference edits affect all reader roles. Clear both unscoped and scoped
+  # copies in the shared public cache and the editor's private cache.
+  for (env in cache_envs) {
+    for (cache_key in cache_keys) {
+      clear_cached(cache_key, env = env, all_scopes = TRUE)
     }
   }
 }
@@ -2436,7 +2430,7 @@ parameterManagerUI <- function(id) {
 
 manageParameters <- function(id, language) {
   configs <- reference_table_configs()
-  for (table in c(names(parameter_suggestion_tables()), "chemistry_crosswalk")) {
+  for (table in names(parameter_suggestion_tables())) {
     referenceTableManager(id = paste0(id, "_", table), language = language,
       config = configs[[table]], notification_module_id = "manageParameters")
   }
@@ -3100,7 +3094,7 @@ manageParameterSubGroups <- function(id, language) {
 
 manageParametersUI <- function(id) {
   configs <- reference_table_configs()
-  panels <- lapply(c(names(parameter_suggestion_tables()), "chemistry_crosswalk"), function(table) {
+  panels <- lapply(names(parameter_suggestion_tables()), function(table) {
     bslib::nav_panel(configs[[table]]$title,
       referenceTableManagerUI(paste0(id, "_", table), config = configs[[table]]))
   })

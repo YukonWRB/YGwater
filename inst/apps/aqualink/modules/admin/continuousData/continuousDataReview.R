@@ -229,6 +229,19 @@ continuousDataReviewUI <- function(id) {
               ),
               conditionalPanel(
                 ns = ns,
+                condition = "input.attribute_kind != 'correction'",
+                checkboxInput(
+                  ns("no_source_update"),
+                  "Prevent remote sources from changing this grade, approval, or qualifier",
+                  value = TRUE
+                ),
+                p(
+                  class = "text-muted small",
+                  "Leave this unchecked if you want a remote source to update it later."
+                )
+              ),
+              conditionalPanel(
+                ns = ns,
                 condition = "input.attribute_kind == 'grade' || input.attribute_kind == 'approval'",
                 p(
                   class = "text-muted small",
@@ -429,8 +442,18 @@ continuousDataReview <- function(id, language) {
     shift_range_datetime_inputs <- function(tz_name) {
       shift_air_datetime_input_timezone(session, input, "start_dt", tz_name)
       shift_air_datetime_input_timezone(session, input, "end_dt", tz_name)
-      shift_air_datetime_input_timezone(session, input, "record_start_dt", tz_name)
-      shift_air_datetime_input_timezone(session, input, "record_end_dt", tz_name)
+      shift_air_datetime_input_timezone(
+        session,
+        input,
+        "record_start_dt",
+        tz_name
+      )
+      shift_air_datetime_input_timezone(
+        session,
+        input,
+        "record_end_dt",
+        tz_name
+      )
     }
 
     set_datetime_input <- function(input_id, value) {
@@ -636,6 +659,7 @@ continuousDataReview <- function(id, language) {
       input$ts_table_rows_selected,
       {
         selection <- input$ts_table_rows_selected
+        updateCheckboxInput(session, "no_source_update", value = TRUE)
         if (length(selection)) {
           row <- ts_meta()[selection, ]
           tsid <- row$timeseries_id[[1]]
@@ -866,7 +890,9 @@ continuousDataReview <- function(id, language) {
         return(msg)
       }
       if (is.null(selected_range())) {
-        return("No review range selected. The plot shows the latest year of data.")
+        return(
+          "No review range selected. The plot shows the latest year of data."
+        )
       }
       "The selected review interval filters the overlapping-records list."
     })
@@ -914,6 +940,7 @@ continuousDataReview <- function(id, language) {
                         g.grade_type_id AS type_id,
                         gt.grade_type_description AS description,
                         COALESCE(gt.color_code, '#4E79A7') AS color_code,
+                        COALESCE(g.no_source_update, FALSE) AS no_source_update,
                         g.start_dt, g.end_dt, g.created, g.modified AS updated
                  FROM continuous.grades AS g
                  LEFT JOIN public.grade_types AS gt
@@ -924,6 +951,7 @@ continuousDataReview <- function(id, language) {
                            a.approval_type_id AS type_id,
                            at.approval_type_description AS description,
                            COALESCE(at.color_code, '#F28E2B') AS color_code,
+                           COALESCE(a.no_source_update, FALSE) AS no_source_update,
                            a.start_dt, a.end_dt, a.created, a.modified AS updated
                     FROM continuous.approvals AS a
                     LEFT JOIN public.approval_types AS at
@@ -934,6 +962,7 @@ continuousDataReview <- function(id, language) {
                             q.qualifier_type_id AS type_id,
                             qt.qualifier_type_description AS description,
                             COALESCE(qt.color_code, '#E15759') AS color_code,
+                            COALESCE(q.no_source_update, FALSE) AS no_source_update,
                             q.start_dt, q.end_dt, q.created, q.modified AS updated
                      FROM continuous.qualifiers AS q
                      LEFT JOIN public.qualifier_types AS qt
@@ -1395,6 +1424,7 @@ continuousDataReview <- function(id, language) {
           set_record_range_inputs(NULL, NULL)
         }
         selected_record(NULL)
+        updateCheckboxInput(session, "no_source_update", value = TRUE)
         if (!identical(active_kind(), "correction")) {
           clear_correction_form()
         }
@@ -1729,6 +1759,11 @@ continuousDataReview <- function(id, language) {
               "attribute_value",
               selected = as.character(row$type_id)
             )
+            updateCheckboxInput(
+              session,
+              "no_source_update",
+              value = isTRUE(row$no_source_update[[1]])
+            )
           }
           set_record_range_inputs(row$start_dt, row$end_dt)
         }
@@ -1739,6 +1774,7 @@ continuousDataReview <- function(id, language) {
     observeEvent(input$clear_selection, {
       selected_record(NULL)
       set_record_range_inputs(NULL, NULL)
+      updateCheckboxInput(session, "no_source_update", value = TRUE)
       proxy <- DT::dataTableProxy("active_assignments")
       DT::selectRows(proxy, NULL)
       updateSelectizeInput(session, "attribute_value", selected = character(0))
@@ -1845,34 +1881,38 @@ continuousDataReview <- function(id, language) {
       }
       start_num <- as.numeric(start_dt)
       end_num <- as.numeric(end_dt)
-      vapply(seq_len(nrow(df)), function(i) {
-        old_start <- df$start_dt[i]
-        old_end <- df$end_dt[i]
-        keeps_left <- as.numeric(old_start) < start_num
-        keeps_right <- as.numeric(old_end) > end_num
-        effect <- if (keeps_left && keeps_right) {
+      vapply(
+        seq_len(nrow(df)),
+        function(i) {
+          old_start <- df$start_dt[i]
+          old_end <- df$end_dt[i]
+          keeps_left <- as.numeric(old_start) < start_num
+          keeps_right <- as.numeric(old_end) > end_num
+          effect <- if (keeps_left && keeps_right) {
+            sprintf(
+              "will split into [%s, %s) and [%s, %s)",
+              format_datetime(old_start),
+              format_datetime(start_dt),
+              format_datetime(end_dt),
+              format_datetime(old_end)
+            )
+          } else if (keeps_left) {
+            sprintf("will end at %s", format_datetime(start_dt))
+          } else if (keeps_right) {
+            sprintf("will start at %s", format_datetime(end_dt))
+          } else {
+            "will be removed because the new range covers it"
+          }
           sprintf(
-            "will split into [%s, %s) and [%s, %s)",
+            "%s (%s to %s): %s",
+            df$description[i],
             format_datetime(old_start),
-            format_datetime(start_dt),
-            format_datetime(end_dt),
-            format_datetime(old_end)
+            format_datetime(old_end),
+            effect
           )
-        } else if (keeps_left) {
-          sprintf("will end at %s", format_datetime(start_dt))
-        } else if (keeps_right) {
-          sprintf("will start at %s", format_datetime(end_dt))
-        } else {
-          "will be removed because the new range covers it"
-        }
-        sprintf(
-          "%s (%s to %s): %s",
-          df$description[i],
-          format_datetime(old_start),
-          format_datetime(old_end),
-          effect
-        )
-      }, character(1))
+        },
+        character(1)
+      )
     }
 
     qualifier_merge_component <- function(
@@ -2041,12 +2081,16 @@ continuousDataReview <- function(id, language) {
              )
            )
            SELECT 1 AS locked FROM range_lock",
-          params = list(paste0("YGwater range ", spec$table), as.character(ts_id))
+          params = list(
+            paste0("YGwater range ", spec$table),
+            as.character(ts_id)
+          )
         )
         existing <- DBI::dbGetQuery(
           con,
           sprintf(
-            "SELECT %s AS record_id, %s AS type_id, start_dt, end_dt
+            "SELECT %s AS record_id, %s AS type_id, start_dt, end_dt,
+                    COALESCE(no_source_update, FALSE) AS no_source_update
              FROM %s WHERE timeseries_id = $1",
             spec$id,
             spec$type,
@@ -2089,8 +2133,9 @@ continuousDataReview <- function(id, language) {
               DBI::dbExecute(
                 con,
                 sprintf(
-                  "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt)
-                   VALUES ($1, $2, $3, $4)",
+                  "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt,
+                                  no_source_update)
+                   VALUES ($1, $2, $3, $4, $5)",
                   spec$table,
                   spec$type
                 ),
@@ -2098,7 +2143,8 @@ continuousDataReview <- function(id, language) {
                   ts_id,
                   existing$type_id[i],
                   action$end_dt,
-                  old_end
+                  old_end,
+                  existing$no_source_update[i]
                 )
               )
             } else if (keeps_left) {
@@ -2138,8 +2184,9 @@ continuousDataReview <- function(id, language) {
             DBI::dbExecute(
               con,
               sprintf(
-                "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt)
-                 VALUES ($1, $2, $3, $4)",
+                "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt,
+                                no_source_update)
+                 VALUES ($1, $2, $3, $4, $5)",
                 spec$table,
                 spec$type
               ),
@@ -2147,15 +2194,17 @@ continuousDataReview <- function(id, language) {
                 ts_id,
                 as.integer(action$type_id),
                 action$start_dt,
-                action$end_dt
+                action$end_dt,
+                action$no_source_update
               )
             )
           } else {
             DBI::dbExecute(
               con,
               sprintf(
-                "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3
-                 WHERE %s = $4",
+                "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3,
+                               no_source_update = $4
+                 WHERE %s = $5",
                 spec$table,
                 spec$type,
                 spec$id
@@ -2164,6 +2213,7 @@ continuousDataReview <- function(id, language) {
                 as.integer(action$type_id),
                 action$start_dt,
                 action$end_dt,
+                action$no_source_update,
                 record_id
               )
             )
@@ -2210,8 +2260,9 @@ continuousDataReview <- function(id, language) {
             DBI::dbExecute(
               con,
               sprintf(
-                "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3
-                 WHERE %s = $4",
+                "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3,
+                               no_source_update = $4
+                 WHERE %s = $5",
                 spec$table,
                 spec$type,
                 spec$id
@@ -2220,6 +2271,7 @@ continuousDataReview <- function(id, language) {
                 as.integer(action$type_id),
                 merge$start,
                 merge$end,
+                action$no_source_update,
                 keeper_id
               )
             )
@@ -2227,8 +2279,9 @@ continuousDataReview <- function(id, language) {
             DBI::dbExecute(
               con,
               sprintf(
-                "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt)
-                 VALUES ($1, $2, $3, $4)",
+                "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt,
+                                no_source_update)
+                 VALUES ($1, $2, $3, $4, $5)",
                 spec$table,
                 spec$type
               ),
@@ -2236,7 +2289,8 @@ continuousDataReview <- function(id, language) {
                 ts_id,
                 as.integer(action$type_id),
                 action$start_dt,
-                action$end_dt
+                action$end_dt,
+                action$no_source_update
               )
             )
           }
@@ -2354,6 +2408,7 @@ continuousDataReview <- function(id, language) {
           "attribute_value",
           selected = character(0)
         )
+        updateCheckboxInput(session, "no_source_update", value = TRUE)
       }
       proxy <- DT::dataTableProxy(ns("active_assignments"), session = session)
       DT::selectRows(proxy, NULL)
@@ -2369,7 +2424,10 @@ continuousDataReview <- function(id, language) {
       }
       rng <- record_range()
       if (is.null(rng)) {
-        showNotification("Enter valid record start and end datetimes.", type = "error")
+        showNotification(
+          "Enter valid record start and end datetimes.",
+          type = "error"
+        )
         return()
       }
 
@@ -2415,6 +2473,7 @@ continuousDataReview <- function(id, language) {
           return()
         }
         action$type_id <- as.integer(type_id)
+        action$no_source_update <- !identical(input$no_source_update, FALSE)
       }
 
       msg <- confirmation_message(action)

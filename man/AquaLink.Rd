@@ -20,7 +20,8 @@ AquaLink(
   server = FALSE,
   analytics = FALSE,
   public = TRUE,
-  brand = "yukon"
+  brand = "yukon",
+  workers = NULL
 )
 }
 \arguments{
@@ -51,6 +52,8 @@ AquaLink(
 \item{public}{TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.}
 
 \item{brand}{Character string to specify the branding of the app. Default is "public", which is a more generic version of the app with Yukon-specific references removed. The "yukon" branding includes Yukon-specific logos and references. This parameter can be used in the future to create other branded versions of the app for different users or organizations.}
+
+\item{workers}{Number of local mirai daemons shared by all sessions and modules in this app process. \code{NULL} (the default) uses half the cores available to R after reserving one, with at least one daemon. Set explicitly when several applications share a host or to limit memory use. This controls tasks migrated to mirai; legacy future-based tasks retain their existing backend. Daemons stop when the app stops.}
 }
 \value{
 Opens a Shiny application.

@@ -4,7 +4,9 @@
 #' Creates an Excel report from AquaCache discrete results. The report
 #' worksheet layout can place dates, locations, or parameters on separate tabs;
 #' filterable result details and a guideline audit sheet follow the report
-#' tabs. When requested, a separate HTML map is written for report locations.
+#' tabs. Flagged result cells include comments describing each exceeded
+#' guideline limit or standard-deviation threshold. When requested, a separate
+#' HTML map is written for report locations.
 #'
 #' @details
 #' Approximate sample selection is performed separately for each target date
@@ -15,10 +17,14 @@
 #' in the report matrix and result details. Reporting basis, chemical form,
 #' analytical target, endpoint, and analysis conditions distinguish report rows
 #' whenever recorded for a measurement. Matrix rows also
-#' distinguish result type, so field and laboratory measurements of the same
-#' parameter and sample remain separate. When `date_range` is
+#' distinguish result type and value type, so field, laboratory, actual, and
+#' calculated measurements remain separate. When `date_range` is
 #' supplied, all eligible samples collected in the inclusive interval are
 #' included directly, and matrix columns represent individual sample IDs.
+#' Location worksheets use location codes as tab names; their report headings
+#' include location names and aliases when available. Comments on flagged cells
+#' state the failed guideline and its per-result limit, or the exceeded
+#' standard-deviation bound with the historical mean, SD, and sample count.
 #'
 #' @param date One or more target sample dates, supplied as `Date` values or
 #'   `YYYY-MM-DD` strings. The report layout controls whether dates are written
@@ -43,7 +49,8 @@
 #'   mean used to flag unusually high or low results. Only numeric result values
 #'   are used; censored and missing results are excluded. Groups are calculated
 #'   separately by location, parameter, matrix, fraction, reporting basis,
-#'   chemical form, analytical target, endpoint, analysis conditions, and result type.
+#'   chemical form, analytical target, endpoint, analysis conditions, result type,
+#'   and result value type.
 #' @param sd_start Optional first date included in the SD calculation.
 #' @param sd_end Optional last date included in the SD calculation.
 #' @param sd_day_of_year Optional day-of-year values included in the SD
@@ -135,13 +142,21 @@ AquaCacheReport <- function(
     stop("'date' must not contain duplicate dates.", call. = FALSE)
   }
   validate_ids <- function(x, name, optional = FALSE) {
-    if (optional && (is.null(x) || length(x) == 0L)) return(integer())
+    if (optional && (is.null(x) || length(x) == 0L)) {
+      return(integer())
+    }
     if (is.character(x) && !anyNA(x) && all(grepl("^[0-9]+$", x))) {
       x <- suppressWarnings(as.numeric(x))
     }
-    if (!is.numeric(x) || length(x) == 0L || anyNA(x) ||
-        any(!is.finite(x)) || any(x < 1) || any(x != trunc(x)) ||
-        any(x > .Machine$integer.max)) {
+    if (
+      !is.numeric(x) ||
+        length(x) == 0L ||
+        anyNA(x) ||
+        any(!is.finite(x)) ||
+        any(x < 1) ||
+        any(x != trunc(x)) ||
+        any(x > .Machine$integer.max)
+    ) {
       stop("'", name, "' must contain positive integer IDs.", call. = FALSE)
     }
     unique(as.integer(x))
@@ -149,19 +164,31 @@ AquaCacheReport <- function(
   location_ids <- validate_ids(location_ids, "location_ids")
   parameter_ids <- validate_ids(parameter_ids, "parameter_ids")
   matrix_state_ids <- validate_ids(
-    matrix_state_ids, "matrix_state_ids", optional = TRUE
+    matrix_state_ids,
+    "matrix_state_ids",
+    optional = TRUE
   )
   sample_fraction_ids <- validate_ids(
-    sample_fraction_ids, "sample_fraction_ids", optional = TRUE
+    sample_fraction_ids,
+    "sample_fraction_ids",
+    optional = TRUE
   )
   guideline_ids <- validate_ids(guideline_ids, "guideline_ids", optional = TRUE)
-  if (!sample_range_mode &&
-      (!is.numeric(date_approx) || !length(date_approx) ||
-       anyNA(date_approx) || any(!is.finite(date_approx)) ||
-       any(date_approx < 0) || any(date_approx > .Machine$integer.max) ||
-       any(date_approx != trunc(date_approx)) ||
-       !(length(date_approx) %in% c(1L, length(date))))) {
-    stop("'date_approx' must be one non-negative integer or one per date.", call. = FALSE)
+  if (
+    !sample_range_mode &&
+      (!is.numeric(date_approx) ||
+        !length(date_approx) ||
+        anyNA(date_approx) ||
+        any(!is.finite(date_approx)) ||
+        any(date_approx < 0) ||
+        any(date_approx > .Machine$integer.max) ||
+        any(date_approx != trunc(date_approx)) ||
+        !(length(date_approx) %in% c(1L, length(date))))
+  ) {
+    stop(
+      "'date_approx' must be one non-negative integer or one per date.",
+      call. = FALSE
+    )
   }
   date_approx <- if (sample_range_mode) {
     rep(0L, length(date))
@@ -174,19 +201,38 @@ AquaCacheReport <- function(
       stop("'", flag, "' must be TRUE or FALSE.", call. = FALSE)
     }
   }
-  if (!is.null(sd_multiplier) &&
-      (!is.numeric(sd_multiplier) || length(sd_multiplier) != 1L ||
-       is.na(sd_multiplier) || !is.finite(sd_multiplier) || sd_multiplier < 0)) {
-    stop("'sd_multiplier' must be NULL or one non-negative number.", call. = FALSE)
+  if (
+    !is.null(sd_multiplier) &&
+      (!is.numeric(sd_multiplier) ||
+        length(sd_multiplier) != 1L ||
+        is.na(sd_multiplier) ||
+        !is.finite(sd_multiplier) ||
+        sd_multiplier < 0)
+  ) {
+    stop(
+      "'sd_multiplier' must be NULL or one non-negative number.",
+      call. = FALSE
+    )
   }
   parse_optional_date <- function(x, name) {
-    if (is.null(x)) return(NULL)
-    if (inherits(x, "Date") && length(x) == 1L && !is.na(x)) return(x)
+    if (is.null(x)) {
+      return(NULL)
+    }
+    if (inherits(x, "Date") && length(x) == 1L && !is.na(x)) {
+      return(x)
+    }
     if (!is.character(x) || length(x) != 1L) {
-      stop("'", name, "' must be NULL or one Date/YYYY-MM-DD value.", call. = FALSE)
+      stop(
+        "'",
+        name,
+        "' must be NULL or one Date/YYYY-MM-DD value.",
+        call. = FALSE
+      )
     }
     value <- tryCatch(as.Date(x), error = function(e) as.Date(NA))
-    if (is.na(value)) stop("'", name, "' is not a valid date.", call. = FALSE)
+    if (is.na(value)) {
+      stop("'", name, "' is not a valid date.", call. = FALSE)
+    }
     value
   }
   sd_start <- parse_optional_date(sd_start, "sd_start")
@@ -194,21 +240,37 @@ AquaCacheReport <- function(
   if (!is.null(sd_start) && !is.null(sd_end) && sd_start > sd_end) {
     stop("'sd_start' must be on or before 'sd_end'.", call. = FALSE)
   }
-  if (!is.null(sd_day_of_year) &&
-      (!is.numeric(sd_day_of_year) || length(sd_day_of_year) == 0L ||
-       anyNA(sd_day_of_year) || any(sd_day_of_year < 1 | sd_day_of_year > 366) ||
-       any(sd_day_of_year != trunc(sd_day_of_year)))) {
+  if (
+    !is.null(sd_day_of_year) &&
+      (!is.numeric(sd_day_of_year) ||
+        length(sd_day_of_year) == 0L ||
+        anyNA(sd_day_of_year) ||
+        any(sd_day_of_year < 1 | sd_day_of_year > 366) ||
+        any(sd_day_of_year != trunc(sd_day_of_year)))
+  ) {
     stop("'sd_day_of_year' must contain integers from 1 to 366.", call. = FALSE)
   }
-  if (!is.character(output_path) || length(output_path) != 1L ||
-      is.na(output_path) || !nzchar(output_path) ||
-      !grepl("\\.xlsx$", output_path, ignore.case = TRUE)) {
+  if (
+    !is.character(output_path) ||
+      length(output_path) != 1L ||
+      is.na(output_path) ||
+      !nzchar(output_path) ||
+      !grepl("\\.xlsx$", output_path, ignore.case = TRUE)
+  ) {
     stop("'output_path' must be a full path ending in .xlsx.", call. = FALSE)
   }
-  if (!is.null(map_path) &&
-      (!is.character(map_path) || length(map_path) != 1L || is.na(map_path) ||
-       !nzchar(map_path) || !grepl("\\.html?$", map_path, ignore.case = TRUE))) {
-    stop("'map_path' must be NULL or a path ending in .html/.htm.", call. = FALSE)
+  if (
+    !is.null(map_path) &&
+      (!is.character(map_path) ||
+        length(map_path) != 1L ||
+        is.na(map_path) ||
+        !nzchar(map_path) ||
+        !grepl("\\.html?$", map_path, ignore.case = TRUE))
+  ) {
+    stop(
+      "'map_path' must be NULL or a path ending in .html/.htm.",
+      call. = FALSE
+    )
   }
   if (!include_map && !is.null(map_path)) {
     stop("Set 'include_map = TRUE' when supplying 'map_path'.", call. = FALSE)
@@ -216,7 +278,10 @@ AquaCacheReport <- function(
   if (include_map) {
     rlang::check_installed(c("leaflet", "htmlwidgets", "htmltools"))
     if (is.null(map_path)) {
-      map_path <- paste0(tools::file_path_sans_ext(output_path), "_locations.html")
+      map_path <- paste0(
+        tools::file_path_sans_ext(output_path),
+        "_locations.html"
+      )
     }
   }
   rlang::check_installed("jsonlite")
@@ -229,9 +294,12 @@ AquaCacheReport <- function(
     stop("The supplied AquaCache connection is not valid.", call. = FALSE)
   }
 
-  id_json <- function(x) as.character(jsonlite::toJSON(
-    as.character(x), auto_unbox = FALSE
-  ))
+  id_json <- function(x) {
+    as.character(jsonlite::toJSON(
+      as.character(x),
+      auto_unbox = FALSE
+    ))
+  }
   location_json <- id_json(location_ids)
   parameter_json <- id_json(parameter_ids)
   matrix_state_json <- id_json(matrix_state_ids)
@@ -257,22 +325,56 @@ AquaCacheReport <- function(
   requested_locations <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT l.location_id, l.location_code FROM public.locations l ",
+      "SELECT l.location_id, l.location_code, l.alias, l.name, l.name_fr ",
+      "FROM public.locations l ",
       "WHERE l.location_id IN (SELECT value::integer ",
       "FROM jsonb_array_elements_text($1::jsonb))"
     ),
     params = list(location_json)
   )
   if (nrow(requested_locations) == 0L) {
-    stop("None of the supplied location IDs were found or visible.", call. = FALSE)
+    stop(
+      "None of the supplied location IDs were found or visible.",
+      call. = FALSE
+    )
   }
   missing_locations <- setdiff(location_ids, requested_locations$location_id)
   if (length(missing_locations)) {
     warning(
-      "Location IDs not found or visible: ", paste(missing_locations, collapse = ", "),
+      "Location IDs not found or visible: ",
+      paste(missing_locations, collapse = ", "),
       call. = FALSE
     )
   }
+  clean_location_text <- function(x) {
+    value <- trimws(as.character(x))
+    value[is.na(value)] <- ""
+    value
+  }
+  location_name_column <- if (lang == "fr") "name_fr" else "name"
+  requested_locations$report_label <- vapply(
+    seq_len(nrow(requested_locations)),
+    function(i) {
+      code <- clean_location_text(requested_locations$location_code[[i]])
+      name <- clean_location_text(requested_locations[[location_name_column]][[
+        i
+      ]])
+      if (!nzchar(name) && lang == "fr") {
+        name <- clean_location_text(requested_locations$name[[i]])
+      }
+      alias <- clean_location_text(requested_locations$alias[[i]])
+      label <- if (nzchar(name) && name != code) {
+        paste(code, name, sep = " - ")
+      } else {
+        code
+      }
+      if (nzchar(alias) && alias != code && alias != name) {
+        label <- paste0(label, " (alias: ", alias, ")")
+      }
+      label
+    },
+    character(1)
+  )
   requested_parameters <- DBI::dbGetQuery(
     con,
     paste0(
@@ -283,12 +385,19 @@ AquaCacheReport <- function(
     params = list(parameter_json)
   )
   if (nrow(requested_parameters) == 0L) {
-    stop("None of the supplied parameter IDs were found or visible.", call. = FALSE)
+    stop(
+      "None of the supplied parameter IDs were found or visible.",
+      call. = FALSE
+    )
   }
-  missing_parameters <- setdiff(parameter_ids, requested_parameters$parameter_id)
+  missing_parameters <- setdiff(
+    parameter_ids,
+    requested_parameters$parameter_id
+  )
   if (length(missing_parameters)) {
     warning(
-      "Parameter IDs not found or visible: ", paste(missing_parameters, collapse = ", "),
+      "Parameter IDs not found or visible: ",
+      paste(missing_parameters, collapse = ", "),
       call. = FALSE
     )
   }
@@ -361,7 +470,8 @@ AquaCacheReport <- function(
     )
   }
   result_sql <- paste0(
-    "WITH ", selected_samples_sql,
+    "WITH ",
+    selected_samples_sql,
     "SELECT r.result_id, s.sample_id, s.location_id, l.location_code AS location,\n",
     "  l.alias, l.name AS location_name, l.name_fr AS location_name_fr,\n",
     "  l.latitude, l.longitude, s.sub_location_id, sl.sub_location_name,\n",
@@ -377,7 +487,9 @@ AquaCacheReport <- function(
     "  r.result_type AS result_type_id, rt.result_type,\n",
     "  r.result_value_type AS result_value_type_id, rvt.result_value_type,\n",
     "  r.result, r.result_condition, rc.result_condition AS result_condition_label,\n",
-    "  r.result_condition_value, ", unit_sql, ",\n",
+    "  r.result_condition_value, ",
+    unit_sql,
+    ",\n",
     "  r.grade_type_id AS result_grade_id, gt.grade_type_code AS result_grade_code,\n",
     "  gt.grade_type_description AS result_grade, r.approval_type_id AS result_approval_id,\n",
     "  at.approval_type_code AS result_approval_code,\n",
@@ -411,8 +523,12 @@ AquaCacheReport <- function(
     con,
     result_sql,
     params = list(
-      location_json, parameter_json, date_request_json,
-      include_blanks, include_duplicates, matrix_state_json,
+      location_json,
+      parameter_json,
+      date_request_json,
+      include_blanks,
+      include_duplicates,
+      matrix_state_json,
       sample_fraction_json
     )
   )
@@ -435,22 +551,52 @@ AquaCacheReport <- function(
   if (length(repeated_samples)) {
     warning(
       "Closest-date matching selected the same sample for multiple requested dates; it will appear in ",
-      if (report_format == "by_date") "multiple date worksheets." else "multiple date columns.",
+      if (report_format == "by_date") {
+        "multiple date worksheets."
+      } else {
+        "multiple date columns."
+      },
       call. = FALSE
     )
   }
-  results$location_label <- if (lang == "fr") {
-    ifelse(is.na(results$location_name_fr), results$location_name, results$location_name_fr)
-  } else {
-    results$location_name
-  }
+  results$location_label <- vapply(
+    seq_len(nrow(results)),
+    function(i) {
+      name <- if (lang == "fr") {
+        french_name <- clean_location_text(results$location_name_fr[[i]])
+        if (nzchar(french_name)) {
+          french_name
+        } else {
+          clean_location_text(results$location_name[[i]])
+        }
+      } else {
+        clean_location_text(results$location_name[[i]])
+      }
+      code <- clean_location_text(results$location[[i]])
+      alias <- clean_location_text(results$alias[[i]])
+      label <- if (nzchar(name)) name else code
+      if (nzchar(alias) && alias != code && alias != name) {
+        label <- paste0(label, " (alias: ", alias, ")")
+      }
+      label
+    },
+    character(1)
+  )
   results$parameter_label <- if (lang == "fr") {
-    ifelse(is.na(results$param_name_fr), results$param_name, results$param_name_fr)
+    ifelse(
+      is.na(results$param_name_fr),
+      results$param_name,
+      results$param_name_fr
+    )
   } else {
     results$param_name
   }
   results$media_label <- if (lang == "fr") {
-    ifelse(is.na(results$media_type_fr), results$media_type, results$media_type_fr)
+    ifelse(
+      is.na(results$media_type_fr),
+      results$media_type,
+      results$media_type_fr
+    )
   } else {
     results$media_type
   }
@@ -460,24 +606,61 @@ AquaCacheReport <- function(
   } else {
     results$sub_location_name
   }
-  is_less_than <- results$result_condition %in% 1L |
-    grepl("below detection|less than", results$result_condition_label, ignore.case = TRUE)
-  is_greater_than <- results$result_condition %in% 2L |
-    grepl("above detection|greater than", results$result_condition_label, ignore.case = TRUE)
+  is_less_than <- results$result_condition %in%
+    1L |
+    grepl(
+      "below detection|less than",
+      results$result_condition_label,
+      ignore.case = TRUE
+    )
+  is_greater_than <- results$result_condition %in%
+    2L |
+    grepl(
+      "above detection|greater than",
+      results$result_condition_label,
+      ignore.case = TRUE
+    )
   results$result_relation <- ifelse(
-    !is.na(results$result), "actual",
-    ifelse(is_less_than, "less_than", ifelse(is_greater_than, "greater_than", "none"))
+    !is.na(results$result),
+    "actual",
+    ifelse(
+      is_less_than,
+      "less_than",
+      ifelse(is_greater_than, "greater_than", "none")
+    )
   )
   results$result_display <- ifelse(
     !is.na(results$result),
     format(results$result, digits = 12, trim = TRUE, scientific = FALSE),
     ifelse(
-      results$result_relation == "less_than" & !is.na(results$result_condition_value),
-      paste0("< ", format(results$result_condition_value, digits = 12, trim = TRUE, scientific = FALSE)),
+      results$result_relation == "less_than" &
+        !is.na(results$result_condition_value),
+      paste0(
+        "< ",
+        format(
+          results$result_condition_value,
+          digits = 12,
+          trim = TRUE,
+          scientific = FALSE
+        )
+      ),
       ifelse(
-        results$result_relation == "greater_than" & !is.na(results$result_condition_value),
-        paste0("> ", format(results$result_condition_value, digits = 12, trim = TRUE, scientific = FALSE)),
-        ifelse(is.na(results$result_condition_label), "", results$result_condition_label)
+        results$result_relation == "greater_than" &
+          !is.na(results$result_condition_value),
+        paste0(
+          "> ",
+          format(
+            results$result_condition_value,
+            digits = 12,
+            trim = TRUE,
+            scientific = FALSE
+          )
+        ),
+        ifelse(
+          is.na(results$result_condition_label),
+          "",
+          results$result_condition_label
+        )
       )
     )
   )
@@ -553,7 +736,8 @@ AquaCacheReport <- function(
     missing_guidelines <- setdiff(guideline_ids, guideline_catalog$guideline_id)
     if (length(missing_guidelines)) {
       warning(
-        "Guideline IDs not found or visible: ", paste(missing_guidelines, collapse = ", "),
+        "Guideline IDs not found or visible: ",
+        paste(missing_guidelines, collapse = ", "),
         call. = FALSE
       )
     }
@@ -562,7 +746,8 @@ AquaCacheReport <- function(
       data.frame(
         result_id = as.integer(results$result_id),
         sample_date = format(as.Date(results$sample_date), "%Y-%m-%d")
-      ) |> unique(),
+      ) |>
+        unique(),
       dataframe = "rows",
       auto_unbox = TRUE,
       na = "null"
@@ -673,66 +858,99 @@ AquaCacheReport <- function(
     guideline_rules <- data.frame()
   }
 
-  results$result_row_key <- do.call(paste, c(
-    lapply(results[c(
-      "parameter_id", "matrix_state_id", "sample_fraction_id",
-      chemistry_identity_columns(), "units"
-    )], function(x) {
-      value <- as.character(x)
-      value[is.na(value)] <- "<NA>"
-      value
-    }),
-    sep = "\034"
-  ))
+  results$result_row_key <- do.call(
+    paste,
+    c(
+      lapply(
+        results[c(
+          "parameter_id",
+          "matrix_state_id",
+          "sample_fraction_id",
+          chemistry_identity_columns(),
+          "units"
+        )],
+        function(x) {
+          value <- as.character(x)
+          value[is.na(value)] <- "<NA>"
+          value
+        }
+      ),
+      sep = "\034"
+    )
+  )
 
   guideline_summary <- data.frame()
   if (nrow(guideline_rules)) {
     summary_groups <- split(
       seq_len(nrow(guideline_rules)),
-      paste(guideline_rules$result_id, guideline_rules$guideline_id, sep = "\034")
+      paste(
+        guideline_rules$result_id,
+        guideline_rules$guideline_id,
+        sep = "\034"
+      )
     )
-    guideline_summary <- do.call(rbind, lapply(summary_groups, function(idx) {
-      rows <- guideline_rules[idx, , drop = FALSE]
-      statuses <- unique(stats::na.omit(rows$comparison_status))
-      failures <- intersect(statuses, c("exceeds", "below", "does_not_equal"))
-      assessment <- if (length(failures)) {
-        paste(failures, collapse = "; ")
-      } else if (length(statuses) && all(statuses == "meets")) {
-        "meets"
-      } else if (length(statuses)) {
-        paste(statuses, collapse = "; ")
-      } else {
-        "not evaluated"
-      }
-      valid_values <- rows$output_status == "value" & !is.na(rows$guideline_value)
-      lower <- rows$guideline_value[valid_values & rows$bound_code == "lower"]
-      upper <- rows$guideline_value[valid_values & rows$bound_code == "upper"]
-      lower <- if (length(lower)) max(lower) else NA_real_
-      upper <- if (length(upper)) max(upper) else NA_real_
-      op <- rows$comparison_operator_code[[1]]
-      value_text <- function(x) format(x, digits = 12, trim = TRUE, scientific = FALSE)
-      limit <- switch(
-        op,
-        lte = if (!is.na(upper)) paste0("<= ", value_text(upper)) else "unresolved",
-        gte = if (!is.na(lower)) paste0(">= ", value_text(lower)) else "unresolved",
-        range = if (!is.na(lower) && !is.na(upper)) {
-          paste0(value_text(lower), " to ", value_text(upper))
-        } else "unresolved",
-        eq = if (!is.na(upper)) paste0("= ", value_text(upper)) else "unresolved",
-        narrative = "narrative",
-        "unresolved"
-      )
-      data.frame(
-        result_id = rows$result_id[[1]],
-        guideline_id = rows$guideline_id[[1]],
-        lower_value = lower,
-        upper_value = upper,
-        limit_display = limit,
-        assessment = assessment,
-        has_failure = length(failures) > 0L,
-        stringsAsFactors = FALSE
-      )
-    }))
+    guideline_summary <- do.call(
+      rbind,
+      lapply(summary_groups, function(idx) {
+        rows <- guideline_rules[idx, , drop = FALSE]
+        statuses <- unique(stats::na.omit(rows$comparison_status))
+        failures <- intersect(statuses, c("exceeds", "below", "does_not_equal"))
+        assessment <- if (length(failures)) {
+          paste(failures, collapse = "; ")
+        } else if (length(statuses) && all(statuses == "meets")) {
+          "meets"
+        } else if (length(statuses)) {
+          paste(statuses, collapse = "; ")
+        } else {
+          "not evaluated"
+        }
+        valid_values <- rows$output_status == "value" &
+          !is.na(rows$guideline_value)
+        lower <- rows$guideline_value[valid_values & rows$bound_code == "lower"]
+        upper <- rows$guideline_value[valid_values & rows$bound_code == "upper"]
+        lower <- if (length(lower)) max(lower) else NA_real_
+        upper <- if (length(upper)) max(upper) else NA_real_
+        op <- rows$comparison_operator_code[[1]]
+        value_text <- function(x) {
+          format(x, digits = 12, trim = TRUE, scientific = FALSE)
+        }
+        limit <- switch(
+          op,
+          lte = if (!is.na(upper)) {
+            paste0("<= ", value_text(upper))
+          } else {
+            "unresolved"
+          },
+          gte = if (!is.na(lower)) {
+            paste0(">= ", value_text(lower))
+          } else {
+            "unresolved"
+          },
+          range = if (!is.na(lower) && !is.na(upper)) {
+            paste0(value_text(lower), " to ", value_text(upper))
+          } else {
+            "unresolved"
+          },
+          eq = if (!is.na(upper)) {
+            paste0("= ", value_text(upper))
+          } else {
+            "unresolved"
+          },
+          narrative = "narrative",
+          "unresolved"
+        )
+        data.frame(
+          result_id = rows$result_id[[1]],
+          guideline_id = rows$guideline_id[[1]],
+          lower_value = lower,
+          upper_value = upper,
+          limit_display = limit,
+          assessment = assessment,
+          has_failure = length(failures) > 0L,
+          stringsAsFactors = FALSE
+        )
+      })
+    )
     rownames(guideline_summary) <- NULL
     guideline_summary$guideline_label <- guideline_catalog$guideline_code[
       match(guideline_summary$guideline_id, guideline_catalog$guideline_id)
@@ -740,8 +958,12 @@ AquaCacheReport <- function(
     missing_codes <- is.na(guideline_summary$guideline_label) |
       !nzchar(guideline_summary$guideline_label)
     guideline_summary$guideline_label[missing_codes] <- paste0(
-      "Guideline ", guideline_summary$guideline_id[missing_codes]
+      "Guideline ",
+      guideline_summary$guideline_id[missing_codes]
     )
+    guideline_summary$guideline_name <- guideline_catalog$guideline_name[
+      match(guideline_summary$guideline_id, guideline_catalog$guideline_id)
+    ]
     guideline_summary$row_key <- results$result_row_key[
       match(guideline_summary$result_id, results$result_id)
     ]
@@ -756,22 +978,37 @@ AquaCacheReport <- function(
       "($3::boolean OR st.sample_type IS NULL OR st.sample_type !~* 'blank')",
       "($4::boolean OR st.sample_type IS NULL OR st.sample_type !~* '(duplicate|replicate)')"
     )
-    sd_params <- list(location_json, parameter_json, include_blanks, include_duplicates)
+    sd_params <- list(
+      location_json,
+      parameter_json,
+      include_blanks,
+      include_duplicates
+    )
     if (!is.null(sd_start)) {
       sd_params[[length(sd_params) + 1L]] <- format(sd_start, "%Y-%m-%d")
-      sd_where <- c(sd_where, paste0("s.datetime::date >= $", length(sd_params), "::date"))
+      sd_where <- c(
+        sd_where,
+        paste0("s.datetime::date >= $", length(sd_params), "::date")
+      )
     }
     if (!is.null(sd_end)) {
       sd_params[[length(sd_params) + 1L]] <- format(sd_end, "%Y-%m-%d")
-      sd_where <- c(sd_where, paste0("s.datetime::date <= $", length(sd_params), "::date"))
+      sd_where <- c(
+        sd_where,
+        paste0("s.datetime::date <= $", length(sd_params), "::date")
+      )
     }
     if (!is.null(sd_day_of_year)) {
-      sd_params[[length(sd_params) + 1L]] <- id_json(unique(as.integer(sd_day_of_year)))
+      sd_params[[length(sd_params) + 1L]] <- id_json(unique(as.integer(
+        sd_day_of_year
+      )))
       sd_where <- c(
         sd_where,
         paste0(
           "EXTRACT(DOY FROM s.datetime)::integer IN (SELECT value::integer ",
-          "FROM jsonb_array_elements_text($", length(sd_params), "::jsonb))"
+          "FROM jsonb_array_elements_text($",
+          length(sd_params),
+          "::jsonb))"
         )
       )
     }
@@ -781,35 +1018,52 @@ AquaCacheReport <- function(
         "SELECT s.location_id, r.parameter_id, r.matrix_state_id,\n",
         "  r.sample_fraction_id, r.reporting_basis_id, r.result_speciation_id, r.result_target_id,\n",
         "  r.endpoint_mode, r.endpoint_ph, r.analysis_conditions_key,\n",
-        "  r.result_type AS result_type_id, r.result AS result\n",
+        "  r.result_type AS result_type_id, r.result_value_type AS result_value_type_id,\n",
+        "  r.result AS result\n",
         "FROM discrete.results r\n",
         "JOIN discrete.samples s ON s.sample_id = r.sample_id\n",
         "LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type\n",
-        "WHERE ", paste(sd_where, collapse = " AND "), ";"
+        "WHERE ",
+        paste(sd_where, collapse = " AND "),
+        ";"
       ),
       params = sd_params
     )
     key_columns <- c(
-      "location_id", "parameter_id", "matrix_state_id",
-      "sample_fraction_id", chemistry_identity_columns(), "result_type_id"
+      "location_id",
+      "parameter_id",
+      "matrix_state_id",
+      "sample_fraction_id",
+      chemistry_identity_columns(),
+      "result_type_id",
+      "result_value_type_id"
     )
     if (nrow(sd_history)) {
       sd_dt <- data.table::as.data.table(sd_history)
-      sd_stats <- sd_dt[, .(
-        sd_n = .N,
-        sd_mean = mean(result),
-        sd_value = if (.N > 1L) stats::sd(result) else NA_real_
-      ), by = key_columns]
+      sd_stats <- sd_dt[,
+        .(
+          sd_n = .N,
+          sd_mean = mean(result),
+          sd_value = if (.N > 1L) stats::sd(result) else NA_real_
+        ),
+        by = key_columns
+      ]
       sd_stats[, sd_lower := sd_mean - sd_multiplier * sd_value]
       sd_stats[, sd_upper := sd_mean + sd_multiplier * sd_value]
-      make_group_key <- function(x) do.call(paste, c(
-        lapply(x[key_columns], function(value) {
-          value <- as.character(value)
-          value[is.na(value)] <- "<NA>"
-          value
-        }),
-        sep = "\034"
-      ))
+      make_group_key <- function(x) {
+        do.call(
+          paste,
+          c(
+            lapply(key_columns, function(column) {
+              # [[ selects a column consistently from data.frames and data.tables.
+              value <- as.character(x[[column]])
+              value[is.na(value)] <- "<NA>"
+              value
+            }),
+            sep = "\034"
+          )
+        )
+      }
       sd_index <- match(make_group_key(results), make_group_key(sd_stats))
       results$sd_n <- sd_stats$sd_n[sd_index]
       results$sd_mean <- sd_stats$sd_mean[sd_index]
@@ -822,87 +1076,261 @@ AquaCacheReport <- function(
     } else {
       results$sd_n <- NA_integer_
       results$sd_mean <- results$sd_value <- results$sd_lower <- results$sd_upper <- NA_real_
-      warning("No numeric historical results were available for the SD calculation.", call. = FALSE)
+      warning(
+        "No numeric historical results were available for the SD calculation.",
+        call. = FALSE
+      )
     }
   }
 
   if (nrow(guideline_summary)) {
     assessment_groups <- split(
-      seq_len(nrow(guideline_summary)), guideline_summary$result_id
+      seq_len(nrow(guideline_summary)),
+      guideline_summary$result_id
     )
-    results$guideline_assessments <- vapply(seq_len(nrow(results)), function(i) {
-      idx <- assessment_groups[[as.character(results$result_id[[i]])]]
-      if (is.null(idx)) return("")
-      rows <- guideline_summary[idx, , drop = FALSE]
-      labels <- paste0(rows$guideline_label, ": ", rows$limit_display, " (", rows$assessment, ")")
-      paste(labels, collapse = "; ")
-    }, character(1))
+    results$guideline_assessments <- vapply(
+      seq_len(nrow(results)),
+      function(i) {
+        idx <- assessment_groups[[as.character(results$result_id[[i]])]]
+        if (is.null(idx)) {
+          return("")
+        }
+        rows <- guideline_summary[idx, , drop = FALSE]
+        labels <- paste0(
+          rows$guideline_label,
+          ": ",
+          rows$limit_display,
+          " (",
+          rows$assessment,
+          ")"
+        )
+        paste(labels, collapse = "; ")
+      },
+      character(1)
+    )
   } else {
     results$guideline_assessments <- ""
   }
 
+  format_flag_number <- function(value) {
+    if (!length(value) || is.na(value) || !is.finite(value)) {
+      return("unavailable")
+    }
+    format(value, digits = 12, trim = TRUE, scientific = FALSE)
+  }
+  results$exceedance_note <- rep("", nrow(results))
+  if (nrow(guideline_summary)) {
+    failed_guidelines <- guideline_summary[
+      guideline_summary$has_failure,
+      ,
+      drop = FALSE
+    ]
+    if (nrow(failed_guidelines)) {
+      guideline_groups <- split(
+        seq_len(nrow(failed_guidelines)),
+        failed_guidelines$result_id
+      )
+      result_groups <- split(seq_len(nrow(results)), results$result_id)
+      for (group_index in seq_along(guideline_groups)) {
+        result_indices <- result_groups[[names(guideline_groups)[[
+          group_index
+        ]]]]
+        if (is.null(result_indices)) {
+          next
+        }
+        rows <- failed_guidelines[
+          guideline_groups[[group_index]],
+          ,
+          drop = FALSE
+        ]
+        for (i in result_indices) {
+          notes <- vapply(
+            seq_len(nrow(rows)),
+            function(j) {
+              assessment <- rows$assessment[[j]]
+              action <- if (grepl("exceeds", assessment, fixed = TRUE)) {
+                "exceeds"
+              } else if (grepl("below", assessment, fixed = TRUE)) {
+                "is below"
+              } else {
+                "does not meet"
+              }
+              label <- rows$guideline_label[[j]]
+              name <- clean_location_text(rows$guideline_name[[j]])
+              if (nzchar(name) && !identical(name, label)) {
+                label <- paste0(label, " (", name, ")")
+              }
+              unit <- clean_location_text(results$units[[i]])
+              unit_suffix <- if (nzchar(unit)) paste0(" ", unit) else ""
+              paste0(
+                "Guideline ",
+                label,
+                ": result ",
+                results$result_display[[i]],
+                " ",
+                action,
+                " limit ",
+                rows$limit_display[[j]],
+                unit_suffix,
+                "."
+              )
+            },
+            character(1)
+          )
+          results$exceedance_note[[i]] <- paste(notes, collapse = "\n")
+        }
+      }
+    }
+  }
+  for (i in which(results$sd_exceedance)) {
+    below <- results$result[[i]] < results$sd_lower[[i]]
+    bound <- if (below) results$sd_lower[[i]] else results$sd_upper[[i]]
+    direction <- if (below) "below the lower" else "above the upper"
+    unit <- clean_location_text(results$units[[i]])
+    unit_suffix <- if (nzchar(unit)) paste0(" ", unit) else ""
+    sd_note <- paste0(
+      "Standard-deviation threshold: result ",
+      results$result_display[[i]],
+      " is ",
+      direction,
+      " ",
+      sd_multiplier,
+      "-SD threshold ",
+      format_flag_number(bound),
+      unit_suffix,
+      " (historical mean ",
+      format_flag_number(results$sd_mean[[i]]),
+      ", SD ",
+      format_flag_number(results$sd_value[[i]]),
+      ", n = ",
+      format_flag_number(results$sd_n[[i]]),
+      ")."
+    )
+    results$exceedance_note[[i]] <- if (nzchar(results$exceedance_note[[i]])) {
+      paste(results$exceedance_note[[i]], sd_note, sep = "\n")
+    } else {
+      sd_note
+    }
+  }
+
   results$analytical_identity <- chemistry_result_labels(results)
 
-  # Keep distinct result types on separate matrix rows so field and laboratory
-  # measurements from the same sample are not combined into one cell.
+  # Result provenance and value type are independent parts of the row identity.
+  # Do not combine field/lab or actual/calculated results into one matrix cell.
   param_key_columns <- c(
-    "parameter_id", "matrix_state_id", "sample_fraction_id",
-    chemistry_identity_columns(), "units", "result_type_id"
+    "parameter_id",
+    "matrix_state_id",
+    "sample_fraction_id",
+    chemistry_identity_columns(),
+    "units",
+    "result_type_id",
+    "result_value_type_id"
   )
-  make_matrix_key <- function(x, columns) do.call(paste, c(
-    lapply(x[columns], function(value) {
-      value <- as.character(value)
-      value[is.na(value)] <- "<NA>"
-      value
-    }),
-    sep = "\034"
-  ))
+  make_matrix_key <- function(x, columns) {
+    do.call(
+      paste,
+      c(
+        lapply(x[columns], function(value) {
+          value <- as.character(value)
+          value[is.na(value)] <- "<NA>"
+          value
+        }),
+        sep = "\034"
+      )
+    )
+  }
   all_param_groups <- unique(results[c(
-    param_key_columns, "parameter_label", "matrix_label",
-    "sample_fraction", "reporting_basis", "analytical_identity", "result_type"
+    param_key_columns,
+    "parameter_label",
+    "matrix_label",
+    "sample_fraction",
+    "reporting_basis",
+    "analytical_identity",
+    "result_type",
+    "result_value_type"
   )])
-  all_param_groups <- all_param_groups[order(
-    match(all_param_groups$parameter_id, parameter_ids),
-    all_param_groups$matrix_state_id,
-    all_param_groups$sample_fraction_id,
-    all_param_groups$reporting_basis_id,
-    all_param_groups$result_type_id,
-    na.last = TRUE
-  ), , drop = FALSE]
-  all_param_groups$row_key <- make_matrix_key(all_param_groups, param_key_columns)
+  all_param_groups <- all_param_groups[
+    order(
+      match(all_param_groups$parameter_id, parameter_ids),
+      all_param_groups$matrix_state_id,
+      all_param_groups$sample_fraction_id,
+      all_param_groups$reporting_basis_id,
+      all_param_groups$result_type_id,
+      all_param_groups$result_value_type_id,
+      na.last = TRUE
+    ),
+    ,
+    drop = FALSE
+  ]
+  all_param_groups$row_key <- make_matrix_key(
+    all_param_groups,
+    param_key_columns
+  )
   results$result_row_key <- make_matrix_key(results, param_key_columns)
 
   report_tabs <- if (report_format == "by_date") {
     if (sample_range_mode) {
       sample_dates <- sort(unique(results$sample_date))
-      lapply(sample_dates, function(sample_date) list(
-        id = sample_date,
-        base_name = if (length(sample_dates) == 1L) "Report" else format(sample_date, "%Y-%m-%d"),
-        result_rows = which(results$sample_date == sample_date)
-      ))
+      lapply(sample_dates, function(sample_date) {
+        list(
+          id = sample_date,
+          base_name = if (length(sample_dates) == 1L) {
+            "Report"
+          } else {
+            format(sample_date, "%Y-%m-%d")
+          },
+          result_rows = which(results$sample_date == sample_date)
+        )
+      })
     } else {
-      lapply(seq_along(date), function(i) list(
-        id = date[[i]],
-        base_name = if (length(date) == 1L) "Report" else format(date[[i]], "%Y-%m-%d"),
-        result_rows = which(results$requested_date == date[[i]])
-      ))
+      lapply(seq_along(date), function(i) {
+        list(
+          id = date[[i]],
+          base_name = if (length(date) == 1L) {
+            "Report"
+          } else {
+            format(date[[i]], "%Y-%m-%d")
+          },
+          result_rows = which(results$requested_date == date[[i]])
+        )
+      })
     }
   } else if (report_format == "by_location") {
     lapply(location_ids, function(id) {
-      meta <- requested_locations[requested_locations$location_id == id, , drop = FALSE]
-      location <- if (nrow(meta)) as.character(meta$location_code[[1]]) else paste0("Location ", id)
+      meta <- requested_locations[
+        requested_locations$location_id == id,
+        ,
+        drop = FALSE
+      ]
+      location <- if (nrow(meta)) {
+        as.character(meta$location_code[[1]])
+      } else {
+        paste0("Location ", id)
+      }
       list(
         id = id,
-        base_name = if (length(location_ids) == 1L) "Report" else location,
+        base_name = location,
         result_rows = which(results$location_id == id)
       )
     })
   } else {
     lapply(parameter_ids, function(id) {
-      meta <- requested_parameters[requested_parameters$parameter_id == id, , drop = FALSE]
-      parameter <- if (nrow(meta)) as.character(meta$param_name[[1]]) else paste0("Parameter ", id)
-      if (nrow(meta) && lang == "fr" && !is.na(meta$param_name_fr[[1]]) &&
-          nzchar(meta$param_name_fr[[1]])) {
+      meta <- requested_parameters[
+        requested_parameters$parameter_id == id,
+        ,
+        drop = FALSE
+      ]
+      parameter <- if (nrow(meta)) {
+        as.character(meta$param_name[[1]])
+      } else {
+        paste0("Parameter ", id)
+      }
+      if (
+        nrow(meta) &&
+          lang == "fr" &&
+          !is.na(meta$param_name_fr[[1]]) &&
+          nzchar(meta$param_name_fr[[1]])
+      ) {
         parameter <- as.character(meta$param_name_fr[[1]])
       }
       list(
@@ -925,7 +1353,10 @@ AquaCacheReport <- function(
       while (tolower(candidate) %in% tolower(used)) {
         suffix <- suffix + 1L
         ending <- paste0(" (", suffix, ")")
-        candidate <- paste0(substr(values[[i]], 1L, 31L - nchar(ending)), ending)
+        candidate <- paste0(
+          substr(values[[i]], 1L, 31L - nchar(ending)),
+          ending
+        )
       }
       values[[i]] <- candidate
       used <- c(used, candidate)
@@ -991,23 +1422,36 @@ AquaCacheReport <- function(
   wb <- openxlsx::createWorkbook(title = "Water Quality Report")
   generated <- format(Sys.time(), "%Y-%m-%d %H:%M %Z")
   title_style <- openxlsx::createStyle(
-    fgFill = "turquoise2", textDecoration = "bold", fontSize = 12,
+    fgFill = "turquoise2",
+    textDecoration = "bold",
+    fontSize = 12,
     valign = "center"
   )
-  note_style <- openxlsx::createStyle(fgFill = "orchid", wrapText = TRUE, valign = "center")
+  note_style <- openxlsx::createStyle(
+    fgFill = "orchid",
+    wrapText = TRUE,
+    valign = "center"
+  )
   group_style <- openxlsx::createStyle(
-    fgFill = "azure3", textDecoration = "bold", halign = "center"
+    fgFill = "azure3",
+    textDecoration = "bold",
+    halign = "center"
   )
   sample_style <- openxlsx::createStyle(
-    fgFill = "lemonchiffon2", textDecoration = "bold", wrapText = TRUE,
-    halign = "center", valign = "center"
+    fgFill = "lemonchiffon2",
+    textDecoration = "bold",
+    wrapText = TRUE,
+    halign = "center",
+    valign = "center"
   )
   parameter_style <- openxlsx::createStyle(fgFill = "goldenrod1")
   limit_style <- openxlsx::createStyle(fgFill = "azure1", wrapText = TRUE)
   sample_data_style <- openxlsx::createStyle(fgFill = "lemonchiffon")
   exceed_style <- openxlsx::createStyle(
-    fontColour = "black", border = "TopBottomLeftRight",
-    borderColour = "red2", borderStyle = "medium"
+    fontColour = "black",
+    border = "TopBottomLeftRight",
+    borderColour = "red2",
+    borderStyle = "medium"
   )
   format_note <- if (sample_range_mode) {
     switch(
@@ -1026,7 +1470,8 @@ AquaCacheReport <- function(
   }
   flag_note <- if (length(guideline_ids)) {
     paste0(
-      "Run with guideline IDs: ", paste(guideline_ids, collapse = ", "),
+      "Run with guideline IDs: ",
+      paste(guideline_ids, collapse = ", "),
       ". Guideline applicability is evaluated separately for each result."
     )
   } else {
@@ -1034,25 +1479,41 @@ AquaCacheReport <- function(
   }
   if (!is.null(sd_multiplier)) {
     flag_note <- paste0(
-      flag_note, " SD exceedances above/below ", sd_multiplier,
+      flag_note,
+      " SD exceedances above/below ",
+      sd_multiplier,
       " SD from mean (from ",
-      if (is.null(sd_start)) "start of records" else format(sd_start, "%Y-%m-%d"),
+      if (is.null(sd_start)) {
+        "start of records"
+      } else {
+        format(sd_start, "%Y-%m-%d")
+      },
       " to ",
       if (is.null(sd_end)) "end of records" else format(sd_end, "%Y-%m-%d"),
-      if (is.null(sd_day_of_year)) " for all days of year" else paste0(
-        " on days of year ", paste(sd_day_of_year, collapse = ", ")
-      ),
+      if (is.null(sd_day_of_year)) {
+        " for all days of year"
+      } else {
+        paste0(
+          " on days of year ",
+          paste(sd_day_of_year, collapse = ", ")
+        )
+      },
       "). Numeric results only; red outline marks an SD exceedance or guideline failure."
     )
   } else if (length(guideline_ids)) {
     flag_note <- paste0(flag_note, " Red outline marks a guideline failure.")
   }
   if (length(repeated_samples)) {
-    flag_note <- paste0(flag_note, " A sample may appear for more than one target date.")
+    flag_note <- paste0(
+      flag_note,
+      " A sample may appear for more than one target date."
+    )
   }
   failed_result_ids <- if (nrow(guideline_summary)) {
     unique(guideline_summary$result_id[guideline_summary$has_failure])
-  } else integer()
+  } else {
+    integer()
+  }
 
   for (tab_index in seq_along(report_tabs)) {
     tab <- report_tabs[[tab_index]]
@@ -1061,17 +1522,36 @@ AquaCacheReport <- function(
     if (report_format == "by_parameter") {
       row_results <- results[results$parameter_id == tab$id, , drop = FALSE]
       row_groups <- unique(row_results[c(
-        "location_id", "location", "location_label", "parameter_id",
-        "matrix_state_id", "sample_fraction_id", chemistry_identity_columns(),
-        "units", "result_type_id", "matrix_label", "sample_fraction",
-        "reporting_basis", "analytical_identity", "result_type"
+        "location_id",
+        "location",
+        "location_label",
+        "parameter_id",
+        "matrix_state_id",
+        "sample_fraction_id",
+        chemistry_identity_columns(),
+        "units",
+        "result_type_id",
+        "result_value_type_id",
+        "matrix_label",
+        "sample_fraction",
+        "reporting_basis",
+        "analytical_identity",
+        "result_type",
+        "result_value_type"
       )])
-      row_groups <- row_groups[order(
-        match(row_groups$location_id, location_ids),
-        row_groups$matrix_state_id, row_groups$sample_fraction_id,
-        row_groups$reporting_basis_id, row_groups$result_type_id,
-        na.last = TRUE
-      ), , drop = FALSE]
+      row_groups <- row_groups[
+        order(
+          match(row_groups$location_id, location_ids),
+          row_groups$matrix_state_id,
+          row_groups$sample_fraction_id,
+          row_groups$reporting_basis_id,
+          row_groups$result_type_id,
+          row_groups$result_value_type_id,
+          na.last = TRUE
+        ),
+        ,
+        drop = FALSE
+      ]
       row_groups$row_key <- make_matrix_key(row_groups, param_key_columns)
     } else {
       row_results <- sheet_results
@@ -1079,15 +1559,26 @@ AquaCacheReport <- function(
     }
     row_groups$cell_row_key <- if (report_format == "by_parameter") {
       paste(row_groups$location_id, row_groups$row_key, sep = "\034")
-    } else row_groups$row_key
+    } else {
+      row_groups$row_key
+    }
     row_results$cell_row_key <- if (report_format == "by_parameter") {
       paste(row_results$location_id, row_results$result_row_key, sep = "\034")
-    } else row_results$result_row_key
+    } else {
+      row_results$result_row_key
+    }
     guide_limit_map <- list()
     if (nrow(guideline_summary) && nrow(row_results) && nrow(row_groups)) {
       result_groups <- unique(row_results[c("result_id", "cell_row_key")])
-      result_groups$row_index <- match(result_groups$cell_row_key, row_groups$cell_row_key)
-      result_groups <- result_groups[!is.na(result_groups$row_index), , drop = FALSE]
+      result_groups$row_index <- match(
+        result_groups$cell_row_key,
+        row_groups$cell_row_key
+      )
+      result_groups <- result_groups[
+        !is.na(result_groups$row_index),
+        ,
+        drop = FALSE
+      ]
       guide_values <- merge(
         result_groups,
         guideline_summary[c("result_id", "guideline_id", "limit_display")],
@@ -1106,15 +1597,25 @@ AquaCacheReport <- function(
       }
     }
 
-    guideline_column_names <- if (length(guideline_ids)) vapply(
-      seq_len(nrow(guideline_catalog)), function(i) {
-        meta <- guideline_catalog[i, , drop = FALSE]
-        code <- if (is.na(meta$guideline_code) || !nzchar(meta$guideline_code)) {
-          paste0("Guideline ", meta$guideline_id)
-        } else as.character(meta$guideline_code)
-        paste0(code, " - ", meta$guideline_name, " (limit)")
-      }, character(1)
-    ) else character()
+    guideline_column_names <- if (length(guideline_ids)) {
+      vapply(
+        seq_len(nrow(guideline_catalog)),
+        function(i) {
+          meta <- guideline_catalog[i, , drop = FALSE]
+          code <- if (
+            is.na(meta$guideline_code) || !nzchar(meta$guideline_code)
+          ) {
+            paste0("Guideline ", meta$guideline_id)
+          } else {
+            as.character(meta$guideline_code)
+          }
+          paste0(code, " - ", meta$guideline_name, " (limit)")
+        },
+        character(1)
+      )
+    } else {
+      character()
+    }
 
     if (report_format == "by_date" || sample_range_mode) {
       sample_source <- if (report_format == "by_date") {
@@ -1123,40 +1624,57 @@ AquaCacheReport <- function(
         row_results
       }
       sample_meta <- unique(sample_source[c(
-        "sample_id", "location", "sub_location_label", "sample_date", "datetime"
+        "sample_id",
+        "location",
+        "sub_location_label",
+        "sample_date",
+        "datetime"
       )])
-      sample_meta <- sample_meta[order(
-        sample_meta$sample_date,
-        sample_meta$location,
-        sample_meta$datetime,
-        sample_meta$sample_id
-      ), , drop = FALSE]
+      sample_meta <- sample_meta[
+        order(
+          sample_meta$sample_date,
+          sample_meta$location,
+          sample_meta$datetime,
+          sample_meta$sample_id
+        ),
+        ,
+        drop = FALSE
+      ]
       if (!nrow(sample_meta)) {
         date_headers <- "No eligible samples"
       } else {
         date_headers <- if (sample_range_mode) {
           paste0(
             format(sample_meta$sample_date, "%Y-%m-%d"),
-            " - Sample ", sample_meta$sample_id,
+            " - Sample ",
+            sample_meta$sample_id,
             if (report_format == "by_location") {
               ""
             } else {
               paste0(" - ", sample_meta$location)
             },
             ifelse(
-              is.na(sample_meta$sub_location_label) | !nzchar(sample_meta$sub_location_label),
-              "", paste0(" - ", sample_meta$sub_location_label)
+              is.na(sample_meta$sub_location_label) |
+                !nzchar(sample_meta$sub_location_label),
+              "",
+              paste0(" - ", sample_meta$sub_location_label)
             ),
-            " (", format(sample_meta$datetime, "%H:%M", tz = "UTC"), " UTC)"
+            " (",
+            format(sample_meta$datetime, "%H:%M", tz = "UTC"),
+            " UTC)"
           )
         } else {
           paste0(
             sample_meta$location,
             ifelse(
-              is.na(sample_meta$sub_location_label) | !nzchar(sample_meta$sub_location_label),
-              "", paste0(" - ", sample_meta$sub_location_label)
+              is.na(sample_meta$sub_location_label) |
+                !nzchar(sample_meta$sub_location_label),
+              "",
+              paste0(" - ", sample_meta$sub_location_label)
             ),
-            " (", format(sample_meta$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"), " UTC)"
+            " (",
+            format(sample_meta$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+            " UTC)"
           )
         }
         date_headers <- make.unique(date_headers, sep = " #")
@@ -1175,6 +1693,7 @@ AquaCacheReport <- function(
         `Sample fraction` = row_groups$sample_fraction,
         `Analytical identity` = row_groups$analytical_identity,
         `Result type` = row_groups$result_type,
+        `Result value type` = row_groups$result_value_type,
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
@@ -1191,10 +1710,20 @@ AquaCacheReport <- function(
         values <- rep("No applicable result", nrow(row_groups))
         if (length(guide_limit_map) && nrow(row_groups)) {
           for (j in seq_len(nrow(row_groups))) {
-            limits <- guide_limit_map[[paste(j, meta$guideline_id, sep = "\034")]]
-            if (is.null(limits)) next
-            if (length(limits) == 1L) values[[j]] <- limits
-            if (length(limits) > 1L) values[[j]] <- "Varies by sample; see Guideline details"
+            limits <- guide_limit_map[[paste(
+              j,
+              meta$guideline_id,
+              sep = "\034"
+            )]]
+            if (is.null(limits)) {
+              next
+            }
+            if (length(limits) == 1L) {
+              values[[j]] <- limits
+            }
+            if (length(limits) > 1L) {
+              values[[j]] <- "Varies by sample; see Guideline details"
+            }
           }
         }
         matrix_report[[guideline_column_names[[g]]]] <- values
@@ -1206,6 +1735,7 @@ AquaCacheReport <- function(
       matrix_report$`Sample fraction` <- row_groups$sample_fraction
       matrix_report$`Analytical identity` <- row_groups$analytical_identity
       matrix_report$`Result type` <- row_groups$result_type
+      matrix_report$`Result value type` <- row_groups$result_value_type
     }
     for (header in date_headers) {
       matrix_report[[header]] <- rep("", nrow(row_groups))
@@ -1213,20 +1743,38 @@ AquaCacheReport <- function(
     flagged_row_index <- flagged_column_index <- integer()
     if (nrow(row_results) && nrow(row_groups)) {
       cell_table <- data.table::as.data.table(row_results[c(
-        "result_id", "sample_id", "requested_date", "result_display",
-        "sd_exceedance", "cell_row_key"
+        "result_id",
+        "sample_id",
+        "requested_date",
+        "result_display",
+        "sd_exceedance",
+        "exceedance_note",
+        "cell_row_key"
       )])
-      cell_table[, cell_column_index := if (
-        report_format == "by_date" || sample_range_mode
-      ) {
-        match(sample_id, sample_meta$sample_id)
-      } else match(requested_date, date)]
-      cell_table[, cell_flagged := (!is.na(sd_exceedance) & sd_exceedance) |
-        result_id %in% failed_result_ids]
-      cell_values <- cell_table[, .(
-        display_value = paste(unique(result_display), collapse = "; "),
-        flagged = any(cell_flagged)
-      ), by = .(cell_row_key, cell_column_index)]
+      cell_table[,
+        cell_column_index := if (
+          report_format == "by_date" || sample_range_mode
+        ) {
+          match(sample_id, sample_meta$sample_id)
+        } else {
+          match(requested_date, date)
+        }
+      ]
+      cell_table[,
+        cell_flagged := (!is.na(sd_exceedance) & sd_exceedance) |
+          result_id %in% failed_result_ids
+      ]
+      cell_values <- cell_table[,
+        .(
+          display_value = paste(unique(result_display), collapse = "; "),
+          flagged = any(cell_flagged),
+          exceedance_note = paste(
+            unique(exceedance_note[nzchar(exceedance_note)]),
+            collapse = "\n"
+          )
+        ),
+        by = .(cell_row_key, cell_column_index)
+      ]
       cell_values[, row_index := match(cell_row_key, row_groups$cell_row_key)]
       cell_values <- cell_values[
         !is.na(row_index) & !is.na(cell_column_index)
@@ -1241,20 +1789,28 @@ AquaCacheReport <- function(
       flagged_cells <- cell_values[cell_values$flagged == TRUE]
       flagged_row_index <- flagged_cells$row_index
       flagged_column_index <- flagged_cells$cell_column_index
+      flagged_notes <- flagged_cells$exceedance_note
     }
     if (!nrow(matrix_report)) {
-      empty_row <- stats::setNames(rep(list(NA), ncol(matrix_report)), names(matrix_report))
+      empty_row <- stats::setNames(
+        rep(list(NA), ncol(matrix_report)),
+        names(matrix_report)
+      )
       empty_row[[1]] <- "No eligible results"
-      matrix_report <- as.data.frame(empty_row, check.names = FALSE, stringsAsFactors = FALSE)
+      matrix_report <- as.data.frame(
+        empty_row,
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
     }
 
     report_last_col <- ncol(matrix_report)
     guide_count <- length(guideline_column_names)
     if (report_format == "by_parameter") {
-      location_end <- 7L
-      guideline_start <- 8L
-      guideline_end <- 7L + guide_count
-      date_start <- 8L + guide_count
+      location_end <- match("Result value type", names(matrix_report))
+      guideline_start <- location_end + 1L
+      guideline_end <- location_end + guide_count
+      date_start <- guideline_end + 1L
       date_end <- date_start + length(date_headers) - 1L
       context_start <- 1L
       context_end <- location_end
@@ -1262,8 +1818,8 @@ AquaCacheReport <- function(
       guideline_start <- 2L
       guideline_end <- 1L + guide_count
       context_start <- 2L + guide_count
-      context_end <- 6L + guide_count
-      date_start <- 7L + guide_count
+      context_end <- match("Result value type", names(matrix_report))
+      date_start <- context_end + 1L
       date_end <- date_start + length(date_headers) - 1L
     }
     openxlsx::addWorksheet(wb, sheet_name, gridLines = FALSE)
@@ -1282,27 +1838,45 @@ AquaCacheReport <- function(
           param_name <- french_name
         }
       }
-      paste0("WQ report for AquaCache parameter ", param_name)
+      paste0("WQ report for parameter ", param_name)
     } else if (report_format == "by_location") {
-      location <- requested_locations$location_code[
+      location_label <- requested_locations$report_label[
         match(tab$id, requested_locations$location_id)
       ]
-      if (is.na(location)) location <- paste0("Location ", tab$id)
-      paste0("WQ report for AquaCache location ", location)
+      if (is.na(location_label)) {
+        location_label <- paste0("Location ", tab$id)
+      }
+      paste0("WQ report for location ", location_label)
     } else {
-      paste0("WQ report for AquaCache locations  ", paste(unique(results$location), collapse = ", "))
+      location_ids_in_sheet <- unique(sheet_results$location_id)
+      location_labels <- requested_locations$report_label[
+        match(location_ids_in_sheet, requested_locations$location_id)
+      ]
+      location_labels <- location_labels[
+        !is.na(location_labels) & nzchar(location_labels)
+      ]
+      paste0(
+        "WQ report for locations ",
+        paste(location_labels, collapse = ", ")
+      )
     }
     if (sample_range_mode) {
       date_note <- if (report_format == "by_date") {
         paste0(
-          "Sample date: ", format(tab$id, "%Y-%m-%d"),
-          ". Samples are restricted to ", format(date[[1]], "%Y-%m-%d"),
-          " through ", format(date[[2]], "%Y-%m-%d"), "."
+          "Sample date: ",
+          format(tab$id, "%Y-%m-%d"),
+          ". Samples are restricted to ",
+          format(date[[1]], "%Y-%m-%d"),
+          " through ",
+          format(date[[2]], "%Y-%m-%d"),
+          "."
         )
       } else {
         paste0(
-          "Sample collection range: ", format(date[[1]], "%Y-%m-%d"),
-          " through ", format(date[[2]], "%Y-%m-%d"),
+          "Sample collection range: ",
+          format(date[[1]], "%Y-%m-%d"),
+          " through ",
+          format(date[[2]], "%Y-%m-%d"),
           ". Each result column represents one sample."
         )
       }
@@ -1311,38 +1885,92 @@ AquaCacheReport <- function(
       target_tolerance <- date_approx[match(target_date, date)]
       date_note <- paste0("Target date: ", format(target_date, "%Y-%m-%d"))
       if (target_tolerance > 0L) {
-        date_note <- paste0(date_note, ". Closest eligible samples may be within ", target_tolerance, " day(s).")
+        date_note <- paste0(
+          date_note,
+          ". Closest eligible samples may be within ",
+          target_tolerance,
+          " day(s)."
+        )
       }
     } else {
       date_note <- paste0(
-        "Target dates: ", format(min(date), "%Y-%m-%d"), " to ",
-        format(max(date), "%Y-%m-%d"), " (", length(date), " selected)."
+        "Target dates: ",
+        format(min(date), "%Y-%m-%d"),
+        " to ",
+        format(max(date), "%Y-%m-%d"),
+        " (",
+        length(date),
+        " selected)."
       )
       if (length(unique(date_approx)) == 1L && date_approx[[1]] > 0L) {
-        date_note <- paste0(date_note, " Closest eligible samples may be within ", date_approx[[1]], " day(s).")
+        date_note <- paste0(
+          date_note,
+          " Closest eligible samples may be within ",
+          date_approx[[1]],
+          " day(s)."
+        )
       } else if (length(unique(date_approx)) > 1L) {
-        date_note <- paste0(date_note, " The tolerance varies by target date; see Result details.")
+        date_note <- paste0(
+          date_note,
+          " The tolerance varies by target date; see Result details."
+        )
       }
     }
-    openxlsx::writeData(wb, sheet_name, report_title, startRow = 1, colNames = FALSE)
     openxlsx::writeData(
-      wb, sheet_name, paste0("Issued at ", generated),
-      startCol = report_last_col, startRow = 1, colNames = FALSE
-    )
-    openxlsx::writeData(wb, sheet_name, date_note, startRow = 2, colNames = FALSE)
-    openxlsx::writeData(
-      wb, sheet_name,
-      paste0("Created with R package YGwater ", utils::packageVersion("YGwater")),
-      startCol = report_last_col, startRow = 2, colNames = FALSE
+      wb,
+      sheet_name,
+      report_title,
+      startRow = 1,
+      colNames = FALSE
     )
     openxlsx::writeData(
-      wb, sheet_name, paste(flag_note, format_note, sep = " "),
-      startRow = 3, colNames = FALSE
+      wb,
+      sheet_name,
+      paste0("Issued at ", generated),
+      startCol = report_last_col,
+      startRow = 1,
+      colNames = FALSE
+    )
+    openxlsx::writeData(
+      wb,
+      sheet_name,
+      date_note,
+      startRow = 2,
+      colNames = FALSE
+    )
+    openxlsx::writeData(
+      wb,
+      sheet_name,
+      paste0(
+        "Created with R package YGwater ",
+        utils::packageVersion("YGwater")
+      ),
+      startCol = report_last_col,
+      startRow = 2,
+      colNames = FALSE
+    )
+    openxlsx::writeData(
+      wb,
+      sheet_name,
+      paste(flag_note, format_note, sep = " "),
+      startRow = 3,
+      colNames = FALSE
     )
     if (guide_count) {
-      openxlsx::writeData(wb, sheet_name, "Guidelines", startCol = guideline_start, startRow = 4, colNames = FALSE)
+      openxlsx::writeData(
+        wb,
+        sheet_name,
+        "Guidelines",
+        startCol = guideline_start,
+        startRow = 4,
+        colNames = FALSE
+      )
     }
-    context_title <- if (report_format == "by_parameter") "Location and result details" else "Parameter details"
+    context_title <- if (report_format == "by_parameter") {
+      "Location and result details"
+    } else {
+      "Parameter details"
+    }
     date_title <- if (sample_range_mode) {
       "Samples (sample ID, date-time UTC)"
     } else if (report_format == "by_date") {
@@ -1351,131 +1979,283 @@ AquaCacheReport <- function(
       "Target dates"
     }
     openxlsx::writeData(
-      wb, sheet_name, context_title,
-      startCol = context_start, startRow = 4, colNames = FALSE
+      wb,
+      sheet_name,
+      context_title,
+      startCol = context_start,
+      startRow = 4,
+      colNames = FALSE
     )
     openxlsx::writeData(
-      wb, sheet_name, date_title,
-      startCol = date_start, startRow = 4, colNames = FALSE
+      wb,
+      sheet_name,
+      date_title,
+      startCol = date_start,
+      startRow = 4,
+      colNames = FALSE
     )
     openxlsx::writeData(
-      wb, sheet_name, matrix_report,
-      startRow = 5, withFilter = TRUE, keepNA = FALSE
+      wb,
+      sheet_name,
+      matrix_report,
+      startRow = 5,
+      withFilter = TRUE,
+      keepNA = FALSE
     )
     for (row in 1:3) {
       if (row < 3L) {
         openxlsx::mergeCells(wb, sheet_name, cols = 1:context_end, rows = row)
       } else {
-        openxlsx::mergeCells(wb, sheet_name, cols = seq_len(report_last_col), rows = row)
+        openxlsx::mergeCells(
+          wb,
+          sheet_name,
+          cols = seq_len(report_last_col),
+          rows = row
+        )
       }
     }
     if (guide_count > 1L) {
-      openxlsx::mergeCells(wb, sheet_name, cols = guideline_start:guideline_end, rows = 4)
+      openxlsx::mergeCells(
+        wb,
+        sheet_name,
+        cols = guideline_start:guideline_end,
+        rows = 4
+      )
     }
     if (context_end > context_start) {
-      openxlsx::mergeCells(wb, sheet_name, cols = context_start:context_end, rows = 4)
+      openxlsx::mergeCells(
+        wb,
+        sheet_name,
+        cols = context_start:context_end,
+        rows = 4
+      )
     }
     if (date_end > date_start) {
       openxlsx::mergeCells(wb, sheet_name, cols = date_start:date_end, rows = 4)
     }
-    openxlsx::addStyle(wb, sheet_name, title_style, rows = 1:2, cols = seq_len(report_last_col), gridExpand = TRUE)
-    openxlsx::addStyle(wb, sheet_name, note_style, rows = 3, cols = seq_len(report_last_col), gridExpand = TRUE)
+    openxlsx::addStyle(
+      wb,
+      sheet_name,
+      title_style,
+      rows = 1:2,
+      cols = seq_len(report_last_col),
+      gridExpand = TRUE
+    )
+    openxlsx::addStyle(
+      wb,
+      sheet_name,
+      note_style,
+      rows = 3,
+      cols = seq_len(report_last_col),
+      gridExpand = TRUE
+    )
     data_rows <- 6:(5L + nrow(matrix_report))
-    openxlsx::addStyle(wb, sheet_name, parameter_style, rows = 4:5, cols = 1, gridExpand = TRUE)
-    openxlsx::addStyle(wb, sheet_name, parameter_style, rows = data_rows, cols = 1)
+    openxlsx::addStyle(
+      wb,
+      sheet_name,
+      parameter_style,
+      rows = 4:5,
+      cols = 1,
+      gridExpand = TRUE
+    )
+    openxlsx::addStyle(
+      wb,
+      sheet_name,
+      parameter_style,
+      rows = data_rows,
+      cols = 1
+    )
     if (guide_count) {
       openxlsx::addStyle(
-        wb, sheet_name, group_style, rows = 4:5,
-        cols = guideline_start:guideline_end, gridExpand = TRUE
+        wb,
+        sheet_name,
+        group_style,
+        rows = 4:5,
+        cols = guideline_start:guideline_end,
+        gridExpand = TRUE
       )
       openxlsx::addStyle(
-        wb, sheet_name, limit_style, rows = data_rows,
-        cols = guideline_start:guideline_end, gridExpand = TRUE
+        wb,
+        sheet_name,
+        limit_style,
+        rows = data_rows,
+        cols = guideline_start:guideline_end,
+        gridExpand = TRUE
       )
     }
     openxlsx::addStyle(
-      wb, sheet_name, group_style, rows = 4:5,
-      cols = context_start:context_end, gridExpand = TRUE
+      wb,
+      sheet_name,
+      group_style,
+      rows = 4:5,
+      cols = context_start:context_end,
+      gridExpand = TRUE
     )
     openxlsx::addStyle(
-      wb, sheet_name, limit_style, rows = data_rows,
-      cols = context_start:context_end, gridExpand = TRUE
+      wb,
+      sheet_name,
+      limit_style,
+      rows = data_rows,
+      cols = context_start:context_end,
+      gridExpand = TRUE
     )
     openxlsx::addStyle(
-      wb, sheet_name, sample_style, rows = 4:5,
-      cols = date_start:date_end, gridExpand = TRUE
+      wb,
+      sheet_name,
+      sample_style,
+      rows = 4:5,
+      cols = date_start:date_end,
+      gridExpand = TRUE
     )
     openxlsx::addStyle(
-      wb, sheet_name, sample_data_style, rows = data_rows,
-      cols = date_start:date_end, gridExpand = TRUE
+      wb,
+      sheet_name,
+      sample_data_style,
+      rows = data_rows,
+      cols = date_start:date_end,
+      gridExpand = TRUE
     )
     if (report_format == "by_parameter") {
       openxlsx::setColWidths(wb, sheet_name, cols = 1, widths = 16)
       openxlsx::setColWidths(wb, sheet_name, cols = 2, widths = 26)
-      openxlsx::setColWidths(wb, sheet_name, cols = 3:7, widths = 16)
+      openxlsx::setColWidths(wb, sheet_name, cols = 3:context_end, widths = 16)
     } else {
       openxlsx::setColWidths(wb, sheet_name, cols = 1, widths = 28)
-      openxlsx::setColWidths(wb, sheet_name, cols = context_start:context_end, widths = 15)
+      openxlsx::setColWidths(
+        wb,
+        sheet_name,
+        cols = context_start:context_end,
+        widths = 15
+      )
     }
     if (guide_count) {
-      openxlsx::setColWidths(wb, sheet_name, cols = guideline_start:guideline_end, widths = 24)
+      openxlsx::setColWidths(
+        wb,
+        sheet_name,
+        cols = guideline_start:guideline_end,
+        widths = 24
+      )
     }
     openxlsx::setColWidths(
-      wb, sheet_name, cols = date_start:date_end,
-      widths = if (report_format == "by_date") 23 else if (sample_range_mode) 24 else 16
+      wb,
+      sheet_name,
+      cols = date_start:date_end,
+      widths = if (report_format == "by_date") {
+        23
+      } else if (sample_range_mode) {
+        24
+      } else {
+        16
+      }
     )
     openxlsx::setRowHeights(wb, sheet_name, rows = 1, heights = 24)
     openxlsx::setRowHeights(wb, sheet_name, rows = 3, heights = 34)
     openxlsx::setRowHeights(wb, sheet_name, rows = 4:5, heights = 32)
-    openxlsx::freezePane(wb, sheet_name, firstActiveRow = 6, firstActiveCol = date_start)
+    openxlsx::freezePane(
+      wb,
+      sheet_name,
+      firstActiveRow = 6,
+      firstActiveCol = date_start
+    )
 
     exceed_rows <- 5L + flagged_row_index
     exceed_cols <- date_start + flagged_column_index - 1L
     if (length(exceed_rows)) {
       openxlsx::addStyle(
-        wb, sheet_name, exceed_style,
-        rows = exceed_rows, cols = exceed_cols,
-        gridExpand = FALSE, stack = TRUE
+        wb,
+        sheet_name,
+        exceed_style,
+        rows = exceed_rows,
+        cols = exceed_cols,
+        gridExpand = FALSE,
+        stack = TRUE
       )
+      for (i in seq_along(exceed_rows)) {
+        note <- flagged_notes[[i]]
+        if (!nzchar(note)) {
+          next
+        }
+        note_lines <- length(strsplit(note, "\n", fixed = TRUE)[[1]])
+        openxlsx::writeComment(
+          wb,
+          sheet_name,
+          row = exceed_rows[[i]],
+          col = exceed_cols[[i]],
+          comment = openxlsx::createComment(
+            note,
+            visible = FALSE,
+            width = 4.5,
+            height = min(6, max(1.5, note_lines * 0.35))
+          )
+        )
+      }
     }
   }
 
   openxlsx::addWorksheet(wb, "Result details", gridLines = FALSE)
   openxlsx::writeDataTable(
-    wb, "Result details", result_details,
-    tableStyle = "TableStyleMedium2", withFilter = TRUE
+    wb,
+    "Result details",
+    result_details,
+    tableStyle = "TableStyleMedium2",
+    withFilter = TRUE
   )
-  openxlsx::freezePane(wb, "Result details", firstActiveRow = 2, firstActiveCol = 5)
-  openxlsx::setColWidths(wb, "Result details", cols = 1:ncol(result_details), widths = "auto")
+  openxlsx::freezePane(
+    wb,
+    "Result details",
+    firstActiveRow = 2,
+    firstActiveCol = 5
+  )
+  openxlsx::setColWidths(
+    wb,
+    "Result details",
+    cols = 1:ncol(result_details),
+    widths = "auto"
+  )
 
   openxlsx::addWorksheet(wb, "Guideline details", gridLines = FALSE)
   openxlsx::writeData(
-    wb, "Guideline details", "Guideline catalogue and application",
-    startRow = 1, colNames = FALSE
+    wb,
+    "Guideline details",
+    "Guideline catalogue and application",
+    startRow = 1,
+    colNames = FALSE
   )
   openxlsx::writeData(
-    wb, "Guideline details",
+    wb,
+    "Guideline details",
     paste0(
       "Guidelines are evaluated at each sample date. Only active, approved versions are included; unresolved inputs are retained with their status."
     ),
-    startRow = 2, colNames = FALSE
+    startRow = 2,
+    colNames = FALSE
   )
   if (!length(guideline_ids)) {
     openxlsx::writeData(
-      wb, "Guideline details", "No guideline IDs were selected.",
-      startRow = 4, colNames = FALSE
+      wb,
+      "Guideline details",
+      "No guideline IDs were selected.",
+      startRow = 4,
+      colNames = FALSE
     )
   } else if (!nrow(guideline_catalog)) {
     openxlsx::writeData(
-      wb, "Guideline details", "No selected guideline IDs were visible in the catalogue.",
-      startRow = 4, colNames = FALSE
+      wb,
+      "Guideline details",
+      "No selected guideline IDs were visible in the catalogue.",
+      startRow = 4,
+      colNames = FALSE
     )
   } else {
     guideline_catalog$report_result_count <- vapply(
       guideline_catalog$guideline_id,
       function(id) {
-        if (!nrow(guideline_rules)) return(0L)
-        length(unique(guideline_rules$result_id[guideline_rules$guideline_id == id]))
+        if (!nrow(guideline_rules)) {
+          return(0L)
+        }
+        length(unique(guideline_rules$result_id[
+          guideline_rules$guideline_id == id
+        ]))
       },
       integer(1)
     )
@@ -1485,34 +2265,60 @@ AquaCacheReport <- function(
       "No applicable result in this report"
     )
     openxlsx::writeDataTable(
-      wb, "Guideline details", guideline_catalog,
-      startRow = 4, tableStyle = "TableStyleMedium2", withFilter = TRUE
+      wb,
+      "Guideline details",
+      guideline_catalog,
+      startRow = 4,
+      tableStyle = "TableStyleMedium2",
+      withFilter = TRUE
     )
     rules_start <- 6L + nrow(guideline_catalog)
     if (nrow(guideline_rules)) {
       openxlsx::writeData(
-        wb, "Guideline details", "Per-result rule evaluation",
-        startRow = rules_start - 1L, colNames = FALSE
+        wb,
+        "Guideline details",
+        "Per-result rule evaluation",
+        startRow = rules_start - 1L,
+        colNames = FALSE
       )
       openxlsx::writeDataTable(
-        wb, "Guideline details", guideline_rules,
-        startRow = rules_start, tableStyle = "TableStyleMedium4", withFilter = TRUE
+        wb,
+        "Guideline details",
+        guideline_rules,
+        startRow = rules_start,
+        tableStyle = "TableStyleMedium4",
+        withFilter = TRUE
       )
     } else {
       openxlsx::writeData(
-        wb, "Guideline details",
+        wb,
+        "Guideline details",
         "No selected guideline rules matched the included results.",
-        startRow = rules_start, colNames = FALSE
+        startRow = rules_start,
+        colNames = FALSE
       )
     }
   }
   title_detail_style <- openxlsx::createStyle(
-    fgFill = "turquoise2", textDecoration = "bold", fontSize = 12
+    fgFill = "turquoise2",
+    textDecoration = "bold",
+    fontSize = 12
   )
-  openxlsx::addStyle(wb, "Guideline details", title_detail_style, rows = 1, cols = 1)
+  openxlsx::addStyle(
+    wb,
+    "Guideline details",
+    title_detail_style,
+    rows = 1,
+    cols = 1
+  )
   openxlsx::addStyle(wb, "Guideline details", note_style, rows = 2, cols = 1)
   openxlsx::setColWidths(wb, "Guideline details", cols = 1:60, widths = "auto")
-  openxlsx::freezePane(wb, "Guideline details", firstActiveRow = 5, firstActiveCol = 1)
+  openxlsx::freezePane(
+    wb,
+    "Guideline details",
+    firstActiveRow = 5,
+    firstActiveCol = 1
+  )
 
   output_dir <- dirname(output_path)
   if (!dir.exists(output_dir) && !dir.create(output_dir, recursive = TRUE)) {
@@ -1523,44 +2329,77 @@ AquaCacheReport <- function(
   written_map <- NULL
   map_assets_path <- NULL
   if (include_map) {
-    sites <- unique(results[c("location", "location_label", "latitude", "longitude")])
-    sites <- sites[!is.na(sites$latitude) & !is.na(sites$longitude), , drop = FALSE]
+    sites <- unique(results[c(
+      "location",
+      "location_label",
+      "latitude",
+      "longitude"
+    )])
+    sites <- sites[
+      !is.na(sites$latitude) & !is.na(sites$longitude),
+      ,
+      drop = FALSE
+    ]
     if (!nrow(sites)) {
-      warning("No report locations had coordinates; the HTML map was not created.", call. = FALSE)
+      warning(
+        "No report locations had coordinates; the HTML map was not created.",
+        call. = FALSE
+      )
     } else {
       sites$popup <- paste0(
-        "<strong>", htmltools::htmlEscape(as.character(sites$location)), "</strong><br>",
+        "<strong>",
+        htmltools::htmlEscape(as.character(sites$location)),
+        "</strong><br>",
         htmltools::htmlEscape(as.character(sites$location_label))
       )
       map <- leaflet::leaflet(sites) |>
         leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) |>
         leaflet::addCircleMarkers(
-          lng = ~longitude, lat = ~latitude,
-          label = ~location, popup = ~popup,
-          radius = 5, stroke = TRUE, weight = 1, fillOpacity = 0.8
+          lng = ~longitude,
+          lat = ~latitude,
+          label = ~location,
+          popup = ~popup,
+          radius = 5,
+          stroke = TRUE,
+          weight = 1,
+          fillOpacity = 0.8
         )
       longitude_range <- range(sites$longitude)
       latitude_range <- range(sites$latitude)
-      if (nrow(sites) == 1L ||
-          (diff(longitude_range) == 0 && diff(latitude_range) == 0)) {
+      if (
+        nrow(sites) == 1L ||
+          (diff(longitude_range) == 0 && diff(latitude_range) == 0)
+      ) {
         map <- leaflet::setView(
-          map, lng = sites$longitude[[1]], lat = sites$latitude[[1]], zoom = 9
+          map,
+          lng = sites$longitude[[1]],
+          lat = sites$latitude[[1]],
+          zoom = 9
         )
       } else {
         map <- leaflet::fitBounds(
           map,
-          lng1 = longitude_range[[1]], lat1 = latitude_range[[1]],
-          lng2 = longitude_range[[2]], lat2 = latitude_range[[2]]
+          lng1 = longitude_range[[1]],
+          lat1 = latitude_range[[1]],
+          lng2 = longitude_range[[2]],
+          lat2 = latitude_range[[2]]
         )
       }
       map_dir <- dirname(map_path)
       if (!dir.exists(map_dir) && !dir.create(map_dir, recursive = TRUE)) {
-        stop("Could not create the map output directory: ", map_dir, call. = FALSE)
+        stop(
+          "Could not create the map output directory: ",
+          map_dir,
+          call. = FALSE
+        )
       }
-      saved_self_contained <- tryCatch({
-        htmlwidgets::saveWidget(map, map_path, selfcontained = TRUE)
-        TRUE
-      }, error = function(e) FALSE)
+      saved_self_contained <- tryCatch(
+        {
+          htmlwidgets::saveWidget(map, map_path, selfcontained = TRUE)
+          TRUE
+        },
+        error = function(e) FALSE
+      )
       if (!saved_self_contained) {
         warning(
           "Could not embed the map dependencies in one HTML file; saving the map with an adjacent assets directory.",
@@ -1575,8 +2414,14 @@ AquaCacheReport <- function(
 
   invisible(list(
     xlsx_path = normalizePath(output_path, winslash = "/", mustWork = TRUE),
-    map_path = if (is.null(written_map)) NULL else normalizePath(written_map, winslash = "/", mustWork = TRUE),
-    map_assets_path = if (is.null(map_assets_path) || !dir.exists(map_assets_path)) {
+    map_path = if (is.null(written_map)) {
+      NULL
+    } else {
+      normalizePath(written_map, winslash = "/", mustWork = TRUE)
+    },
+    map_assets_path = if (
+      is.null(map_assets_path) || !dir.exists(map_assets_path)
+    ) {
       NULL
     } else {
       normalizePath(map_assets_path, winslash = "/", mustWork = TRUE)

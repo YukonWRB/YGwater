@@ -149,7 +149,7 @@ test_that("statistics-period labels use the translation catalogue", {
       stats_period_last_30_years = "Recent baseline",
       stats_period_1991_2020 = "1991 baseline",
       stats_period_1981_2010 = "1981 baseline",
-      stats_period_entire_record = "Complete baseline"
+      plot_all_record = "Complete baseline"
     )
   )
 
@@ -160,8 +160,11 @@ test_that("statistics-period labels use the translation catalogue", {
       translations = translations
     ),
     c(
-      "Recent baseline", "1991 baseline", "1981 baseline",
-      "Complete baseline", "custom"
+      "Recent baseline",
+      "1991 baseline",
+      "1981 baseline",
+      "Complete baseline",
+      "custom"
     )
   )
 })
@@ -240,7 +243,11 @@ test_that("adaptive multi-timeseries plots batch data and preserve axis units", 
   )
   expect_match(module_text, 'output_alias = "units"', fixed = TRUE)
   expect_match(module_text, 'paste0(" (", meta_row$units, ")")', fixed = TRUE)
-  expect_match(module_text, "meta_row[, units := item$meta$units]", fixed = TRUE)
+  expect_match(
+    module_text,
+    "meta_row[, units := item$meta$units]",
+    fixed = TRUE
+  )
   expect_match(module_text, 'ns("metadata_timeseries_select")', fixed = TRUE)
   expect_match(
     module_text,

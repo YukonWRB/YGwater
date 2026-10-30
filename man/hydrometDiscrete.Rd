@@ -10,7 +10,7 @@ hydrometDiscrete(
   startDay = 1,
   endDay = 365,
   binwidth = "1 month",
-  tzone = "MST",
+  tzone = "Etc/GMT+7",
   years = NULL,
   title = TRUE,
   custom_title = NULL,
@@ -35,7 +35,14 @@ hydrometDiscrete(
 
 \item{binwidth}{The width of the bins in the violin/boxplot in days, specified as an integer of \strong{n} days or as "1 day", "1 week", "1 month", etc. Default is one month.}
 
-\item{tzone}{The timezone to use for fetching data. Datetimes are stored in the database in UTC offset, so this parameter could make a difference to what day a particular sample is considered to be on. In most cases you can ignore this parameter.}
+\item{tzone}{The timezone to use for fetching data. Defaults to fixed UTC-7
+(\code{Etc/GMT+7}). Pass an IANA region name such as "America/Yellowknife" to
+apply local daylight-saving rules. Run \code{OlsonNames()} for names installed
+in R; the IANA \href{https://data.iana.org/time-zones/tzdb/zone1970.tab}{zone1970.tab}
+lists geographic zone names. Prefer these over abbreviations such as
+\code{"MST"}, which may not be recognized on every operating system. This can
+affect which day a sample is assigned to. In most cases, you can ignore
+this parameter.}
 
 \item{years}{The years to plot. If \code{startDay} and \code{endDay} cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.}
 

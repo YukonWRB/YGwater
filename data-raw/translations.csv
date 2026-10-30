@@ -108,7 +108,7 @@ no_ts_medias,notification of automatic reset,"This selection results in 0 corres
 no_ts_agg,notification of automatic reset,"This selection results in 0 corresponding timeseries, aggregation type selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de type d'agrégation a été réinitialisé à sa valeur précédente."
 no_ts_rate,notification of automatic reset,"This selection results in 0 corresponding timeseries, recording rate selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de la fréquence d'enregistrement nominale a été réinitialisé à sa valeur précédente."
 continuous_subset_msg,,Subset of daily mean data (first and last result per timeseries),Sous-ensemble des moyennes journalières (premier et dernier résultat par série temporelle)
-dl_additional_data,,"Tables for grades, approvals, qualifiers, and time-ranged notes will also be included as part of your download.","Des tableaux pour les qualificatifs, les cotes de qualité, les niveaux d’approbation et les remarques temporelles feront également partie de votre téléchargement."
+dl_additional_data,,"Tables for aggregation methods, steps, and inputs, grades, approvals, qualifiers, and time-ranged notes will also be included as part of your download.","Les tableaux des méthodes d’agrégation, de leurs étapes et entrées, des cotes, des approbations, des qualificatifs et des remarques temporelles seront également inclus dans votre téléchargement."
 filter,,Filter,Filtrer
 apply,,Apply,Appliquer
 param_modal,button text for modal,Filter by group/sub-group,Filtrer par groupe/sous-groupe
@@ -121,7 +121,7 @@ tooltip_discrete,tool tips,Measurements or samples taken at variable intervals,M
 tooltip_continuous,tool tips,Measurements recorded at regular intervals automatically,Mesures enregistrées automatiquement à intervalles réguliers
 tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Lieu de la prise de la mesure ou de l’échantillon
 tooltip_utc7,table tool tips,UTC-7,UTC-7
-tooltip_params_map_min_yrs,,"Minimum number of years on record to show the point. Especially useful when showing historic range to avoid points with very little data.","Nombre minimum d'années de données pour afficher le point. Utile surtout lors de l'affichage de la plage historique pour éviter les points avec très peu de données."
+tooltip_params_map_min_yrs,,"Minimum number of years on record for historical comparisons. Absolute values do not require historical coverage.","Nombre minimum d'années de données pour les comparaisons historiques. Les valeurs absolues ne nécessitent pas de couverture historique."
 tooltip_params_map_date_within,,"Maximum number of days from the target date to include a measurement. Use a lower threshold for parameters that change quickly (e.g., temperature).","Nombre maximum de jours à partir de la date ciblée pour inclure une mesure. Utilisez un seuil plus bas pour les paramètres qui changent rapidement (par exemple, la température)."
 filters,,Filters,Filtres
 reset_filters,,Reset filters,Réinitialiser les filtres
@@ -239,7 +239,6 @@ sensor_priority_secondary,,Secondary,Secondaire
 sensor_priority_tertiary,,Tertiary,Tertiaire
 stats_period,,Stats period,Période des statistiques
 stats_period_last_30_years,,Last 30 years,30 dernières années
-stats_period_entire_record,,Entire record,Toute la période
 stats_period_1991_2020,,1991-2020,1991-2020
 stats_period_1981_2010,,1981-2010,1981-2010
 timeseries_already_selected,,Timeseries %s is already selected. Choose a different timeseries.,La série chronologique %s est déjà sélectionnée. Choisissez-en une autre.
@@ -333,7 +332,18 @@ map_two_parameter,,Two parameters,Deux paramètres
 map_latest_measurements,,Latest measurements,Plus récentes mesures
 map_latest_auto_update,,Update every 15 minutes,Actualiser toutes les 15 minutes
 map_auto_update_notification,,Measurements updated,Mesures actualisées
-map_latest_measurements_modal,,"<b>Note</b>: Latest measurements are compared to the <i>average</i> values for the same day in past years. Keep this in mind for parameters that change a lot during the day, like temperature.","<b>Remarque</b> : Les mesures les plus récentes sont comparées aux valeurs <i>moyennes</i> de la même journée dans les années passées. Ceci impacte surtout les paramètres qui varient beaucoup au cours d’une journée, comme la température."
+map_latest_measurements_modal,,"The most frequent eligible series is used at each location. Relative values compare its latest corrected measurement to historical daily means for the same UTC calendar day. The date tolerance includes today and the selected number of preceding UTC days.","La série admissible la plus fréquente est utilisée à chaque site. Les valeurs relatives comparent sa plus récente mesure corrigée aux moyennes quotidiennes historiques du même jour du calendrier UTC. La tolérance inclut aujourd’hui et le nombre choisi de jours UTC précédents."
+map_loading,,Loading measurements… You can change the selections while the map updates.,Chargement des mesures… Vous pouvez modifier les sélections pendant l’actualisation de la carte.
+map_load_error,,Measurements could not be loaded. Change the selection or try again.,Impossible de charger les mesures. Modifiez la sélection ou réessayez.
+map_retry,,Try again,Réessayer
+map_no_measurements,,No measurements match these parameters and date limits.,Aucune mesure ne correspond à ces paramètres et limites de date.
+map_stats_fallback,,30-year statistics are unavailable for this database. Showing the full historical record.,Les statistiques sur 30 ans ne sont pas disponibles pour cette base de données. L’historique complet est affiché.
+map_daily_mean,,(daily mean),(moyenne quotidienne)
+map_latest_within_selected,,and a latest measurement from today or the preceding %s UTC day(s),et une dernière mesure datant d’aujourd’hui ou des %s jours UTC précédents
+map_latest_within_only,,Latest measurement from today or the preceding %s UTC day(s),Dernière mesure datant d’aujourd’hui ou des %s jours UTC précédents
+map_date_within_only,,Data within %s day(s) of the target date,Données à moins de %s jours de la date ciblée
+map_invalid_selection,,Select an available parameter with 3–100 years of record and a date tolerance of 0–365 whole days.,Sélectionnez un paramètre disponible avec 3 à 100 années de données et une tolérance de date de 0 à 365 jours entiers.
+map_invalid_absolute_selection,,Select an available parameter and a date tolerance of 0–365 whole days.,Sélectionnez un paramètre disponible et une tolérance de date de 0 à 365 jours entiers.
 map_primary_param,,Primary parameter,Paramètre primaire
 map_edit_primary_param,,Edit primary parameter,Modifer paramètre primaire
 map_edit_primary_param_solo,,Edit parameter,Modifier le paramètre
@@ -375,8 +385,6 @@ gen_snowBul_cddf_period,,Period of record for CDDF stats,Période à utiliser po
 gen_snowBul_period1,,Last 40 years,40 dernières années
 all_yrs_record,,All years of record,Toutes les années disponibles
 last_yr_only,,Up to last plotted year,Jusqu'à la dernière année tracée
-gen_snowBul_period3,,1981-2010,1981-2010
-gen_snowBul_period4,,1991-2020,1991-2020
 gen_snowBul_scale,,Plot scale,Échelle des graphiques
 gen_snowBul_error_stats,,Error generating snow bulletin stats Excel tables,Échec lors de la création des tableaux de statistiques
 gen_snowBul_error_report,,Error generating snow bulletin Word document,Échec lors de la création du rapport Word
@@ -947,3 +955,15 @@ aggregation_metadata_minimum_coverage,Aggregation minimum coverage,Minimum cover
 aggregation_metadata_missing_data_policy,Aggregation missing data rule,Missing data policy,Règle pour les données manquantes
 aggregation_metadata_calculation_parameters,Aggregation calculation parameters,Calculation parameters,Paramètres de calcul
 aggregation_metadata_inputs,Aggregation operation input links,Inputs,Entrées
+disc_export_headers,Discrete export column headers,Workbook column names,Noms des colonnes du classeur
+disc_export_human,Reader-friendly export headings,Reader-friendly labels,Libellés faciles à lire
+disc_export_machine,Database field names for export,Database field names (for scripts),Noms des champs de base de données (pour les scripts)
+aggregation_quick_start,Aggregation method quick start,Start with a common example,Commencer avec un exemple courant
+aggregation_quick_start_help,Explanation of aggregation examples,"Hourly means summarize readings from the preceding hour and evaluate once per UTC hour. Daily means summarize the preceding UTC day and evaluate once per day. Both examples require the timeseries aggregation type to be Mean. The window sets which readings are combined; the evaluation interval sets when a result is produced.","Les moyennes horaires résument les mesures de l’heure précédente et sont calculées une fois par heure UTC. Les moyennes journalières résument la journée UTC précédente et sont calculées une fois par jour. Les deux exemples exigent le type d’agrégation Moyenne. La fenêtre détermine quelles mesures sont combinées; l’intervalle d’évaluation détermine quand un résultat est produit."
+aggregation_hourly_mean,Hourly mean example,Use hourly mean example,Utiliser l’exemple de moyenne horaire
+aggregation_daily_mean,Daily mean example,Use daily mean example,Utiliser l’exemple de moyenne journalière
+aggregation_quick_start_assumptions,Aggregation example assumptions,"Examples give each reading equal weight, ignore missing readings, and set no minimum coverage. Change these assumptions when your source or reporting standard requires it. Nothing is stored until you save the method.","Les exemples accordent le même poids à chaque mesure, ignorent les mesures manquantes et n’imposent aucune couverture minimale. Modifiez ces hypothèses si votre source ou votre norme de déclaration l’exige. Rien n’est enregistré avant de sauvegarder la méthode."
+aggregation_quick_start_new_method,Quick-start requires a new method version,Add a new method version before using an example. This keeps the existing method history intact.,Ajoutez une nouvelle version de méthode avant d’utiliser un exemple. L’historique existant sera ainsi conservé.
+aggregation_quick_start_requires_mean,Quick-start requires a mean timeseries,These examples produce a Mean value. Choose Mean as the timeseries aggregation type to use them.,Ces exemples produisent une moyenne. Choisissez Moyenne comme type d’agrégation de la série temporelle pour les utiliser.
+aggregation_quick_start_staged,Quick-start staged notification,Example staged. Review the weighting and missing-reading assumptions before saving.,Exemple préparé. Vérifiez la pondération et le traitement des mesures manquantes avant l’enregistrement.
+aggregation_quick_start_has_steps,Quick-start preserves existing steps,"This new method already has staged steps. Remove them first to load an example; your current work was kept.","Cette nouvelle méthode contient déjà des étapes préparées. Supprimez-les avant de charger un exemple; votre travail actuel a été conservé."

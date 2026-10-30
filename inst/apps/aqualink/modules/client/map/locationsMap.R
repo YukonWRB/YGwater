@@ -133,6 +133,22 @@ mapLocs <- function(id, language, outputs = NULL) {
       cached <- map_location_module_data(con = session$userData$AquaCache)
     }
 
+    localized_filter_choices <- function(data, id_column, label_key) {
+      values <- as.character(data[[id_column]])
+      labels <- as.character(data[[tr(label_key, language$language)]])
+      fallback <- as.character(data[[tr(label_key, "English")]])
+
+      missing_labels <- is.na(labels) | !nzchar(trimws(labels))
+      labels[missing_labels] <- fallback[missing_labels]
+      missing_labels <- is.na(labels) | !nzchar(trimws(labels))
+      labels[missing_labels] <- values[missing_labels]
+
+      stats::setNames(
+        c("all", values),
+        c(tr("all_m", language$language), labels)
+      )
+    }
+
     moduleData <- reactiveValues(
       locations = cached$locations,
       timeseries = cached$timeseries,
@@ -196,13 +212,7 @@ mapLocs <- function(id, language, outputs = NULL) {
     parameter_choices <- reactive({
       params <- filtered_parameters()
 
-      stats::setNames(
-        c("all", params$parameter_id),
-        c(
-          tr("all_m", language$language),
-          params[[tr("param_name_col", language$language)]]
-        )
-      )
+      localized_filter_choices(params, "parameter_id", "param_name_col")
     })
 
     observe({
@@ -282,15 +292,10 @@ mapLocs <- function(id, language, outputs = NULL) {
             ),
             tr("tooltip_sample_media", language$language),
           ),
-          choices = stats::setNames(
-            c("all", moduleData$media_types$media_id),
-            c(
-              tr("all_m", language$language),
-              moduleData$media_types[[tr(
-                "media_type_col",
-                language$language
-              )]]
-            )
+          choices = localized_filter_choices(
+            moduleData$media_types,
+            "media_id",
+            "media_type_col"
           ),
           selected = "all",
           multiple = TRUE
@@ -298,15 +303,10 @@ mapLocs <- function(id, language, outputs = NULL) {
         selectizeInput(
           ns("param_group"),
           label = tr("param_group", language$language),
-          choices = stats::setNames(
-            c("all", moduleData$parameter_groups$group_id),
-            c(
-              tr("all_m", language$language),
-              moduleData$parameter_groups[[tr(
-                "param_group_col",
-                language$language
-              )]]
-            )
+          choices = localized_filter_choices(
+            moduleData$parameter_groups,
+            "group_id",
+            "param_group_col"
           ),
           selected = "all",
           multiple = TRUE
@@ -321,15 +321,10 @@ mapLocs <- function(id, language, outputs = NULL) {
         selectizeInput(
           ns("project"),
           label = tr("project", language$language),
-          choices = stats::setNames(
-            c("all", moduleData$projects$project_id),
-            c(
-              tr("all_m", language$language),
-              moduleData$projects[[tr(
-                "generic_name_col",
-                language$language
-              )]]
-            )
+          choices = localized_filter_choices(
+            moduleData$projects,
+            "project_id",
+            "generic_name_col"
           ),
           selected = "all",
           multiple = TRUE
@@ -337,15 +332,10 @@ mapLocs <- function(id, language, outputs = NULL) {
         selectizeInput(
           ns("network"),
           label = tr("network", language$language),
-          choices = stats::setNames(
-            c("all", moduleData$networks$network_id),
-            c(
-              tr("all_m", language$language),
-              moduleData$networks[[tr(
-                "generic_name_col",
-                language$language
-              )]]
-            )
+          choices = localized_filter_choices(
+            moduleData$networks,
+            "network_id",
+            "generic_name_col"
           ),
           selected = "all",
           multiple = TRUE
@@ -426,63 +416,50 @@ mapLocs <- function(id, language, outputs = NULL) {
       updateSelectizeInput(
         session,
         "media_type",
-        choices = stats::setNames(
-          c("all", moduleData$media_types$media_id),
-          c(
-            tr("all_m", language$language),
-            moduleData$media_types[[tr("media_type_col", language$language)]]
-          )
+        choices = localized_filter_choices(
+          moduleData$media_types,
+          "media_id",
+          "media_type_col"
         ),
         selected = "all"
       )
       updateSelectizeInput(
         session,
         "param_group",
-        choices = stats::setNames(
-          c("all", moduleData$parameter_groups$group_id),
-          c(
-            tr("all_m", language$language),
-            moduleData$parameter_groups[[tr(
-              "param_group_col",
-              language$language
-            )]]
-          )
+        choices = localized_filter_choices(
+          moduleData$parameter_groups,
+          "group_id",
+          "param_group_col"
         ),
         selected = "all"
       )
       updateSelectizeInput(
         session,
         "param",
-        choices = stats::setNames(
-          c("all", moduleData$parameters$parameter_id),
-          c(
-            tr("all_m", language$language),
-            moduleData$parameters[[tr("param_name_col", language$language)]]
-          )
+        choices = localized_filter_choices(
+          moduleData$parameters,
+          "parameter_id",
+          "param_name_col"
         ),
         selected = "all"
       )
       updateSelectizeInput(
         session,
         "project",
-        choices = stats::setNames(
-          c("all", moduleData$projects$project_id),
-          c(
-            tr("all_m", language$language),
-            moduleData$projects[[tr("generic_name_col", language$language)]]
-          )
+        choices = localized_filter_choices(
+          moduleData$projects,
+          "project_id",
+          "generic_name_col"
         ),
         selected = "all"
       )
       updateSelectizeInput(
         session,
         "network",
-        choices = stats::setNames(
-          c("all", moduleData$networks$network_id),
-          c(
-            tr("all_m", language$language),
-            moduleData$networks[[tr("generic_name_col", language$language)]]
-          )
+        choices = localized_filter_choices(
+          moduleData$networks,
+          "network_id",
+          "generic_name_col"
         ),
         selected = "all"
       )

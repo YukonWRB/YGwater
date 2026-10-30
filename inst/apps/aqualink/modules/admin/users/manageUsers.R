@@ -34,7 +34,11 @@ manageUsersUI <- function(id) {
         condition = "input.group_user == 'groups'",
         ns = ns,
         h4("Create group"),
-        textInput(ns("group_name"), "Group name"),
+        textInput(
+          ns("group_name"),
+          "Group name",
+          placeholder = "e.g. new_group"
+        ),
         uiOutput(ns("group_options_ui")),
         actionButton(ns("create_group"), "Create group"),
       ),

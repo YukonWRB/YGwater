@@ -20,9 +20,18 @@ addImgsUI <- function(id) {
           ns("files"),
           label = NULL,
           multiple = TRUE,
-          accept = c("image/jpeg", "image/png", "image/tiff")
+          accept = c(
+            "image/jpeg",
+            "image/png",
+            "image/tiff",
+            if (YGwater:::heif_jpeg_conversion_available()) {
+              c(".heic", ".heif")
+            }
+          )
         ) |>
-          tooltip("Select image files (ctrl+A to select all)"),
+          tooltip(
+            "Select images (HEIC/HEIF files are converted to JPEG when supported)."
+          ),
       ),
       column(
         width = 6,
@@ -325,8 +334,62 @@ addImgs <- function(id, language) {
       # Standardize the data frame for AquaCache
       standardized_df <- standardizeDataFrame(df)
 
+      selected_heif_rows <- which(
+        standardized_df$SourceFile %in% converted_heif_paths
+      )
+      upload_dir <- NULL
+      if (length(selected_heif_rows)) {
+        upload_dir <- tempfile(pattern = "ygwater-addimgs-upload-")
+        if (!dir.create(upload_dir)) {
+          showModal(modalDialog(
+            title = "Upload staging failed",
+            "Could not stage converted HEIC/HEIF images for upload.",
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          return()
+        }
+        staged_paths <- file.path(
+          upload_dir,
+          sprintf("image_%03d.jpg", seq_along(selected_heif_rows))
+        )
+        copied <- file.copy(
+          standardized_df$SourceFile[selected_heif_rows],
+          staged_paths,
+          overwrite = FALSE
+        )
+        if (!all(copied)) {
+          unlink(upload_dir, recursive = TRUE, force = TRUE)
+          showModal(modalDialog(
+            title = "Upload staging failed",
+            "Could not stage converted HEIC/HEIF images for upload.",
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          return()
+        }
+        standardized_df$SourceFile[selected_heif_rows] <- staged_paths
+      }
+
       # Perform the upload task
-      uploadAquacache$invoke(standardized_df, session$userData$config)
+      tryCatch(
+        uploadAquacache$invoke(
+          standardized_df,
+          session$userData$config,
+          upload_dir
+        ),
+        error = function(e) {
+          if (!is.null(upload_dir)) {
+            unlink(upload_dir, recursive = TRUE, force = TRUE)
+          }
+          showModal(modalDialog(
+            title = "Upload could not be started",
+            conditionMessage(e),
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+        }
+      )
     }
 
     # verify that the dataframe is valid for upload to AquaCache
@@ -580,6 +643,10 @@ addImgs <- function(id, language) {
 
     # Initiaze dataframe to store exif data and updated attributes
     dat <- reactiveValues(df = data.frame())
+    converted_heif_paths <- character()
+    session$onSessionEnded(function() {
+      unlink(converted_heif_paths, force = TRUE)
+    })
 
     # Define a named list of colors
     color_list <- list(
@@ -620,12 +687,126 @@ addImgs <- function(id, language) {
     # Observe file input and update the data table
     observeEvent(input$files, ignoreNULL = TRUE, ignoreInit = TRUE, {
       files <- input$files
+      file_extensions <- tolower(tools::file_ext(files$name))
+      heif_files <- file_extensions %in% c("heic", "heif")
 
-      dat$df <- exifr::read_exif(files$datapath)
-      dat$df$FileName <- files$name
+      if (length(converted_heif_paths)) {
+        unlink(converted_heif_paths, force = TRUE)
+      }
+      converted_heif_paths <<- character()
+
+      if (
+        any(heif_files) &&
+          !YGwater:::heif_jpeg_conversion_available()
+      ) {
+        dat$df <- data.frame()
+        showModal(modalDialog(
+          title = "HEIC/HEIF conversion unavailable",
+          "This server cannot convert HEIC/HEIF images to JPEG. Upload JPEG, PNG, or TIFF images instead.",
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        return()
+      }
+
+      exif_data <- tryCatch(
+        exifr::read_exif(files$datapath),
+        error = function(e) {
+          if (!any(heif_files)) {
+            showModal(modalDialog(
+              title = "Image metadata could not be read",
+              conditionMessage(e),
+              easyClose = TRUE,
+              footer = modalButton("Close")
+            ))
+            return(NULL)
+          }
+
+          other_indices <- which(!heif_files)
+          other_exif <- if (length(other_indices)) {
+            tryCatch(
+              exifr::read_exif(files$datapath[other_indices]),
+              error = function(e) NULL
+            )
+          } else {
+            NULL
+          }
+          if (
+            is.null(other_exif) ||
+              nrow(other_exif) != length(other_indices)
+          ) {
+            showNotification(
+              "HEIC/HEIF images will be converted to JPEG, but EXIF metadata could not be read. Enter missing location and date/time values manually.",
+              type = "warning",
+              duration = 10
+            )
+            return(data.frame(SourceFile = files$datapath))
+          }
+
+          rows <- vector("list", nrow(files))
+          for (ii in seq_along(other_indices)) {
+            rows[[other_indices[[ii]]]] <- other_exif[ii, , drop = FALSE]
+          }
+          for (ii in which(heif_files)) {
+            rows[[ii]] <- data.frame(SourceFile = files$datapath[[ii]])
+          }
+          showNotification(
+            "HEIC/HEIF images will be converted to JPEG. Their EXIF metadata could not be read; enter missing location and date/time values manually.",
+            type = "warning",
+            duration = 10
+          )
+          data.table::rbindlist(rows, fill = TRUE)
+        }
+      )
+      if (is.null(exif_data)) {
+        dat$df <- data.frame()
+        return()
+      }
+      exif_data$FileName <- files$name
 
       # Grab only necessary attributes and add placeholders for new ones
-      dat$df <- preprocess_exif(dat$df)
+      dat$df <- preprocess_exif(exif_data)
+
+      created_paths <- character()
+      for (ii in which(heif_files)) {
+        jpeg_path <- tempfile(
+          pattern = "ygwater-addimgs-heif-",
+          fileext = ".jpg"
+        )
+        created_paths <- c(created_paths, jpeg_path)
+        conversion <- tryCatch(
+          {
+            converted_path <- YGwater:::convert_heif_to_jpeg(
+              files$datapath[[ii]],
+              output_path = jpeg_path,
+              extension = file_extensions[[ii]]
+            )
+            image_info <- magick::image_info(
+              magick::image_read(converted_path)
+            )
+            if (nrow(image_info) != 1L) {
+              stop("The converted image dimensions could not be read.")
+            }
+            dat$df$SourceFile[[ii]] <- converted_path
+            dat$df$ImageWidth[[ii]] <- image_info$width[[1]]
+            dat$df$ImageHeight[[ii]] <- image_info$height[[1]]
+            NULL
+          },
+          error = function(e) e
+        )
+        if (inherits(conversion, "error")) {
+          unlink(created_paths, force = TRUE)
+          dat$df <- data.frame()
+          showModal(modalDialog(
+            title = "HEIC/HEIF conversion failed",
+            conditionMessage(conversion),
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          return()
+        }
+      }
+      converted_heif_paths <<- created_paths
 
       # Check for null latitude or longitude values; issue a warning if any are found.
       dat$df$Latitude[dat$df$Latitude == 0] <- NA
@@ -986,8 +1167,14 @@ addImgs <- function(id, language) {
 
     # Define the upload ExtendedTask
     uploadAquacache <- ExtendedTask$new(
-      function(df, config) {
+      function(df, config, upload_dir) {
         promises::future_promise({
+          if (!is.null(upload_dir)) {
+            on.exit(
+              unlink(upload_dir, recursive = TRUE, force = TRUE),
+              add = TRUE
+            )
+          }
           con <- AquaConnect(
             name = config$dbName,
             host = config$dbHost,

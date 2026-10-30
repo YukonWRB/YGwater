@@ -1673,7 +1673,9 @@ ORDER BY ag.result_id, ag.guideline_id;"
       )
     }
 
-    unit_sql <- ac_parameter_unit_select_sql(AC, "p", "units")
+    unit_sql <- ac_parameter_unit_select_sql(
+      AC, "p", "units", matrix_state_alias = "r"
+    )
     samp_query <- paste0(
       "SELECT
          r.result_id,
@@ -2301,6 +2303,17 @@ ORDER BY ag.result_id, ag.guideline_id;"
         }
       }
 
+      plot_times <- suppressWarnings(as.POSIXct(
+        c(df$datetime, conditions$datetime),
+        tz = "UTC"
+      ))
+      plot_times <- plot_times[!is.na(plot_times)]
+      single_time_range <- NULL
+      if (length(plot_times) && length(unique(plot_times)) == 1L) {
+        day_start <- as.POSIXct(as.Date(plot_times[[1]], tz = "UTC"), tz = "UTC")
+        single_time_range <- c(day_start, day_start + 24 * 60 * 60)
+      }
+
       p <- plotly::plot_ly()
       p <- add_season_highlight_traces(
         p,
@@ -2309,6 +2322,16 @@ ORDER BY ag.result_id, ag.guideline_id;"
         season_highlight_ranges,
         log
       )
+      xaxis_settings <- list(
+        title = NULL,
+        showline = TRUE,
+        showgrid = gridx,
+        tickfont = list(size = axis_scale * 14)
+      )
+      if (!is.null(single_time_range)) {
+        xaxis_settings$range <- single_time_range
+      }
+
       p <- plotly::add_trace(
         p,
         data = df,
@@ -2369,12 +2392,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
             titlefont = list(size = axis_scale * 16),
             tickfont = list(size = axis_scale * 14)
           ),
-          xaxis = list(
-            title = NULL,
-            showline = TRUE,
-            showgrid = gridx,
-            tickfont = list(size = axis_scale * 14)
-          ),
+          xaxis = xaxis_settings,
           legend = list(
             font = list(size = legend_scale * 14),
             orientation = legend_position
@@ -2495,7 +2513,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
             ,
             drop = FALSE
           ]
-          if (nrow(plot_data) <= 1) {
+          if (nrow(plot_data) == 0L) {
             return(p)
           }
 

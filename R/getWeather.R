@@ -9,7 +9,12 @@
 #' @param start The start date for which you want data. Input either a character vector of form "2022-12-30" or a Date formatted object.
 #' @param end The end date for which you want data. Input either a character vector of form "2022-12-30" or a Date formatted object.
 #' @param save_path The path where you wish to save the resultant .csv file. Defaults to NULL, in which case you should assign the function to an R object. Set to "choose" to interactively select the location.
-#' @param tzone Choose from "local" or "UTC". Note that "local" is whatever ECCC thinks the station local TZ is: this might be inaccurate in Yukon, where many (maybe even all) stations report in UTC-8.
+#' @param tzone Choose "local" or "UTC". "Local" uses ECCC's station timezone,
+#'   which may not match Yukon civil time; many Yukon stations report in UTC-8.
+#'   This is a weathercan display mode, not a general R timezone name, so other
+#'   IANA names are not accepted here. Run `OlsonNames()` to see standard names
+#'   accepted by other R functions. The IANA [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab)
+#'   lists geographic zone names.
 #' @param interval Select from 'hour', 'day', or 'month'. However, if requesting a location by name you will need to select your chosen interval  interactively (so don't bother modifying the default).
 #'
 #'@seealso [weathercan::weather_dl()] for a simpler, pared-down means of downloading ECCC weather data. For nice precipitation maps and tabular reports of precipitation (past or future), try [basinPrecip()].

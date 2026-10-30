@@ -1,7 +1,8 @@
 params_map_daily_stats_select_sql <- function(
   con,
   stats_period = "30yr",
-  columns = c("percent_historic_range", "max", "min", "doy_count")
+  columns = c("percent_historic_range", "max", "min", "doy_count"),
+  table_alias = "d"
 ) {
   if (!(stats_period %in% c("30yr", "full"))) {
     stats_period <- "30yr"
@@ -27,16 +28,13 @@ params_map_daily_stats_select_sql <- function(
     columns,
     function(column) {
       source_column <- paste0(column, suffix)
-      source_sql <- as.character(DBI::dbQuoteIdentifier(con, source_column))
-      if (identical(source_column, column)) {
-        source_sql
-      } else {
-        paste0(
-          source_sql,
-          " AS ",
-          as.character(DBI::dbQuoteIdentifier(con, column))
-        )
-      }
+      paste0(
+        table_alias,
+        ".",
+        DBI::dbQuoteIdentifier(con, source_column),
+        " AS ",
+        DBI::dbQuoteIdentifier(con, column)
+      )
     },
     character(1)
   )
@@ -191,7 +189,11 @@ mapParamsUI <- function(id) {
     # All UI elements rendered in server function to allow multi-language functionality
     uiOutput(ns("banner")),
     uiOutput(ns("top")),
-    page_sidebar(
+    # This module is embedded in an existing page. A full page_sidebar() adds
+    # page-level sizing/theme rules and clips Leaflet controls on narrow views.
+    layout_sidebar(
+      border = FALSE,
+      border_radius = FALSE,
       sidebar = sidebar(
         title = NULL,
         bg = config$sidebar_bg,
@@ -226,15 +228,18 @@ mapParams <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    if (session$userData$user_logged_in) {
-      cached <- map_params_module_data(
-        con = session$userData$AquaCache,
-        env = session$userData$app_cache
-      )
-    } else {
-      cached <- map_params_module_data(con = session$userData$AquaCache)
+    load_catalogue <- function() {
+      if (isTRUE(session$userData$user_logged_in)) {
+        map_params_module_data(
+          con = session$userData$AquaCache,
+          env = session$userData$app_cache
+        )
+      } else {
+        map_params_module_data(con = session$userData$AquaCache)
+      }
     }
-
+    cached <- load_catalogue()
+    parameters <- unique(cached$parameters, by = "parameter_id")
     moduleData <- reactiveValues(
       locations = cached$locations,
       timeseries = cached$timeseries,
@@ -258,7 +263,9 @@ mapParams <- function(id, language) {
           error = function(e) character()
         )
         canonical_name <- as.character(canonical_name)
-        canonical_name <- canonical_name[!is.na(canonical_name) & nzchar(canonical_name)]
+        canonical_name <- canonical_name[
+          !is.na(canonical_name) & nzchar(canonical_name)
+        ]
         if (length(canonical_name)) return(canonical_name[[1]])
       }
       values <- parameter_names(parameter_id)
@@ -323,7 +330,7 @@ mapParams <- function(id, language) {
               tr("map_actual_values", language$language)
             )
           ),
-          selected = "range",
+          selected = if (is.null(input$mapType)) "range" else input$mapType,
           multiple = FALSE
         ),
         tags$div(
@@ -523,7 +530,7 @@ mapParams <- function(id, language) {
       bindEvent(map_params$yrs1, map_params$days1)
 
     output$primary_param <- renderUI({
-      req(map_params, language)
+      req(map_params, language, input$mapType)
       tagList(
         h4(
           if (config$public) {
@@ -541,8 +548,10 @@ mapParams <- function(id, language) {
       bindEvent(map_params$param1, map_params$agg1, language$language)
 
     output$secondary_param <- renderUI({
-      req(map_params, language)
-      if (config$public || map_params$params == 1) {
+      req(map_params, language, input$mapType)
+      if (
+        config$public || map_params$params == 1 || input$mapType == "actual"
+      ) {
         return(NULL)
       } else {
         tagList(
@@ -680,7 +689,9 @@ mapParams <- function(id, language) {
 
     # Which of `ids` (aggregation type ids) fit the chosen aggregation
     aggregation_allowed <- function(ids, choice) {
-      if (identical(choice, "average") || !choice %in% names(aggregation_type_ids)) {
+      if (
+        identical(choice, "average") || !choice %in% names(aggregation_type_ids)
+      ) {
         !ids %in% aggregation_type_ids[c("minimum", "maximum")]
       } else {
         ids %in% aggregation_type_ids[[choice]]
@@ -692,7 +703,11 @@ mapParams <- function(id, language) {
       if (identical(choice, "average") || !choice %in% aggregation_choices) {
         return("")
       }
-      paste0(" (", tolower(names(aggregation_choices)[aggregation_choices == choice]), ")")
+      paste0(
+        " (",
+        tolower(names(aggregation_choices)[aggregation_choices == choice]),
+        ")"
+      )
     }
 
     # Aggregation choice, shown in the parameter modal when it applies
@@ -734,7 +749,10 @@ mapParams <- function(id, language) {
         ns("precip_hours"),
         label = "Accumulation",
         choices = precip_hour_choices,
-        selected = isolate(map_params[[paste0("precip_hours", editing_param())]]),
+        selected = isolate(map_params[[paste0(
+          "precip_hours",
+          editing_param()
+        )]]),
         multiple = FALSE
       )
     })
@@ -1113,6 +1131,9 @@ mapParams <- function(id, language) {
     })
 
     observeEvent(input$save_secondary_param, {
+      if (!valid_selection()) {
+        return()
+      }
       if (map_params$params == 1) {
         map_params$params <- 2
       }
@@ -1187,7 +1208,10 @@ mapParams <- function(id, language) {
         value <- min(utc_time(value), now)
         span <- days * 24 * 3600 # seconds
         hour <- function(x) utc_time(round(as.numeric(x) / 3600) * 3600)
-        new_window <- c(hour(value - 0.8 * span), min(hour(value + 0.2 * span), now))
+        new_window <- c(
+          hour(value - 0.8 * span),
+          min(hour(value + 0.2 * span), now)
+        )
         step <- 3600 * 1000 # milliseconds
         time_format <- "%Y-%m-%d %H:%M"
       } else {
@@ -1325,6 +1349,35 @@ mapParams <- function(id, language) {
         }
       },
       ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$map_date_slider,
+      {
+        req(input$map_date_slider)
+        if (is_hourly_timeline()) {
+          # A daily value can arrive while the slider switches to hourly
+          if (!inherits(input$map_date_slider, "POSIXct")) {
+            return()
+          }
+          target_time <- utc_time(input$map_date_slider)
+          if (!is_echo("map_date_slider", target_time)) {
+            stop_following_latest()
+          }
+          map_params$target_time <- target_time
+          selected_date <- as.Date(target_time, tz = Sys.timezone())
+        } else {
+          selected_date <- as.Date(input$map_date_slider)
+          if (!is_echo("map_date_slider", selected_date)) {
+            stop_following_latest()
+          }
+        }
+        map_params$target <- selected_date
+        if (is.null(input$target) || as.Date(input$target) != selected_date) {
+          push_date_input(selected_date)
+        }
+      },
+      ignoreInit = FALSE
     )
 
     observeEvent(
@@ -1736,7 +1789,10 @@ mapParams <- function(id, language) {
           # Use the local date and never go past today: the date inputs are
           # capped at Sys.Date(), and a UTC date of 'tomorrow' would be pushed
           # back by them, re-triggering this update in an endless loop.
-          latest_date <- min(as.Date(max(times), tz = Sys.timezone()), Sys.Date())
+          latest_date <- min(
+            as.Date(max(times), tz = Sys.timezone()),
+            Sys.Date()
+          )
           # isolate() so writing the target here doesn't re-trigger updateMap.
           if (isolate(is_hourly_timeline())) {
             latest_time <- min(
@@ -2089,29 +2145,30 @@ mapParams <- function(id, language) {
         leaflet::addMapPane("overlay", zIndex = 420) %>%
         leaflet::clearPopups()
       if (nrow(circle_data)) {
-        map_proxy <- map_proxy %>% leaflet::addCircleMarkers(
-          data = circle_data,
-          layerId = ~timeseries_id,
-          clusterOptions = cluster_options,
-          clusterId = "stations",
-          lng = ~longitude,
-          lat = ~latitude,
-          fillColor = ~colour,
-          color = ~colour,
-          fillOpacity = 1,
-          stroke = TRUE,
-          weight = 1,
-          radius = 8,
-          options = leaflet::pathOptions(pane = "overlay"),
-          label = ~label,
-          labelOptions = leaflet::labelOptions(
-            noHide = isTRUE(input$show_value_annotations),
-            direction = "top",
-            offset = c(0, -10),
-            textOnly = TRUE,
-            className = "map-value-annotation"
+        map_proxy <- map_proxy %>%
+          leaflet::addCircleMarkers(
+            data = circle_data,
+            layerId = ~timeseries_id,
+            clusterOptions = cluster_options,
+            clusterId = "stations",
+            lng = ~longitude,
+            lat = ~latitude,
+            fillColor = ~colour,
+            color = ~colour,
+            fillOpacity = 1,
+            stroke = TRUE,
+            weight = 1,
+            radius = 8,
+            options = leaflet::pathOptions(pane = "overlay"),
+            label = ~label,
+            labelOptions = leaflet::labelOptions(
+              noHide = isTRUE(input$show_value_annotations),
+              direction = "top",
+              offset = c(0, -10),
+              textOnly = TRUE,
+              className = "map-value-annotation"
+            )
           )
-        )
       }
       map_proxy %>%
         leaflet::addLegend(
@@ -2309,12 +2366,14 @@ mapParams <- function(id, language) {
           options = leaflet::scaleBarOptions(imperial = FALSE)
         ) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
-      mapCreated(TRUE)
       map
     })
 
+    # Wait for Leaflet's first client bounds event before sending proxy calls.
+    observeEvent(input$map_bounds, mapCreated(TRUE), once = TRUE)
+
     # Auto-update for latest measurements every 15 minutes
-    autoUpdateTimer <- reactiveTimer(15 * 60 * 1000) # 15 minutes in milliseconds
+    autoUpdateTimer <- reactiveTimer(15 * 60 * 1000, session = session)
 
     observeEvent(autoUpdateTimer(), {
       req(mapCreated())

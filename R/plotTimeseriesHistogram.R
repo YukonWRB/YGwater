@@ -24,7 +24,13 @@
 #' @param legend_position The position of the legend, `'v'` for vertical on the right side or `'h'` for horizontal on the bottom. Default is `'v'`.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is `FALSE`.
 #' @param gridy Should gridlines be drawn on the y-axis? Default is `FALSE`.
-#' @param tzone The timezone to use for the plot. Default is `"auto"`, which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
+#' @param tzone The timezone to use for the plot. Default is `"auto"`, which uses
+#'   the system timezone. Otherwise pass a name returned by `OlsonNames()` or a
+#'   numeric UTC offset in hours. The IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab) lists
+#'   geographic zone names. Prefer these over abbreviations such as `"MST"`;
+#'   abbreviations may not be recognized on every operating system. Named zones
+#'   follow local daylight-saving rules; numeric offsets are fixed.
 #' @param data If `TRUE`, return plotting data with the plot.
 #' @param con A connection to the AquaCache database. `NULL` uses
 #'   [AquaConnect()] and automatically disconnects.

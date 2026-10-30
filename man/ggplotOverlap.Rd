@@ -12,7 +12,7 @@ ggplotOverlap(
   startDay = 1,
   endDay = 365,
   traceEnd = endDay,
-  tzone = "MST",
+  tzone = "Etc/GMT+7",
   years = NULL,
   datum = TRUE,
   title = TRUE,
@@ -55,7 +55,12 @@ ggplotOverlap(
 
 \item{traceEnd}{The end day of year for the trace line. If NULL, will default to \code{endDay}. Must be less than \code{endDay}. Format as per \code{startDay}.}
 
-\item{tzone}{The timezone to use for graphing. Only really evident for a small number of days.}
+\item{tzone}{The timezone to use for graphing. Defaults to \code{"Etc/GMT+7"}
+(fixed UTC-7 year-round). Use a name returned by \code{OlsonNames()}; the IANA
+\href{https://data.iana.org/time-zones/tzdb/zone1970.tab}{zone1970.tab} lists
+geographic zone names. Use a region name such as \code{"America/Yellowknife"}
+for local daylight-saving rules. Prefer these names over abbreviations such
+as \code{"MST"}, which may not be recognized on every operating system.}
 
 \item{years}{The years to plot. If \code{startDay} and \code{endDay} cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year. Currently, only 1 year can be provided for when other data is provided to function.}
 

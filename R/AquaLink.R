@@ -17,7 +17,7 @@
 #' @param analytics FALSE (no analytics) or path to an HTML file containing analytics code to insert into the app, such as a matomo analytics script. If a file in the package's inst directory, point to it as `system.file("apps/aqualink/www/html/matomo.html", package = "YGwater")`. This file will be called within the main UI as `tags$head(includeHTML(file))`. Default is FALSE.
 #' @param public TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.
 #' @param brand Character string to specify the branding of the app. Default is "public", which is a more generic version of the app with Yukon-specific references removed. The "yukon" branding includes Yukon-specific logos and references. This parameter can be used in the future to create other branded versions of the app for different users or organizations.
-
+#' @param workers Number of local mirai daemons shared by all sessions and modules in this app process. `NULL` (the default) uses half the cores available to R after reserving one, with at least one daemon. Set explicitly when several applications share a host or to limit memory use. This controls tasks migrated to mirai; legacy future-based tasks retain their existing backend. Daemons stop when the app stops.
 #'
 #' @return Opens a Shiny application.
 #' @export
@@ -39,7 +39,8 @@ AquaLink <- function(
   server = FALSE,
   analytics = FALSE,
   public = TRUE,
-  brand = "yukon"
+  brand = "yukon",
+  workers = NULL
 ) {
   rlang::check_installed("shiny", reason = "to use AquaLink app")
   rlang::check_installed("shinyjs", reason = "to use AquaLink app")
@@ -52,7 +53,17 @@ AquaLink <- function(
   )
   rlang::check_installed(
     "promises",
-    reason = "to enable asynchronous operations in AquaLink"
+    reason = "to connect mirai tasks to Shiny ExtendedTask",
+    version = "1.3.0"
+  )
+  rlang::check_installed(
+    "mirai",
+    reason = "to enable asynchronous operations in AquaLink",
+    version = "2.0.0"
+  )
+  rlang::check_installed(
+    "parallelly",
+    reason = "to determine the available CPU allocation for mirai daemons"
   )
   rlang::check_installed(
     "bslib",
@@ -72,6 +83,21 @@ AquaLink <- function(
     "base64enc",
     reason = "to create base64-encoded plot images"
   )
+
+  if (is.null(workers)) {
+    workers <- max(1L, floor(parallelly::availableCores(omit = 1L) / 2L))
+  } else if (
+    !is.numeric(workers) ||
+      length(workers) != 1L ||
+      is.na(workers) ||
+      !is.finite(workers) ||
+      workers < 1 ||
+      workers != floor(workers) ||
+      workers > .Machine$integer.max
+  ) {
+    stop("`workers` must be NULL or a positive whole number.", call. = FALSE)
+  }
+  workers <- as.integer(workers)
 
   if (!rlang::is_installed("AquaCache", version = "2.8.9")) {
     rlang::check_installed(
@@ -317,13 +343,24 @@ AquaLink <- function(
     test_exists = test_exists
   )
 
-  # Set up for ExtendedTasks or promises
+  # Retain the future backend until the remaining tasks have been migrated.
   # If on Windows OR running interactively, use multisession, else use multicore
   if (Sys.info()["sysname"] == "Windows" | interactive()) {
     future::plan("multisession")
   } else {
     future::plan("multicore")
   }
+
+  # One persistent pool serves every mirai task in this app process. Modules
+  # submit work to this profile; they do not size or manage their own pools.
+  compute_profile <- "YGwater_aqualink"
+  mirai::daemons(n = workers, .compute = compute_profile)
+  shiny::onStop(
+    function() {
+      mirai::daemons(n = 0L, .compute = compute_profile)
+    },
+    session = NULL
+  )
 
   if (server) {
     shiny::shinyAppDir(appDir)

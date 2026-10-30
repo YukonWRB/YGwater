@@ -413,8 +413,17 @@ render_document_pages <- function(
       max_pixels = max_pixels
     ))
   }
-  if (!document_type %in% c("jpg", "jpeg", "png")) {
-    stop("Supported document types are PDF, JPG, JPEG, and PNG.")
+  image_extensions <- c("jpg", "jpeg", "png")
+  if (YGwater:::heif_jpeg_conversion_available()) {
+    image_extensions <- c(image_extensions, "heic", "heif")
+  }
+  if (!document_type %in% image_extensions) {
+    supported_types <- if (YGwater:::heif_jpeg_conversion_available()) {
+      "PDF, JPG, JPEG, PNG, HEIC, and HEIF"
+    } else {
+      "PDF, JPG, JPEG, and PNG"
+    }
+    stop(sprintf("Supported document types are %s.", supported_types))
   }
   if (
     !is.numeric(max_pixels) || length(max_pixels) != 1 ||

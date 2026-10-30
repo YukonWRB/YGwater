@@ -34,7 +34,13 @@
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.
 #' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
-#' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
+#' @param tzone The timezone to use for the plot. Default is "auto", which uses
+#'   the system timezone. Otherwise pass a name returned by `OlsonNames()` or a
+#'   numeric UTC offset in hours. The IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab) lists
+#'   geographic zone names. Prefer these over abbreviations such as `"MST"`;
+#'   abbreviations may not be recognized on every operating system. Named zones
+#'   follow local daylight-saving rules; numeric offsets are fixed.
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
 #' @param as_of Optional point-in-time timestamp at which measurement values,
 #'   daily summaries, quality-control metadata, and unusable-grade exclusions
@@ -1121,46 +1127,62 @@ plotTimeseries <- function(
         )
       }
     } else {
-      range_select <- paste(
-        c(
-          "date AS datetime",
-          daily_stats_select_sql(
-            con,
-            stats_period = stats_period,
-            columns = c("min", "max", "q75", "q25")
-          )
-        ),
-        collapse = ", "
-      )
       # Get historic-range values, extending by one day so ribbons reach the
       # visible trace bounds.
       range_end <- end_date + 1 * 24 * 60 * 60
       range_start <- start_date - 1 * 24 * 60 * 60
-      if (is.null(as_of)) {
-        range_data <- dbGetQueryDT(
+      if (
+        is.null(as_of) &&
+          !is.null(daily_stats_period_bounds(stats_period))
+      ) {
+        range_data <- fetch_fixed_daily_stats(
           con,
-          paste0(
-            "SELECT ",
-            range_select,
-            " FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;"
+          bounds = data.table::data.table(
+            timeseries_id = tsid,
+            range_start = range_start,
+            range_end = range_end
           ),
-          params = list(tsid, range_start, range_end)
+          stats_period = stats_period
         )
+        range_data[, timeseries_id := NULL]
       } else {
-        range_data <- dbGetQueryDT(
-          con,
-          paste(
-            paste0("SELECT ", range_select),
-            "FROM continuous.measurements_calculated_daily_at(",
-            "  $1,",
-            "  ARRAY[$2]::INTEGER[],",
-            "  $3::DATE,",
-            "  $4::DATE",
-            ")",
-            "ORDER BY date ASC;"
+        range_select <- paste(
+          c(
+            "date AS datetime",
+            daily_stats_select_sql(
+              con,
+              stats_period = stats_period,
+              columns = c("min", "max", "q75", "q25")
+            )
           ),
-          params = list(as_of, tsid, range_start, range_end)
+          collapse = ", "
         )
+        if (is.null(as_of)) {
+          range_data <- dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT ",
+              range_select,
+              " FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;"
+            ),
+            params = list(tsid, range_start, range_end)
+          )
+        } else {
+          range_data <- dbGetQueryDT(
+            con,
+            paste(
+              paste0("SELECT ", range_select),
+              "FROM continuous.measurements_calculated_daily_at(",
+              "  $1,",
+              "  ARRAY[$2]::INTEGER[],",
+              "  $3::DATE,",
+              "  $4::DATE",
+              ")",
+              "ORDER BY date ASC;"
+            ),
+            params = list(as_of, tsid, range_start, range_end)
+          )
+        }
       }
     }
     range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")

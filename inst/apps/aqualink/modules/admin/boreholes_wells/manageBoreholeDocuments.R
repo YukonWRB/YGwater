@@ -28,6 +28,9 @@ manageBoreholeDocumentsUI <- function(id) {
         tags$hr(),
         h5("Upload and associate to new document"),
         fileInput(ns("doc_file"), "Document file", multiple = FALSE),
+        helpText(
+          "HEIC/HEIF files are converted to JPEG when this server supports conversion."
+        ),
         textInput(ns("doc_name"), "Document name"),
         selectizeInput(
           ns("doc_type"),
@@ -540,18 +543,23 @@ manageBoreholeDocuments <- function(id, language) {
 
             # insertACDocument resolves the indexed file-hash conflict and
             # returns either the new or existing document ID.
-            result <- AquaCache::insertACDocument(
-              path = request$path,
-              name = request$name,
-              type = request$type,
-              description = request$description,
-              tags = request$tags,
-              authors = request$authors,
-              publish_date = request$publish_date,
-              url = request$url,
-              share_with = request$share_with,
-              geoms = NULL,
-              con = con
+            result <- YGwater:::with_heif_upload_as_jpeg(
+              request$path,
+              function(upload_path) {
+                AquaCache::insertACDocument(
+                  path = upload_path,
+                  name = request$name,
+                  type = request$type,
+                  description = request$description,
+                  tags = request$tags,
+                  authors = request$authors,
+                  publish_date = request$publish_date,
+                  url = request$url,
+                  share_with = request$share_with,
+                  geoms = NULL,
+                  con = con
+                )
+              }
             )
             document_id <- as.integer(result$new_document_id[[1]])
             if (length(document_id) != 1L || is.na(document_id)) {

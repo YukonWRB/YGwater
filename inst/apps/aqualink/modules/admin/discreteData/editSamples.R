@@ -140,7 +140,7 @@ editSamples <- function(id, language) {
       owner = list(label = "Owner", column = "owner"),
       contributor = list(label = "Contributor", column = "contributor"),
       comissioning_org = list(
-        label = "Comissioning organization",
+        label = "Commissioning organization",
         column = "comissioning_org"
       ),
       sampling_org = list(
@@ -524,34 +524,47 @@ editSamples <- function(id, language) {
     }
 
     insert_or_find_document <- function(con, file, sample_id, share_with) {
-      existing <- find_existing_document(con, file$datapath)
-      if (nrow(existing)) {
-        return(as.integer(existing$document_id[[1]]))
-      }
+      YGwater:::with_heif_upload_as_jpeg(
+        file$datapath,
+        function(upload_path) {
+          is_heif <- tolower(tools::file_ext(file$name)) %in% c("heic", "heif")
+          document_name <- if (is_heif) {
+            paste0(tools::file_path_sans_ext(file$name), ".jpg")
+          } else {
+            file$name
+          }
+          existing <- find_existing_document(con, upload_path)
+          if (nrow(existing)) {
+            return(as.integer(existing$document_id[[1]]))
+          }
 
-      document_type <- input$new_document_type
-      if (
-        !length(document_type) || is.na(document_type) || !nzchar(document_type)
-      ) {
-        stop("Select a document type before uploading documents.")
-      }
+          document_type <- input$new_document_type
+          if (
+            !length(document_type) || is.na(document_type) ||
+              !nzchar(document_type)
+          ) {
+            stop("Select a document type before uploading documents.")
+          }
 
-      result <- AquaCache::insertACDocument(
-        path = file$datapath,
-        name = file$name,
-        type = document_type,
-        description = sprintf(
-          "Uploaded %s for discrete sample %s from the sample editor.",
-          file$name,
-          sample_id
-        ),
-        tags = c("discrete sample", paste0("sample_id:", sample_id)),
-        share_with = share_with,
-        geoms = NULL,
-        con = con
+          result <- AquaCache::insertACDocument(
+            path = upload_path,
+            name = document_name,
+            type = document_type,
+            description = sprintf(
+              "Uploaded %s for discrete sample %s from the sample editor.",
+              file$name,
+              sample_id
+            ),
+            tags = c("discrete sample", paste0("sample_id:", sample_id)),
+            share_with = share_with,
+            geoms = NULL,
+            con = con
+          )
+
+          as.integer(result$new_document_id)
+        },
+        extension = tools::file_ext(file$name)
       )
-
-      as.integer(result$new_document_id)
     }
 
     collect_sample_inputs <- function() {
@@ -1066,6 +1079,8 @@ editSamples <- function(id, language) {
           rvt.result_value_type AS result_value_type_name,
           r.reporting_basis_id, r.result_speciation_id, r.result_target_id, r.endpoint_mode, r.endpoint_ph, r.analysis_conditions,
           rs.reporting_basis,
+          spec.result_speciation,
+          target.result_target,
           r.protocol_method,
           pm.protocol_name,
           r.laboratory,
@@ -1106,6 +1121,10 @@ editSamples <- function(id, language) {
           ON r.result_value_type = rvt.result_value_type_id
         LEFT JOIN discrete.reporting_bases rs
           ON r.reporting_basis_id = rs.reporting_basis_id
+        LEFT JOIN discrete.result_speciations spec
+          ON r.result_speciation_id = spec.result_speciation_id
+        LEFT JOIN discrete.result_targets target
+          ON r.result_target_id = target.result_target_id
         LEFT JOIN discrete.protocols_methods pm
           ON r.protocol_method = pm.protocol_id
         LEFT JOIN discrete.laboratories lab
@@ -2167,6 +2186,14 @@ editSamples <- function(id, language) {
               tooltip(
                 "Allows selection of multiple samples to update fields simultaneously."
               ),
+            checkboxInput(
+              ns("show_sample_details"),
+              "Show additional sample details",
+              value = FALSE
+            ) |>
+              tooltip(
+                "Adds contributor, sample and purge volumes, qualifiers, and sampler names to the sample list."
+              ),
             DT::DTOutput(ns("sample_table"))
           )
         ),
@@ -2432,6 +2459,9 @@ editSamples <- function(id, language) {
                     ns("new_documents"),
                     "Upload and link documents",
                     multiple = TRUE
+                  ),
+                  helpText(
+                    "HEIC/HEIF files are converted to JPEG when this server supports conversion."
                   )
                 )
               ),
@@ -2657,7 +2687,7 @@ editSamples <- function(id, language) {
                   6,
                   selectizeInput(
                     ns("comissioning_org"),
-                    "Comissioning organization",
+                    "Commissioning organization",
                     choices = named_choices(
                       moduleData$organizations$organization_id,
                       moduleData$organizations$name
@@ -2801,6 +2831,37 @@ editSamples <- function(id, language) {
       for (col in factor_cols) {
         display[[col]] <- as.factor(display[[col]])
       }
+      display$share_with <- NULL
+      if (!isTRUE(input$show_sample_details)) {
+        display <- display[, setdiff(
+          names(display),
+          c(
+            "contributor",
+            "sample_volume_ml",
+            "purge_volume_l",
+            "sample_qualifiers",
+            "sample_observers"
+          )
+        ), drop = FALSE]
+      }
+      sample_column_labels <- c(
+        sample_id = "Sample ID",
+        location = "Location",
+        sub_location = "Sub-location",
+        media_type = "Medium",
+        sample_type = "Sample type",
+        collection_method = "Collection method",
+        datetime = "Sample date/time (UTC)",
+        target_datetime = "Target date/time (UTC)",
+        owner = "Owner",
+        contributor = "Contributor",
+        sample_volume_ml = "Sample volume (mL)",
+        purge_volume_l = "Purge volume (L)",
+        sample_groups = "Sample groups",
+        sample_qualifiers = "Qualifiers",
+        sample_observers = "Samplers"
+      )
+      names(display) <- unname(sample_column_labels[names(display)])
       DT::datatable(
         display,
         selection = if (isTRUE(input$multi_edit)) {
@@ -2813,6 +2874,12 @@ editSamples <- function(id, language) {
         options = list(
           pageLength = 10,
           scrollX = TRUE,
+          scrollY = "45vh",
+          scrollCollapse = TRUE,
+          autoWidth = FALSE,
+          columnDefs = list(
+            list(className = "dt-nowrap", targets = "_all")
+          ),
           initComplete = htmlwidgets::JS(
             "function(settings, json) {",
             "$(this.api().table().header()).css({",
@@ -2863,33 +2930,74 @@ editSamples <- function(id, language) {
       results <- moduleData$sample_results
       if (is.null(results) || !nrow(results)) {
         results <- data.frame(
-          result_id = integer(),
-          parameter = character(),
-          units = character(),
-          result = numeric(),
-          result_type = character(),
-          matrix_state = character(),
+          `Result ID` = integer(),
+          Parameter = character(),
+          Units = character(),
+          Result = numeric(),
+          `Result type` = character(),
+          `Result condition` = character(),
+          `Value type` = character(),
+          `Sample fraction` = character(),
+          `Reporting basis` = character(),
+          `Chemical form / species scope` = character(),
+          `Analytical target / material` = character(),
+          `Endpoint determination` = character(),
+          `Endpoint pH` = numeric(),
+          `Additional analysis conditions (JSON)` = character(),
+          Matrix = character(),
+          Laboratory = character(),
+          `Lab report number` = character(),
+          `Lab sample number` = character(),
+          Grade = character(),
+          Approval = character(),
+          Aggregation = character(),
+          `Component count` = integer(),
+          check.names = FALSE,
           stringsAsFactors = FALSE
         )
       } else {
+        endpoint_labels <- c(
+          fixed = "Fixed pH",
+          inflection = "Inflection",
+          gran = "Gran",
+          other = "Other"
+        )
+        endpoint_determination <- unname(
+          endpoint_labels[results$endpoint_mode]
+        )
+        endpoint_determination[is.na(endpoint_determination)] <- ""
+        analysis_conditions <- vapply(
+          results$analysis_conditions,
+          function(value) {
+            if (is.null(value) || is.na(value)) "{}" else
+              AquaCache::normalizeAnalysisConditions(value)
+          },
+          character(1)
+        )
         results <- data.frame(
-          result_id = results$result_id,
-          parameter = results$parameter,
-          units = results$units,
-          result = results$result,
-          result_type = results$result_type_name,
-          condition = results$result_condition_name,
-          value_type = results$result_value_type_name,
-          fraction = results$sample_fraction,
-          descriptor = results$reporting_basis,
-          matrix_state = results$matrix_state_name,
-          laboratory = results$laboratory_name,
-          lab_report_no = results$lab_report_no,
-          lab_sample_no = results$lab_sample_no,
-          result_grade = results$result_grade,
-          result_approval = results$result_approval,
-          aggregation = results$aggregation_type,
-          component_count = results$component_count,
+          `Result ID` = results$result_id,
+          Parameter = results$parameter,
+          Units = results$units,
+          Result = results$result,
+          `Result type` = results$result_type_name,
+          `Result condition` = results$result_condition_name,
+          `Value type` = results$result_value_type_name,
+          `Sample fraction` = results$sample_fraction,
+          `Reporting basis` = results$reporting_basis,
+          `Chemical form / species scope` = results$result_speciation,
+          `Analytical target / material` = results$result_target,
+          `Endpoint determination` = endpoint_determination,
+          `Endpoint pH` = results$endpoint_ph,
+          `Additional analysis conditions (JSON)` = analysis_conditions,
+          Matrix = results$matrix_state_name,
+          Laboratory = results$laboratory_name,
+          `Lab report number` = results$lab_report_no,
+          `Lab sample number` = results$lab_sample_no,
+          Grade = results$result_grade,
+          Approval = results$result_approval,
+          Aggregation = results$aggregation_type,
+          `Component count` = results$component_count,
+          check.names = FALSE,
           stringsAsFactors = FALSE
         )
       }

@@ -56,7 +56,8 @@ selected for each location and target date; ties prefer the later date.}
 mean used to flag unusually high or low results. Only numeric result values
 are used; censored and missing results are excluded. Groups are calculated
 separately by location, parameter, matrix, fraction, reporting basis,
-chemical form, analytical target, endpoint, analysis conditions, and result type.}
+chemical form, analytical target, endpoint, analysis conditions, result type,
+and result value type.}
 
 \item{sd_start}{Optional first date included in the SD calculation.}
 
@@ -101,7 +102,9 @@ dates.
 Creates an Excel report from AquaCache discrete results. The report
 worksheet layout can place dates, locations, or parameters on separate tabs;
 filterable result details and a guideline audit sheet follow the report
-tabs. When requested, a separate HTML map is written for report locations.
+tabs. Flagged result cells include comments describing each exceeded
+guideline limit or standard-deviation threshold. When requested, a separate
+HTML map is written for report locations.
 }
 \details{
 Approximate sample selection is performed separately for each target date
@@ -112,10 +115,14 @@ filters are applied when finding the closest eligible sample, then retained
 in the report matrix and result details. Reporting basis, chemical form,
 analytical target, endpoint, and analysis conditions distinguish report rows
 whenever recorded for a measurement. Matrix rows also
-distinguish result type, so field and laboratory measurements of the same
-parameter and sample remain separate. When \code{date_range} is
+distinguish result type and value type, so field, laboratory, actual, and
+calculated measurements remain separate. When \code{date_range} is
 supplied, all eligible samples collected in the inclusive interval are
 included directly, and matrix columns represent individual sample IDs.
+Location worksheets use location codes as tab names; their report headings
+include location names and aliases when available. Comments on flagged cells
+state the failed guideline and its per-result limit, or the exceeded
+standard-deviation bound with the historical mean, SD, and sample count.
 }
 \examples{
 \dontrun{

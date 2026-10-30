@@ -562,14 +562,14 @@ app_ui <- function(request) {
             title = "Discrete data",
             value = "discreteDataTasks",
             nav_panel(
-              title = "Import setup",
-              value = "importSetup",
-              uiOutput("importSetup_ui")
-            ),
-            nav_panel(
               title = "Add samples and results",
               value = "addDiscData",
               uiOutput("addDiscData_ui")
+            ),
+            nav_panel(
+              title = "Manage import setups",
+              value = "importSetup",
+              uiOutput("importSetup_ui")
             ),
             nav_panel(
               title = "Edit samples and results",
