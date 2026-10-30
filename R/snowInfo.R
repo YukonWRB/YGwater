@@ -1143,7 +1143,7 @@ snowInfo <- function(
         "Description: Metadata about Yukon snow survey locations. Information is fetched in real-time and reflects the location metadata at query time.",
         paste0(
           "Generated at : ",
-          substr(format(Sys.time(), tz = "MST"), 1, 16),
+          substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
           " MST"
         ),
         "Report Title: Snow survey location metadata",
@@ -1174,7 +1174,7 @@ snowInfo <- function(
       },
       paste0(
         "Generated at : ",
-        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
         " MST"
       ),
       "",
@@ -1199,7 +1199,7 @@ snowInfo <- function(
       },
       paste0(
         "Generated at : ",
-        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
         " MST"
       ),
       "",
@@ -1224,7 +1224,7 @@ snowInfo <- function(
       },
       paste0(
         "Generated at : ",
-        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
         " MST"
       ),
       "",
@@ -1251,7 +1251,7 @@ snowInfo <- function(
       "Description: Snow survey measurements for Yukon snow survey locations. Measurements are fetched in real-time and reflect the data at query time.",
       paste0(
         "Generated at : ",
-        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
         " MST"
       ),
       "",

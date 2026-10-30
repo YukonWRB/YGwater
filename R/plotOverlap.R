@@ -13,7 +13,12 @@
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value.
 #' @param startDay The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
-#' @param tzone The timezone to use for graphing. Only really evident for a small number of days.
+#' @param tzone The timezone to use for graphing. Defaults to `"Etc/GMT+7"`
+#'   (fixed UTC-7 year-round). Use a name returned by `OlsonNames()`; the IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab) lists
+#'   geographic zone names. Use a region name such as `"America/Yellowknife"`
+#'   for local daylight-saving rules. Prefer these names over abbreviations such
+#'   as `"MST"`, which may not be recognized on every operating system.
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
@@ -58,7 +63,7 @@
 # aggregation_type = NULL
 # startDay <- 1
 # endDay <- 365
-# tzone <- "MST"
+# tzone <- "Etc/GMT+7"
 # years <- 2025
 # datum <- FALSE
 # title <- TRUE
@@ -91,7 +96,7 @@ plotOverlap <- function(
   z_approx = NULL,
   startDay = 1,
   endDay = 365,
-  tzone = "MST",
+  tzone = "Etc/GMT+7",
   years = NULL,
   datum = TRUE,
   title = TRUE,
@@ -766,7 +771,23 @@ plotOverlap <- function(
     daily_end <- daily_end + 60 * 60 * 24
   }
 
-  if (is.null(as_of)) {
+  if (
+    is.null(as_of) &&
+      !is.null(daily_stats_period_bounds(stats_period))
+  ) {
+    daily <- fetch_fixed_daily_stats(
+      con,
+      bounds = data.table::data.table(
+        timeseries_id = tsid,
+        range_start = daily_start,
+        range_end = daily_end
+      ),
+      stats_period = stats_period,
+      include_value = TRUE
+    )
+    daily[, timeseries_id := NULL]
+    data.table::setnames(daily, "datetime", "date")
+  } else if (is.null(as_of)) {
     daily_select <- paste(
       c(
         "date",
@@ -1098,10 +1119,10 @@ plotOverlap <- function(
   if (overlaps) {
     # This section sorts out the overlap years, builds the plotting column
     temp <- data.frame(date = day_seq)
-    temp$year = lubridate::year(temp$date)
+    temp$year <- lubridate::year(temp$date)
     temp <- temp[!(temp$year == max(temp$year)), ] #Remove the rows for days after the new year
-    temp$month = lubridate::month(temp$date)
-    temp$day = lubridate::day(temp$date)
+    temp$month <- lubridate::month(temp$date)
+    temp$day <- lubridate::day(temp$date)
     temp$day <- stringr::str_pad(temp$day, 2, side = "left", pad = "0")
 
     # Column md is built in both temp and realtime dfs to be able to differentiate the previous year from the next and assign proper plot years (i.e. 2022-2023) and fake datetimes (since every year needs the same "fake year" to plot together)

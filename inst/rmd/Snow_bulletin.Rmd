@@ -458,7 +458,7 @@ snowbullSWE <- function(
   p <- hydrometDiscrete(
     parameter = "SWE",
     startDay = 1,
-    tzone = "MST",
+    tzone = "Etc/GMT+7",
     years = bulletin_year,
     title = TRUE,
     custom_title = custom_title,
@@ -564,7 +564,7 @@ snowBullPrecip <- function(
 
   plot <- hydrometDiscrete(
     parameter = "Total precipitation",
-    tzone = "MST",
+    tzone = "Etc/GMT+7",
     years = bulletin_year - 1,
     startDay = paste0(bulletin_year - 1, "-10-01"),
     endDay = sprintf("%d-%02d-01", bulletin_year, bulletin_month),

@@ -1,0 +1,22 @@
+station,value,threshold,parameter,units,valid_from,valid_to,notes
+09DC007,11,Min flow,flow,cms,05-01,09-30,
+09DC007,5,Min flow,flow,cms,10-01,04-30,
+09AB001,85,Min flow,flow,cms,01-01,12-31,
+08AA010,2.832,Min flow,flow,cms,01-01,12-31,
+08AA009,1.146,Min flow,flow,cms,01-01,12-31,"YEC must maintain a minimum release of 1.416 m3/s from Aishihik, which can be checked with this calculation (note difficult to verify given high uncertainty at low flows, but worthwhile check) "
+09AB001,31.25,Alert,level,m,01-01,12-31,"YEC must alert WSS and CoW as flooding may occur, typically associated with freeze-up"
+08AA005,915.16,FSL,level,masl,01-01,12-31,
+09AB004,656.234,FSL,level,masl,01-01,12-31,
+09DC005,665.84,FSL,level,masl,01-01,12-31,
+08AA005,913,LSL,level,masl,01-01,12-31,
+09AB004,653.796,LSL,level,masl,01-01,12-31,
+09DC005,663.249,LSL,level,masl,01-01,12-31,
+08AA005,911.565,Datum,level,masl,01-01,12-31,
+09AB004,653.357,Datum,level,masl,01-01,12-31,
+09DC005,662.337,Datum,level,masl,01-01,12-31,
+08AA005,3.595,FSL,level,m,01-01,12-31,
+09AB004,2.877,FSL,level,m,01-01,12-31,
+09DC005,3.503,FSL,level,m,01-01,12-31,
+08AA005,1.435,LSL,level,m,01-01,12-31,
+09AB004,0.439,LSL,level,m,01-01,12-31,
+09DC005,0.912,LSL,level,m,01-01,12-31,
