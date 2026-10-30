@@ -51,7 +51,7 @@ Imports:
     xml2,
     zoo
 Suggests:
-    AquaCache (>= 2.8.9),
+    AquaCache (>= 2.8.7),
     base64enc,
     bslib,
     bsicons,
