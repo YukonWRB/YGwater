@@ -5,7 +5,13 @@ add_disc_data_mapping_environment <- function() {
   )
   env <- new.env(parent = asNamespace("YGwater"))
   sys.source(module_path, envir = env)
-  sys.source(system.file("apps/aqualink/modules/admin/discreteData/importSetup.R", package = "YGwater"), envir = env)
+  sys.source(
+    system.file(
+      "apps/aqualink/modules/admin/discreteData/importSetup.R",
+      package = "YGwater"
+    ),
+    envir = env
+  )
   env
 }
 
@@ -380,6 +386,156 @@ test_that("Excel and textual dates are parsed without partial-year matches", {
     ),
     "2025-10-02 17:50:00"
   )
+  expect_identical(
+    format(
+      env$addDiscData_datetime(
+        "7/2/2026 10:35 AM",
+        NA_character_,
+        "America/Whitehorse"
+      ),
+      "%Y-%m-%d %H:%M:%S",
+      tz = "UTC"
+    ),
+    "2026-07-02 17:35:00"
+  )
+  expect_identical(
+    format(
+      env$addDiscData_datetime(
+        "2025-06-10",
+        "12:30:00.0000000",
+        "America/Whitehorse"
+      ),
+      "%Y-%m-%d %H:%M:%S",
+      tz = "UTC"
+    ),
+    "2025-06-10 19:30:00"
+  )
+})
+
+test_that("EHS component workbooks suggest a long layout without a unit column", {
+  env <- add_disc_data_mapping_environment()
+  raw <- as.data.frame(
+    as.list(c(
+      "Sample ID",
+      "CustomerId",
+      "JobName",
+      "SampledDate",
+      "LocationId",
+      "Area",
+      "SamplingPoint",
+      "Analysis",
+      "ComponentName",
+      "ResultText"
+    )),
+    check.names = FALSE
+  )
+
+  suggested <- env$importSetup_suggest_layout(raw)
+
+  expect_identical(suggested$parser_family, "long")
+  expect_identical(suggested$column_map$parameter_code, "ComponentName")
+  expect_identical(suggested$column_map$result, "ResultText")
+  expect_null(suggested$column_map$unit)
+})
+
+test_that("Mayo-style sample reports suggest and parse transposed results", {
+  env <- add_disc_data_mapping_environment()
+  raw <- matrix("", nrow = 28L, ncol = 8L)
+  raw[1L, 1L] <- "Report Id"
+  raw[1L, 7:8] <- "3148108"
+  raw[4L, 1L] <- "Sample Id"
+  raw[4L, 7:8] <- c("S1", "S2")
+  raw[16L, 1L] <- "Site Id"
+  raw[16L, 7:8] <- c("W3", "W5")
+  raw[18L, 1L] <- "Sample Date"
+  raw[18L, 7:8] <- "2025-06-10"
+  raw[19L, 1L] <- "Sampled Time"
+  raw[19L, 7:8] <- c("12:30:00.0000000", "12:20:00.0000000")
+  raw[26L, ] <- c(
+    "Report Results Group",
+    "Method Reference",
+    "Analyte",
+    "Descriptor",
+    "Unit",
+    "Detection Limit",
+    "Result Text",
+    "Result Text"
+  )
+  raw[27L, c(1L, 2L, 3L, 5L, 6L, 7L, 8L)] <- c(
+    "Routine Water",
+    "APHA [4500-H+ B]",
+    "pH",
+    "",
+    "0.01",
+    "7.2",
+    "7.3"
+  )
+  raw[28L, c(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L)] <- c(
+    "Routine Water",
+    "APHA [4110 B]",
+    "Nitrate",
+    "Dissolved",
+    "mg/L",
+    "0.01",
+    "<0.01",
+    "0.02"
+  )
+
+  suggested <- env$importSetup_suggest_layout(as.data.frame(raw))
+  expect_identical(suggested$parser_family, "transposed")
+  expect_identical(suggested$header_row, 26L)
+  expect_identical(suggested$column_map$data_start_row, 27L)
+  expect_identical(suggested$column_map$first_sample_column, 7L)
+  expect_setequal(
+    suggested$column_map$match_columns,
+    c(
+      "Report Results Group",
+      "Method Reference",
+      "Descriptor",
+      "Detection Limit"
+    )
+  )
+
+  path <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(path), add = TRUE)
+  wb <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(wb, "Test Results")
+  openxlsx::writeData(wb, "Test Results", raw, colNames = FALSE)
+  openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
+
+  profile <- add_disc_data_test_profile("transposed")
+  profile$sheet_name <- "Test Results"
+  profile$header_row <- suggested$header_row
+  profile$column_map[[1]] <- suggested$column_map
+  parsed <- env$addDiscData_parse_upload(path, profile)
+
+  expect_equal(nrow(parsed), 4L)
+  expect_identical(
+    parsed$source_parameter_name,
+    c("pH", "Nitrate", "pH", "Nitrate")
+  )
+  expect_identical(
+    parsed$result_condition,
+    c(NA_integer_, 1L, NA_integer_, NA_integer_)
+  )
+  nitrate_context <- jsonlite::fromJSON(
+    parsed$source_matching_values[[2]],
+    simplifyVector = FALSE
+  )
+  expect_identical(nitrate_context[["source.Descriptor"]], "Dissolved")
+  expect_identical(
+    nitrate_context[["source.Method Reference"]],
+    "APHA [4110 B]"
+  )
+  expect_identical(
+    format(parsed$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    c(
+      "2025-06-10 19:30:00",
+      "2025-06-10 19:30:00",
+      "2025-06-10 19:20:00",
+      "2025-06-10 19:20:00"
+    )
+  )
 })
 
 test_that("location choices expose name, code, and alias", {
@@ -548,8 +704,14 @@ test_that("mapped-result preview uses source text and lookup labels", {
       reporting_basis = character()
     ),
     chemistry_catalogues = list(
-      result_speciations = data.frame(result_speciation_id = integer(), result_speciation = character()),
-      result_targets = data.frame(result_target_id = integer(), result_target = character())
+      result_speciations = data.frame(
+        result_speciation_id = integer(),
+        result_speciation = character()
+      ),
+      result_targets = data.frame(
+        result_target_id = integer(),
+        result_target = character()
+      )
     ),
     matrix_states = data.frame(
       matrix_state_id = 1L,
@@ -628,4 +790,173 @@ test_that("file uploads write generalized import-run provenance", {
     "source_adapter_function = \"addDiscData\"",
     fixed = TRUE
   )
+})
+
+test_that("negative numeric results are opt-in MDLs with source exclusions", {
+  env <- add_disc_data_mapping_environment()
+  parsed <- env$addDiscData_parse_result(
+    c("-0.25", "-2", "-3"),
+    negative_values_are_mdl = TRUE,
+    negative_mdl_excluded = c(FALSE, TRUE, TRUE)
+  )
+
+  expect_true(is.na(parsed$result[[1]]))
+  expect_identical(parsed$result_condition[[1]], 1L)
+  expect_equal(parsed$result_condition_value[[1]], 0.25)
+  expect_identical(parsed$result[2:3], c(-2, -3))
+  expect_true(all(is.na(parsed$result_condition[2:3])))
+
+  unchanged <- env$addDiscData_parse_result(
+    "-0.25",
+    negative_values_are_mdl = FALSE
+  )
+  expect_identical(unchanged$result[[1]], -0.25)
+  expect_true(is.na(unchanged$result_condition[[1]]))
+})
+
+test_that("signed and non-Kelvin temperature parameters are auto-excluded", {
+  env <- add_disc_data_mapping_environment()
+  parameter <- c(
+    "Temperature Celsius",
+    "Temperature_K",
+    "Temperature_K",
+    "Temperature",
+    "Temperature K",
+    "ORP",
+    "redox potential",
+    "pH",
+    "delta_18O",
+    "water depth",
+    "gauge pressure",
+    "flow velocity",
+    "discharge",
+    "Dissolved aluminum"
+  )
+
+  expect_identical(
+    env$addDiscData_negative_mdl_auto_excluded(
+      parameter,
+      parameter,
+      c(
+        "deg C", "K", "", "", "deg C", "mV", "mV", "pH", "per mil",
+        "m", "kPa", "m/s", "m3/s", "ug/L"
+      )
+    ),
+    c(
+      TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE,
+      TRUE, TRUE, FALSE
+    )
+  )
+})
+
+test_that("wide workbook headers retain Unicode-minus units", {
+  env <- add_disc_data_mapping_environment()
+  minus <- intToUtf8(0x2212)
+  micro <- intToUtf8(0x00B5)
+  headers <- c(
+    paste0("F", minus, "-D (mg L", minus, "1)"),
+    paste0("SpC ", micro, "S cm", minus, "1"),
+    paste0("Alk mg L", minus, "1 as CaCO3")
+  )
+
+  parsed <- env$addDiscData_split_wide_header_units(headers)
+
+  expect_identical(parsed$parameter, c(
+    paste0("F", minus, "-D"),
+    "SpC",
+    "Alk"
+  ))
+  expect_identical(parsed$unit, c(
+    paste0("mg L", minus, "1"),
+    paste0(micro, "S cm", minus, "1"),
+    paste0("mg L", minus, "1 as CaCO3")
+  ))
+})
+
+test_that("wide workbook parsing requires its configured sample date", {
+  env <- add_disc_data_mapping_environment()
+  path <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(path), add = TRUE)
+  workbook <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(workbook, "together")
+  openxlsx::writeData(
+    workbook,
+    "together",
+    data.frame(
+      No. = "S1",
+      datetime = NA_character_,
+      ID = "ST01",
+      `B-T ppb` = "-1",
+      check.names = FALSE
+    ),
+    colNames = TRUE
+  )
+  openxlsx::saveWorkbook(workbook, path, overwrite = TRUE)
+
+  profile <- add_disc_data_test_profile("wide")
+  profile$sheet_name <- "together"
+  profile$column_map[[1]] <- list(
+    station_code = "ID",
+    sample_date = "datetime",
+    lab_sample_id = "No.",
+    first_result_column = 4L,
+    last_result_column = 4L,
+    data_start_row = 2L
+  )
+
+  expect_error(
+    env$addDiscData_parse_upload(path, profile),
+    "Every sample row needs a valid sample date/time"
+  )
+})
+
+test_that("wide workbook parsing preserves worksheet row numbers", {
+  env <- add_disc_data_mapping_environment()
+  path <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(path), add = TRUE)
+  workbook <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(workbook, "Data")
+  openxlsx::writeData(
+    workbook,
+    "Data",
+    data.frame("", "", "", "Dissolved metals", check.names = FALSE),
+    startRow = 1L,
+    colNames = FALSE
+  )
+  openxlsx::writeData(
+    workbook,
+    "Data",
+    data.frame(
+      `No.` = "S1",
+      datetime = "2025-06-10",
+      ID = "ST01",
+      Aluminum = "1.2",
+      check.names = FALSE
+    ),
+    startRow = 2L,
+    colNames = TRUE
+  )
+  openxlsx::saveWorkbook(workbook, path, overwrite = TRUE)
+
+  profile <- add_disc_data_test_profile("wide")
+  profile$parser_type <- "wide"
+  profile$sheet_name <- "Data"
+  profile$header_row <- 2L
+  profile$data_start_row <- 3L
+  profile$datetime_origin <- "text"
+  profile$column_map[[1]] <- list(
+    lab_sample_id = "No.",
+    sample_date = "datetime",
+    station_code = "ID",
+    first_result_column = 4L,
+    last_result_column = 4L,
+    data_start_row = 3L,
+    group_header_row = 1L
+  )
+
+  parsed <- env$addDiscData_parse_upload(path, profile)
+
+  expect_equal(nrow(parsed), 1L)
+  expect_identical(parsed$source_sample_id, "S1")
+  expect_identical(parsed$source_parameter_code, "Dissolved metals / Aluminum")
 })
