@@ -621,6 +621,11 @@ app_ui <- function(request) {
               uiOutput("addDocs_ui")
             ),
             nav_panel(
+              title = "Forecaster comments",
+              value = "viewForecasterComments",
+              uiOutput("viewForecasterComments_ui")
+            ),
+            nav_panel(
               title = "Images",
               value = "addImgs",
               uiOutput("addImgs_ui")

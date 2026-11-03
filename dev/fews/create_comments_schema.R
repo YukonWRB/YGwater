@@ -476,29 +476,34 @@ scrape_tabular_report_comments <- function(
 }
 
 
-# Run the schema setup and the recent-comment scrape when this file is run
-# directly. Sourcing the file only defines the two functions above.
-if (sys.nframe() == 0L) {
-    required_vars <- c(
-        "aquacacheHostDev",
-        "aquacachePortDev",
-        "aquacachePostgresPass"
+run_forecaster_commentary <- function(nDays = 3L, overwrite = FALSE) {
+    connection_vars <- c(
+        host = Sys.getenv("aquacacheHost"),
+        port = Sys.getenv("aquacachePort"),
+        username = Sys.getenv(
+            "FORECASTER_COMMENTS_DB_USER",
+            Sys.getenv("aquacachePostgresUser")
+        ),
+        password = Sys.getenv("aquacachePostgresPass")
     )
-    missing_vars <- required_vars[!nzchar(Sys.getenv(required_vars))]
+    missing_vars <- names(connection_vars)[!nzchar(connection_vars)]
     if (length(missing_vars)) {
         stop(
-            "Missing environment variables: ",
+            "Missing AquaCache connection settings: ",
             paste(missing_vars, collapse = ", "),
             call. = FALSE
         )
     }
 
     con <- YGwater::AquaConnect(
-        name = Sys.getenv("FORECASTER_COMMENTS_DB_NAME", "aquacache"),
-        host = Sys.getenv("aquacacheHostDev"),
-        port = Sys.getenv("aquacachePortDev"),
-        username = Sys.getenv("FORECASTER_COMMENTS_DB_USER", "postgres"),
-        password = Sys.getenv("aquacachePostgresPass"),
+        name = Sys.getenv(
+            "FORECASTER_COMMENTS_DB_NAME",
+            Sys.getenv("aquacacheName", "aquacache")
+        ),
+        host = connection_vars[["host"]],
+        port = connection_vars[["port"]],
+        username = connection_vars[["username"]],
+        password = connection_vars[["password"]],
         silent = TRUE
     )
     on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -507,10 +512,21 @@ if (sys.nframe() == 0L) {
         "FORECASTER_COMMENTS_REPORTS_DIR",
         "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports"
     )
-    create_commentary_schema(con, overwrite = TRUE)
+    create_commentary_schema(con, overwrite = overwrite)
     scrape_tabular_report_comments(
         con,
         tabular_report_dir = tabular_report_dir,
-        nDays = 1000
+        nDays = nDays
+    )
+}
+
+# Run schema setup and comment scraping when this file is executed directly.
+# Sourcing defines the reusable functions only.
+if (sys.nframe() == 0L) {
+    nDays <- suppressWarnings(as.integer(Sys.getenv("FORECASTER_COMMENTS_N_DAYS", "3")))
+    if (is.na(nDays) || nDays < -1L) nDays <- 3L
+    run_forecaster_commentary(
+        nDays = nDays,
+        overwrite = identical(tolower(Sys.getenv("FORECASTER_COMMENTS_OVERWRITE")), "true")
     )
 }

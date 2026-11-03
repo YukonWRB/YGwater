@@ -310,6 +310,10 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
+      "apps/aqualink/modules/admin/documents/viewForecasterComments.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/aqualink/modules/admin/imgupload/addImgs.R",
       package = "YGwater"
     ))
