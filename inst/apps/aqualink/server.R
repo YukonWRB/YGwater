@@ -3515,6 +3515,15 @@ WHERE rolname = current_user;"
         addDocs("addDocs", language = languageSelection) # Call the server
       }
     }
+    if (input$navbar == "viewForecasterComments") {
+      if (!isTRUE(ui_loaded$viewForecasterComments)) {
+        output$viewForecasterComments_ui <- renderUI(
+          viewForecasterCommentsUI("viewForecasterComments")
+        )
+        ui_loaded$viewForecasterComments <- TRUE
+        viewForecasterComments("viewForecasterComments", language = languageSelection)
+      }
+    }
     if (input$navbar == "addImgs") {
       if (!ui_loaded$addImgs) {
         output$addImgs_ui <- renderUI(addImgsUI("addImgs")) # Render the UI
