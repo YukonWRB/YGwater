@@ -4131,6 +4131,98 @@ function(client_id, query) {
 #* @then
 v2_finalize_response
 
+#* Return locations with recent images
+#*
+#* Returns the locations that have at least one image in AquaCache within the last `hours` hours (default 24). Use the returned `location_name` with `/images/download` to retrieve the images. Use the `image_type` parameter to filter by specific image types.
+#*
+#* @get /images/locations
+#* @query hours:number(24) Look-back window in hours, counted back from the current time. Must be greater than 0 and at most 8760 (one year).
+#* @query image_type:string Image type name (case-insensitive exact match). Optional.
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
+function(request, response, query) {
+  hours <- suppressWarnings(as.numeric(v2_query_value(query, "hours", "24")))
+  if (length(hours) != 1L || is.na(hours) || hours <= 0 || hours > 8760) {
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df(
+          "Invalid 'hours' parameter. Must be a number greater than 0 and at most 8760."
+        ),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ),
+      response,
+      request,
+      query
+    ))
+  }
+
+  image_type <- v2_query_value(query, "image_type")
+  has_image_type <- !is.null(image_type) && nzchar(trimws(image_type))
+
+  ctx <- v2_context_request(request)
+  if (!is.null(ctx$error)) {
+    return(v2_apply_response(ctx$error, response, request, query))
+  }
+  on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
+
+  since_ts <- Sys.time() - hours * 60 * 60
+  query_params <- list(since_ts)
+  image_type_sql <- ""
+  if (isTRUE(has_image_type)) {
+    image_type_sql <- "AND LOWER(COALESCE(it.image_type, '')) = LOWER($2)"
+    query_params <- c(query_params, list(trimws(image_type)))
+  }
+
+  sql <- sprintf(
+    "SELECT
+       l.location_id,
+       l.location_code,
+       l.name AS location_name,
+       l.name_fr AS location_name_fr,
+       COUNT(i.image_id)::integer AS image_count,
+       MAX(i.datetime) AS latest_image_datetime
+     FROM files.images i
+     JOIN public.locations l
+       ON l.location_id = i.location_id
+     LEFT JOIN files.image_types it
+       ON it.image_type_id = i.image_type
+     WHERE i.datetime >= $1
+       %s
+     GROUP BY l.location_id, l.location_code, l.name, l.name_fr
+     ORDER BY l.location_code, l.location_id",
+    image_type_sql
+  )
+
+  out <- DBI::dbGetQuery(ctx$con, sql, params = query_params)
+
+  if (nrow(out) == 0L) {
+    no_data_message <- sprintf(
+      "No locations with images in the last %s hours.",
+      format(hours)
+    )
+    if (isTRUE(has_image_type)) {
+      no_data_message <- paste(no_data_message, "Applied image_type filter.")
+    }
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df(no_data_message, status = "info"),
+        headers = list("X-Status" = "info")
+      ),
+      response,
+      request,
+      query
+    ))
+  }
+
+  v2_serialize_tabular(
+    out,
+    request = request,
+    response = response,
+    query = query
+  )
+}
+
 #* Return snow water equivalent map as a leaflet/HTML output
 #*
 #* @get /snow-bulletin/leaflet
