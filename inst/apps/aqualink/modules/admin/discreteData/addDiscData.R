@@ -1770,7 +1770,6 @@ addDiscData_parse_wide <- function(
       path,
       sheet = sheet,
       col_names = FALSE,
-      range = readxl::cell_limits(c(1, 1), c(NA, NA)),
       col_types = "text",
       .name_repair = "minimal"
     ),

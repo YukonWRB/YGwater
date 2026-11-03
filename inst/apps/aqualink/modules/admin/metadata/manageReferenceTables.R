@@ -2420,7 +2420,11 @@ parameterManagerUI <- function(id) {
         actionButton(ns("add_relationship"), "Add group link"),
         actionButton(ns("remove_relationship"), "Remove selected")
       ),
-      DT::DTOutput(ns("relationships_table"))
+      DT::DTOutput(ns("relationships_table")),
+      div(
+        class = "d-grid mt-3",
+        actionButton(ns("save_bottom"), "Save", class = "btn-primary")
+      )
     ),
     uiOutput(ns("banner")),
     uiOutput(ns("table_heading")),
@@ -2452,6 +2456,8 @@ manageParameters <- function(id, language) {
     current_record_id <- reactiveVal(NULL)
     current_relationships <- reactiveVal(parameter_relationships_empty())
     current_row <- reactiveVal(reference_empty_row(config$columns))
+    records_table_state <- new.env(parent = emptyenv())
+    records_table_state$initialized <- FALSE
 
     output$banner <- renderUI({
       req(language$language)
@@ -2528,6 +2534,16 @@ manageParameters <- function(id, language) {
 
       session$onFlushed(
         function() {
+          if (records_table_state$initialized) {
+            display_dt <- reference_prepare_for_dt(display)
+            DT::replaceData(
+              table_proxy,
+              display_dt,
+              resetPaging = FALSE
+            )
+          } else {
+            records_table_state$initialized <- TRUE
+          }
           update_relationship_selectors(relationship_choices)
 
           if (is.null(selected_id)) {
@@ -2605,7 +2621,12 @@ manageParameters <- function(id, language) {
 
     output$records_table <- DT::renderDT(
       {
-        display <- reference_prepare_for_dt(editor_data$records_display)
+        # Keep this output bound to one DataTable instance. refresh_editor()
+        # updates its rows through the proxy so DataTables retains the user's
+        # column filters, ordering, and current page.
+        display <- reference_prepare_for_dt(
+          isolate(editor_data$records_display)
+        )
         DT::datatable(
           display,
           rownames = FALSE,
@@ -2620,7 +2641,7 @@ manageParameters <- function(id, language) {
           )
         )
       },
-      server = FALSE
+      server = TRUE
     )
     outputOptions(output, "records_table", suspendWhenHidden = FALSE)
 
@@ -2774,9 +2795,7 @@ manageParameters <- function(id, language) {
       ignoreInit = TRUE
     )
 
-    observeEvent(
-      input$save,
-      {
+    save_parameter <- function() {
         values <- tryCatch(reference_collect_values(input, config$columns), error = function(e) e)
         if (inherits(values, "error")) {
           showNotification(paste("Save failed:", conditionMessage(values)), type = "error", duration = 15)
@@ -2931,9 +2950,15 @@ manageParameters <- function(id, language) {
             )
           }
         )
-      },
-      ignoreInit = TRUE
-    )
+    }
+
+    observeEvent(input$save, {
+      save_parameter()
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$save_bottom, {
+      save_parameter()
+    }, ignoreInit = TRUE)
 
     refresh_editor()
   })

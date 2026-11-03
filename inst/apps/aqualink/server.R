@@ -2378,6 +2378,134 @@ app_server <- function(input, output, session) {
   session$userData$can_create_role <- FALSE # track CREATE ROLE privilege
   session$userData$table_privs <- data.frame() # track table privileges
   session$userData$admin_privs <- list() # store privilege flags for UI filtering
+  admin_vis_flag <- reactiveVal("admin")
+
+  initialize_authenticated_user <- function() {
+    # Include views as well as tables so read-only module requirements can be
+    # checked against the same relations used by their queries.
+    sql <- "
+        WITH tbls AS (
+          SELECT n.nspname AS schema, c.relname AS table_name, c.oid AS tbl_oid
+          FROM pg_catalog.pg_class c
+          JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+          WHERE c.relkind IN ('r','p','v','m','f')
+            AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field', 'spatial', 'information')
+        )
+        SELECT t.schema,
+               t.table_name,
+               string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
+        FROM tbls t
+        CROSS JOIN LATERAL unnest(ARRAY['SELECT', 'INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
+        WHERE has_table_privilege(current_user, t.tbl_oid, p.priv)
+        GROUP BY t.schema, t.table_name
+        ORDER BY t.schema, t.table_name;"
+
+    session$userData$table_privs <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      sql
+    )
+    session$userData$table_privs$qual_name <- paste0(
+      session$userData$table_privs$schema,
+      ".",
+      session$userData$table_privs$table_name
+    )
+
+    # The feedback module only needs INSERT; exclude it from the table
+    # inventory used to decide whether administrative modules are available.
+    feedback_privileges <- session$userData$table_privs$extra_privileges[
+      session$userData$table_privs$qual_name == "application.feedback"
+    ]
+    if (
+      length(feedback_privileges) == 1 &&
+        identical(feedback_privileges, "INSERT")
+    ) {
+      session$userData$table_privs <- session$userData$table_privs[
+        !session$userData$table_privs$qual_name == "application.feedback",
+      ]
+    }
+
+    session$userData$admin_privs <- ygwater_admin_privileges(
+      session$userData$table_privs,
+      module_privilege_requirements
+    )
+    if (session$userData$config$dbName == "testdb") {
+      # Role changes affect the shared PostgreSQL cluster, so testers must not
+      # manage roles while connected through the test database.
+      session$userData$can_create_role <- FALSE
+    } else {
+      session$userData$can_create_role <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT rolcreaterole
+FROM pg_catalog.pg_roles
+WHERE rolname = current_user;"
+      )[[1, 1]]
+    }
+
+    session$userData$user_logged_in <- TRUE
+    if (!isTRUE(session$userData$admin_button_inserted)) {
+      # Every authenticated non-public_reader account can enter admin mode;
+      # showAdmin() and can_access_page() still filter each module by privilege.
+      nav_insert(
+        "navbar",
+        nav_item(tagList(actionButton(
+          "admin",
+          "Switch to Admin mode",
+          style = "color: #F2A900;"
+        ))),
+        target = "home",
+        position = "before"
+      )
+      session$userData$admin_button_inserted <- TRUE
+    }
+
+    shinyjs::hide("loginBtn")
+    shinyjs::show("logoutBtn")
+    shinyjs::hide("loginBtnMobile")
+    shinyjs::show("logoutBtnMobile")
+    session$userData$app_cache <- new.env(parent = emptyenv())
+    reset_ui_loaded()
+  }
+
+  configured_user <- if (length(config$dbUser) == 1L && !is.na(config$dbUser)) {
+    trimws(as.character(config$dbUser))
+  } else {
+    ""
+  }
+  request_query <- session$request$QUERY_STRING
+  if (is.null(request_query)) {
+    request_query <- ""
+  }
+  logout_requested <- grepl(
+    "(^|[?&])aqualink_logged_out=1(&|$)",
+    request_query
+  )
+  auto_login <- !isTRUE(config$public) &&
+    nzchar(configured_user) &&
+    !identical(tolower(configured_user), "public_reader") &&
+    !logout_requested
+  if (auto_login) {
+    tryCatch(
+      {
+        initialize_authenticated_user()
+        showAdmin(show = FALSE)
+        showViz(show = TRUE)
+        admin_vis_flag("admin")
+        updateActionButton(session, "admin", label = "Switch to Admin mode")
+        updateTabsetPanel(session, "navbar", selected = "home")
+      },
+      error = function(e) {
+        session$userData$user_logged_in <- FALSE
+        session$userData$can_create_role <- FALSE
+        session$userData$table_privs <- data.frame()
+        session$userData$admin_privs <- list()
+        warning(
+          "Automatic AquaLink login failed for the configured database user: ",
+          conditionMessage(e),
+          call. = FALSE
+        )
+      }
+    )
+  }
 
   # Track the user's last activity
   session$userData$last_activity <- reactiveVal(Sys.time())
@@ -2475,9 +2603,7 @@ app_server <- function(input, output, session) {
     # Reset the session userData with the default credentials
     session$userData$config$dbUser <- config$dbUser
     session$userData$config$dbPass <- config$dbPass
-    if (config$test_exists && input$test_login) {
-      session$userData$config$dbName <- config$dbName
-    }
+    session$userData$config$dbName <- config$dbName
 
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     showViz(show = TRUE) # Restore public/viz tabs immediately without relying on the removed admin button
@@ -2494,12 +2620,17 @@ app_server <- function(input, output, session) {
     shinyjs::runjs("$('#logoutBtn').prop('disabled', false);")
 
     # End this authenticated session after the logout response has reached the
-    # browser. A fresh public session is the only reliable way to destroy every
-    # observer and discard module state that may contain data from the previous
-    # authenticated user.
+    # browser. Preserve an explicit logout in the URL when the configured
+    # account would otherwise be authenticated again on the fresh session.
     session$onFlushed(
       function() {
-        session$reload()
+        if (auto_login) {
+          shinyjs::runjs(
+            "const logoutUrl = new URL(window.location.href); logoutUrl.searchParams.set('aqualink_logged_out', '1'); window.location.replace(logoutUrl.toString());"
+          )
+        } else {
+          session$reload()
+        }
       },
       once = TRUE
     )
@@ -2700,120 +2831,7 @@ app_server <- function(input, output, session) {
             "set application_name TO 'YGwater_shiny'"
           )
 
-          # Check if the user has more than SELECT privileges on relevant tables, used to determine if the 'admin' tab should be shown
-
-          # Include views as well as tables so read-only module requirements
-          # can be checked against the same relation used by their query.
-          sql <- "
-        WITH tbls AS (
-          SELECT n.nspname AS schema, c.relname AS table_name, c.oid AS tbl_oid
-          FROM pg_catalog.pg_class c
-          JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-          WHERE c.relkind IN ('r','p','v','m','f')
-            AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field', 'spatial', 'information')
-        )
-        SELECT t.schema,
-               t.table_name,
-               string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
-        FROM tbls t
-        CROSS JOIN LATERAL unnest(ARRAY['SELECT', 'INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
-        WHERE has_table_privilege(current_user, t.tbl_oid, p.priv)
-        GROUP BY t.schema, t.table_name
-        ORDER BY t.schema, t.table_name;"
-
-          # Store the table privileges in the session for use in other modules or to show/hide certain UI elements
-          session$userData$table_privs <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            sql
-          )
-          # Create a qualified name column for easier filtering
-          session$userData$table_privs$qual_name <- paste0(
-            session$userData$table_privs$schema,
-            ".",
-            session$userData$table_privs$table_name
-          )
-
-          # If application.feedback is present but only has INSERT privileges, remove it
-          feedback_privileges <- session$userData$table_privs$extra_privileges[
-            session$userData$table_privs$qual_name == "application.feedback"
-          ]
-          if (
-            length(feedback_privileges) == 1 &&
-              identical(feedback_privileges, "INSERT")
-          ) {
-            session$userData$table_privs <- session$userData$table_privs[
-              !session$userData$table_privs$qual_name == "application.feedback",
-            ]
-          }
-
-          # Recalculate visibility from the shared catalogue used by manageUsers.
-          # This keeps the diagnostic table and navigation access in sync.
-          session$userData$admin_privs <- ygwater_admin_privileges(
-            session$userData$table_privs,
-            module_privilege_requirements
-          )
-
-          # IF the user has more than SELECT privileges on any tables, show the 'admin' button
-          has_admin_privs <- FALSE
-          if (nrow(session$userData$table_privs) > 0) {
-            has_admin_privs <- any(vapply(
-              session$userData$table_privs$extra_privileges,
-              function(privs) {
-                priv_list <- unlist(strsplit(privs, ", "))
-                any(priv_list != "SELECT")
-              },
-              logical(1)
-            ))
-          }
-          if (session$userData$config$dbName == "testdb") {
-            # Role changes affect the shared PostgreSQL cluster, so testers must
-            # not manage roles while connected through the test database.
-            session$userData$can_create_role <- FALSE
-          } else {
-            session$userData$can_create_role <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              "SELECT rolcreaterole
-FROM pg_catalog.pg_roles
-WHERE rolname = current_user;"
-            )[[1, 1]]
-          }
-
-          # CREATEROLE alone is sufficient to expose the manage-users page.
-          if (has_admin_privs || isTRUE(session$userData$can_create_role)) {
-            if (!isTRUE(session$userData$admin_button_inserted)) {
-              # Create the new element for the 'admin' mode
-              # Other tabs are created if/when the user clicks on the 'admin' actionButton
-              nav_insert(
-                "navbar",
-                nav_item(tagList(actionButton(
-                  "admin",
-                  "Switch to Admin mode",
-                  style = "color: #F2A900;"
-                ))),
-                target = "home",
-                position = "before"
-              )
-              session$userData$admin_button_inserted <- TRUE
-            }
-          } # else the button just won't be created/shown
-
-          # Set the login status to TRUE
-          session$userData$user_logged_in <- TRUE
-
-          # change the 'Login' button to 'Logout'
-          shinyjs::hide("loginBtn")
-          shinyjs::show("logoutBtn")
-          shinyjs::hide("loginBtnMobile")
-          shinyjs::show("logoutBtnMobile")
-
-          # Initialize a fresh cache environment for the session
-          session$userData$app_cache <- new.env(parent = emptyenv())
-
-          # Public modules may already be loaded. Recreate them against the
-          # authenticated connection so row-level security and private data are
-          # reflected immediately. This reset occurs only once per session;
-          # logout reloads the complete Shiny session.
-          reset_ui_loaded()
+          initialize_authenticated_user()
 
           # Send the user back to the 'home' tab if they were elsewhere
           updateTabsetPanel(session, "navbar", selected = "home")
@@ -2957,7 +2975,6 @@ WHERE rolname = current_user;"
   })
 
   # Move between admin/visualize modes
-  admin_vis_flag <- reactiveVal("admin")
   observeEvent(input$admin, {
     if (!isTRUE(session$userData$user_logged_in)) {
       updateTabsetPanel(session, "navbar", selected = "home")
