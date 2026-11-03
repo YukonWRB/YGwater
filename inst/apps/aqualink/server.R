@@ -21,16 +21,44 @@ observe_module_tab_change <- function(outputs, session, nav_select_fun) {
 app_server <- function(input, output, session) {
   # Initial setup #############################################################
 
+  configured_user <- if (length(config$dbUser) == 1L && !is.na(config$dbUser)) {
+    trimws(as.character(config$dbUser))
+  } else {
+    ""
+  }
+  request_query <- session$request$QUERY_STRING
+  if (is.null(request_query)) {
+    request_query <- ""
+  }
+  logout_requested <- grepl(
+    "(^|[?&])aqualink_logged_out=1(&|$)",
+    request_query
+  )
+
+  # An explicit logout starts the new session with the same public_reader
+  # connection used by the public-facing app, so it can browse public data or
+  # authenticate as a different account.
+  base_config <- config
+  if (logout_requested && !isTRUE(config$public)) {
+    public_db_user <- Sys.getenv("aquacachePublicUser", "public_reader")
+    public_db_pass <- Sys.getenv("aquacachePublicPass", "aquacache")
+    if (!nzchar(public_db_user)) public_db_user <- "public_reader"
+    if (!nzchar(public_db_pass)) public_db_pass <- "aquacache"
+    base_config$dbUser <- public_db_user
+    base_config$dbPass <- public_db_pass
+  }
+  session$userData$base_config <- base_config
+
   # Store the config info in the session. If the user connects with their own credentials these need to be used for plot rendering wrapped in an ExtendedTask or future/promises
-  session$userData$config <- config
+  session$userData$config <- base_config
 
   # Initial database connection without edit privileges
   session$userData$AquaCache <- AquaConnect(
-    name = config$dbName,
-    host = config$dbHost,
-    port = config$dbPort,
-    username = config$dbUser,
-    password = config$dbPass,
+    name = base_config$dbName,
+    host = base_config$dbHost,
+    port = base_config$dbPort,
+    username = base_config$dbUser,
+    password = base_config$dbPass,
     silent = TRUE
   )
 
@@ -880,11 +908,11 @@ app_server <- function(input, output, session) {
       tryCatch(
         {
           retry_con <- AquaConnect(
-            name = config$dbName,
-            host = config$dbHost,
-            port = config$dbPort,
-            username = config$dbUser,
-            password = config$dbPass,
+            name = session$userData$base_config$dbName,
+            host = session$userData$base_config$dbHost,
+            port = session$userData$base_config$dbPort,
+            username = session$userData$base_config$dbUser,
+            password = session$userData$base_config$dbPass,
             silent = TRUE
           )
           # Reset the application_name to 'YGwater_shiny'
@@ -944,7 +972,9 @@ app_server <- function(input, output, session) {
     FALSE
   }
 
-  session$userData$usage_id <- insert_usage_session(config$dbUser)
+  session$userData$usage_id <- insert_usage_session(
+    session$userData$base_config$dbUser
+  )
   session$userData$usage_closed <- is.null(session$userData$usage_id)
 
   session$onUnhandledError(function(e) {
@@ -2466,19 +2496,6 @@ WHERE rolname = current_user;"
     reset_ui_loaded()
   }
 
-  configured_user <- if (length(config$dbUser) == 1L && !is.na(config$dbUser)) {
-    trimws(as.character(config$dbUser))
-  } else {
-    ""
-  }
-  request_query <- session$request$QUERY_STRING
-  if (is.null(request_query)) {
-    request_query <- ""
-  }
-  logout_requested <- grepl(
-    "(^|[?&])aqualink_logged_out=1(&|$)",
-    request_query
-  )
   auto_login <- !isTRUE(config$public) &&
     nzchar(configured_user) &&
     !identical(tolower(configured_user), "public_reader") &&
@@ -2566,7 +2583,7 @@ WHERE rolname = current_user;"
       session$userData$admin_button_inserted <- FALSE
     }
 
-    new_id <- insert_usage_session(config$dbUser)
+    new_id <- insert_usage_session(session$userData$base_config$dbUser)
     close_usage_session(
       source = if (show_idle_modal) "logout_idle" else "logout",
       login_to = new_id,
@@ -2587,11 +2604,11 @@ WHERE rolname = current_user;"
     safe_disconnect(session$userData$AquaCache)
     # Re-create the connection with the base 'config' parameters, no edit privileges
     set_session_aquacache_connection(AquaConnect(
-      name = config$dbName,
-      host = config$dbHost,
-      port = config$dbPort,
-      username = config$dbUser,
-      password = config$dbPass,
+      name = session$userData$base_config$dbName,
+      host = session$userData$base_config$dbHost,
+      port = session$userData$base_config$dbPort,
+      username = session$userData$base_config$dbUser,
+      password = session$userData$base_config$dbPass,
       silent = TRUE
     ))
     # Reset the application_name to 'YGwater_shiny'
@@ -2601,9 +2618,7 @@ WHERE rolname = current_user;"
     )
 
     # Reset the session userData with the default credentials
-    session$userData$config$dbUser <- config$dbUser
-    session$userData$config$dbPass <- config$dbPass
-    session$userData$config$dbName <- config$dbName
+    session$userData$config <- session$userData$base_config
 
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     showViz(show = TRUE) # Restore public/viz tabs immediately without relying on the removed admin button
@@ -2620,17 +2635,12 @@ WHERE rolname = current_user;"
     shinyjs::runjs("$('#logoutBtn').prop('disabled', false);")
 
     # End this authenticated session after the logout response has reached the
-    # browser. Preserve an explicit logout in the URL when the configured
-    # account would otherwise be authenticated again on the fresh session.
+    # browser. The logout URL marker was added before the action button event,
+    # so the fresh session starts as public_reader when this account normally
+    # triggers automatic authentication.
     session$onFlushed(
       function() {
-        if (auto_login) {
-          shinyjs::runjs(
-            "const logoutUrl = new URL(window.location.href); logoutUrl.searchParams.set('aqualink_logged_out', '1'); window.location.replace(logoutUrl.toString());"
-          )
-        } else {
-          session$reload()
-        }
+        session$reload()
       },
       once = TRUE
     )
