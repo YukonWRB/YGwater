@@ -544,8 +544,7 @@ reference_table_configs <- function() {
             "SELECT unit_id AS value, unit_name AS label",
             "FROM public.units",
             "ORDER BY unit_name"
-          ),
-          required = TRUE
+          )
         ),
         reference_select_field(
           "units_solid",
@@ -2213,104 +2212,1392 @@ parameter_changed_assigned_unit_fields <- function(old_values, new_values) {
       old_key <- parameter_unit_value_key(old_values[[unit_column]])
       new_key <- parameter_unit_value_key(new_values[[unit_column]])
 
-      !is.na(old_key) && !identical(old_key, new_key)
+      !identical(old_key, new_key)
     },
     logical(1)
   )
 
-  fields[changed, , drop = FALSE]
-}
-
-fetch_parameter_unit_usage <- function(con, parameter_id, changed_units) {
-  if (is.null(changed_units) || !nrow(changed_units)) {
-    return(data.frame())
+  out <- fields[changed, , drop = FALSE]
+  if (!nrow(out)) {
+    return(out)
   }
 
-  usage <- lapply(seq_len(nrow(changed_units)), function(row_idx) {
-    row <- changed_units[row_idx, , drop = FALSE]
-    result <- DBI::dbGetQuery(
-      con,
-      paste(
-        "SELECT",
-        "  ms.matrix_state_id,",
-        "  COALESCE(ms.matrix_state_name, ms.matrix_state_code) AS matrix_state_name,",
-        "  EXISTS (",
-        "    SELECT 1",
-        "    FROM discrete.results AS r",
-        "    WHERE r.parameter_id = $1",
-        "      AND r.matrix_state_id = ms.matrix_state_id",
-        "  ) AS has_discrete_results,",
-        "  EXISTS (",
-        "    SELECT 1",
-        "    FROM continuous.timeseries AS ts",
-        "    WHERE ts.parameter_id = $1",
-        "      AND ts.matrix_state_id = ms.matrix_state_id",
-        "      AND EXISTS (",
-        "        SELECT 1",
-        "        FROM continuous.measurements_continuous AS mc",
-        "        WHERE mc.timeseries_id = ts.timeseries_id",
-        "      )",
-        "  ) AS has_continuous_results",
-        "FROM public.matrix_states AS ms",
-        "WHERE ms.matrix_state_code = $2"
-      ),
-      params = list(
-        as.integer(parameter_id),
-        as.character(row$matrix_state_code)
-      )
-    )
+  out$old_unit_id <- vapply(
+    out$unit_column,
+    function(column) {
+      value <- parameter_unit_value_key(old_values[[column]])
+      if (is.na(value)) NA_integer_ else as.integer(value)
+    },
+    integer(1)
+  )
+  out$new_unit_id <- vapply(
+    out$unit_column,
+    function(column) {
+      value <- parameter_unit_value_key(new_values[[column]])
+      if (is.na(value)) NA_integer_ else as.integer(value)
+    },
+    integer(1)
+  )
+  out
+}
 
-    if (!nrow(result)) {
-      return(result)
+parameter_unit_relation_exists <- function(con, schema, table) {
+  relation <- paste(schema, table, sep = ".")
+  DBI::dbGetQuery(
+    con,
+    "SELECT to_regclass($1) IS NOT NULL AS available",
+    params = list(relation)
+  )$available[[1]] %in% TRUE
+}
+
+parameter_unit_count <- function(con, schema, table, where, params) {
+  if (!parameter_unit_relation_exists(con, schema, table)) {
+    return(0)
+  }
+
+  relation <- as.character(DBI::dbQuoteIdentifier(
+    con,
+    DBI::Id(schema = schema, table = table)
+  ))
+  # Return the count as text because RPostgres represents BIGINT values using
+  # bit64's integer64 encoding. Coercing that representation directly to a
+  # double can silently produce a tiny, incorrect count.
+  query <- sprintf("SELECT count(*)::TEXT AS n FROM %s WHERE %s", relation, where)
+  as.numeric(DBI::dbGetQuery(con, query, params = params)$n[[1]])
+}
+
+parameter_unit_conversion <- function(con, from_unit_id, to_unit_id) {
+  if (is.na(from_unit_id) || is.na(to_unit_id)) {
+    return(NULL)
+  }
+  if (identical(as.integer(from_unit_id), as.integer(to_unit_id))) {
+    return(data.frame(
+      conversion_type = "factor",
+      scale_a = 1,
+      scale_b = 0,
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  direct <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT conversion_type, scale_a, scale_b",
+      "FROM public.unit_conversions",
+      "WHERE from_unit_id = $1 AND to_unit_id = $2"
+    ),
+    params = list(as.integer(from_unit_id), as.integer(to_unit_id))
+  )
+  if (nrow(direct)) {
+    return(direct)
+  }
+
+  reverse <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT conversion_type, scale_a, scale_b",
+      "FROM public.unit_conversions",
+      "WHERE from_unit_id = $1 AND to_unit_id = $2"
+    ),
+    params = list(as.integer(to_unit_id), as.integer(from_unit_id))
+  )
+  if (!nrow(reverse) || isTRUE(all.equal(as.numeric(reverse$scale_a[[1]]), 0))) {
+    return(NULL)
+  }
+
+  data.frame(
+    conversion_type = reverse$conversion_type[[1]],
+    scale_a = 1 / as.numeric(reverse$scale_a[[1]]),
+    scale_b = -as.numeric(reverse$scale_b[[1]]) / as.numeric(reverse$scale_a[[1]]),
+    stringsAsFactors = FALSE
+  )
+}
+
+parameter_unit_matrix_state_choices <- function(con, new_values) {
+  fields <- parameter_unit_fields()
+  assigned <- vapply(
+    fields$unit_column,
+    function(column) {
+      !reference_is_missing_value(new_values[[column]])
+    },
+    logical(1)
+  )
+  available_codes <- fields$matrix_state_code[assigned]
+  if (!length(available_codes)) {
+    return(data.frame(
+      matrix_state_id = integer(),
+      matrix_state_code = character(),
+      matrix_state_name = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  placeholders <- paste0("$", seq_along(available_codes))
+  DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT matrix_state_id, matrix_state_code,",
+      "COALESCE(matrix_state_name, matrix_state_code) AS matrix_state_name",
+      "FROM public.matrix_states WHERE matrix_state_code IN (",
+      paste(placeholders, collapse = ", "), ") ORDER BY matrix_state_id"
+    ),
+    params = as.list(available_codes)
+  )
+}
+
+fetch_parameter_unit_usage <- function(con, parameter_id, changed_units, new_values) {
+  if (is.null(changed_units) || !nrow(changed_units)) {
+    return(list(
+      usage = data.frame(),
+      mapping_sets = data.frame(),
+      parameter_refs = data.frame(
+        schema_name = character(), table_name = character(),
+        column_name = character(), stringsAsFactors = FALSE
+      ),
+      timeseries_refs = data.frame(
+        schema_name = character(), table_name = character(),
+        column_name = character(), stringsAsFactors = FALSE
+      ),
+      state_choices = data.frame(),
+      unit_choices = data.frame(),
+      blockers = character(0)
+    ))
+  }
+
+  usage_rows <- list()
+  add_usage <- function(state_code, table, count, detail = "", supported = TRUE) {
+    if (length(count) && is.finite(count) && count > 0) {
+      usage_rows[[length(usage_rows) + 1L]] <<- data.frame(
+        matrix_state_code = state_code,
+        table = table,
+        count = as.numeric(count),
+        detail = detail,
+        supported = isTRUE(supported),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+
+  state_sql <- paste0(
+    "SELECT matrix_state_id, matrix_state_code, ",
+    "COALESCE(matrix_state_name, matrix_state_code) AS matrix_state_name ",
+    "FROM public.matrix_states WHERE matrix_state_code IN (",
+    paste0("$", seq_len(nrow(changed_units)), collapse = ", "), ")"
+  )
+  state_ids <- DBI::dbGetQuery(
+    con,
+    state_sql,
+    params = as.list(changed_units$matrix_state_code)
+  )
+  state_idx <- match(changed_units$matrix_state_code, state_ids$matrix_state_code)
+  changed_units$matrix_state_id <- state_ids$matrix_state_id[state_idx]
+  changed_units$matrix_state_name <- state_ids$matrix_state_name[state_idx]
+  blockers <- character(0)
+
+  for (row_idx in seq_len(nrow(changed_units))) {
+    row <- changed_units[row_idx, , drop = FALSE]
+    state_id <- as.integer(row$matrix_state_id[[1]])
+    code <- row$matrix_state_code[[1]]
+    if (is.na(state_id)) {
+      next
+    }
+    state_params <- list(as.integer(parameter_id), state_id)
+
+    result_count <- parameter_unit_count(
+      con, "discrete", "results",
+      "parameter_id = $1 AND matrix_state_id = $2", state_params
+    )
+    add_usage(code, "discrete.results", result_count)
+
+    component_count <- parameter_unit_count(
+      con, "discrete", "result_components",
+      paste(
+        "result_id IN (SELECT result_id FROM discrete.results",
+        "WHERE parameter_id = $1 AND matrix_state_id = $2)"
+      ),
+      state_params
+    )
+    add_usage(code, "discrete.result_components", component_count)
+
+    aggregation_count <- parameter_unit_count(
+      con, "discrete", "result_aggregations",
+      "result_id IN (SELECT result_id FROM discrete.results WHERE parameter_id = $1 AND matrix_state_id = $2)",
+      state_params
+    )
+    add_usage(
+      code, "discrete.result_aggregations", aggregation_count,
+      "Stored calculation arguments and rounding need an algorithm-specific review.",
+      supported = aggregation_count == 0
+    )
+    if (aggregation_count > 0) {
+      blockers <- c(blockers, "discrete.result_aggregations")
+    }
+    for (view in c("result_aggregation_summary", "stale_result_aggregations")) {
+      view_count <- parameter_unit_count(
+        con, "discrete", view,
+        "result_id IN (SELECT result_id FROM discrete.results WHERE parameter_id = $1 AND matrix_state_id = $2)",
+        state_params
+      )
+      add_usage(
+        code, paste0("discrete.", view), view_count,
+        "Derived view; it will reflect the migrated canonical result and components."
+      )
     }
 
-    result$unit_column <- row$unit_column
-    result$unit_label <- row$unit_label
-    result$matrix_state_code <- row$matrix_state_code
-    result
-  })
+    timeseries_count <- parameter_unit_count(
+      con, "continuous", "timeseries",
+      "parameter_id = $1 AND matrix_state_id = $2", state_params
+    )
+    add_usage(code, "continuous.timeseries", timeseries_count)
 
-  do.call(rbind, usage)
+    timeseries_clause <- paste(
+      "timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries",
+      "WHERE parameter_id = $1 AND matrix_state_id = $2)"
+    )
+    for (table in c(
+      "measurements_continuous", "measurements_calculated_daily", "corrections",
+      "extrema", "forecasts", "thresholds"
+    )) {
+      count <- parameter_unit_count(
+        con, "continuous", table, timeseries_clause, state_params
+      )
+      add_usage(code, paste0("continuous.", table), count)
+    }
+
+    for (table in c("transmission_timeseries_mappings")) {
+      count <- parameter_unit_count(
+        con, "continuous", table, timeseries_clause, state_params
+      )
+      add_usage(code, paste0("continuous.", table), count)
+    }
+
+    aggregation_method_clause <- paste(
+      "aggregation_method_id IN (SELECT aggregation_method_id",
+      "FROM continuous.timeseries_aggregation_methods",
+      "WHERE timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries",
+      "WHERE parameter_id = $1 AND matrix_state_id = $2))"
+    )
+    for (table in c(
+      "timeseries_aggregation_methods",
+      "timeseries_aggregation_method_steps",
+      "timeseries_aggregation_method_step_inputs"
+    )) {
+      where <- if (identical(table, "timeseries_aggregation_methods")) {
+        timeseries_clause
+      } else {
+        aggregation_method_clause
+      }
+      count <- parameter_unit_count(
+        con, "continuous", table, where, state_params
+      )
+      add_usage(
+        code, paste0("continuous.", table), count,
+        "Versioned aggregation recipes and their steps require recalculation review after a unit change.",
+        supported = count == 0
+      )
+      if (count > 0) {
+        blockers <- c(blockers, paste0("continuous.", table))
+      }
+    }
+
+    guideline_count <- parameter_unit_count(
+      con, "criteria", "guidelines",
+      "parameter_id = $1 AND matrix_state_id = $2", state_params
+    )
+    add_usage(code, "criteria.guidelines", guideline_count)
+
+    guideline_input_count <- parameter_unit_count(
+      con, "criteria", "guideline_rule_inputs",
+      "parameter_id = $1 AND matrix_state_id = $2", state_params
+    )
+    add_usage(code, "criteria.guideline_rule_inputs", guideline_input_count)
+
+    # A parameter may feed a formula for a different guideline parameter.
+    # Converting that input without rewriting the consumer changes its meaning.
+    dependent_rule_count <- parameter_unit_count(
+      con, "criteria", "guideline_value_rules",
+      "rule_id IN (
+         SELECT rule_id FROM criteria.guideline_rule_inputs
+         WHERE parameter_id = $1 AND matrix_state_id = $2
+       ) AND (algorithm_code NOT IN ('constant', 'narrative')
+         OR NULLIF(btrim(formula_sql), '') IS NOT NULL)",
+      state_params
+    )
+    if (dependent_rule_count > 0) {
+      add_usage(
+        code, "criteria.guideline_value_rules (dependent input)",
+        dependent_rule_count,
+        "Formulas consuming this parameter need an input-unit review before migration.",
+        supported = FALSE
+      )
+      blockers <- c(blockers, "criteria.guideline_value_rules (dependent input)")
+    }
+
+    helper_input_count <- parameter_unit_count(
+      con, "criteria", "guideline_rule_inputs",
+      "parameter_id = $1 AND matrix_state_id = $2 AND input_source = 'hardness_helper'",
+      state_params
+    )
+    if (helper_input_count > 0) {
+      add_usage(
+        code, "criteria.guideline_rule_inputs (hardness_helper)", helper_input_count,
+        "Derived hardness inputs need a helper-specific unit migration.",
+        supported = FALSE
+      )
+      blockers <- c(blockers, "criteria.guideline_rule_inputs (hardness_helper)")
+    }
+
+    guideline_rule_count <- parameter_unit_count(
+      con, "criteria", "guideline_value_rules",
+      "guideline_id IN (SELECT guideline_id FROM criteria.guidelines WHERE parameter_id = $1 AND matrix_state_id = $2)",
+      state_params
+    )
+    add_usage(code, "criteria.guideline_value_rules", guideline_rule_count)
+
+    guideline_coefficient_count <- parameter_unit_count(
+      con, "criteria", "guideline_rule_coefficients",
+      "rule_id IN (SELECT rule.rule_id FROM criteria.guideline_value_rules rule JOIN criteria.guidelines guideline USING (guideline_id) WHERE guideline.parameter_id = $1 AND guideline.matrix_state_id = $2)",
+      state_params
+    )
+    add_usage(
+      code, "criteria.guideline_rule_coefficients", guideline_coefficient_count,
+      "Rule coefficients require a parameter-specific review.",
+      supported = guideline_coefficient_count == 0
+    )
+    if (guideline_coefficient_count > 0) {
+      blockers <- c(blockers, "criteria.guideline_rule_coefficients")
+    }
+
+    formula_rule_count <- parameter_unit_count(
+      con, "criteria", "guideline_value_rules",
+      "guideline_id IN (SELECT guideline_id FROM criteria.guidelines WHERE parameter_id = $1 AND matrix_state_id = $2) AND formula_sql IS NOT NULL AND btrim(formula_sql) <> ''",
+      state_params
+    )
+    if (formula_rule_count > 0) {
+      add_usage(
+        code, "criteria.guideline_value_rules (formula_sql)", formula_rule_count,
+        "Stored formulas cannot be rewritten safely by a unit conversion.",
+        supported = FALSE
+      )
+      blockers <- c(blockers, "criteria.guideline_value_rules (formula_sql)")
+    }
+
+    computed_rule_count <- parameter_unit_count(
+      con, "criteria", "guideline_value_rules",
+      "guideline_id IN (SELECT guideline_id FROM criteria.guidelines WHERE parameter_id = $1 AND matrix_state_id = $2) AND algorithm_code <> 'constant'",
+      state_params
+    )
+    if (computed_rule_count > 0) {
+      add_usage(
+        code, "criteria.guideline_value_rules (computed algorithm)", computed_rule_count,
+        "Computed guideline algorithms require an algorithm-specific unit migration.",
+        supported = FALSE
+      )
+      blockers <- c(blockers, "criteria.guideline_value_rules (computed algorithm)")
+    }
+
+    rounded_rule_count <- parameter_unit_count(
+      con, "criteria", "guideline_value_rules",
+      "guideline_id IN (SELECT guideline_id FROM criteria.guidelines
+       WHERE parameter_id = $1 AND matrix_state_id = $2)
+       AND rounding_method <> 'none'",
+      state_params
+    )
+    if (rounded_rule_count > 0) {
+      add_usage(
+        code, "criteria.guideline_value_rules (rounding)", rounded_rule_count,
+        "Output rounding precision must be reviewed in the destination unit.",
+        supported = FALSE
+      )
+      blockers <- c(blockers, "criteria.guideline_value_rules (rounding)")
+    }
+
+    has_mapping_sets <- parameter_unit_relation_exists(con, "discrete", "import_mapping_sets")
+    mapping_count <- if (has_mapping_sets) parameter_unit_count(
+      con, "discrete", "import_parameter_mappings",
+      paste(
+        "parameter_id = $1 AND matrix_state_id = $2 AND import_mapping_set_id IN (",
+        "SELECT import_mapping_set_id FROM discrete.import_mapping_sets",
+        "WHERE status IN ('draft', 'published'))"
+      ),
+      state_params
+    ) else 0
+    add_usage(code, "discrete.import_parameter_mappings", mapping_count)
+
+  }
+
+  mapping_missing_state_count <- parameter_unit_count(
+    con, "discrete", "import_parameter_mappings",
+    "parameter_id = $1 AND matrix_state_id IS NULL AND import_mapping_set_id IN (SELECT import_mapping_set_id FROM discrete.import_mapping_sets WHERE status IN ('draft', 'published'))",
+    list(as.integer(parameter_id))
+  )
+  if (mapping_missing_state_count > 0) {
+    add_usage(
+      NA_character_, "discrete.import_parameter_mappings (missing matrix state)",
+      mapping_missing_state_count,
+      "The mapping has no matrix state, so its target unit is ambiguous.",
+      supported = FALSE
+    )
+    blockers <- c(blockers, "discrete.import_parameter_mappings (missing matrix state)")
+  }
+
+  # Curves reference a parameter independently on their input and output axes.
+  curve_count <- parameter_unit_count(
+    con, "continuous", "rating_curves",
+    "input_parameter_id = $1 OR output_parameter_id = $1",
+    list(as.integer(parameter_id))
+  )
+  add_usage(NA_character_, "continuous.rating_curves", curve_count)
+  if (curve_count > 0) {
+    old_units <- fetch_parameter_unit_values(con, parameter_id)
+    fields <- parameter_unit_fields()$unit_column
+    old_assigned <- vapply(
+      fields,
+      function(column) !reference_is_missing_value(old_units[[column]]),
+      logical(1)
+    )
+    new_assigned <- vapply(
+      fields,
+      function(column) !reference_is_missing_value(new_values[[column]]),
+      logical(1)
+    )
+    if (sum(old_assigned) != 1L || sum(new_assigned) != 1L || nrow(changed_units) != 1L) {
+      add_usage(
+        NA_character_, "continuous.rating_curves (ambiguous matrix state)",
+        curve_count,
+        "Rating curves do not store a matrix state; this parameter has multiple or changing unit states.",
+        supported = FALSE
+      )
+      blockers <- c(blockers, "continuous.rating_curves (ambiguous matrix state)")
+    }
+  }
+
+  for (table in c("rating_curve_points", "rating_curve_shifts")) {
+    count <- parameter_unit_count(
+      con, "continuous", table,
+      "curve_id IN (SELECT curve_id FROM continuous.rating_curves WHERE input_parameter_id = $1 OR output_parameter_id = $1)",
+      list(as.integer(parameter_id))
+    )
+    add_usage(NA_character_, paste0("continuous.", table), count)
+  }
+
+  unsupported_correction_count <- parameter_unit_count(
+    con, "continuous", "corrections",
+    paste(
+      "timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = $1)",
+      "AND correction_type IN (SELECT correction_type_id FROM continuous.correction_types",
+      "WHERE correction_type = 'drift equation')"
+    ),
+    list(as.integer(parameter_id))
+  )
+  if (unsupported_correction_count > 0) {
+    add_usage(
+      NA_character_, "continuous.corrections (drift equation)",
+      unsupported_correction_count,
+      "Drift equations cannot be transformed safely.",
+      supported = FALSE
+    )
+    blockers <- c(blockers, "continuous.corrections (drift equation)")
+  }
+
+  custom_transmission_config_count <- parameter_unit_count(
+    con, "continuous", "transmission_timeseries_mappings",
+    paste(
+      "timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = $1)",
+      "AND mapping_config <> '{}'::jsonb"
+    ),
+    list(as.integer(parameter_id))
+  )
+  if (custom_transmission_config_count > 0) {
+    add_usage(
+      NA_character_, "continuous.transmission_timeseries_mappings (mapping_config)",
+      custom_transmission_config_count,
+      "Configured preprocessing such as counter differencing or rounding needs a separate unit review.",
+      supported = FALSE
+    )
+    blockers <- c(blockers, "continuous.transmission_timeseries_mappings (mapping_config)")
+  }
+
+  custom_adapter_count <- parameter_unit_count(
+    con, "continuous", "timeseries_source_adapters",
+    "timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = $1)",
+    list(as.integer(parameter_id))
+  )
+  if (custom_adapter_count > 0) {
+    add_usage(
+      NA_character_, "continuous.timeseries_source_adapters", custom_adapter_count,
+      "Source adapter outputs need an adapter-specific unit review.",
+      supported = FALSE
+    )
+    blockers <- c(blockers, "continuous.timeseries_source_adapters")
+  }
+
+  compound_count <- parameter_unit_count(
+    con, "continuous", "timeseries_compounds",
+    "timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = $1)",
+    list(as.integer(parameter_id))
+  )
+  if (compound_count > 0) {
+    add_usage(
+      NA_character_, "continuous.timeseries_compounds", compound_count,
+      "Compound expressions require a formula-specific unit review.",
+      supported = FALSE
+    )
+    blockers <- c(blockers, "continuous.timeseries_compounds")
+  }
+
+  compound_member_count <- parameter_unit_count(
+    con, "continuous", "timeseries_compound_members",
+    "member_timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = $1)",
+    list(as.integer(parameter_id))
+  )
+  if (compound_member_count > 0) {
+    add_usage(
+      NA_character_, "continuous.timeseries_compound_members", compound_member_count,
+      "The parameter is an input to a compound series.",
+      supported = FALSE
+    )
+    blockers <- c(blockers, "continuous.timeseries_compound_members")
+  }
+
+  # Report parameter foreign keys not yet handled by the migration registry.
+  # These are blockers until their value semantics have an explicit policy.
+  parameter_refs <- DBI::dbGetQuery(
+    con,
+    "SELECT n.nspname AS schema_name, c.relname AS table_name,
+       a.attname AS column_name
+     FROM pg_constraint f
+     JOIN pg_class c ON c.oid = f.conrelid
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(f.conkey)
+     WHERE f.contype = 'f' AND f.confrelid = 'public.parameters'::regclass
+     ORDER BY n.nspname, c.relname, a.attname"
+  )
+  safe_refs <- c(
+    "public.parameter_relationships.parameter_id",
+    "public.parameter_reporting_basis_suggestions.parameter_id",
+    "public.parameter_speciation_suggestions.parameter_id",
+    "public.parameter_target_suggestions.parameter_id",
+    "discrete.results.parameter_id",
+    "discrete.import_parameter_mappings.parameter_id",
+    "criteria.guidelines.parameter_id",
+    "criteria.guideline_rule_inputs.parameter_id",
+    "continuous.timeseries.parameter_id",
+    "continuous.rating_curves.input_parameter_id",
+    "continuous.rating_curves.output_parameter_id"
+  )
+  for (ref_idx in seq_len(nrow(parameter_refs))) {
+    ref <- parameter_refs[ref_idx, , drop = FALSE]
+    ref_key <- paste(ref$schema_name, ref$table_name, ref$column_name, sep = ".")
+    if (ref_key %in% safe_refs) {
+      next
+    }
+    count <- parameter_unit_count(
+      con,
+      ref$schema_name[[1]],
+      ref$table_name[[1]],
+      sprintf("%s = $1", as.character(DBI::dbQuoteIdentifier(con, ref$column_name[[1]]))),
+      list(as.integer(parameter_id))
+    )
+    if (count > 0) {
+      add_usage(NA_character_, ref_key, count, "Requires a reviewed migration policy.", supported = FALSE)
+      blockers <- c(blockers, ref_key)
+    }
+  }
+
+  timeseries_refs <- DBI::dbGetQuery(
+    con,
+    "SELECT n.nspname AS schema_name, c.relname AS table_name,
+       a.attname AS column_name
+     FROM pg_constraint f
+     JOIN pg_class c ON c.oid = f.conrelid
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(f.conkey)
+     WHERE f.contype = 'f'
+       AND f.confrelid = 'continuous.timeseries'::regclass
+     ORDER BY n.nspname, c.relname, a.attname"
+  )
+  safe_timeseries_refs <- c(
+    "continuous.timeseries.timeseries_id",
+    # These segments describe provenance, access, or review status. Preserve
+    # their values and time ranges; they do not carry measurement units.
+    "continuous.approvals.timeseries_id",
+    "continuous.contributors.timeseries_id",
+    "continuous.grades.timeseries_id",
+    "continuous.owners.timeseries_id",
+    "continuous.qualifiers.timeseries_id",
+    "continuous.notes.timeseries_id",
+    "continuous.timeseries_data_sharing_agreements.timeseries_id",
+    "continuous.measurements_continuous.timeseries_id",
+    "continuous.measurements_calculated_daily.timeseries_id",
+    "continuous.corrections.timeseries_id",
+    "continuous.extrema.timeseries_id",
+    "continuous.forecasts.timeseries_id",
+    "continuous.thresholds.timeseries_id",
+    "continuous.transmission_timeseries_mappings.timeseries_id",
+    "continuous.timeseries_aggregation_methods.timeseries_id",
+    "continuous.timeseries_compounds.timeseries_id",
+    "continuous.timeseries_compound_members.timeseries_id",
+    "continuous.timeseries_compound_members.member_timeseries_id",
+    "continuous.timeseries_source_adapters.timeseries_id"
+  )
+  for (ref_idx in seq_len(nrow(timeseries_refs))) {
+    ref <- timeseries_refs[ref_idx, , drop = FALSE]
+    ref_key <- paste(ref$schema_name, ref$table_name, ref$column_name, sep = ".")
+    if (ref_key %in% safe_timeseries_refs) {
+      next
+    }
+    for (state_idx in seq_len(nrow(changed_units))) {
+      code <- changed_units$matrix_state_code[[state_idx]]
+      state_id <- as.integer(changed_units$matrix_state_id[[state_idx]])
+      count <- parameter_unit_count(
+        con,
+        ref$schema_name[[1]],
+        ref$table_name[[1]],
+        paste(
+          as.character(DBI::dbQuoteIdentifier(con, ref$column_name[[1]])),
+          "IN (SELECT timeseries_id FROM continuous.timeseries",
+          "WHERE parameter_id = $1 AND matrix_state_id = $2)"
+        ),
+        list(as.integer(parameter_id), state_id)
+      )
+      if (count > 0) {
+        add_usage(
+          code, ref_key, count,
+          "An unhandled timeseries foreign key requires a reviewed migration policy.",
+          supported = FALSE
+        )
+        blockers <- c(blockers, ref_key)
+      }
+    }
+  }
+
+  mapping_sets <- if (parameter_unit_relation_exists(con, "discrete", "import_parameter_mappings")) {
+    DBI::dbGetQuery(
+      con,
+      "SELECT DISTINCT mapping_set.import_mapping_set_id,
+         source.source_code, mapping_set.version, mapping_set.status,
+         mapping_set.import_source_id, mapping_set.import_profile_id,
+         count(*) OVER (PARTITION BY mapping_set.import_mapping_set_id)::INTEGER AS mapping_count,
+         draft.import_mapping_set_id AS open_draft_id,
+         draft.version AS open_draft_version
+       FROM discrete.import_parameter_mappings mapping
+       JOIN discrete.import_mapping_sets mapping_set USING (import_mapping_set_id)
+       JOIN discrete.import_sources source USING (import_source_id)
+       LEFT JOIN LATERAL (
+         SELECT draft_set.import_mapping_set_id, draft_set.version
+         FROM discrete.import_mapping_sets draft_set
+         WHERE draft_set.import_source_id = mapping_set.import_source_id
+           AND draft_set.import_profile_id IS NOT DISTINCT FROM mapping_set.import_profile_id
+           AND draft_set.status = 'draft'
+         ORDER BY draft_set.version DESC
+         LIMIT 1
+       ) draft ON TRUE
+       WHERE mapping.parameter_id = $1 AND mapping_set.status IN ('draft', 'published')
+       ORDER BY mapping_set.status, source.source_code, mapping_set.version",
+      params = list(as.integer(parameter_id))
+    )
+  } else {
+    data.frame()
+  }
+
+  flag_count <- if (nrow(mapping_sets) && parameter_unit_relation_exists(con, "discrete", "import_result_flag_mappings")) {
+    set_ids <- unique(as.integer(mapping_sets$import_mapping_set_id))
+    placeholders <- paste0("$", seq_along(set_ids))
+    as.numeric(DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT count(*)::TEXT AS n FROM discrete.import_result_flag_mappings",
+        "WHERE import_mapping_set_id IN (", paste(placeholders, collapse = ", "), ")",
+        "AND result_condition_value_literal IS NOT NULL"
+      ),
+      params = as.list(set_ids)
+    )$n[[1]])
+  } else {
+    0
+  }
+  if (flag_count > 0) {
+    add_usage(
+      NA_character_, "discrete.import_result_flag_mappings", flag_count,
+      "These set-level numeric conditions may apply to multiple parameters.",
+      supported = FALSE
+    )
+    blockers <- c(blockers, "discrete.import_result_flag_mappings")
+  }
+
+  usage <- if (length(usage_rows)) {
+    do.call(rbind, usage_rows)
+  } else {
+    data.frame(
+      matrix_state_code = character(), table = character(), count = numeric(),
+      detail = character(), supported = logical(), stringsAsFactors = FALSE
+    )
+  }
+
+  list(
+    usage = usage,
+    mapping_sets = mapping_sets,
+    parameter_refs = parameter_refs,
+    timeseries_refs = timeseries_refs,
+    state_choices = parameter_unit_matrix_state_choices(con, new_values),
+    unit_choices = DBI::dbGetQuery(
+      con,
+      "SELECT unit_id, unit_name FROM public.units ORDER BY unit_name"
+    ),
+    blockers = unique(blockers),
+    changed_units = changed_units
+  )
 }
 
 parameter_unit_usage_messages <- function(usage) {
-  if (is.null(usage) || !nrow(usage)) {
+  if (is.null(usage) || !nrow(usage$usage)) {
     return(character(0))
   }
 
-  blocked <- usage[
-    usage$has_discrete_results %in% TRUE |
-      usage$has_continuous_results %in% TRUE,
-    ,
-    drop = FALSE
-  ]
-  if (!nrow(blocked)) {
-    return(character(0))
+  usage <- usage$usage
+  apply(usage, 1L, function(row) {
+    state <- if (is.na(row[["matrix_state_code"]])) "parameter-linked" else row[["matrix_state_code"]]
+    detail <- if (nzchar(row[["detail"]])) paste0(" — ", row[["detail"]]) else ""
+    paste0(
+      row[["table"]], ": ", format(as.numeric(row[["count"]]), big.mark = ","),
+      " row(s) (", state, ")", detail
+    )
+  })
+}
+
+parameter_unit_change_defaults <- function(con, changed_units, new_values, state_choices, usage = NULL) {
+  fields <- parameter_unit_fields()
+  out <- changed_units
+  if (!is.null(usage)) {
+    # A newly assigned destination with no existing records needs no source
+    # migration. Keep unassigned sources only when they actually contain data.
+    unscoped <- anyNA(usage$usage$matrix_state_code)
+    needed <- vapply(seq_len(nrow(out)), function(i) {
+      parameter_unit_data_has_state_rows(usage, out$matrix_state_code[[i]]) ||
+        (unscoped && !is.na(out$old_unit_id[[i]]))
+    }, logical(1))
+    out <- out[needed, , drop = FALSE]
+  }
+  out$destination_code <- rep(NA_character_, nrow(out))
+  out$destination_id <- rep(NA_integer_, nrow(out))
+  out$destination_unit_id <- rep(NA_integer_, nrow(out))
+  # Unknown conversions need an explicit choice to keep numbers or supply a
+  # custom conversion; never inherit a factor from a different unit pair.
+  out$conversion_a <- rep(NA_real_, nrow(out))
+  out$conversion_b <- rep(NA_real_, nrow(out))
+  out$conversion_known <- rep(FALSE, nrow(out))
+  out$transmission_a <- rep(NA_real_, nrow(out))
+  out$transmission_b <- rep(NA_real_, nrow(out))
+
+  for (row_idx in seq_len(nrow(out))) {
+    source_code <- out$matrix_state_code[[row_idx]]
+    if (nrow(state_choices)) {
+      destination_code <- if (source_code %in% state_choices$matrix_state_code) {
+        source_code
+      } else {
+        state_choices$matrix_state_code[[1]]
+      }
+      destination_idx <- match(destination_code, state_choices$matrix_state_code)
+      destination_field <- fields$unit_column[
+        match(destination_code, fields$matrix_state_code)
+      ]
+      destination_unit <- parameter_unit_value_key(new_values[[destination_field]])
+      out$destination_code[[row_idx]] <- destination_code
+      out$destination_id[[row_idx]] <- as.integer(
+        state_choices$matrix_state_id[[destination_idx]]
+      )
+      out$destination_unit_id[[row_idx]] <- if (is.na(destination_unit)) {
+        NA_integer_
+      } else {
+        as.integer(destination_unit)
+      }
+
+      conversion <- parameter_unit_conversion(
+        con,
+        out$old_unit_id[[row_idx]],
+        out$destination_unit_id[[row_idx]]
+      )
+      if (!is.null(conversion) && nrow(conversion)) {
+        out$conversion_a[[row_idx]] <- as.numeric(conversion$scale_a[[1]])
+        out$conversion_b[[row_idx]] <- as.numeric(conversion$scale_b[[1]])
+        out$conversion_known[[row_idx]] <- TRUE
+      }
+      out$transmission_a[[row_idx]] <- out$conversion_a[[row_idx]]
+      out$transmission_b[[row_idx]] <- out$conversion_b[[row_idx]]
+    }
+  }
+  out
+}
+
+parameter_unit_data_has_state_rows <- function(usage, state_code) {
+  rows <- usage$usage
+  nrow(rows) > 0L && any(!is.na(rows$matrix_state_code) & rows$matrix_state_code == state_code)
+}
+
+parameter_unit_affine_update <- function(
+  con,
+  schema,
+  table,
+  value_columns,
+  where,
+  where_params,
+  scale_a,
+  scale_b,
+  extra_assignments = list()
+) {
+  if (
+    identical(as.numeric(scale_a), 1) && identical(as.numeric(scale_b), 0) &&
+      !length(extra_assignments)
+  ) {
+    return(invisible(0L))
   }
 
-  apply(
-    blocked,
-    1,
-    function(row) {
-      sources <- character(0)
-      if (isTRUE(as.logical(row[["has_discrete_results"]]))) {
-        sources <- c(sources, "discrete results")
-      }
-      if (isTRUE(as.logical(row[["has_continuous_results"]]))) {
-        sources <- c(sources, "continuous measurements")
-      }
-
+  relation <- as.character(DBI::dbQuoteIdentifier(
+    con,
+    DBI::Id(schema = schema, table = table)
+  ))
+  fields <- character(0)
+  if (length(value_columns)) {
+    value_columns <- intersect(value_columns, DBI::dbListFields(
+      con,
+      DBI::Id(schema = schema, table = table)
+    ))
+    scale_idx <- length(where_params) + 1L
+    offset_idx <- scale_idx + 1L
+    fields <- vapply(value_columns, function(column) {
+      quoted <- as.character(DBI::dbQuoteIdentifier(con, column))
       paste0(
-        "Cannot change ",
-        row[["unit_label"]],
-        " because parameter/matrix state ",
-        row[["matrix_state_name"]],
-        " already has ",
-        paste(sources, collapse = " and "),
-        ". Update or convert those results before changing the unit."
+        quoted, " = CASE WHEN ", quoted, " IS NULL THEN NULL ELSE $",
+        scale_idx, " * ", quoted, " + $", offset_idx, " END"
+      )
+    }, character(1))
+  } else {
+    scale_idx <- length(where_params) + 1L
+    offset_idx <- scale_idx + 1L
+  }
+
+  extra_params <- list()
+  if (length(extra_assignments)) {
+    for (column in names(extra_assignments)) {
+      extra_params[[length(extra_params) + 1L]] <- extra_assignments[[column]]
+      fields <- c(
+        fields,
+        paste0(
+          as.character(DBI::dbQuoteIdentifier(con, column)),
+          " = $", length(where_params) + 2L + length(extra_params)
+        )
       )
     }
+  }
+  if (!length(fields)) {
+    return(invisible(0L))
+  }
+
+  query <- sprintf(
+    "UPDATE %s SET %s WHERE %s",
+    relation,
+    paste(fields, collapse = ", "),
+    where
   )
+  DBI::dbExecute(
+    con,
+    query,
+    params = c(where_params, list(as.numeric(scale_a), as.numeric(scale_b)), extra_params)
+  )
+}
+
+parameter_unit_update_matrix_states <- function(
+  con,
+  schema,
+  table,
+  parameter_id,
+  plan,
+  extra_where = NULL,
+  extra_params = list()
+) {
+  source_ids <- unique(as.integer(plan$matrix_state_id))
+  if (!length(source_ids) || anyNA(source_ids)) {
+    return(invisible(0L))
+  }
+  if (all(plan$matrix_state_id == plan$destination_id)) {
+    return(invisible(0L))
+  }
+  relation <- as.character(DBI::dbQuoteIdentifier(
+    con,
+    DBI::Id(schema = schema, table = table)
+  ))
+  pair_params <- list()
+  case_parts <- character(0)
+  source_placeholders <- character(0)
+  for (source_id in source_ids) {
+    destination_id <- as.integer(
+      plan$destination_id[match(source_id, plan$matrix_state_id)]
+    )
+    pair_params <- c(pair_params, list(source_id, destination_id))
+    source_placeholder <- length(pair_params)
+    destination_placeholder <- source_placeholder + 1L
+    case_parts <- c(
+      case_parts,
+      sprintf(
+        "WHEN $%d::INTEGER THEN $%d::INTEGER",
+        source_placeholder, destination_placeholder
+      )
+    )
+    source_placeholders <- c(
+      source_placeholders,
+      paste0("$", source_placeholder, "::INTEGER")
+    )
+  }
+  params <- c(list(as.integer(parameter_id)), pair_params, extra_params)
+  where <- paste0(
+    "parameter_id = $1 AND matrix_state_id IN (",
+    paste(source_placeholders, collapse = ", "), ")"
+  )
+  if (!is.null(extra_where)) {
+    where <- paste("(", where, ") AND (", extra_where, ")")
+  }
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "UPDATE %s SET matrix_state_id = CASE matrix_state_id %s END WHERE %s",
+      relation,
+      paste(case_parts, collapse = " "),
+      where
+    ),
+    params = params
+  )
+}
+
+parameter_unit_json_object <- function(values, fields) {
+  out <- lapply(fields, function(field) {
+    value <- values[[field]]
+    if (reference_is_missing_value(value)) NA_integer_ else as.integer(value[[1]])
+  })
+  names(out) <- fields
+  out
+}
+
+parameter_unit_inventory_signature <- function(usage) {
+  jsonlite::toJSON(
+    list(
+      usage = usage$usage[order(usage$usage$table, usage$usage$matrix_state_code), , drop = FALSE],
+      mapping_sets = usage$mapping_sets[order(
+        usage$mapping_sets$import_source_id,
+        usage$mapping_sets$import_profile_id,
+        usage$mapping_sets$version
+      ), , drop = FALSE],
+      parameter_refs = usage$parameter_refs[order(
+        usage$parameter_refs$schema_name,
+        usage$parameter_refs$table_name,
+        usage$parameter_refs$column_name
+      ), , drop = FALSE],
+      timeseries_refs = usage$timeseries_refs[order(
+        usage$timeseries_refs$schema_name,
+        usage$timeseries_refs$table_name,
+        usage$timeseries_refs$column_name
+      ), , drop = FALSE],
+      blockers = sort(usage$blockers)
+    ),
+    dataframe = "rows",
+    auto_unbox = TRUE,
+    na = "null"
+  )
+}
+
+parameter_unit_apply_migration <- function(con, parameter_id, plan, mapping_sets) {
+  scale_columns <- c("discrete_a", "continuous_a", "transmission_a", "mapping_a")
+  offset_columns <- c("discrete_b", "continuous_b", "transmission_b", "mapping_b")
+  if (
+    any(!is.finite(as.matrix(plan[, scale_columns, drop = FALSE]))) ||
+      any(as.matrix(plan[, scale_columns, drop = FALSE]) <= 0) ||
+      any(!is.finite(as.matrix(plan[, offset_columns, drop = FALSE])))
+  ) {
+    stop("Unit-change scale factors must be finite and positive, and offsets must be finite.")
+  }
+
+  previous_daily_refresh <- DBI::dbGetQuery(
+    con,
+    "SELECT COALESCE(current_setting('continuous.skip_daily_refresh', TRUE), '') AS setting"
+  )$setting[[1]]
+  invisible(DBI::dbGetQuery(
+    con,
+    "SELECT set_config('continuous.skip_daily_refresh', 'on', TRUE)"
+  ))
+  restore_daily_refresh <- function() {
+    invisible(DBI::dbGetQuery(
+      con,
+      "SELECT set_config('continuous.skip_daily_refresh', $1, TRUE)",
+      params = list(previous_daily_refresh)
+    ))
+  }
+  # A SQL error leaves the transaction aborted; let the caller roll it back
+  # without masking the original error with a failed setting restoration.
+  on.exit(try(restore_daily_refresh(), silent = TRUE), add = TRUE)
+
+  for (row_idx in seq_len(nrow(plan))) {
+    row <- plan[row_idx, , drop = FALSE]
+    source_id <- as.integer(row$matrix_state_id[[1]])
+    destination_id <- as.integer(row$destination_id[[1]])
+    state_params <- list(as.integer(parameter_id), source_id)
+    ts_where <- paste(
+      "timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries",
+      "WHERE parameter_id = $1 AND matrix_state_id = $2)"
+    )
+    result_where <- "parameter_id = $1 AND matrix_state_id = $2"
+
+    parameter_unit_affine_update(
+      con, "discrete", "results",
+      c("result", "result_condition_value"), result_where, state_params,
+      row$discrete_a[[1]], row$discrete_b[[1]]
+    )
+    parameter_unit_affine_update(
+      con, "discrete", "result_components",
+      c("result", "result_condition_value"),
+      "result_id IN (SELECT result_id FROM discrete.results WHERE parameter_id = $1 AND matrix_state_id = $2)",
+      state_params, row$discrete_a[[1]], row$discrete_b[[1]]
+    )
+
+    parameter_unit_affine_update(
+      con, "continuous", "measurements_continuous", "value", ts_where,
+      state_params, row$continuous_a[[1]], row$continuous_b[[1]]
+    )
+    parameter_unit_affine_update(
+      con, "continuous", "measurements_calculated_daily",
+      c(
+        "value", "max", "min", "q90", "q75", "q50", "q25", "q10", "mean",
+        "max_30yr", "min_30yr", "q90_30yr", "q75_30yr", "q50_30yr",
+        "q25_30yr", "q10_30yr", "mean_30yr"
+      ),
+      ts_where, state_params, row$continuous_a[[1]], row$continuous_b[[1]]
+    )
+    parameter_unit_affine_update(
+      con, "continuous", "extrema", "value", ts_where,
+      state_params, row$continuous_a[[1]], row$continuous_b[[1]]
+    )
+    parameter_unit_affine_update(
+      con, "continuous", "extrema",
+      c("uncertainty_lower", "uncertainty_upper"), ts_where, state_params,
+      abs(as.numeric(row$continuous_a[[1]])), 0
+    )
+    parameter_unit_affine_update(
+      con, "continuous", "forecasts",
+      c("value", "min", "q10", "q25", "q50", "q75", "q90", "max"),
+      ts_where, state_params, row$continuous_a[[1]], row$continuous_b[[1]]
+    )
+    parameter_unit_affine_update(
+      con, "continuous", "thresholds",
+      c(
+        "high_advisory", "high_watch", "high_warning", "flood_minor", "flood_major",
+        "high_first_human_impacts", "low_advisory", "low_watch", "low_warning",
+        "low_first_human_impacts", "low_aquatic_life_impacts_minor",
+        "low_aquatic_life_impacts_major", "high_aquatic_life_impacts_minor",
+        "high_aquatic_life_impacts_major", "fsl", "lsl"
+      ),
+      ts_where, state_params, row$continuous_a[[1]], row$continuous_b[[1]]
+    )
+
+    correction_types <- DBI::dbGetQuery(
+      con,
+      "SELECT correction_type_id, correction_type
+       FROM continuous.correction_types"
+    )
+    type_ids <- setNames(correction_types$correction_type_id, correction_types$correction_type)
+    correction_where <- paste(
+      "timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries",
+      "WHERE parameter_id = $1 AND matrix_state_id = $2)",
+      "AND correction_type = ANY($3)"
+    )
+    if (row$continuous_a[[1]] != 1 || row$continuous_b[[1]] != 0) {
+      if (row$continuous_a[[1]] <= 0) {
+        stop("Continuous conversions with a non-positive scale cannot preserve correction trim bounds.")
+      }
+      if (row$continuous_b[[1]] != 0 && "scale" %in% names(type_ids)) {
+        scale_count <- parameter_unit_count(
+          con, "continuous", "corrections",
+          paste(
+            ts_where,
+            "AND correction_type = $3"
+          ),
+          c(state_params, list(as.integer(type_ids[["scale"]])))
+        )
+        if (scale_count > 0) {
+          stop("Affine offsets cannot be applied safely to existing scale corrections.")
+        }
+      }
+      if ("trim" %in% names(type_ids)) {
+        DBI::dbExecute(
+          con,
+          "UPDATE continuous.corrections
+           SET value1 = $4 * value1 + $5,
+               value2 = $4 * value2 + $5
+           WHERE timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries
+             WHERE parameter_id = $1 AND matrix_state_id = $2)
+             AND correction_type = $3",
+          params = list(
+            as.integer(parameter_id), source_id, as.integer(type_ids[["trim"]]),
+            as.numeric(row$continuous_a[[1]]), as.numeric(row$continuous_b[[1]])
+          )
+        )
+      }
+      for (correction_name in c("offset linear", "offset two-point", "drift linear")) {
+        if (!(correction_name %in% names(type_ids))) {
+          next
+        }
+        DBI::dbExecute(
+          con,
+          paste(
+            "UPDATE continuous.corrections",
+            if (identical(correction_name, "offset two-point")) {
+              "SET value1 = $4 * value1, value2 = $4 * value2"
+            } else {
+              "SET value1 = $4 * value1"
+            },
+            "WHERE timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries",
+            "WHERE parameter_id = $1 AND matrix_state_id = $2)",
+            "AND correction_type = $3"
+          ),
+          params = list(
+            as.integer(parameter_id), source_id,
+            as.integer(type_ids[[correction_name]]),
+            as.numeric(row$continuous_a[[1]])
+          )
+        )
+      }
+    }
+
+    # Timeseries delivery mappings feed future values into the stored unit.
+    transmission_where <- paste(
+      "timeseries_id IN (SELECT timeseries_id FROM continuous.timeseries",
+      "WHERE parameter_id = $1 AND matrix_state_id = $2)"
+    )
+    if (row$transmission_a[[1]] != 1 || row$transmission_b[[1]] != 0) {
+      DBI::dbExecute(
+        con,
+        paste(
+          "UPDATE continuous.transmission_timeseries_mappings",
+          "SET value_multiplier = COALESCE(value_multiplier, 1) * $3,",
+          "    value_offset = COALESCE(value_offset, 0) * $3 + $4",
+          "WHERE", transmission_where
+        ),
+        params = c(state_params, list(
+          as.numeric(row$transmission_a[[1]]),
+          as.numeric(row$transmission_b[[1]])
+        ))
+      )
+    }
+
+    guideline_where <- "parameter_id = $1 AND matrix_state_id = $2"
+    parameter_unit_affine_update(
+      con, "criteria", "guideline_value_rules",
+      c("fixed_value", "min_output_value", "max_output_value"),
+      "guideline_id IN (SELECT guideline_id FROM criteria.guidelines WHERE parameter_id = $1 AND matrix_state_id = $2)",
+      state_params, row$discrete_a[[1]], row$discrete_b[[1]]
+    )
+    parameter_unit_affine_update(
+      con, "criteria", "guideline_rule_inputs",
+      c("lower_calibrated_bound", "upper_calibrated_bound"),
+      "parameter_id = $1 AND matrix_state_id = $2",
+      state_params, row$discrete_a[[1]], row$discrete_b[[1]]
+    )
+
+    # Rating curves store both axes as numbers. Curve offsets and shifts are
+    # expressed in output units and therefore scale with the output axis.
+    if (row$continuous_a[[1]] != 1 || row$continuous_b[[1]] != 0) {
+      if (DBI::dbGetQuery(
+        con,
+        "SELECT EXISTS (SELECT 1 FROM continuous.rating_curves
+         WHERE output_parameter_id = $1) AS used_output",
+        params = list(as.integer(parameter_id))
+      )$used_output[[1]]) {
+        DBI::dbExecute(
+          con,
+          "UPDATE continuous.rating_curves
+           SET offset_value = $2 * offset_value + $3
+           WHERE output_parameter_id = $1",
+          params = list(
+            as.integer(parameter_id), as.numeric(row$continuous_a[[1]]),
+            as.numeric(row$continuous_b[[1]])
+          )
+        )
+        DBI::dbExecute(
+          con,
+          "UPDATE continuous.rating_curve_shifts
+           SET shift_value = shift_value * $2
+           WHERE curve_id IN (SELECT curve_id FROM continuous.rating_curves
+             WHERE output_parameter_id = $1)",
+          params = list(as.integer(parameter_id), as.numeric(row$continuous_a[[1]]))
+        )
+      }
+      DBI::dbExecute(
+        con,
+        "UPDATE continuous.rating_curve_points point
+         SET input_value = CASE WHEN curve.input_parameter_id = $1
+               THEN $2 * point.input_value + $3 ELSE point.input_value END,
+             output_value = CASE WHEN curve.output_parameter_id = $1
+               THEN $2 * point.output_value + $3 ELSE point.output_value END
+         FROM continuous.rating_curves curve
+         WHERE curve.curve_id = point.curve_id
+           AND (curve.input_parameter_id = $1 OR curve.output_parameter_id = $1)",
+        params = list(
+          as.integer(parameter_id), as.numeric(row$continuous_a[[1]]),
+          as.numeric(row$continuous_b[[1]])
+        )
+      )
+    }
+
+  }
+
+  restore_daily_refresh()
+  on.exit(NULL, add = FALSE)
+
+  parameter_unit_update_matrix_states(
+    con, "discrete", "results", parameter_id, plan
+  )
+  parameter_unit_update_matrix_states(
+    con, "continuous", "timeseries", parameter_id, plan
+  )
+  parameter_unit_update_matrix_states(
+    con, "criteria", "guidelines", parameter_id, plan
+  )
+  parameter_unit_update_matrix_states(
+    con, "criteria", "guideline_rule_inputs", parameter_id, plan
+  )
+
+  # Draft mappings can be adjusted directly. Published snapshots still need a
+  # revision; unpublished edits must not be included in that publication.
+  if (nrow(mapping_sets)) {
+    if (!exists("import_mapping_prepare_revision", envir = asNamespace("AquaCache"), inherits = FALSE)) {
+      stop("This AquaCache installation cannot create import mapping revisions.")
+    }
+    prepare_revision <- getFromNamespace("import_mapping_prepare_revision", "AquaCache")
+    publish_revision <- getFromNamespace("import_mapping_publish_revision", "AquaCache")
+    migrate_mapping_set <- function(draft_id) {
+      for (row_idx in seq_len(nrow(plan))) {
+        row <- plan[row_idx, , drop = FALSE]
+        if (row$mapping_a[[1]] != 1 || row$mapping_b[[1]] != 0) {
+          DBI::dbExecute(
+            con,
+            "UPDATE discrete.import_parameter_mappings
+             SET conversion = COALESCE(conversion, 1) * $3,
+                 result_offset = COALESCE(result_offset, 0) * $3 + $4
+             WHERE import_mapping_set_id = $1
+               AND parameter_id = $2
+               AND matrix_state_id = $5",
+            params = list(
+              draft_id, as.integer(parameter_id),
+              as.numeric(row$mapping_a[[1]]), as.numeric(row$mapping_b[[1]]),
+              as.integer(row$matrix_state_id[[1]])
+            )
+          )
+        }
+      }
+      mapping_sources <- unique(as.integer(plan$matrix_state_id))
+      mapping_cases <- character(0)
+      mapping_params <- list(draft_id, as.integer(parameter_id))
+      mapping_source_placeholders <- character(0)
+      for (source_id in mapping_sources) {
+        destination_id <- as.integer(
+          plan$destination_id[match(source_id, plan$matrix_state_id)]
+        )
+        mapping_params <- c(mapping_params, list(source_id, destination_id))
+        source_placeholder <- length(mapping_params) - 1L
+        destination_placeholder <- length(mapping_params)
+        mapping_cases <- c(
+          mapping_cases,
+          sprintf(
+            "WHEN $%d::INTEGER THEN $%d::INTEGER",
+            source_placeholder, destination_placeholder
+          )
+        )
+        mapping_source_placeholders <- c(
+          mapping_source_placeholders,
+          paste0("$", source_placeholder, "::INTEGER")
+        )
+      }
+      if (!all(plan$matrix_state_id == plan$destination_id)) {
+        DBI::dbExecute(
+          con,
+          paste0(
+            "UPDATE discrete.import_parameter_mappings SET matrix_state_id = CASE matrix_state_id ",
+            paste(mapping_cases, collapse = " "),
+            " END WHERE import_mapping_set_id = $1 AND parameter_id = $2 AND matrix_state_id IN (",
+            paste(mapping_source_placeholders, collapse = ", "), ")"
+          ),
+          params = mapping_params
+        )
+      }
+    }
+    draft_sets <- mapping_sets[mapping_sets$status == "draft", , drop = FALSE]
+    for (draft_id in unique(draft_sets$import_mapping_set_id)) {
+      migrate_mapping_set(as.integer(draft_id))
+    }
+
+    mapping_tables <- c(
+      import_parameter_mappings = "import_mapping_id",
+      import_result_flag_mappings = "import_result_flag_mapping_id",
+      import_location_mappings = "import_location_mapping_id"
+    )
+    # Used both when cloning published evidence and when restoring unfinished
+    # work. Let identities and generated analytical keys be rebuilt normally.
+    copy_mapping_rows <- function(table, from_relation, from_id, to_id) {
+      columns <- DBI::dbGetQuery(con,
+        "SELECT column_name FROM information_schema.columns
+         WHERE table_schema = 'discrete' AND table_name = $1
+           AND is_generated = 'NEVER' AND is_identity = 'NO'
+         ORDER BY ordinal_position", params = list(table))$column_name
+      columns <- setdiff(columns, c("import_mapping_set_id", mapping_tables[[table]]))
+      columns_sql <- paste(as.character(DBI::dbQuoteIdentifier(con, columns)), collapse = ", ")
+      target <- as.character(DBI::dbQuoteIdentifier(con, DBI::Id(schema = "discrete", table = table)))
+      DBI::dbExecute(con, sprintf(
+        "INSERT INTO %s (import_mapping_set_id, %s)
+         SELECT $1, %s FROM %s WHERE import_mapping_set_id = $2",
+        target, columns_sql, columns_sql, from_relation), params = list(to_id, from_id))
+    }
+    published_sets <- mapping_sets[mapping_sets$status == "published", , drop = FALSE]
+    for (set_idx in seq_len(nrow(published_sets))) {
+      set <- published_sets[set_idx, , drop = FALSE]
+      source_id <- as.integer(set$import_source_id[[1]])
+      profile_id <- as.integer(set$import_profile_id[[1]])
+      draft_id <- prepare_revision(con, source_id, profile_id)
+      preserve_draft <- !is.na(set$open_draft_id[[1]])
+      if (preserve_draft) {
+        draft_note <- DBI::dbGetQuery(con,
+          "SELECT note FROM discrete.import_mapping_sets WHERE import_mapping_set_id = $1",
+          params = list(draft_id))$note[[1]]
+        # Only one draft is allowed per scope. Save its already-adjusted rows,
+        # publish a clean revision of the published snapshot, then carry the
+        # unfinished work forward into a new draft in this same transaction.
+        for (i in seq_along(mapping_tables)) {
+          table <- names(mapping_tables)[[i]]
+          relation <- as.character(DBI::dbQuoteIdentifier(con, DBI::Id(schema = "discrete", table = table)))
+          temp <- as.character(DBI::dbQuoteIdentifier(con, paste0("parameter_unit_draft_", i)))
+          DBI::dbExecute(con, sprintf(
+            "CREATE TEMP TABLE %s ON COMMIT DROP AS SELECT * FROM %s WHERE import_mapping_set_id = $1",
+            temp, relation), params = list(draft_id))
+          DBI::dbExecute(con, paste("DELETE FROM", relation, "WHERE import_mapping_set_id = $1"),
+            params = list(draft_id))
+          copy_mapping_rows(table, relation, as.integer(set$import_mapping_set_id[[1]]), draft_id)
+        }
+      }
+      migrate_mapping_set(draft_id)
+      publish_revision(con, draft_id)
+      if (preserve_draft) {
+        next_draft <- DBI::dbGetQuery(con,
+          "INSERT INTO discrete.import_mapping_sets
+             (import_source_id, import_profile_id, version, status, note)
+           SELECT $1, $2, COALESCE(max(version), 0) + 1, 'draft', $3
+           FROM discrete.import_mapping_sets
+           WHERE import_source_id = $1 AND import_profile_id IS NOT DISTINCT FROM $2
+           RETURNING import_mapping_set_id", params = list(source_id, profile_id, draft_note))$import_mapping_set_id[[1]]
+        for (i in seq_along(mapping_tables)) {
+          temp <- as.character(DBI::dbQuoteIdentifier(con, paste0("parameter_unit_draft_", i)))
+          copy_mapping_rows(names(mapping_tables)[[i]], temp, draft_id, as.integer(next_draft))
+          DBI::dbExecute(con, paste("DROP TABLE", temp))
+        }
+      }
+    }
+  }
+  invisible(TRUE)
 }
 
 # Advisory associations are edited with their parameter, within the same
@@ -2361,6 +3648,15 @@ save_parameter_suggestions <- function(con, parameter_id, input) {
   }
 }
 
+parameter_save_button <- function(ns, id, label = "Save", busy_label = "Checking affected records...") {
+  actionButton(ns(id), label, class = "btn-primary", onclick = sprintf(
+    "if (this.dataset.parameterBusy === 'true') { event.preventDefault(); event.stopImmediatePropagation(); return false; }
+     window.aqualinkParameterSaveState(%s, true, %s, %s);",
+    jsonlite::toJSON(ns(c("save", "save_bottom", "confirm_unit_change"))),
+    jsonlite::toJSON(busy_label, auto_unbox = TRUE),
+    jsonlite::toJSON(ns("save_status"), auto_unbox = TRUE)))
+}
+
 parameterManagerUI <- function(id) {
   ns <- NS(id)
   config <- reference_table_configs()[["parameters"]]
@@ -2370,14 +3666,39 @@ parameterManagerUI <- function(id) {
       width = 430,
       open = "always",
       title = config$title,
+      # A synchronous database check cannot flush reactive UI updates while it
+      # is running. Acknowledge and disable submissions in the browser itself.
+      tags$script(HTML("window.aqualinkParameterSaveState = function(ids, busy, label, statusId) {
+        ids.forEach(function(id) {
+          var button = document.getElementById(id);
+          if (!button) return;
+          if (!button.dataset.parameterIdleLabel) button.dataset.parameterIdleLabel = button.textContent.trim();
+          button.disabled = busy;
+          button.dataset.parameterBusy = busy ? 'true' : 'false';
+          button.setAttribute('aria-busy', busy ? 'true' : 'false');
+          button.textContent = busy ? label : button.dataset.parameterIdleLabel;
+          if (busy) {
+            var spinner = document.createElement('span');
+            spinner.className = 'spinner-border spinner-border-sm me-2';
+            spinner.setAttribute('aria-hidden', 'true');
+            button.insertBefore(spinner, button.firstChild);
+          }
+        });
+        var status = document.getElementById(statusId);
+        if (status) { status.textContent = busy ? label : ''; status.hidden = !busy; }
+      };
+      Shiny.addCustomMessageHandler('aqualink-parameter-save-state', function(message) {
+        window.aqualinkParameterSaveState(message.ids, message.busy, message.label, message.statusId);
+      });")),
       uiOutput(ns("panel_intro")),
       uiOutput(ns("record_summary")),
       div(
         class = "d-flex gap-2 flex-wrap mb-3",
-        actionButton(ns("save"), "Save", class = "btn-primary"),
+        parameter_save_button(ns, "save"),
         actionButton(ns("new_record"), "New record"),
         actionButton(ns("reload"), "Reload")
       ),
+      tags$div(id = ns("save_status"), role = "status", `aria-live` = "polite", hidden = NA),
       reference_render_fields_ui(
         ns,
         config$columns,
@@ -2423,7 +3744,7 @@ parameterManagerUI <- function(id) {
       DT::DTOutput(ns("relationships_table")),
       div(
         class = "d-grid mt-3",
-        actionButton(ns("save_bottom"), "Save", class = "btn-primary")
+        parameter_save_button(ns, "save_bottom")
       )
     ),
     uiOutput(ns("banner")),
@@ -2442,6 +3763,42 @@ manageParameters <- function(id, language) {
     con <- session$userData$AquaCache
     config <- reference_table_configs()[["parameters"]]
     table_proxy <- DT::dataTableProxy("records_table", session = session)
+    records_table_state_key <- as.character(jsonlite::toJSON(
+      session$ns("records_table_state"),
+      auto_unbox = TRUE
+    ))
+    records_table_state_save <- htmlwidgets::JS(sprintf(
+      "function(settings, data) {
+        try { sessionStorage.setItem(%s, JSON.stringify(data)); }
+        catch (e) {}
+      }",
+      records_table_state_key
+    ))
+    records_table_state_load <- htmlwidgets::JS(sprintf(
+      "function(settings) {
+        try {
+          var state = sessionStorage.getItem(%s);
+          return state ? JSON.parse(state) : null;
+        } catch (e) { return null; }
+      }",
+      records_table_state_key
+    ))
+    records_table_init <- htmlwidgets::JS(
+      "function(settings, json) {
+        var api = this.api();
+        setTimeout(function() {
+          var container = api.table().container();
+          var filterInputs = $(container).find(
+            '.dataTables_scrollHead thead tr:last input'
+          );
+          api.columns().every(function(index) {
+            filterInputs.eq(index).val(this.search());
+          });
+          $(container).find('.dataTables_filter input[type=search]')
+            .val(api.search());
+        }, 0);
+      }"
+    )
     relationship_proxy <- DT::dataTableProxy(
       "relationships_table",
       session = session
@@ -2456,8 +3813,14 @@ manageParameters <- function(id, language) {
     current_record_id <- reactiveVal(NULL)
     current_relationships <- reactiveVal(parameter_relationships_empty())
     current_row <- reactiveVal(reference_empty_row(config$columns))
-    records_table_state <- new.env(parent = emptyenv())
-    records_table_state$initialized <- FALSE
+    pending_unit_change <- reactiveVal(NULL)
+    unit_conversion_auto_keys <- reactiveVal(character(0))
+    parameter_save_busy <- FALSE
+    set_parameter_save_busy <- function(busy, label = "Checking affected records...") {
+      session$sendCustomMessage("aqualink-parameter-save-state", list(
+        ids = session$ns(c("save", "save_bottom", "confirm_unit_change")),
+        busy = busy, label = label, statusId = session$ns("save_status")))
+    }
 
     output$banner <- renderUI({
       req(language$language)
@@ -2534,16 +3897,6 @@ manageParameters <- function(id, language) {
 
       session$onFlushed(
         function() {
-          if (records_table_state$initialized) {
-            display_dt <- reference_prepare_for_dt(display)
-            DT::replaceData(
-              table_proxy,
-              display_dt,
-              resetPaging = FALSE
-            )
-          } else {
-            records_table_state$initialized <- TRUE
-          }
           update_relationship_selectors(relationship_choices)
 
           if (is.null(selected_id)) {
@@ -2621,11 +3974,10 @@ manageParameters <- function(id, language) {
 
     output$records_table <- DT::renderDT(
       {
-        # Keep this output bound to one DataTable instance. refresh_editor()
-        # updates its rows through the proxy so DataTables retains the user's
-        # column filters, ordering, and current page.
+        # Rebuild against the refreshed server-side data and restore the user's
+        # filters, ordering, and page from DataTables' session state.
         display <- reference_prepare_for_dt(
-          isolate(editor_data$records_display)
+          editor_data$records_display
         )
         DT::datatable(
           display,
@@ -2637,7 +3989,12 @@ manageParameters <- function(id, language) {
             pageLength = 10,
             lengthChange = FALSE,
             autoWidth = TRUE,
-            scrollX = TRUE
+            scrollX = TRUE,
+            stateSave = TRUE,
+            stateDuration = 0,
+            stateSaveCallback = records_table_state_save,
+            stateLoadCallback = records_table_state_load,
+            initComplete = records_table_init
           )
         )
       },
@@ -2795,162 +4152,700 @@ manageParameters <- function(id, language) {
       ignoreInit = TRUE
     )
 
-    save_parameter <- function() {
-        values <- tryCatch(reference_collect_values(input, config$columns), error = function(e) e)
-        if (inherits(values, "error")) {
-          showNotification(paste("Save failed:", conditionMessage(values)), type = "error", duration = 15)
-          return()
-        }
+    parameter_unit_numeric_input <- function(prefix, index, label, value) {
+      numericInput(
+        session$ns(paste0(prefix, "_", index)),
+        label = label,
+        value = as.numeric(value)
+      )
+    }
 
-        validation_errors <- character(0)
-        for (field in config$columns) {
-          if (
-            isTRUE(field$required) &&
-              reference_is_missing_value(values[[field$name]])
-          ) {
-            validation_errors <- c(
-              validation_errors,
-              paste(field$label, "is required.")
+    show_parameter_unit_change_modal <- function(pending) {
+      usage <- pending$usage
+      choices <- usage$state_choices
+      unit_choices <- usage$unit_choices
+      defaults <- pending$defaults
+      unit_name <- function(unit_id) {
+        if (is.null(unit_id) || !length(unit_id) || is.na(unit_id)) {
+          return("no unit assigned")
+        }
+        idx <- match(as.character(unit_id), as.character(unit_choices$unit_id))
+        if (is.na(idx)) as.character(unit_id) else unit_choices$unit_name[[idx]]
+      }
+      state_choices <- if (nrow(choices)) {
+        destination_unit_ids <- vapply(choices$matrix_state_code, function(code) {
+          field <- parameter_unit_fields()$unit_column[
+            match(code, parameter_unit_fields()$matrix_state_code)
+          ]
+          parameter_unit_value_key(pending$values[[field]])
+        }, character(1))
+        labels <- paste0(
+          choices$matrix_state_name, " — ",
+          vapply(destination_unit_ids, unit_name, character(1))
+        )
+        stats::setNames(choices$matrix_state_code, labels)
+      } else {
+        c("No unit-bearing matrix state is available" = "")
+      }
+      old_unit_choices <- c(
+        "Choose the unit used by existing values" = "",
+        stats::setNames(
+          as.character(unit_choices$unit_id),
+          unit_choices$unit_name
+        )
+      )
+      impact_rows <- if (nrow(usage$usage)) {
+        lapply(seq_len(nrow(usage$usage)), function(i) {
+          row <- usage$usage[i, , drop = FALSE]
+          tags$tr(
+            tags$td(row$table[[1]]),
+            tags$td(format(as.numeric(row$count[[1]]), big.mark = ",")),
+            tags$td(if (isTRUE(row$supported[[1]])) "Will be updated" else "Review required"),
+            tags$td(row$detail[[1]])
+          )
+        })
+      } else {
+        list(tags$tr(tags$td(colspan = 4, "No dependent rows were found.")))
+      }
+      map_rows <- if (nrow(usage$mapping_sets)) {
+        lapply(seq_len(nrow(usage$mapping_sets)), function(i) {
+          row <- usage$mapping_sets[i, , drop = FALSE]
+          tags$tr(
+            tags$td(row$source_code[[1]]),
+            tags$td(if (is.na(row$import_profile_id[[1]])) "Source-wide" else as.character(row$import_profile_id[[1]])),
+            tags$td(paste0("v", row$version[[1]], " (", row$status[[1]], ")")),
+            tags$td(if (identical(row$status[[1]], "draft")) {
+              "Update draft; keep unpublished"
+            } else if (is.na(row$open_draft_id[[1]])) {
+              "Publish a unit-adjusted revision"
+            } else {
+              "Publish a unit-adjusted revision; carry unfinished edits forward as a draft"
+            })
+          )
+        })
+      } else {
+        NULL
+      }
+      state_controls <- lapply(seq_len(nrow(defaults)), function(i) {
+        row <- defaults[i, , drop = FALSE]
+        old_unit <- if (is.na(row$old_unit_id[[1]])) {
+          tags$div(
+            selectInput(
+              session$ns(paste0("unit_assumed_", i)),
+              "Unit represented by existing values",
+              choices = old_unit_choices,
+              selected = ""
             )
-          }
-        }
-
-        if (
-          !is.na(values$plot_default_floor) &&
-            !is.na(values$plot_default_ceiling) &&
-            values$plot_default_floor > values$plot_default_ceiling
-        ) {
-          validation_errors <- c(
-            validation_errors,
-            "Default plot floor cannot be greater than the default plot ceiling."
           )
+        } else {
+          tags$p(paste("Existing unit:", unit_name(row$old_unit_id[[1]])))
         }
-
-        if (length(validation_errors)) {
-          showNotification(
-            paste(validation_errors, collapse = " "),
-            type = "error"
+        source_id <- row$old_unit_id[[1]]
+        key <- paste(if (is.na(source_id)) "" else source_id, row$destination_unit_id[[1]], sep = ":")
+        mode_id <- paste0("unit_conversion_mode_", i)
+        tags$div(
+          class = "panel panel-default",
+          tags$div(class = "panel-heading", tags$strong(row$unit_label[[1]])),
+          tags$div(
+            class = "panel-body",
+            old_unit,
+            selectInput(
+              session$ns(paste0("unit_destination_", i)),
+              "Move existing matrix state to",
+              choices = state_choices,
+              selected = row$destination_code[[1]]
+            ),
+            selectInput(
+              session$ns(mode_id), "How should existing numbers be handled?",
+              choices = c(
+                "Choose an action" = "",
+                "Convert values (database or custom conversion)" = paste0("convert:", key),
+                "Keep existing numbers; change the unit only" = paste0("keep:", key)
+              ),
+              selected = if (isTRUE(row$conversion_known[[1]])) paste0("convert:", key) else ""
+            ),
+            tags$p(
+              class = "text-muted small",
+              "Known conversions are filled in automatically. If none exists, choose to keep existing numbers or enter a custom conversion. For example, correcting a unit from % to m can keep all numbers unchanged."
+            ),
+            conditionalPanel(
+              condition = sprintf("input.%s && input.%s.indexOf('convert:') === 0", mode_id, mode_id),
+              ns = session$ns,
+              fluidRow(
+                column(4, parameter_unit_numeric_input("discrete_a", i, "Discrete results scale (a)", row$conversion_a[[1]])),
+                column(4, parameter_unit_numeric_input("discrete_b", i, "Discrete results offset (b)", row$conversion_b[[1]])),
+                column(4, parameter_unit_numeric_input("continuous_a", i, "Continuous data scale (a)", row$conversion_a[[1]]))
+              ),
+              fluidRow(
+                column(4, parameter_unit_numeric_input("continuous_b", i, "Continuous data offset (b)", row$conversion_b[[1]])),
+                column(4, parameter_unit_numeric_input("transmission_a", i, "Future continuous delivery scale (a)", row$transmission_a[[1]])),
+                column(4, parameter_unit_numeric_input("transmission_b", i, "Future continuous delivery offset (b)", row$transmission_b[[1]]))
+              ),
+              fluidRow(
+                column(4, parameter_unit_numeric_input("mapping_a", i, "Future import mapping scale (a)", row$conversion_a[[1]])),
+                column(4, parameter_unit_numeric_input("mapping_b", i, "Future import mapping offset (b)", row$conversion_b[[1]]))
+              )
+            )
           )
-          return()
-        }
+        )
+      })
+      has_blockers <- length(usage$blockers) > 0L
+      blocker_ui <- if (has_blockers) {
+        tags$div(
+          class = "alert alert-danger",
+          tags$strong("This change cannot be applied yet."),
+          tags$p("Resolve these items first; the affected rows will not be changed."),
+          tags$ul(lapply(usage$blockers, tags$li))
+        )
+      } else {
+        NULL
+      }
+      map_ui <- if (length(map_rows)) {
+        tags$div(
+          tags$h4("Import mapping revisions"),
+          tags$p(
+            "Draft mappings will be adjusted and kept unpublished. Published mappings will receive a new revision in the same transaction. If an unfinished draft also exists, its edits will be carried forward into a new unpublished draft."
+          ),
+          tags$table(
+            class = "table table-condensed",
+            tags$thead(tags$tr(
+              tags$th("Source"), tags$th("Scope"), tags$th("Current revision"),
+              tags$th("Action")
+            )),
+            tags$tbody(map_rows)
+          )
+        )
+      } else {
+        NULL
+      }
+      footer <- if (has_blockers) {
+        modalButton("Close")
+      } else {
+        tagList(
+          actionButton(session$ns("cancel_unit_change"), "Cancel"),
+          parameter_save_button(session$ns, "confirm_unit_change", "Apply unit change", "Applying unit change...")
+        )
+      }
 
-        tryCatch(
-          {
-            if (!is.null(current_record_id())) {
-              existing_units <- fetch_parameter_unit_values(
-                con,
-                current_record_id()
-              )
-              changed_units <- parameter_changed_assigned_unit_fields(
-                existing_units,
-                values
-              )
-              unit_usage <- fetch_parameter_unit_usage(
-                con,
-                current_record_id(),
-                changed_units
-              )
-              unit_usage_messages <- parameter_unit_usage_messages(unit_usage)
+      showModal(modalDialog(
+        title = "Review parameter unit change",
+        tags$p(
+          "Changing these units affects stored values, matrix states, guideline limits, rating curves, and future imports. Review the row counts and choose conversions before applying the change."
+        ),
+        tags$div(
+          class = "alert alert-warning",
+          "If you started an upload before changing units, return to that upload module and reload it, then preview or enter the data again in the new unit. Previously staged or queued uploads may still contain values in the old unit."
+        ),
+        tags$table(
+          class = "table table-condensed",
+          tags$thead(tags$tr(
+            tags$th("Affected table"), tags$th("Rows"),
+            tags$th("Migration"), tags$th("Details")
+          )),
+          tags$tbody(impact_rows)
+        ),
+        blocker_ui,
+        map_ui,
+        tags$h4("Matrix-state destinations and conversions"),
+        tags$p(
+          "Choose 'Keep existing numbers' to correct the unit without changing stored values or future import conversions. Otherwise, use an offset when the conversion is affine (for example, temperature)."
+        ),
+        tags$p(
+          "Discrete controls convert stored results, result components, and fixed guideline limits. Continuous data controls convert measurements, daily summaries, forecasts, extrema values and uncertainty bounds, thresholds, corrections, and rating-curve values. Continuous delivery controls adjust future transmissions. Import-map controls adjust future discrete imports. Each path can use its own conversion."
+        ),
+        tags$p("For every control, the conversion is new value = a × old value + b."),
+        tagList(state_controls),
+        footer = footer,
+        size = "l",
+        easyClose = FALSE
+      ))
+    }
 
-              if (length(unit_usage_messages)) {
-                showNotification(
-                  paste(unit_usage_messages, collapse = " "),
-                  type = "error",
-                  duration = 15
+    commit_parameter_save <- function(values, selected_id, migration = NULL, unit_change = !is.null(migration)) {
+      tryCatch(
+        {
+          saved_id <- DBI::dbWithTransaction(con, {
+            if (!is.null(migration)) {
+              DBI::dbExecute(con, "SET LOCAL lock_timeout = '30s'")
+              lock_tables <- c(
+                "continuous.corrections",
+                "continuous.extrema",
+                "continuous.forecasts",
+                "continuous.measurements_calculated_daily",
+                "continuous.measurements_continuous",
+                "continuous.rating_curve_points",
+                "continuous.rating_curve_shifts",
+                "continuous.rating_curves",
+                "continuous.timeseries",
+                "continuous.timeseries_aggregation_methods",
+                "continuous.timeseries_aggregation_method_steps",
+                "continuous.timeseries_aggregation_method_step_inputs",
+                "continuous.thresholds",
+                "continuous.transmission_timeseries_mappings",
+                "criteria.guideline_rule_coefficients",
+                "criteria.guideline_rule_inputs",
+                "criteria.guideline_value_rules",
+                "criteria.guidelines",
+                "discrete.import_mapping_sets",
+                "discrete.import_location_mappings",
+                "discrete.import_parameter_mappings",
+                "discrete.import_result_flag_mappings",
+                "discrete.result_aggregations",
+                "discrete.results",
+                "discrete.result_components"
+              )
+              parameter_ref_tables <- migration$usage$parameter_refs
+              if (!is.null(parameter_ref_tables) && nrow(parameter_ref_tables)) {
+                lock_tables <- c(
+                  lock_tables,
+                  paste(
+                    parameter_ref_tables$schema_name,
+                    parameter_ref_tables$table_name,
+                    sep = "."
+                  )
                 )
-                return()
               }
-            }
+              timeseries_ref_tables <- migration$usage$timeseries_refs
+              if (!is.null(timeseries_ref_tables) && nrow(timeseries_ref_tables)) {
+                lock_tables <- c(
+                  lock_tables,
+                  paste(
+                    timeseries_ref_tables$schema_name,
+                    timeseries_ref_tables$table_name,
+                    sep = "."
+                  )
+                )
+              }
+              lock_tables <- unique(lock_tables)
+              for (relation_name in sort(lock_tables)) {
+                parts <- strsplit(relation_name, "\\.")[[1]]
+                if (!parameter_unit_relation_exists(con, parts[[1]], parts[[2]])) {
+                  next
+                }
+                relation <- as.character(DBI::dbQuoteIdentifier(
+                  con,
+                  DBI::Id(schema = parts[[1]], table = parts[[2]])
+                ))
+                DBI::dbExecute(
+                  con,
+                  paste("LOCK TABLE", relation, "IN SHARE ROW EXCLUSIVE MODE")
+                )
+              }
 
-            saved_id <- DBI::dbWithTransaction(con, {
+              if (!identical(as.character(current_record_id()), as.character(selected_id))) {
+                stop("The selected parameter changed while the unit-change review was open. Reopen the review and try again.")
+              }
+              current_units <- fetch_parameter_unit_values(con, selected_id)
+              current_units_json <- as.character(jsonlite::toJSON(
+                parameter_unit_json_object(current_units[1, , drop = FALSE], names(migration$old_units)),
+                auto_unbox = TRUE,
+                na = "null"
+              ))
+              if (!identical(current_units_json, migration$old_units_json)) {
+                stop("The parameter units changed after the review opened. Reopen the unit-change review.")
+              }
+              current_usage <- fetch_parameter_unit_usage(
+                con, selected_id, migration$changed_units, values
+              )
+              if (!identical(
+                as.character(parameter_unit_inventory_signature(current_usage)),
+                migration$usage_signature
+              )) {
+                stop("Affected rows or import mapping revisions changed after the review opened. Reopen the unit-change review.")
+              }
+              if (length(current_usage$blockers)) {
+                stop(paste(
+                  "The unit change is blocked by:",
+                  paste(current_usage$blockers, collapse = "; ")
+                ))
+              }
+
+              old_unit_object <- parameter_unit_json_object(
+                current_units[1, , drop = FALSE], names(migration$old_units)
+              )
+              new_unit_object <- parameter_unit_json_object(values, names(migration$old_units))
+              plan_json <- as.character(jsonlite::toJSON(
+                list(
+                  plan = migration$plan,
+                  affected_tables = current_usage$usage,
+                  parameter_references = current_usage$parameter_refs,
+                  timeseries_references = current_usage$timeseries_refs,
+                  mapping_sets = current_usage$mapping_sets[
+                    , intersect(
+                      c("import_mapping_set_id", "source_code", "version", "status"),
+                      names(current_usage$mapping_sets)
+                    ), drop = FALSE
+                  ]
+                ),
+                dataframe = "rows",
+                auto_unbox = TRUE,
+                na = "null"
+              ))
+              DBI::dbGetQuery(
+                con,
+                "SELECT public.begin_parameter_unit_change(
+                   $1, $2::jsonb, $3::jsonb, $4::jsonb
+                 ) AS change_id",
+                params = list(
+                  as.integer(selected_id),
+                  as.character(jsonlite::toJSON(old_unit_object, auto_unbox = TRUE, na = "null")),
+                  as.character(jsonlite::toJSON(new_unit_object, auto_unbox = TRUE, na = "null")),
+                  plan_json
+                )
+              )
               saved_parameter_id <- reference_save_record(
                 con = con,
                 config = config,
                 values = values,
-                selected_id = current_record_id(),
+                selected_id = selected_id,
                 existing_columns = names(editor_data$records_raw)
               )
-
-              existing_relationships <- fetch_parameter_relationships(
+              parameter_unit_apply_migration(
                 con,
-                saved_parameter_id
+                as.integer(selected_id),
+                migration$plan,
+                current_usage$mapping_sets
               )
-              desired_relationships <- current_relationships()[,
-                c(
-                  "group_id",
-                  "sub_group_id"
-                ),
-                drop = FALSE
-              ]
+            }
 
-              existing_keys <- parameter_relationship_keys(
-                existing_relationships
+            if (is.null(migration)) {
+              saved_parameter_id <- reference_save_record(
+                con = con,
+                config = config,
+                values = values,
+                selected_id = selected_id,
+                existing_columns = names(editor_data$records_raw)
               )
-              desired_keys <- parameter_relationship_keys(desired_relationships)
+            }
 
-              delete_ids <- existing_relationships$relationship_id[
-                !(existing_keys %in% desired_keys)
-              ]
-              if (length(delete_ids)) {
-                for (relationship_id in delete_ids) {
-                  DBI::dbExecute(
-                    con,
-                    paste(
-                      "DELETE FROM public.parameter_relationships",
-                      "WHERE relationship_id = $1"
-                    ),
-                    params = list(as.integer(relationship_id))
-                  )
-                }
-              }
-
-              new_relationships <- desired_relationships[
-                !(desired_keys %in% existing_keys),
-                ,
-                drop = FALSE
-              ]
-              if (nrow(new_relationships)) {
-                for (row_idx in seq_len(nrow(new_relationships))) {
-                  DBI::dbExecute(
-                    con,
-                    paste(
-                      "INSERT INTO public.parameter_relationships",
-                      "(parameter_id, group_id, sub_group_id)",
-                      "VALUES ($1, $2, $3)"
-                    ),
-                    params = list(
-                      as.integer(saved_parameter_id),
-                      as.integer(new_relationships$group_id[row_idx]),
-                      if (is.na(new_relationships$sub_group_id[row_idx])) {
-                        NA_integer_
-                      } else {
-                        as.integer(new_relationships$sub_group_id[row_idx])
-                      }
-                    )
-                  )
-                }
-              }
-
-              save_parameter_suggestions(con, saved_parameter_id, input)
+            existing_relationships <- fetch_parameter_relationships(
+              con,
               saved_parameter_id
-            })
-
-            clear_reference_caches(session)
-            refresh_editor(selected_id = saved_id)
-            showNotification(
-              "Parameters saved.",
-              type = "message"
             )
-          },
-          error = function(e) {
+            desired_relationships <- current_relationships()[,
+              c("group_id", "sub_group_id"),
+              drop = FALSE
+            ]
+            existing_keys <- parameter_relationship_keys(existing_relationships)
+            desired_keys <- parameter_relationship_keys(desired_relationships)
+            delete_ids <- existing_relationships$relationship_id[
+              !(existing_keys %in% desired_keys)
+            ]
+            if (length(delete_ids)) {
+              for (relationship_id in delete_ids) {
+                DBI::dbExecute(
+                  con,
+                  "DELETE FROM public.parameter_relationships WHERE relationship_id = $1",
+                  params = list(as.integer(relationship_id))
+                )
+              }
+            }
+            new_relationships <- desired_relationships[
+              !(desired_keys %in% existing_keys), , drop = FALSE
+            ]
+            if (nrow(new_relationships)) {
+              for (row_idx in seq_len(nrow(new_relationships))) {
+                DBI::dbExecute(
+                  con,
+                  paste(
+                    "INSERT INTO public.parameter_relationships",
+                    "(parameter_id, group_id, sub_group_id) VALUES ($1, $2, $3)"
+                  ),
+                  params = list(
+                    as.integer(saved_parameter_id),
+                    as.integer(new_relationships$group_id[row_idx]),
+                    if (is.na(new_relationships$sub_group_id[row_idx])) {
+                      NA_integer_
+                    } else {
+                      as.integer(new_relationships$sub_group_id[row_idx])
+                    }
+                  )
+                )
+              }
+            }
+            save_parameter_suggestions(con, saved_parameter_id, input)
+            saved_parameter_id
+          })
+
+          pending_unit_change(NULL)
+          if (!is.null(migration)) {
+            removeModal()
+          }
+          clear_reference_caches(session)
+          refresh_editor(selected_id = saved_id)
+          showNotification("Parameters saved.", type = "message")
+          if (isTRUE(unit_change)) {
             showNotification(
-              paste("Save failed:", conditionMessage(e)),
-              type = "error",
-              duration = 10
+              "Units changed. If you previously started an upload, reload that upload module and preview or enter the data again in the new unit. Staged or queued uploads may still contain values in the old unit.",
+              type = "warning", duration = NULL
             )
           }
-        )
+          invisible(TRUE)
+        },
+        error = function(e) {
+          showNotification(
+            paste("Save failed:", conditionMessage(e)),
+            type = "error",
+            duration = 15
+          )
+          invisible(FALSE)
+        }
+      )
     }
+
+    validate_parameter_save <- function(values) {
+      errors <- character(0)
+      for (field in config$columns) {
+        if (
+          isTRUE(field$required) &&
+            reference_is_missing_value(values[[field$name]])
+        ) {
+          errors <- c(errors, paste(field$label, "is required."))
+        }
+      }
+      unit_fields <- c("units_liquid", "units_solid", "units_gas", "units_na")
+      assigned_units <- !vapply(
+        values[unit_fields], reference_is_missing_value, logical(1)
+      )
+      has_regular_units <- any(assigned_units[c("units_liquid", "units_solid", "units_gas")])
+      has_not_applicable_unit <- assigned_units[["units_na"]]
+      if (!any(assigned_units)) {
+        errors <- c(errors, "Assign at least one unit: liquid, solid, gas, or not applicable.")
+      } else if (has_regular_units && has_not_applicable_unit) {
+        errors <- c(errors, "Choose either a not applicable unit or one or more liquid, solid, or gas units, not both.")
+      }
+      if (
+        !is.na(values$plot_default_floor) && !is.na(values$plot_default_ceiling) &&
+          values$plot_default_floor > values$plot_default_ceiling
+      ) {
+        errors <- c(errors, "Default plot floor cannot be greater than the default plot ceiling.")
+      }
+      errors
+    }
+
+    save_parameter <- function() {
+      if (parameter_save_busy) return(invisible(FALSE))
+      parameter_save_busy <<- TRUE
+      set_parameter_save_busy(TRUE)
+      on.exit({
+        parameter_save_busy <<- FALSE
+        set_parameter_save_busy(FALSE)
+      }, add = TRUE)
+      values <- tryCatch(reference_collect_values(input, config$columns), error = function(e) e)
+      if (inherits(values, "error")) {
+        showNotification(paste("Save failed:", conditionMessage(values)), type = "error", duration = 15)
+        return(invisible(FALSE))
+      }
+      validation_errors <- validate_parameter_save(values)
+      if (length(validation_errors)) {
+        showNotification(paste(validation_errors, collapse = " "), type = "error")
+        return(invisible(FALSE))
+      }
+
+      selected_id <- current_record_id()
+      if (!is.null(selected_id)) {
+        tryCatch({
+          existing_units <- fetch_parameter_unit_values(con, selected_id)
+          changed_units <- parameter_changed_assigned_unit_fields(existing_units, values)
+          if (nrow(changed_units)) {
+            usage <- fetch_parameter_unit_usage(con, selected_id, changed_units, values)
+            if (nrow(usage$usage)) {
+              defaults <- parameter_unit_change_defaults(
+                con, usage$changed_units, values, usage$state_choices, usage
+              )
+              old_units_json <- as.character(jsonlite::toJSON(
+                parameter_unit_json_object(existing_units[1, , drop = FALSE], names(existing_units)),
+                auto_unbox = TRUE,
+                na = "null"
+              ))
+              pending <- list(
+                selected_id = as.character(selected_id),
+                values = values,
+                old_units = as.list(existing_units[1, names(existing_units), drop = FALSE]),
+                old_units_json = old_units_json,
+                changed_units = usage$changed_units,
+                usage = usage,
+                defaults = defaults,
+                usage_signature = as.character(parameter_unit_inventory_signature(usage))
+              )
+              pending_unit_change(pending)
+              initial_keys <- vapply(seq_len(nrow(defaults)), function(i) {
+                source_id <- defaults$old_unit_id[[i]]
+                paste(if (is.na(source_id)) "" else source_id, defaults$destination_unit_id[[i]], sep = ":")
+              }, character(1))
+              unit_conversion_auto_keys(initial_keys)
+              show_parameter_unit_change_modal(pending)
+              return(invisible(FALSE))
+            }
+          }
+          commit_parameter_save(values, selected_id, unit_change = nrow(changed_units) > 0L)
+        }, error = function(e) {
+          showNotification(paste("Save failed:", conditionMessage(e)), type = "error", duration = 15)
+          invisible(FALSE)
+        })
+      } else {
+        commit_parameter_save(values, NULL)
+      }
+    }
+
+    observe({
+      pending <- pending_unit_change()
+      if (is.null(pending)) {
+        return()
+      }
+      defaults <- pending$defaults
+      old_keys <- isolate(unit_conversion_auto_keys())
+      new_keys <- character(nrow(defaults))
+      for (i in seq_len(nrow(defaults))) {
+        source_id <- defaults$old_unit_id[[i]]
+        if (is.na(source_id)) {
+          assumed <- input[[paste0("unit_assumed_", i)]]
+          source_id <- if (is.null(assumed) || !nzchar(as.character(assumed))) {
+            NA_integer_
+          } else {
+            as.integer(assumed)
+          }
+        }
+        destination_code <- input[[paste0("unit_destination_", i)]]
+        if (is.null(destination_code) || !nzchar(as.character(destination_code))) {
+          destination_code <- defaults$destination_code[[i]]
+        }
+        fields <- parameter_unit_fields()
+        destination_field <- fields$unit_column[
+          match(destination_code, fields$matrix_state_code)
+        ]
+        destination_id <- if (length(destination_field) && !is.na(destination_field)) {
+          as.integer(parameter_unit_value_key(pending$values[[destination_field]]))
+        } else {
+          NA_integer_
+        }
+        key <- paste(if (is.na(source_id)) "" else source_id, destination_id, sep = ":")
+        new_keys[[i]] <- key
+        old_key <- if (length(old_keys) >= i) old_keys[[i]] else ""
+        if (identical(key, old_key)) {
+          next
+        }
+        conversion <- parameter_unit_conversion(con, source_id, destination_id)
+        known <- !is.null(conversion) && nrow(conversion) > 0L
+        # Encode the unit pair in each choice so confirmation cannot accept
+        # an old action while the browser is receiving new control values.
+        updateSelectInput(session, paste0("unit_conversion_mode_", i),
+          choices = c(
+            "Choose an action" = "",
+            "Convert values (database or custom conversion)" = paste0("convert:", key),
+            "Keep existing numbers; change the unit only" = paste0("keep:", key)
+          ),
+          selected = if (known) paste0("convert:", key) else "")
+        for (prefix in c("discrete_a", "continuous_a", "transmission_a", "mapping_a")) {
+          updateNumericInput(session, paste0(prefix, "_", i),
+            value = if (known) as.numeric(conversion$scale_a[[1]]) else NA_real_)
+        }
+        for (prefix in c("discrete_b", "continuous_b", "transmission_b", "mapping_b")) {
+          updateNumericInput(session, paste0(prefix, "_", i),
+            value = if (known) as.numeric(conversion$scale_b[[1]]) else NA_real_)
+        }
+      }
+      unit_conversion_auto_keys(new_keys)
+    })
+
+    observeEvent(input$cancel_unit_change, {
+      pending_unit_change(NULL)
+      removeModal()
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$confirm_unit_change, {
+      if (parameter_save_busy) return()
+      parameter_save_busy <<- TRUE
+      set_parameter_save_busy(TRUE, "Applying unit change...")
+      on.exit({
+        parameter_save_busy <<- FALSE
+        set_parameter_save_busy(FALSE)
+      }, add = TRUE)
+      pending <- pending_unit_change()
+      if (is.null(pending)) {
+        removeModal()
+        return()
+      }
+      if (length(pending$usage$blockers)) {
+        showNotification("Resolve the listed blockers before applying this unit change.", type = "error")
+        return()
+      }
+      plan <- pending$defaults
+      plan$conversion_action <- rep(NA_character_, nrow(plan))
+      for (metric in c("discrete_a", "discrete_b", "continuous_a", "continuous_b", "transmission_a", "transmission_b", "mapping_a", "mapping_b")) {
+        plan[[metric]] <- rep(NA_real_, nrow(plan))
+      }
+      validation_errors <- character(0)
+      for (i in seq_len(nrow(plan))) {
+        destination_code <- input[[paste0("unit_destination_", i)]]
+        if (is.null(destination_code) || !nzchar(as.character(destination_code))) {
+          validation_errors <- c(validation_errors, paste(plan$unit_label[[i]], "needs a destination matrix state."))
+          next
+        }
+        destination_idx <- match(destination_code, pending$usage$state_choices$matrix_state_code)
+        if (is.na(destination_idx)) {
+          validation_errors <- c(validation_errors, paste(plan$unit_label[[i]], "has an invalid destination matrix state."))
+          next
+        }
+        destination_field <- parameter_unit_fields()$unit_column[
+          match(destination_code, parameter_unit_fields()$matrix_state_code)
+        ]
+        destination_unit <- parameter_unit_value_key(pending$values[[destination_field]])
+        plan$destination_code[[i]] <- as.character(destination_code)
+        plan$destination_id[[i]] <- as.integer(pending$usage$state_choices$matrix_state_id[[destination_idx]])
+        plan$destination_unit_id[[i]] <- as.integer(destination_unit)
+
+        needs_assumption <- FALSE
+        if (is.na(plan$old_unit_id[[i]])) {
+          assumed <- input[[paste0("unit_assumed_", i)]]
+          has_unscoped_rows <- nrow(pending$usage$usage) > 0L &&
+            any(is.na(pending$usage$usage$matrix_state_code))
+          needs_assumption <- parameter_unit_data_has_state_rows(
+            pending$usage,
+            plan$matrix_state_code[[i]]
+          ) || has_unscoped_rows
+          if (!is.null(assumed) && nzchar(as.character(assumed))) {
+            plan$old_unit_id[[i]] <- as.integer(assumed)
+          }
+        }
+        source_id <- plan$old_unit_id[[i]]
+        key <- paste(if (is.na(source_id)) "" else source_id, plan$destination_unit_id[[i]], sep = ":")
+        mode <- input[[paste0("unit_conversion_mode_", i)]]
+        if (is.null(mode) || !mode %in% paste0(c("convert:", "keep:"), key)) {
+          validation_errors <- c(validation_errors, paste(plan$unit_label[[i]], "needs a conversion or keep-numbers choice for the selected units."))
+          next
+        }
+        keep_numbers <- identical(mode, paste0("keep:", key))
+        plan$conversion_action[[i]] <- if (keep_numbers) "keep" else "convert"
+        if (!keep_numbers && is.na(source_id) && needs_assumption) {
+          validation_errors <- c(validation_errors, paste(plan$unit_label[[i]], "needs the unit currently represented by its stored values."))
+        }
+        for (metric in c("discrete_a", "discrete_b", "continuous_a", "continuous_b", "transmission_a", "transmission_b", "mapping_a", "mapping_b")) {
+          value <- if (keep_numbers) {
+            if (grepl("_a$", metric)) 1 else 0
+          } else {
+            suppressWarnings(as.numeric(input[[paste0(metric, "_", i)]]))
+          }
+          if (length(value) != 1L || !is.finite(value)) {
+            validation_errors <- c(validation_errors, paste(plan$unit_label[[i]], "has an invalid", metric, "value."))
+          } else {
+            plan[[metric]][[i]] <- value
+          }
+        }
+        for (metric in c("discrete_a", "continuous_a", "transmission_a", "mapping_a")) {
+          if (is.finite(plan[[metric]][[i]]) && plan[[metric]][[i]] <= 0) {
+            validation_errors <- c(validation_errors, paste(plan$unit_label[[i]], metric, "must be positive."))
+          }
+        }
+      }
+      if (length(validation_errors)) {
+        showNotification(paste(unique(validation_errors), collapse = " "), type = "error", duration = 15)
+        return()
+      }
+      migration <- pending
+      migration$plan <- plan
+      commit_parameter_save(pending$values, pending$selected_id, migration)
+    }, ignoreInit = TRUE)
 
     observeEvent(input$save, {
       save_parameter()

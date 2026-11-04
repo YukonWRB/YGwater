@@ -4,8 +4,6 @@ YGwater_globals <- function(
   dbPort,
   dbUser,
   dbPass,
-  RLS_user,
-  RLS_pass,
   network_check,
   accessPaths,
   logout_timer_min,
