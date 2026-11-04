@@ -1205,54 +1205,6 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       ac_query(sql, data.frame())
     })
 
-    ensure_discrete_plot_function <- function() {
-      new_args <- c(
-        "sub_location_ids",
-        "media",
-        "sample_types",
-        "collection_methods",
-        "result_types",
-        "sample_fractions",
-        "result_value_types",
-        "reporting_bases", "result_speciations", "result_targets", "endpoint_modes", "endpoint_ph", "analysis_conditions",
-        "include_blanks",
-        "duplicate_action",
-        "sample_ids",
-        "season_ranges",
-        "season_highlight_ranges",
-        "guidelines"
-      )
-      if (all(new_args %in% names(formals(plotDiscrete)))) {
-        return(invisible(TRUE))
-      }
-
-      candidates <- unique(c(
-        file.path(getwd(), "R", "plotDiscrete.R"),
-        file.path(dirname(getwd()), "R", "plotDiscrete.R"),
-        "C:/Users/g_del/Documents/R/YGwater/R/plotDiscrete.R"
-      ))
-      candidates <- candidates[file.exists(candidates)]
-      for (path in candidates) {
-        root <- dirname(dirname(path))
-        for (helper in c("titleCase.R", "utils.R", "AquaConnect.R", "chemistry_metadata.R")) {
-          helper_path <- file.path(root, "R", helper)
-          if (file.exists(helper_path)) {
-            source(helper_path, local = .GlobalEnv)
-          }
-        }
-        source(path, local = .GlobalEnv)
-        if (all(new_args %in% names(formals(plotDiscrete)))) {
-          return(invisible(TRUE))
-        }
-      }
-
-      stop(
-        "The loaded plotDiscrete() function is older than the discrete plot ",
-        "module. Restart the app from the current YGwater source tree or ",
-        "reinstall/reload YGwater so R/plotDiscrete.R is current."
-      )
-    }
-
     output$banner <- renderUI({
       application_notifications_ui(
         ns = ns,
@@ -2939,11 +2891,12 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         config,
         result_speciations = NULL, result_targets = NULL, endpoint_modes = NULL, endpoint_ph = NULL, analysis_conditions = NULL
       ) {
-        promises::future_promise({
+        mirai::mirai(
+          {
           tryCatch(
             {
               if (is.null(dbPath)) {
-                con <- AquaConnect(
+                con <- YGwater::AquaConnect(
                   name = config$dbName,
                   host = config$dbHost,
                   port = config$dbPort,
@@ -2956,9 +2909,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 con <- NULL
               }
 
-              ensure_discrete_plot_function()
-
-              plot <- plotDiscrete(
+              plot <- YGwater::plotDiscrete(
                 start = start,
                 end = end,
                 locations = locations,
@@ -3003,13 +2954,60 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 dbCon = con,
                 data = TRUE
               )
-              return(plot)
+              plot
             },
             error = function(e) {
               return(e$message)
             }
-          ) # End of tryCatch
-        }) # End of future_promise
+          )
+          },
+          start = start,
+          end = end,
+          locations = locations,
+          locGrp = locGrp,
+          parameters = parameters,
+          paramGrp = paramGrp,
+          standard = standard,
+          guidelines = guidelines,
+          log = log,
+          facet_on = facet_on,
+          loc_code = loc_code,
+          shareX = shareX,
+          shareY = shareY,
+          rows = rows,
+          target_datetime = target_datetime,
+          colorblind = colorblind,
+          lang = lang,
+          point_scale = point_scale,
+          guideline_scale = guideline_scale,
+          axis_scale = axis_scale,
+          legend_scale = legend_scale,
+          legend_position = legend_position,
+          gridx = gridx,
+          gridy = gridy,
+          sub_location_ids = sub_location_ids,
+          media = media,
+          sample_types = sample_types,
+          collection_methods = collection_methods,
+          result_types = result_types,
+          sample_fractions = sample_fractions,
+          result_value_types = result_value_types,
+          reporting_bases = reporting_bases,
+          include_blanks = include_blanks,
+          duplicate_action = duplicate_action,
+          sample_ids = sample_ids,
+          season_ranges = season_ranges,
+          season_highlight_ranges = season_highlight_ranges,
+          dbSource = dbSource,
+          dbPath = dbPath,
+          config = config,
+          result_speciations = result_speciations,
+          result_targets = result_targets,
+          endpoint_modes = endpoint_modes,
+          endpoint_ph = endpoint_ph,
+          analysis_conditions = analysis_conditions,
+          .compute = "YGwater_aqualink"
+        )
       }
     ) |>
       bind_task_button("make_plot")
