@@ -80,7 +80,10 @@ waterInfo <- function(
     locs <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT * FROM continuous.timeseries WHERE parameter_id IN (",
+        "SELECT ts.*, l.location_code AS location
+        FROM continuous.timeseries AS ts
+        JOIN public.locations AS l ON l.location_id = ts.location_id
+        WHERE ts.parameter_id IN (",
         paste(params$parameter_id, collapse = ", "),
         ");"
       )
@@ -89,10 +92,27 @@ waterInfo <- function(
     locs <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT * FROM continuous.timeseries WHERE parameter_id IN (",
+        "SELECT ts.*, l.location_code AS location
+        FROM continuous.timeseries AS ts
+        JOIN public.locations AS l ON l.location_id = ts.location_id
+        WHERE ts.parameter_id IN (",
         paste(params$parameter_id, collapse = ", "),
-        ") AND location IN (
-          SELECT jsonb_array_elements_text($1::jsonb)
+        ") AND (
+          l.location_id::text IN (
+            SELECT jsonb_array_elements_text($1::jsonb)
+          )
+          OR l.location_code IN (
+            SELECT jsonb_array_elements_text($1::jsonb)
+          )
+          OR l.alias IN (
+            SELECT jsonb_array_elements_text($1::jsonb)
+          )
+          OR l.name IN (
+            SELECT jsonb_array_elements_text($1::jsonb)
+          )
+          OR l.name_fr IN (
+            SELECT jsonb_array_elements_text($1::jsonb)
+          )
         );"
       ),
       params = list(jsonlite::toJSON(as.character(locations), auto_unbox = FALSE))
@@ -108,19 +128,19 @@ waterInfo <- function(
           params[params$param_name == "water flow", "parameter_id"] %in%
             sub$parameter_id
         ) {
-          level_end <- sub[
+          # A location may have multiple timeseries for a parameter. Use the
+          # latest end date so the level/flow comparison remains scalar.
+          level_end <- max(sub$end_datetime[
             sub$parameter_id ==
-              params[params$param_name == "water level", "parameter_id"],
-            "end_datetime"
-          ]
+              params[params$param_name == "water level", "parameter_id"]
+          ], na.rm = TRUE)
           if (level_end > end_date) {
             level_end <- end_date
           }
-          flow_end <- sub[
+          flow_end <- max(sub$end_datetime[
             sub$parameter_id ==
-              params[params$param_name == "water flow", "parameter_id"],
-            "end_datetime"
-          ]
+              params[params$param_name == "water flow", "parameter_id"]
+          ], na.rm = TRUE)
           if (flow_end > end_date) {
             flow_end <- end_date
           }

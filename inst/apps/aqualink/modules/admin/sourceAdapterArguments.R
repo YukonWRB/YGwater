@@ -320,7 +320,18 @@ source_adapter_collect_args <- function(
       argument$value_type,
       character = as.character(value[[1]]),
       numeric = as.numeric(value[[1]]),
-      integer = as.integer(value[[1]]),
+      integer = {
+        integer_value <- suppressWarnings(as.numeric(value[[1]]))
+        if (
+          length(integer_value) != 1L ||
+            is.na(integer_value) ||
+            !is.finite(integer_value) ||
+            integer_value != floor(integer_value)
+        ) {
+          stop("Source argument '", argument$label, "' must be an integer.")
+        }
+        as.integer(integer_value)
+      },
       logical = source_adapter_logical_value(value),
       character_vector = {
         if (length(value) == 1L && grepl(",", value, fixed = TRUE)) {
@@ -371,6 +382,461 @@ source_adapter_args_json <- function(args) {
     null = "null",
     digits = NA
   ))
+}
+
+qc_rule_argument_input_id <- function(argument_name, input_prefix = "") {
+  paste0(
+    input_prefix,
+    "qc_arg_",
+    gsub("[^A-Za-z0-9_]", "_", argument_name)
+  )
+}
+
+qc_rule_companion_input_id <- function(role, input_prefix = "") {
+  paste0(
+    input_prefix,
+    "qc_companion_",
+    gsub("[^A-Za-z0-9_]", "_", role)
+  )
+}
+
+qc_rule_schema_defaults <- function(schema) {
+  stats::setNames(
+    lapply(schema$arguments, function(argument) argument$default),
+    vapply(schema$arguments, `[[`, character(1), "name")
+  )
+}
+
+qc_rule_capability_choices <- function(
+  capabilities,
+  primary_parameter = NULL,
+  exclude_rule_fx = character()
+) {
+  empty <- stats::setNames(character(), character())
+  if (!is.data.frame(capabilities) || nrow(capabilities) == 0L) {
+    return(empty)
+  }
+  enabled <- capabilities[
+    !is.na(capabilities$enabled) & capabilities$enabled,
+    ,
+    drop = FALSE
+  ]
+  if (nrow(enabled) == 0L) return(empty)
+
+  latest_rows <- vapply(unique(enabled$rule_fx), function(rule_fx) {
+    rows <- which(enabled$rule_fx == rule_fx)
+    rows[which.max(enabled$rule_version[rows])]
+  }, integer(1))
+  latest <- enabled[latest_rows, , drop = FALSE]
+
+  if (
+    is.character(primary_parameter) &&
+      length(primary_parameter) == 1L &&
+      !is.na(primary_parameter) &&
+      nzchar(trimws(primary_parameter)) &&
+      "primary_parameters" %in% names(latest)
+  ) {
+    compatible <- vapply(seq_len(nrow(latest)), function(i) {
+      allowed <- unlist(
+        latest$primary_parameters[[i]],
+        recursive = TRUE,
+        use.names = FALSE
+      )
+      !length(allowed) || primary_parameter %in% allowed
+    }, logical(1))
+    latest <- latest[compatible, , drop = FALSE]
+  }
+
+  exclude_rule_fx <- unique(trimws(as.character(exclude_rule_fx)))
+  exclude_rule_fx <- exclude_rule_fx[!is.na(exclude_rule_fx) & nzchar(exclude_rule_fx)]
+  latest <- latest[!latest$rule_fx %in% exclude_rule_fx, , drop = FALSE]
+  if (nrow(latest) == 0L) return(empty)
+
+  labels <- paste0(latest$description, " (v", latest$rule_version, ")")
+  stats::setNames(
+    paste0(latest$rule_fx, "@", latest$rule_version),
+    labels
+  )
+}
+
+qc_rule_argument_controls_ui <- function(
+  ns,
+  schema,
+  stored_args,
+  input_prefix = ""
+) {
+  arguments <- schema$arguments
+  user_arguments <- Filter(
+    function(argument) identical(argument$source, "user"),
+    arguments
+  )
+  controls <- lapply(user_arguments, function(argument) {
+    existing <- stored_args
+    display_argument <- argument
+    if (!is.null(argument$units) && nzchar(argument$units)) {
+      display_argument$label <- paste0(
+        argument$label,
+        " (",
+        argument$units,
+        ")"
+      )
+    }
+    control <- source_adapter_argument_control(
+      ns,
+      display_argument,
+      existing,
+      input_prefix = input_prefix
+    )
+    when <- argument$visible_when
+    if (!is.null(when)) {
+      condition <- paste0(
+        "input['",
+        source_adapter_argument_input_id(
+          when$argument,
+          input_prefix
+        ),
+        "'] === ",
+        tolower(as.character(when$equals))
+      )
+      control <- shiny::conditionalPanel(
+        condition = condition,
+        ns = ns,
+        control
+      )
+    }
+    if (isTRUE(argument$advanced)) {
+      control <- shiny::tags$details(
+        class = "mt-2",
+        shiny::tags$summary("Advanced setting: ", argument$label),
+        control
+      )
+    }
+    control
+  })
+
+  managed_arguments <- Filter(
+    function(argument) !identical(argument$source, "user"),
+    arguments
+  )
+  managed_ui <- if (length(managed_arguments)) {
+    shiny::tags$details(
+      class = "mt-2",
+      shiny::tags$summary("Managed rule arguments (read-only)"),
+      shiny::tags$table(
+        class = "table table-sm table-striped mt-2",
+        shiny::tags$thead(shiny::tags$tr(
+          shiny::tags$th("Argument"),
+          shiny::tags$th("Default"),
+          shiny::tags$th("How the rule uses it")
+        )),
+        shiny::tags$tbody(lapply(managed_arguments, function(argument) {
+          shiny::tags$tr(
+            shiny::tags$td(shiny::tags$code(argument$name)),
+            shiny::tags$td(as.character(argument$default)),
+            shiny::tags$td(argument$help)
+          )
+        }))
+      )
+    )
+  }
+
+  shiny::tagList(
+    if (length(controls)) controls else shiny::tags$p(
+      class = "text-muted",
+      "This rule has no user-configurable arguments."
+    ),
+    managed_ui
+  )
+}
+
+qc_rule_companion_control_ui <- function(
+  ns,
+  descriptor,
+  candidates,
+  stored_companions,
+  input_prefix = ""
+) {
+  role <- descriptor$role
+  input_id <- qc_rule_companion_input_id(role, input_prefix)
+  choices <- c("Automatic (lowest sensor priority)" = "")
+  if (!is.null(candidates) && nrow(candidates)) {
+    candidate_labels <- paste0(
+      "Timeseries ",
+      candidates$timeseries_id,
+      ifelse(
+        is.na(candidates$sensor_priority),
+        "",
+        paste0(" (priority ", candidates$sensor_priority, ")")
+      ),
+      " — ",
+      candidates$record_rate
+    )
+    choices <- c(
+      choices,
+      stats::setNames(as.character(candidates$timeseries_id), candidate_labels)
+    )
+  }
+  selected <- stored_companions[[role]]
+  selected <- if (is.null(selected) || !length(selected)) "" else as.character(selected[[1L]])
+  control <- shiny::selectizeInput(
+    ns(input_id),
+    descriptor$label,
+    choices = choices,
+    selected = selected,
+    multiple = FALSE,
+    options = list(placeholder = "Automatic companion"),
+    width = "100%"
+  )
+  when <- descriptor$when
+  if (!is.null(when)) {
+    condition <- paste0(
+      "input['",
+      source_adapter_argument_input_id(
+        when$argument,
+        input_prefix
+      ),
+      "'] === ",
+      tolower(as.character(when$equals))
+    )
+    control <- shiny::conditionalPanel(
+      condition = condition,
+      ns = ns,
+      control
+    )
+  }
+  shiny::tagList(
+    control,
+    shiny::tags$p(class = "text-muted small", descriptor$help),
+    if (is.null(candidates) || !nrow(candidates)) {
+      shiny::tags$p(
+        class = "text-warning small",
+        "No active compatible series was found at this location. The rule will receive missing values until one is available."
+      )
+    }
+  )
+}
+
+qc_rule_collect_arguments <- function(input, schema, stored_args, input_prefix) {
+  catalogued_names <- vapply(schema$arguments, `[[`, character(1), "name")
+  existing_args <- stored_args[
+    intersect(names(stored_args), catalogued_names)
+  ]
+  capability <- data.frame(
+    source_fx = "qc_rule",
+    stringsAsFactors = FALSE
+  )
+  capability$argument_schema <- list(schema)
+  source_adapter_collect_args(
+    input,
+    capability,
+    stored_args = source_adapter_args_json(existing_args),
+    input_prefix = input_prefix
+  )
+}
+
+qc_rule_collect_draft_values <- function(input, assignments) {
+  if (!length(assignments)) return(list())
+  lapply(seq_along(assignments), function(i) {
+    assignment <- assignments[[i]]
+    prefix <- paste0("qc_", i, "_")
+    assignment$active <- source_adapter_logical_value(
+      input[[paste0(prefix, "active")]]
+    )
+    assignment$run_order <- suppressWarnings(as.numeric(
+      input[[paste0(prefix, "run_order")]]
+    ))
+    note <- input[[paste0(prefix, "note")]]
+    assignment$note <- if (is.null(note) || !nzchar(trimws(note))) {
+      NA_character_
+    } else {
+      as.character(note[[1L]])
+    }
+    assignment$rule_args <- qc_rule_collect_arguments(
+      input,
+      assignment$argument_schema,
+      assignment$rule_args,
+      paste0(prefix, "")
+    )
+    companions <- list()
+    for (descriptor in qc_rule_active_companion_descriptors(
+      assignment$argument_schema,
+      assignment$rule_args
+    )) {
+      value <- input[[qc_rule_companion_input_id(descriptor$role, prefix)]]
+      if (!is.null(value) && length(value) && !is.na(value[[1L]]) &&
+          nzchar(as.character(value[[1L]]))) {
+        companions[[descriptor$role]] <- as.integer(value[[1L]])
+      }
+    }
+    assignment$companion_timeseries <- companions
+    assignment
+  })
+}
+
+qc_rule_collect_assignments <- function(input, assignments) {
+  if (!length(assignments)) return(data.frame())
+  controls_ready <- all(vapply(
+    seq_along(assignments),
+    function(i) !is.null(input[[paste0("qc_", i, "_active")]]),
+    logical(1)
+  ))
+  collected <- if (controls_ready) {
+    qc_rule_collect_draft_values(input, assignments)
+  } else {
+    assignments
+  }
+  out <- data.frame(
+    timeseries_qc_rule_id = vapply(collected, function(x) {
+      if (is.null(x$timeseries_qc_rule_id)) NA_integer_ else
+        as.integer(x$timeseries_qc_rule_id)
+    }, integer(1)),
+    rule_fx = vapply(collected, `[[`, character(1), "rule_fx"),
+    rule_version = vapply(collected, function(x) as.integer(x$rule_version), integer(1)),
+    run_order = vapply(collected, function(x) as.numeric(x$run_order), numeric(1)),
+    active = vapply(collected, function(x) isTRUE(x$active), logical(1)),
+    note = vapply(collected, function(x) {
+      if (is.null(x$note) || !length(x$note)) NA_character_ else
+        as.character(x$note[[1L]])
+    }, character(1)),
+    stringsAsFactors = FALSE
+  )
+  out$rule_args <- I(lapply(collected, `[[`, "rule_args"))
+  out$companion_timeseries <- I(lapply(
+    collected,
+    `[[`,
+    "companion_timeseries"
+  ))
+  out
+}
+
+qc_rule_active_companion_descriptors <- function(schema, args) {
+  Filter(
+    function(companion) {
+      when <- companion$when
+      is.null(when) || identical(args[[when$argument]], when$equals)
+    },
+    schema$companions
+  )
+}
+
+qc_rule_assignment_from_row <- function(row, i) {
+  list(
+    timeseries_qc_rule_id = as.integer(row$timeseries_qc_rule_id[[i]]),
+    rule_fx = as.character(row$rule_fx[[i]]),
+    rule_version = as.integer(row$rule_version[[i]]),
+    argument_schema = row$argument_schema[[i]],
+    rule_args = row$rule_args[[i]],
+    companion_timeseries = row$companion_timeseries[[i]],
+    run_order = as.integer(row$run_order[[i]]),
+    active = isTRUE(row$active[[i]]),
+    note = row$note[[i]],
+    description = as.character(row$description[[i]]),
+    enabled = isTRUE(row$enabled[[i]])
+  )
+}
+
+qc_rule_assignment_ui <- function(
+  ns,
+  assignment,
+  index,
+  con,
+  location_id = NULL,
+  target_timeseries_id = NULL
+) {
+  prefix <- paste0("qc_", index, "_")
+  schema <- assignment$argument_schema
+  stored_args <- assignment$rule_args
+  # Render conditional roles too; the browser shows them when their argument
+  # condition changes, without rebuilding the entire assignment editor.
+  descriptors <- schema$companions
+  companion_ui <- lapply(descriptors, function(descriptor) {
+    candidates <- if (is.null(location_id) || is.na(location_id)) {
+      data.frame()
+    } else {
+      AquaCache::getQCRuleCompanionCandidates(
+        con,
+        location_id = as.integer(location_id),
+        parameter_name = descriptor$parameter_name,
+        exclude_timeseries_id = target_timeseries_id
+      )
+    }
+    qc_rule_companion_control_ui(
+      ns,
+      descriptor,
+      candidates,
+      assignment$companion_timeseries,
+      input_prefix = prefix
+    )
+  })
+
+  shiny::tags$div(
+    class = "card mb-3",
+    shiny::tags$div(
+      class = "card-header",
+      shiny::tags$strong(assignment$description),
+      shiny::tags$span(
+        class = "badge text-bg-secondary ms-2",
+        paste0("v", assignment$rule_version)
+      ),
+      if (!isTRUE(assignment$enabled)) {
+        shiny::tags$span(
+          class = "badge text-bg-warning ms-2",
+          "Version disabled; existing assignment is retained"
+        )
+      }
+    ),
+    shiny::tags$div(
+      class = "card-body",
+      shiny::fluidRow(
+        shiny::column(
+          4,
+          shiny::checkboxInput(
+            ns(paste0(prefix, "active")),
+            "Rule active",
+            value = isTRUE(assignment$active)
+          )
+        ),
+        shiny::column(
+          4,
+          shiny::numericInput(
+            ns(paste0(prefix, "run_order")),
+            "Run order",
+            value = assignment$run_order,
+            min = 1,
+            max = 32767,
+            step = 1
+          )
+        ),
+        shiny::column(
+          4,
+          shiny::textInput(
+            ns(paste0(prefix, "note")),
+            "Configuration note",
+            value = if (is.null(assignment$note) || is.na(assignment$note)) {
+              ""
+            } else {
+              assignment$note
+            }
+          )
+        )
+      ),
+      shiny::tags$p(class = "text-muted", assignment$description),
+      qc_rule_argument_controls_ui(
+        ns,
+        schema,
+        stored_args,
+        input_prefix = prefix
+      ),
+      if (length(companion_ui)) {
+        shiny::tagList(
+          shiny::tags$h6("Companion timeseries"),
+          companion_ui
+        )
+      } else {
+        NULL
+      }
+    )
+  )
 }
 
 source_adapter_args_equal <- function(left, right) {

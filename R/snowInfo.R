@@ -727,13 +727,13 @@ snowInfo <- function(
       density_swe <- plot_results_dt[
         plot_results_dt$param_name == "snow water equivalent",
         .(
-          "sample_id",
-          "datetime",
-          "target_datetime",
-          "year",
-          "month",
-          "location",
-          "name",
+          sample_id,
+          datetime,
+          target_datetime,
+          year,
+          month,
+          location,
+          name,
           "SWE" = result
         )
       ]

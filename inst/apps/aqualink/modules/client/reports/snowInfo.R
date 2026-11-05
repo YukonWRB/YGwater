@@ -292,10 +292,11 @@ snowInfoMod <- function(id, language) {
     })
 
     report_task <- ExtendedTask$new(function(req, config) {
-      promises::future_promise({
-        tryCatch(
-          {
-            con <- AquaConnect(
+      mirai::mirai(
+        {
+          tryCatch(
+            {
+            con <- YGwater::AquaConnect(
               name = config$dbName,
               host = config$dbHost,
               port = config$dbPort,
@@ -308,7 +309,7 @@ snowInfoMod <- function(id, language) {
             work_dir <- tempfile("snowInfoOutput_")
             dir.create(work_dir, recursive = TRUE)
 
-            suppressWarnings(snowInfo(
+            suppressWarnings(YGwater::snowInfo(
               con = con,
               locations = req$loc,
               inactive = req$inactive,
@@ -337,16 +338,20 @@ snowInfoMod <- function(id, language) {
             list(
               path = zip_path,
               filename = sprintf(
-                tr("snow_info_filename", req$ui_language),
+                YGwater:::tr("snow_info_filename", req$ui_language),
                 Sys.Date()
               )
             )
-          },
-          error = function(e) {
-            e$message
-          }
-        )
-      })
+            },
+            error = function(e) {
+              e$message
+            }
+          )
+        },
+        req = req,
+        config = config,
+        .compute = "YGwater_aqualink"
+      )
     }) |>
       bind_task_button("go")
 

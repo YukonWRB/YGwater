@@ -411,10 +411,11 @@ waterInfoMod <- function(id, language) {
     }
 
     report_task <- ExtendedTask$new(function(req, config) {
-      promises::future_promise({
-        tryCatch(
-          {
-            con <- AquaConnect(
+      mirai::mirai(
+        {
+          tryCatch(
+            {
+            con <- YGwater::AquaConnect(
               name = config$dbName,
               host = config$dbHost,
               port = config$dbPort,
@@ -427,7 +428,7 @@ waterInfoMod <- function(id, language) {
             work_dir <- tempfile("waterInfoOutput_")
             dir.create(work_dir, recursive = TRUE)
 
-            suppressWarnings(waterInfo(
+            suppressWarnings(YGwater::waterInfo(
               con = con,
               locations = req$loc,
               level_flow = req$param,
@@ -458,16 +459,20 @@ waterInfoMod <- function(id, language) {
             list(
               path = zip_path,
               filename = sprintf(
-                tr("water_info_filename", req$ui_language),
+                YGwater:::tr("water_info_filename", req$ui_language),
                 Sys.Date()
               )
             )
-          },
-          error = function(e) {
-            e$message
-          }
-        )
-      })
+            },
+            error = function(e) {
+              e$message
+            }
+          )
+        },
+        req = req,
+        config = config,
+        .compute = "YGwater_aqualink"
+      )
     }) |>
       bind_task_button("go")
 

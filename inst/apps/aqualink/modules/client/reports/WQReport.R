@@ -1323,10 +1323,11 @@ WQReport <- function(id, mdb_files, language) {
     )
 
     ac_guideline_task <- ExtendedTask$new(function(request, db_config) {
-      promises::future_promise({
-        tryCatch(
-          {
-            con <- AquaConnect(
+      mirai::mirai(
+        {
+          tryCatch(
+            {
+            con <- YGwater::AquaConnect(
               name = db_config$dbName,
               host = db_config$dbHost,
               port = db_config$dbPort,
@@ -1347,12 +1348,20 @@ WQReport <- function(id, mdb_files, language) {
                 params = request$params
               )
             )
-          },
-          error = function(e) {
-            list(key = request$key, guidelines = empty_ac_guidelines)
-          }
-        )
-      })
+            },
+            error = function(e) {
+              list(
+                key = request$key,
+                guidelines = empty_guidelines
+              )
+            }
+          )
+        },
+        request = request,
+        db_config = db_config,
+        empty_guidelines = empty_ac_guidelines,
+        .compute = "YGwater_aqualink"
+      )
     })
 
     observeEvent(
@@ -2063,35 +2072,16 @@ WQReport <- function(id, mdb_files, language) {
       invisible(NULL)
     }
 
-    pick_generated_file <- function(files, pattern = NULL, lang) {
-      files <- files[file.exists(files)]
-      if (!length(files)) {
-        stop(tr("wq_err_no_report_files", lang), call. = FALSE)
-      }
-      if (!is.null(pattern)) {
-        matched <- files[grepl(pattern, basename(files), ignore.case = TRUE)]
-        if (length(matched) == 1L) {
-          return(matched[[1]])
-        }
-        if (length(matched) > 1L) {
-          stop(tr("wq_err_multiple_report_files", lang), call. = FALSE)
-        }
-      }
-      if (length(files) != 1L) {
-        stop(tr("wq_err_expected_report_file", lang), call. = FALSE)
-      }
-      files[[1]]
-    }
-
     report_task <- ExtendedTask$new(function(req, db_config) {
-      promises::future_promise({
+      mirai::mirai(
+        {
         work_dir <- tempfile("WQReport_")
         dir.create(work_dir, recursive = TRUE)
         tryCatch(
           {
             report_warning <- NULL
             if (identical(req$data_source, "AC")) {
-              con <- AquaConnect(
+              con <- YGwater::AquaConnect(
                 name = db_config$dbName,
                 host = db_config$dbHost,
                 port = db_config$dbPort,
@@ -2105,7 +2095,7 @@ WQReport <- function(id, mdb_files, language) {
                 "SET application_name TO 'YGwater_shiny'"
               )
               output_path <- file.path(work_dir, "water-quality-report.xlsx")
-              result <- AquaCacheReport(
+              result <- YGwater::AquaCacheReport(
                 date = req$date,
                 location_ids = req$location_ids,
                 parameter_ids = req$parameter_ids,
@@ -2126,16 +2116,16 @@ WQReport <- function(id, mdb_files, language) {
               report_path <- result$xlsx_path
               if (result$reused_sample_count > 0L) {
                 report_warning <- if (result$reused_sample_count == 1L) {
-                  tr("wq_report_sample_reuse_one", req$ui_language)
+                  YGwater:::tr("wq_report_sample_reuse_one", req$ui_language)
                 } else {
                   sprintf(
-                    tr("wq_report_sample_reuse_many", req$ui_language),
+                    YGwater:::tr("wq_report_sample_reuse_many", req$ui_language),
                     result$reused_sample_count
                   )
                 }
                 report_warning <- paste(
                   report_warning,
-                  tr(
+                  YGwater:::tr(
                     if (identical(req$format, "by_date")) {
                       "wq_report_reuse_worksheets"
                     } else {
@@ -2146,9 +2136,9 @@ WQReport <- function(id, mdb_files, language) {
                 )
               }
             } else {
-              EQWin <- AccessConnect(req$eqwin_source, silent = TRUE)
+              EQWin <- YGwater::AccessConnect(req$eqwin_source, silent = TRUE)
               on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
-              EQWinReport(
+              YGwater::EQWinReport(
                 date = req$date,
                 date_approx = req$date_approx,
                 stations = req$stations,
@@ -2164,11 +2154,35 @@ WQReport <- function(id, mdb_files, language) {
                 save_path = work_dir,
                 con = EQWin
               )
-              report_path <- pick_generated_file(
-                list.files(work_dir, full.names = TRUE),
-                pattern = "\\.xlsx$",
-                lang = req$ui_language
-              )
+              files <- list.files(work_dir, full.names = TRUE)
+              files <- files[file.exists(files)]
+              matched <- files[grepl("\\.xlsx$", basename(files), ignore.case = TRUE)]
+              if (length(matched) == 1L) {
+                report_path <- matched[[1]]
+              } else if (length(matched) > 1L) {
+                stop(
+                  YGwater:::tr(
+                    "wq_err_multiple_report_files",
+                    req$ui_language
+                  ),
+                  call. = FALSE
+                )
+              } else if (length(files) == 1L) {
+                report_path <- files[[1]]
+              } else if (length(files) == 0L) {
+                stop(
+                  YGwater:::tr("wq_err_no_report_files", req$ui_language),
+                  call. = FALSE
+                )
+              } else {
+                stop(
+                  YGwater:::tr(
+                    "wq_err_expected_report_file",
+                    req$ui_language
+                  ),
+                  call. = FALSE
+                )
+              }
             }
 
             date_label <- if (!is.null(req$date_range)) {
@@ -2192,7 +2206,7 @@ WQReport <- function(id, mdb_files, language) {
             list(
               path = report_path,
               filename = sprintf(
-                tr("wq_report_filename", req$ui_language),
+                YGwater:::tr("wq_report_filename", req$ui_language),
                 date_label,
                 Sys.Date()
               ),
@@ -2206,7 +2220,11 @@ WQReport <- function(id, mdb_files, language) {
             e$message
           }
         )
-      })
+        },
+        req = req,
+        db_config = db_config,
+        .compute = "YGwater_aqualink"
+      )
     }) |>
       bind_task_button("go")
 
