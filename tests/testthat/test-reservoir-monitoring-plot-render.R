@@ -1,6 +1,12 @@
-test_that("YEC plot renders selected traces", {
+test_that("Reservoir monitoring plot renders selected traces", {
   env <- new.env(parent = globalenv())
-  sys.source(file.path("inst", "apps", "YGwater", "modules", "client", "reports", "yecDashboard.R"), env)
+  sys.source(
+    file.path(
+      "inst", "apps", "aqualink", "modules", "client", "reports",
+      "reservoirMonitoring.R"
+    ),
+    env
+  )
   env$yec_dashboard_thresholds <- function(...) list(thresholds = data.frame(), types = data.frame(), colours = data.frame())
   env$yec_dashboard_threshold_segments <- function(...) data.frame()
   env$yec_dashboard_threshold_margins <- function(dat, ...) data.frame(
