@@ -87,6 +87,9 @@ addTimeseries <- function(id, language) {
     source_test_role <- reactiveVal("primary")
     source_test_run_id <- reactiveVal(0L)
     source_test_state <- reactiveVal(list(status = "ready"))
+    qc_assignments_draft <- reactiveVal(list())
+    qc_assignments_load_error <- reactiveVal(NULL)
+    qc_preview_result <- reactiveVal(NULL)
 
     safe_text <- function(x) {
       if (is.null(x) || length(x) == 0L) {
@@ -1941,6 +1944,26 @@ addTimeseries <- function(id, language) {
           "timeseries_source_adapter_id"
         )
       )
+      qc_capabilities <- tryCatch(
+        AquaCache::getQCRuleCapabilities(
+          con = session$userData$AquaCache,
+          enabled_only = FALSE
+        ),
+        error = function(e) e
+      )
+      moduleData$qc_rules_available <- !inherits(qc_capabilities, "error")
+      moduleData$qc_rule_capabilities <- if (
+        moduleData$qc_rules_available
+      ) {
+        qc_capabilities
+      } else {
+        data.frame()
+      }
+      moduleData$qc_rules_error <- if (inherits(qc_capabilities, "error")) {
+        conditionMessage(qc_capabilities)
+      } else {
+        NULL
+      }
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT l.location_id, l.name, lt.type, l.latitude, l.longitude FROM public.locations l INNER JOIN public.location_types lt ON l.location_type = lt.type_id ORDER BY l.name ASC"
@@ -2139,6 +2162,391 @@ addTimeseries <- function(id, language) {
     }
 
     getModuleData() # Initial data load
+
+    qc_target_parameter_name <- function() {
+      if (identical(input$mode, "modify")) {
+        selected_rows <- input$ts_table_rows_selected
+        if (length(selected_rows) == 1L) {
+          row <- suppressWarnings(as.integer(selected_rows[[1L]]))
+          if (
+            length(row) == 1L && !is.na(row) &&
+              row >= 1L && row <= nrow(moduleData$timeseries_display)
+          ) {
+            return(as.character(
+              moduleData$timeseries_display$parameter[[row]]
+            ))
+          }
+        }
+        return(NULL)
+      }
+
+      parameter_id <- nullable_integer(input$parameter)
+      if (is.na(parameter_id)) return(NULL)
+      row <- match(parameter_id, moduleData$parameters$parameter_id)
+      if (is.na(row)) return(NULL)
+      as.character(moduleData$parameters$param_name[[row]])
+    }
+
+    available_qc_rule_choices <- function() {
+      draft <- qc_assignments_draft()
+      configured_rule_fx <- if (length(draft)) {
+        vapply(draft, function(rule) as.character(rule$rule_fx), character(1))
+      } else {
+        character()
+      }
+      qc_rule_capability_choices(
+        moduleData$qc_rule_capabilities,
+        primary_parameter = qc_target_parameter_name(),
+        exclude_rule_fx = configured_rule_fx
+      )
+    }
+
+    observeEvent(
+      list(
+        input$mode,
+        input$parameter,
+        input$ts_table_rows_selected,
+        qc_assignments_draft()
+      ),
+      {
+        choices <- available_qc_rule_choices()
+        selected <- nullable_text(input$qc_new_rule)
+        if (is.na(selected) || !selected %in% unname(choices)) {
+          selected <- character()
+        }
+        updateSelectizeInput(
+          session,
+          "qc_new_rule",
+          choices = choices,
+          selected = selected
+        )
+      },
+      ignoreInit = FALSE
+    )
+
+    load_qc_assignments <- function(timeseries_id) {
+      if (!isTRUE(moduleData$qc_rules_available)) {
+        qc_assignments_load_error(NULL)
+        qc_assignments_draft(list())
+        return(invisible(NULL))
+      }
+      rows <- tryCatch(
+        AquaCache::getTimeseriesQCRules(
+          session$userData$AquaCache,
+          timeseries_id
+        ),
+        error = function(e) e
+      )
+      if (inherits(rows, "error")) {
+        qc_assignments_load_error(conditionMessage(rows))
+        qc_assignments_draft(list())
+        showNotification(
+          paste("Could not load automatic QC assignments:",
+                conditionMessage(rows)),
+          type = "error",
+          duration = 10
+        )
+        return(invisible(NULL))
+      }
+      qc_assignments_load_error(NULL)
+      qc_assignments_draft(lapply(seq_len(nrow(rows)), function(i) {
+        qc_rule_assignment_from_row(rows, i)
+      }))
+      qc_preview_result(NULL)
+      invisible(NULL)
+    }
+
+    observeEvent(input$qc_add_rule_button, {
+      capabilities <- as.data.frame(
+        moduleData$qc_rule_capabilities,
+        stringsAsFactors = FALSE
+      )
+      rule_key <- nullable_text(input$qc_new_rule)
+      if (
+        !isTRUE(moduleData$qc_rules_available) ||
+          is.na(rule_key) ||
+          nrow(capabilities) == 0L
+      ) {
+        showNotification("Select an available automatic QC rule first.",
+                         type = "error", duration = 8)
+        return()
+      }
+
+      draft <- qc_assignments_draft()
+      draft <- tryCatch(
+        qc_rule_collect_draft_values(
+          shiny::reactiveValuesToList(input),
+          draft
+        ),
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error", duration = 8)
+          NULL
+        }
+      )
+      if (is.null(draft)) return()
+
+      configured_rule_fx <- if (length(draft)) {
+        vapply(draft, function(rule) as.character(rule$rule_fx), character(1))
+      } else {
+        character()
+      }
+      available_rule_keys <- unname(qc_rule_capability_choices(
+        moduleData$qc_rule_capabilities,
+        primary_parameter = qc_target_parameter_name(),
+        exclude_rule_fx = configured_rule_fx
+      ))
+      if (!rule_key %in% available_rule_keys) {
+        showNotification(
+          "This QC rule is already configured or is incompatible with the selected parameter.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      matches <- which(
+        paste0(capabilities$rule_fx, "@", capabilities$rule_version) ==
+          rule_key & capabilities$enabled
+      )
+      if (length(matches) != 1L) {
+        showNotification(
+          "The selected QC rule version is no longer available.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+      capability <- capabilities[matches, , drop = FALSE]
+      order_values <- vapply(draft, function(x) {
+        suppressWarnings(as.integer(x$run_order))
+      }, integer(1))
+      schema <- capability$argument_schema[[1L]]
+      draft[[length(draft) + 1L]] <- list(
+        timeseries_qc_rule_id = NA_integer_,
+        rule_fx = as.character(capability$rule_fx[[1L]]),
+        rule_version = as.integer(capability$rule_version[[1L]]),
+        argument_schema = schema,
+        rule_args = qc_rule_schema_defaults(schema),
+        companion_timeseries = list(),
+        run_order = if (length(order_values)) max(order_values, na.rm = TRUE) + 1L else 1L,
+        active = TRUE,
+        note = NA_character_,
+        description = as.character(capability$description[[1L]]),
+        enabled = isTRUE(capability$enabled[[1L]])
+      )
+      qc_assignments_draft(draft)
+      updateSelectizeInput(session, "qc_new_rule", selected = character())
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$qc_remove_rule_button, {
+      draft <- qc_assignments_draft()
+      index <- suppressWarnings(as.integer(input$qc_remove_rule))
+      if (
+        length(index) != 1L || is.na(index) ||
+          index < 1L || index > length(draft)
+      ) {
+        showNotification("Select a configured rule to remove.",
+                         type = "error", duration = 8)
+        return()
+      }
+      draft <- tryCatch(
+        qc_rule_collect_draft_values(
+          shiny::reactiveValuesToList(input),
+          draft
+        ),
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error", duration = 8)
+          NULL
+        }
+      )
+      if (is.null(draft)) return()
+      draft <- draft[-index]
+      qc_assignments_draft(draft)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$qc_preview, {
+      timeseries_id <- nullable_integer(selected_tsid())
+      if (is.na(timeseries_id)) {
+        showNotification(
+          "Select an existing timeseries before previewing its QC grading.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+      assignments <- tryCatch(
+        qc_rule_collect_assignments(
+          shiny::isolate(shiny::reactiveValuesToList(input)),
+          qc_assignments_draft()
+        ),
+        error = function(e) e
+      )
+      if (inherits(assignments, "error")) {
+        qc_preview_result(list(error = conditionMessage(assignments)))
+        return()
+      }
+      result <- tryCatch({
+        bounds <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT max(datetime) AS latest
+           FROM continuous.measurements_continuous
+           WHERE timeseries_id = $1",
+          params = list(timeseries_id)
+        )
+        if (nrow(bounds) != 1L || is.na(bounds$latest[[1L]])) {
+          NULL
+        } else {
+          latest <- as.POSIXct(bounds$latest[[1L]], tz = "UTC")
+          AquaCache::gradeContinuous(
+            session$userData$AquaCache,
+            timeseries_id,
+            from = latest - 7 * 24 * 3600,
+            to = latest,
+            write = FALSE,
+            assignments = assignments
+          )
+        }
+      }, error = function(e) e)
+      qc_preview_result(if (inherits(result, "error")) {
+        list(error = conditionMessage(result))
+      } else {
+        list(value = result)
+      })
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$mode, {
+      if (identical(input$mode, "add")) {
+        selected_tsid(NULL)
+        qc_assignments_load_error(NULL)
+        qc_assignments_draft(list())
+        qc_preview_result(NULL)
+      } else {
+        selected_rows <- input$ts_table_rows_selected
+        if (length(selected_rows) == 1L) {
+          timeseries_id <- moduleData$timeseries_display[
+            selected_rows,
+            "timeseries_id"
+          ]
+          selected_tsid(timeseries_id)
+          load_qc_assignments(timeseries_id)
+        }
+      }
+    }, ignoreInit = TRUE)
+
+    output$qc_rules_editor_ui <- renderUI({
+      if (!isTRUE(moduleData$qc_rules_available)) {
+        return(tags$div(
+          class = "alert alert-warning",
+          "Automatic QC configuration is unavailable. Install the QC schema patch and load a compatible AquaCache package to enable it."
+        ))
+      }
+      assignments <- qc_assignments_draft()
+      location_id <- nullable_integer(input$location)
+      target_timeseries_id <- nullable_integer(selected_tsid())
+      input_snapshot <- shiny::isolate(
+        shiny::reactiveValuesToList(input)
+      )
+      controls_ready <- length(assignments) == 0L || all(vapply(
+        seq_along(assignments),
+        function(i) !is.null(input_snapshot[[paste0("qc_", i, "_active")]]),
+        logical(1)
+      ))
+      if (controls_ready) {
+        assignments <- tryCatch(
+          qc_rule_collect_draft_values(input_snapshot, assignments),
+          error = function(e) assignments
+        )
+      }
+      if (!length(assignments)) {
+        return(tags$div(
+          class = "alert alert-secondary",
+          "No automatic QC rules are assigned. Add a rule above to configure grading for this timeseries."
+        ))
+      }
+      do.call(tagList, lapply(seq_along(assignments), function(i) {
+        qc_rule_assignment_ui(
+          ns,
+          assignments[[i]],
+          index = i,
+          con = session$userData$AquaCache,
+          location_id = if (is.na(location_id)) NULL else location_id,
+          target_timeseries_id = if (is.na(target_timeseries_id)) {
+            NULL
+          } else {
+            target_timeseries_id
+          }
+        )
+      }))
+    })
+
+    output$qc_remove_rule_selector_ui <- renderUI({
+      assignments <- qc_assignments_draft()
+      choices <- if (!length(assignments)) {
+        character()
+      } else {
+        stats::setNames(
+          as.character(seq_along(assignments)),
+          vapply(seq_along(assignments), function(i) {
+            paste0(
+              assignments[[i]]$description,
+              " (v",
+              assignments[[i]]$rule_version,
+              ", order ",
+              assignments[[i]]$run_order,
+              ")"
+            )
+          }, character(1))
+        )
+      }
+      selectizeInput(
+        ns("qc_remove_rule"),
+        "Remove a rule from this configuration",
+        choices = choices,
+        multiple = FALSE,
+        options = list(placeholder = "Select a configured rule"),
+        width = "100%"
+      )
+    })
+
+    output$qc_preview_ui <- renderUI({
+      result <- qc_preview_result()
+      if (is.null(result)) {
+        return(tags$p(
+          class = "text-muted",
+          "Preview the most recent seven days using the current form values. Previewing does not save rules or write qualifiers."
+        ))
+      }
+      if (!is.null(result$error)) {
+        return(tags$div(class = "alert alert-danger", result$error))
+      }
+      if (is.null(result$value)) {
+        return(tags$div(
+          class = "alert alert-secondary",
+          "No active QC rules or no readings are available for preview."
+        ))
+      }
+      preview <- result$value
+      counts <- if (is.null(preview$readings) || !nrow(preview$readings)) {
+        data.frame()
+      } else {
+        as.data.frame(table(
+          qualifier = preview$readings$code,
+          useNA = "ifany"
+        ), stringsAsFactors = FALSE)
+      }
+      tagList(
+        tags$p(
+          paste0(
+            "Preview covers ",
+            nrow(preview$readings),
+            " readings; ",
+            nrow(preview$ranges),
+            " qualifier range(s) would be written. No data were changed."
+          )
+        ),
+        if (nrow(counts)) DT::datatable(counts, rownames = FALSE) else NULL
+      )
+    })
 
     current_adapter_capability <- reactive({
       source_fx <- nullable_text(input$source_fx)
@@ -2353,6 +2761,32 @@ addTimeseries <- function(id, language) {
         if (anyDuplicated(priority)) {
           stop("Active source assignments cannot repeat ", column, ".")
         }
+      }
+      assignments
+    }
+
+    collect_qc_assignments <- function() {
+      draft <- qc_assignments_draft()
+      if (
+        identical(input$mode, "modify") &&
+          isTRUE(moduleData$qc_rules_available) &&
+          !is.null(qc_assignments_load_error())
+      ) {
+        stop(
+          "Existing QC rules could not be loaded. Reload module data or",
+          " reselect the timeseries before saving."
+        )
+      }
+      if (!isTRUE(moduleData$qc_rules_available)) {
+        if (length(draft)) {
+          stop("Automatic QC configuration is unavailable in this database.")
+        }
+        return(data.frame())
+      }
+      assignments <- qc_rule_collect_assignments(input, draft)
+      active_assignments <- assignments[assignments$active, , drop = FALSE]
+      if (anyDuplicated(active_assignments$run_order)) {
+        stop("Active QC assignments cannot repeat run order.")
       }
       assignments
     }
@@ -3405,6 +3839,76 @@ addTimeseries <- function(id, language) {
               uiOutput(ns("existing_corrections_message")),
               DT::DTOutput(ns("existing_corrections_table"))
             )
+          ),
+          accordion_panel(
+            id = ns("qc_rules_panel"),
+            title = "Automatic QC grading",
+            tags$p(
+              class = "text-muted",
+              paste(
+                "Active QC rules run after new measurements are imported.",
+                "Their argument forms and companion-series roles come from",
+                "the versioned AquaCache rule catalogue."
+              )
+            ),
+            if (!isTRUE(moduleData$qc_rules_available)) {
+              tags$div(
+                class = "alert alert-warning",
+                "Automatic QC configuration is unavailable. Apply the QC schema patch and use the matching AquaCache package version first."
+              )
+            } else {
+              tagList(
+                fluidRow(
+                  column(
+                    8,
+                    selectizeInput(
+                      ns("qc_new_rule"),
+                      "Add a grading rule",
+                      choices = character(),
+                      selected = character(),
+                      multiple = FALSE,
+                      options = list(placeholder = "Select a rule"),
+                      width = "100%"
+                    )
+                  ),
+                  column(
+                    4,
+                    actionButton(
+                      ns("qc_add_rule_button"),
+                      "Add rule",
+                      icon = icon("plus"),
+                      width = "100%"
+                    )
+                  )
+                ),
+                fluidRow(
+                  column(
+                    8,
+                    uiOutput(ns("qc_remove_rule_selector_ui"))
+                  ),
+                  column(
+                    4,
+                    actionButton(
+                      ns("qc_remove_rule_button"),
+                      "Remove rule",
+                      icon = icon("trash"),
+                      width = "100%"
+                    )
+                  )
+                ),
+                uiOutput(ns("qc_rules_editor_ui")),
+                conditionalPanel(
+                  condition = "input.mode == 'modify'",
+                  ns = ns,
+                  actionButton(
+                    ns("qc_preview"),
+                    "Preview current grading",
+                    icon = icon("eye")
+                  ),
+                  uiOutput(ns("qc_preview_ui"))
+                )
+              )
+            }
           )
         ),
         textAreaInput(
@@ -6348,6 +6852,7 @@ addTimeseries <- function(id, language) {
       if (length(sel) > 0) {
         tsid <- moduleData$timeseries_display[sel, "timeseries_id"]
         selected_tsid(tsid)
+        load_qc_assignments(tsid)
         # Fetch the record from the basic timeseries table, not the timeseries_display as we need the numeric keys
         details <- moduleData$timeseries[
           moduleData$timeseries$timeseries_id == tsid,
@@ -6679,6 +7184,9 @@ addTimeseries <- function(id, language) {
         }
       } else {
         selected_tsid(NULL)
+        qc_assignments_load_error(NULL)
+        qc_assignments_draft(list())
+        qc_preview_result(NULL)
         pending_transmission_mapping(NULL)
         preferred_transmission_route_id(NULL)
         preferred_secondary_transmission_route_id(NULL)
@@ -6900,6 +7408,7 @@ addTimeseries <- function(id, language) {
         owner,
         note,
         source_assignments,
+        qc_assignments,
         allow_empty_initial_fetch,
         transmission_mappings,
         instrument_deployment,
@@ -7030,6 +7539,14 @@ addTimeseries <- function(id, language) {
                     )
                   )
                 }
+              }
+
+              if (nrow(qc_assignments) > 0L) {
+                AquaCache::setTimeseriesQCRules(
+                  con,
+                  new_timeseries_id,
+                  qc_assignments
+                )
               }
 
               timeseries_sync_transmission_mapping(
@@ -7394,6 +7911,17 @@ addTimeseries <- function(id, language) {
         return()
       }
 
+      qc_assignments <- tryCatch(
+        collect_qc_assignments(),
+        error = function(e) {
+          showNotification(e$message, type = "error", duration = 8)
+          NULL
+        }
+      )
+      if (is.null(qc_assignments)) {
+        return()
+      }
+
       transmission_mappings <- tryCatch(
         current_transmission_mappings_input(),
         error = function(e) {
@@ -7469,6 +7997,7 @@ addTimeseries <- function(id, language) {
         owner = input$default_owner,
         note = input$note,
         source_assignments = source_assignments,
+        qc_assignments = qc_assignments,
         allow_empty_initial_fetch = !is.null(capability) &&
           isTRUE(capability$allow_empty_initial_fetch[[1]]),
         transmission_mappings = transmission_mappings,
@@ -7538,6 +8067,8 @@ addTimeseries <- function(id, language) {
       submitted_aggregation_methods(NULL)
 
       getModuleData()
+      qc_assignments_draft(list())
+      qc_preview_result(NULL)
       pending_transmission_mapping(NULL)
       preferred_transmission_route_id(NULL)
       preferred_secondary_transmission_route_id(NULL)
@@ -7835,6 +8366,21 @@ addTimeseries <- function(id, language) {
           }
         )
         if (is.null(input_source_assignments)) {
+          return()
+        }
+
+        input_qc_assignments <- tryCatch(
+          collect_qc_assignments(),
+          error = function(e) {
+            showNotification(
+              conditionMessage(e),
+              type = "error",
+              duration = 8
+            )
+            NULL
+          }
+        )
+        if (is.null(input_qc_assignments)) {
           return()
         }
 
@@ -8226,6 +8772,14 @@ addTimeseries <- function(id, language) {
               }
             }
 
+            if (isTRUE(moduleData$qc_rules_available)) {
+              AquaCache::setTimeseriesQCRules(
+                session$userData$AquaCache,
+                selected_timeseries_id,
+                input_qc_assignments
+              )
+            }
+
             timeseries_sync_transmission_mapping(
               con = session$userData$AquaCache,
               timeseries_id = selected_timeseries_id,
@@ -8290,6 +8844,7 @@ addTimeseries <- function(id, language) {
               )
             }
             getModuleData()
+            load_qc_assignments(selected_timeseries_id)
           },
           error = function(e) {
             DBI::dbRollback(session$userData$AquaCache)
