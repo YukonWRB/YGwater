@@ -11,20 +11,6 @@
 app_ui <- function(request) {
   default_app_title <- tr(config$brand$text$app_title, "English")
   default_app_description <- tr(config$brand$text$SEO_desc, "English")
-  configured_user <- if (length(config$dbUser) == 1L && !is.na(config$dbUser)) {
-    trimws(as.character(config$dbUser))
-  } else {
-    ""
-  }
-  logout_url_marker <- if (
-    !isTRUE(config$public) &&
-      nzchar(configured_user) &&
-      !identical(tolower(configured_user), "public_reader")
-  ) {
-    "var logoutUrl = new URL(window.location.href); logoutUrl.searchParams.set('aqualink_logged_out', '1'); window.history.replaceState(window.history.state, '', logoutUrl.toString());"
-  } else {
-    NULL
-  }
 
   tagList(
     # Load Shiny's complete Selectize dependency before lazy modules. Some
@@ -291,8 +277,7 @@ app_ui <- function(request) {
                   actionButton(
                     "logoutBtn",
                     "Logout",
-                    style = "display: none;",
-                    onclick = logout_url_marker
+                    style = "display: none;"
                   )
                 ) # Initially hidden
               }
@@ -334,8 +319,7 @@ app_ui <- function(request) {
                 "logoutBtnMobile",
                 "Logout",
                 class = "mobile-auth-button",
-                style = "background-color: #F2A900; border: 0; border-radius: 6px; color: #244C5A; display: none; font-weight: 600; min-height: 40px; min-width: 68px; padding: 0.4rem 0.8rem; white-space: nowrap;",
-                onclick = logout_url_marker
+                style = "background-color: #F2A900; border: 0; border-radius: 6px; color: #244C5A; display: none; font-weight: 600; min-height: 40px; min-width: 68px; padding: 0.4rem 0.8rem; white-space: nowrap;"
               )
             )
           }

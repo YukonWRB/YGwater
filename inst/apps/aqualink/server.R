@@ -26,39 +26,17 @@ app_server <- function(input, output, session) {
   } else {
     ""
   }
-  request_query <- session$request$QUERY_STRING
-  if (is.null(request_query)) {
-    request_query <- ""
-  }
-  logout_requested <- grepl(
-    "(^|[?&])aqualink_logged_out=1(&|$)",
-    request_query
-  )
-
-  # An explicit logout starts the new session with the same public_reader
-  # connection used by the public-facing app, so it can browse public data or
-  # authenticate as a different account.
-  base_config <- config
-  if (logout_requested && !isTRUE(config$public)) {
-    public_db_user <- Sys.getenv("aquacachePublicUser", "public_reader")
-    public_db_pass <- Sys.getenv("aquacachePublicPass", "aquacache")
-    if (!nzchar(public_db_user)) public_db_user <- "public_reader"
-    if (!nzchar(public_db_pass)) public_db_pass <- "aquacache"
-    base_config$dbUser <- public_db_user
-    base_config$dbPass <- public_db_pass
-  }
-  session$userData$base_config <- base_config
 
   # Store the config info in the session. If the user connects with their own credentials these need to be used for plot rendering wrapped in an ExtendedTask or future/promises
-  session$userData$config <- base_config
+  session$userData$config <- config
 
   # Initial database connection without edit privileges
   session$userData$AquaCache <- AquaConnect(
-    name = base_config$dbName,
-    host = base_config$dbHost,
-    port = base_config$dbPort,
-    username = base_config$dbUser,
-    password = base_config$dbPass,
+    name = config$dbName,
+    host = config$dbHost,
+    port = config$dbPort,
+    username = config$dbUser,
+    password = config$dbPass,
     silent = TRUE
   )
 
@@ -908,11 +886,11 @@ app_server <- function(input, output, session) {
       tryCatch(
         {
           retry_con <- AquaConnect(
-            name = session$userData$base_config$dbName,
-            host = session$userData$base_config$dbHost,
-            port = session$userData$base_config$dbPort,
-            username = session$userData$base_config$dbUser,
-            password = session$userData$base_config$dbPass,
+            name = config$dbName,
+            host = config$dbHost,
+            port = config$dbPort,
+            username = config$dbUser,
+            password = config$dbPass,
             silent = TRUE
           )
           # Reset the application_name to 'YGwater_shiny'
@@ -972,9 +950,7 @@ app_server <- function(input, output, session) {
     FALSE
   }
 
-  session$userData$usage_id <- insert_usage_session(
-    session$userData$base_config$dbUser
-  )
+  session$userData$usage_id <- insert_usage_session(config$dbUser)
   session$userData$usage_closed <- is.null(session$userData$usage_id)
 
   session$onUnhandledError(function(e) {
@@ -2498,8 +2474,7 @@ WHERE rolname = current_user;"
 
   auto_login <- !isTRUE(config$public) &&
     nzchar(configured_user) &&
-    !identical(tolower(configured_user), "public_reader") &&
-    !logout_requested
+    !identical(tolower(configured_user), "public_reader")
   if (auto_login) {
     tryCatch(
       {
@@ -2583,7 +2558,7 @@ WHERE rolname = current_user;"
       session$userData$admin_button_inserted <- FALSE
     }
 
-    new_id <- insert_usage_session(session$userData$base_config$dbUser)
+    new_id <- insert_usage_session(config$dbUser)
     close_usage_session(
       source = if (show_idle_modal) "logout_idle" else "logout",
       login_to = new_id,
@@ -2604,11 +2579,11 @@ WHERE rolname = current_user;"
     safe_disconnect(session$userData$AquaCache)
     # Re-create the connection with the base 'config' parameters, no edit privileges
     set_session_aquacache_connection(AquaConnect(
-      name = session$userData$base_config$dbName,
-      host = session$userData$base_config$dbHost,
-      port = session$userData$base_config$dbPort,
-      username = session$userData$base_config$dbUser,
-      password = session$userData$base_config$dbPass,
+      name = config$dbName,
+      host = config$dbHost,
+      port = config$dbPort,
+      username = config$dbUser,
+      password = config$dbPass,
       silent = TRUE
     ))
     # Reset the application_name to 'YGwater_shiny'
@@ -2618,7 +2593,9 @@ WHERE rolname = current_user;"
     )
 
     # Reset the session userData with the default credentials
-    session$userData$config <- session$userData$base_config
+    session$userData$config$dbUser <- config$dbUser
+    session$userData$config$dbPass <- config$dbPass
+    session$userData$config$dbName <- config$dbName
 
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     showViz(show = TRUE) # Restore public/viz tabs immediately without relying on the removed admin button
@@ -2634,10 +2611,8 @@ WHERE rolname = current_user;"
     # logout button is disabled on click to prevent multiple rapid clicks; re-enable after logout performed (it's hidden at this point but needs to be enabled for later use)
     shinyjs::runjs("$('#logoutBtn').prop('disabled', false);")
 
-    # End this authenticated session after the logout response has reached the
-    # browser. The logout URL marker was added before the action button event,
-    # so the fresh session starts as public_reader when this account normally
-    # triggers automatic authentication.
+    # Reload the session to discard authenticated module state. A non-public
+    # launch account is automatically authenticated again on the new session.
     session$onFlushed(
       function() {
         session$reload()
