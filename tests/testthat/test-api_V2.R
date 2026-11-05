@@ -190,26 +190,29 @@ test_that("api(version = 2) builds a plumber2 router without running", {
 
 test_that("API V2 async routes declare their finalizers", {
   lines <- readLines(v2_route_file(), warn = FALSE)
-  route_starts <- grep("^#\\* @get\\s+", lines)
+  # Split on every endpoint method: GET and POST /samples/results each have
+  # their own async handler and finalizer. @any annotations belong to filters.
+  route_starts <- grep("^#\\* @(get|post|put|patch|delete|head|options)\\s+", lines)
   route_ends <- c(route_starts[-1L] - 1L, length(lines))
-  routes <- sub("^#\\* @get\\s+", "", lines[route_starts])
+  routes <- sub("^#\\* @", "", lines[route_starts])
   async_routes <- c(
-    "/timeseries/measurements",
-    "/timeseries/measurementsDaily",
-    "/images/download",
-    "/boreholes",
-    "/documents",
-    "/documents/download",
-    "/samples",
-    "/samples/results",
-    "/snow-bulletin/leaflet",
-    "/snow-survey/data",
-    "/snow-survey/metadata",
-    "/snow-survey/stats",
-    "/snow-survey/trends"
+    "get /timeseries/measurements",
+    "get /timeseries/measurementsDaily",
+    "get /images/download",
+    "get /boreholes",
+    "get /documents",
+    "get /documents/download",
+    "get /samples",
+    "get /samples/results",
+    "post /samples/results",
+    "get /snow-bulletin/leaflet",
+    "get /snow-survey/data",
+    "get /snow-survey/metadata",
+    "get /snow-survey/stats",
+    "get /snow-survey/trends"
   )
 
-  expect_false(any(grepl("^/v[0-9]+(?:/|$)", routes)))
+  expect_false(any(grepl("^[a-z]+ /v[0-9]+(?:/|$)", routes)))
   expect_false(any(grepl("^#\\* @any\\s+/\\*\\s*$", lines)))
 
   is_async <- vapply(
@@ -281,18 +284,37 @@ test_that("API measurement SQL limits rows before metadata range joins", {
     measurement_end <- next_route[next_route > measurement_start][[1L]] - 1L
     block <- paste(lines[measurement_start:measurement_end], collapse = "\n")
 
+    # V2 limits candidates before correction evaluation; V1 limits corrected
+    # rows. Both must apply the requested limit before joining range metadata.
+    is_v2 <- identical(route_file, v2_route_file())
+    limited_cte <- if (is_v2) {
+      "limited_measurement_candidates"
+    } else {
+      "limited_measurement_rows"
+    }
+    expect_match(block, paste0(limited_cte, " AS MATERIALIZED"), fixed = TRUE)
+    limit_start <- regexpr(paste0(limited_cte, " AS MATERIALIZED"), block, fixed = TRUE)[[1L]]
+    limited_sql <- substring(block, limit_start)
     expect_match(
-      block,
-      "limited_measurement_rows AS MATERIALIZED",
-      fixed = TRUE
+      limited_sql,
+      'ORDER BY datetime ASC, timeseries_id ASC\\s+LIMIT ",\\s+limit_param',
+      info = route_file
     )
-    expect_match(block, "FROM limited_measurement_rows m", fixed = TRUE)
+    expect_match(block, paste0("FROM ", limited_cte, " m"), fixed = TRUE)
+    if (is_v2) {
+      expect_match(block, "FROM measurement_rows m", fixed = TRUE)
+      expect_match(limited_sql, "m.correction_mode = 'fast'", fixed = TRUE)
+      expect_match(limited_sql, "m.correction_mode = 'slow'", fixed = TRUE)
+      expect_match(limited_sql, "correction_mode = 'compound'", fixed = TRUE)
+    } else {
+      expect_false(grepl("FROM measurement_rows m", block, fixed = TRUE))
+    }
+    expect_match(limited_sql, "measurement_join_sql", fixed = TRUE)
     expect_match(
       block,
       "ORDER BY m.datetime ASC, m.timeseries_id ASC",
       fixed = TRUE
     )
-    expect_false(grepl("FROM measurement_rows m", block, fixed = TRUE))
     expect_false(grepl("publicly_visible|default_show|include_private", block))
   }
 })

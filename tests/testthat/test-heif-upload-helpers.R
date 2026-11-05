@@ -85,7 +85,10 @@ test_that("simplerIndex normalizes HEIC and HEIF images to JPEG pages", {
 
   helper_environment <- new.env(parent = globalenv())
   source(
-    "inst/apps/aqualink/modules/admin/boreholes_wells/simplerIndex_helpers.R",
+    system.file(
+      "apps/aqualink/modules/admin/boreholes_wells/simplerIndex_helpers.R",
+      package = "YGwater"
+    ),
     local = helper_environment
   )
   output_dir <- tempfile("simplerIndex_heif_test_")

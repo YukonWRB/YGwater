@@ -563,7 +563,13 @@ mapParams <- function(id, language) {
         )
       }
     }) |>
-      bindEvent(map_params$param2, map_params$agg2, language$language)
+      bindEvent(
+        map_params$params,
+        map_params$param2,
+        map_params$agg2,
+        input$mapType,
+        language$language
+      )
 
     default_primary_parameter <- {
       matched <- tryCatch(
@@ -1007,6 +1013,34 @@ mapParams <- function(id, language) {
       }
     })
 
+    # Both map types use years of record and day tolerance in their queries.
+    # Validate before changing either selection so incomplete modal inputs
+    # cannot replace usable settings or close the session on Save.
+    valid_selection <- function() {
+      values <- list(input$param, input$yrs, input$days)
+      valid <- all(lengths(values) == 1L)
+      if (valid) {
+        values <- suppressWarnings(as.numeric(unlist(
+          values,
+          use.names = FALSE
+        )))
+        valid <- all(is.finite(values)) &&
+          all(values == floor(values)) &&
+          values[[1L]] %in% moduleData$parameters$parameter_id &&
+          values[[2L]] >= 3 &&
+          values[[2L]] <= 100 &&
+          values[[3L]] >= 0 &&
+          values[[3L]] <= 365
+      }
+      if (!valid) {
+        showNotification(
+          tr("map_invalid_selection", language$language),
+          type = "error"
+        )
+      }
+      valid
+    }
+
     # edit primary and secondary parameter options in a modal
     observeEvent(input$edit_primary_param, {
       # Order the parameters alphabetically by name (in the current language)
@@ -1064,6 +1098,9 @@ mapParams <- function(id, language) {
       ))
     })
     observeEvent(input$save_primary_param, {
+      if (!valid_selection()) {
+        return()
+      }
       if (!identical(as.character(map_params$param1), input$param)) {
         map_params$actual_limits1 <- NULL # rescale to the new parameter
       }

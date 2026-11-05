@@ -1,30 +1,42 @@
 flood_image_test_server <- function() {
-  path <- testthat::test_path(
-    "..", "..", "inst", "apps", "aqualink", "modules", "client",
-    "reports", "floodDashboard.R"
+  path <- system.file(
+    "apps/aqualink/modules/client/reports/floodDashboard.R",
+    package = "YGwater"
   )
   lines <- readLines(path, warn = FALSE)
   start <- grep("selected_img_series_id <-", lines, fixed = TRUE)
   end <- grep("output$station_image <-", lines, fixed = TRUE)
   code <- parse(text = lines[start:(end - 1L)])
   mocked <- c(
-    "community_image_series", "selected_image_series",
-    "available_image_dates", "available_image_timestamps"
+    "community_image_series",
+    "selected_image_series",
+    "available_image_dates",
+    "available_image_timestamps"
   )
-  code <- code[!vapply(code, function(expr) {
-    is.call(expr) && identical(expr[[1]], as.name("<-")) &&
-      is.symbol(expr[[2]]) &&
-      as.character(expr[[2]]) %in% mocked
-  }, logical(1))]
+  code <- code[
+    !vapply(
+      code,
+      function(expr) {
+        is.call(expr) &&
+          identical(expr[[1]], as.name("<-")) &&
+          is.symbol(expr[[2]]) &&
+          as.character(expr[[2]]) %in% mocked
+      },
+      logical(1)
+    )
+  ]
 
   function(input, output, session) {
     language <- shiny::reactiveValues(language = "en")
     tr <- function(key, lang) key
     community_image_series <- shiny::reactive(data.frame(
-      img_series_id = 1L, name = "Test camera"
+      img_series_id = 1L,
+      name = "Test camera"
     ))
     available_image_dates <- shiny::reactive(as.Date(c(
-      "2026-10-10", "2026-10-12", "2026-10-13"
+      "2026-10-10",
+      "2026-10-12",
+      "2026-10-13"
     )))
     available_image_timestamps <- shiny::reactive(data.frame(
       image_id = 1:3,

@@ -17,15 +17,34 @@ downloadECCCPrognos(
 )
 }
 \arguments{
-\item{stations}{A data frame containing an AquaCache location ID and ECCC station identifiers.}
-\item{reference_time}{Latest acceptable model run time.}
+\item{stations}{A data frame with station identifiers. It must include a
+location column (\code{location_id}, \code{MSC_ID}, or \code{location}) and may include
+\code{prognos_station_id}, \code{iata_id}/\code{TC_IDENTIFIER}, \code{wmo_id}/\code{WMO_IDENTIFIER},
+\code{data_provider}, \code{longitude}/\code{lon}, and \code{latitude}/\code{lat}.}
+
+\item{reference_time}{Latest acceptable model run time. Defaults to now UTC.}
+
 \item{models}{Any of \code{"HRDPS"}, \code{"RDPS"}, and \code{"GDPS"}.}
+
 \item{max_run_age_hours}{How far back to search for a complete model run.}
-\item{max_distance_km}{Maximum distance allowed between matched station coordinates.}
+
+\item{max_distance_km}{Reject an identifier match farther than this from the
+supplied station coordinates. Set to \code{Inf} when coordinates are absent.}
+
 \item{api_url}{Base URL for the ECCC GeoMet OGC API.}
-\item{page_size}{Number of features requested per page.}
-\item{attempts}{Number of attempts for each request.}
+
+\item{page_size}{Number of features requested per API page.}
+
+\item{attempts}{Number of attempts for each HTTP request.}
+
 \item{quiet}{Suppress progress messages.}
 }
-\value{A data frame of forecasts matched to AquaCache \code{location_id} values.}
-\description{Retrieves the latest complete ECCC PROGNOS run and matches forecast stations using supplied identifiers.}
+\value{
+A data frame with AquaCache \code{location_id}, model, model run time,
+forecast time, variable, value, unit, lead time, and ECCC station fields.
+}
+\description{
+Retrieves the latest complete PROGNOS run at or before \code{reference_time} for
+each requested model. Forecasts are matched to the supplied stations using
+their MSC/Transport Canada, WMO, and PROGNOS identifiers.
+}

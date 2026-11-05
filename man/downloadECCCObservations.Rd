@@ -16,13 +16,30 @@ downloadECCCObservations(
 )
 }
 \arguments{
-\item{stations}{One or more ECCC climate identifiers or numeric station IDs. A data frame with \code{climate_id} or \code{station_id} is also accepted.}
+\item{stations}{One or more ECCC climate identifiers (for example
+\code{"2101310"}) or numeric ECCC station IDs. A data frame is also accepted;
+it must contain \code{climate_id} or \code{station_id}.}
+
 \item{start, end}{Start and end dates (inclusive).}
+
 \item{interval}{One of \code{"hour"}, \code{"day"}, or \code{"month"}.}
+
 \item{api_url}{Base URL for the ECCC GeoMet OGC API.}
-\item{page_size}{Number of features requested per page (maximum 10,000).}
-\item{attempts}{Number of attempts for each request.}
+
+\item{page_size}{Number of features requested per API page (maximum 10,000).}
+
+\item{attempts}{Number of attempts for each HTTP request.}
+
 \item{quiet}{Suppress progress messages.}
 }
-\value{A data frame containing the fields published by ECCC, with lower-case names.}
-\description{Downloads historical climate observations directly from ECCC's official GeoMet OGC API.}
+\value{
+A data frame containing the fields published by ECCC, with names
+converted to lower case. The \code{geometry} list-column contains GeoJSON point
+geometry when supplied by the API.
+}
+\description{
+Downloads historical climate observations directly from ECCC's official
+GeoMet OGC API. This is a dependency-light replacement for the download
+portion of \code{weathercan}; station selection and persistence can be managed by
+AquaCache.
+}
