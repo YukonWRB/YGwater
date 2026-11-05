@@ -1216,6 +1216,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
     output$sidebar <- renderUI({
       tagList(
+        YGwater:::shiny_ui_ready(ns("sidebar_ready")),
         # Toggle for data source
         if (is.null(mdb_files)) {
           shinyjs::hidden(radioButtons(
@@ -2476,8 +2477,17 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         moduleData$EQ_params <- EQ_params
         moduleData$EQ_param_grps <- EQ_param_grps
         moduleData$EQ_stds <- EQ_stds
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
 
-        # Update the selectize inputs
+    # Data loading and UI binding can finish in either order. Reapply cached
+    # choices after a sidebar language redraw without reopening the database.
+    observe({
+        req(input$sidebar_ready, identical(input$data_source, "EQ"))
+        req(moduleData$EQ_params, moduleData$EQ_param_grps, moduleData$EQ_locs,
+            moduleData$EQ_loc_grps, moduleData$EQ_stds)
         updateSelectizeInput(
           session,
           "parameters_EQ",
@@ -2532,10 +2542,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           server = TRUE,
           selected = character(0)
         )
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
+    })
 
     # Helper function to update the list of available parameters based on selected locations
     update_parameters <- function() {
@@ -2627,10 +2634,11 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       ignoreNULL = TRUE
     )
 
-    observeEvent(input$data_source, {
+    observeEvent(list(input$sidebar_ready, input$data_source), {
+      req(input$sidebar_ready, input$data_source)
       req(moduleData)
       if (input$data_source == "EQ") {
-        # These updates are performed in the observeEvent for input$EQWin_source
+        # EQ choices follow cached metadata and sidebar binding above.
       } else if (input$data_source == "AC") {
         # AC selected
         updateSelectizeInput(

@@ -150,6 +150,7 @@ add_cont_data_prepare_notes <- function(ranges, no_source_update = TRUE) {
 addContDataUI <- function(id) {
   ns <- NS(id)
   tagList(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     tags$style(
       HTML(sprintf(
         "
@@ -1151,6 +1152,7 @@ addContData <- function(id, language) {
 
     # Update owner and contributor selectize inputs when organizations data is loaded
     observe({
+      req(input$ui_ready)
       req(moduleData$organizations)
       updateSelectizeInput(
         session,

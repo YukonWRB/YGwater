@@ -227,6 +227,7 @@ WQReport <- function(id, mdb_files, language) {
         format(Sys.Date() - 30, "%Y-%m-%d")
       )
       tagList(
+        YGwater:::shiny_ui_ready(ns("main_ready")),
         uiOutput(ns("data_source_ui")),
         conditionalPanel(
           ns = ns,
@@ -1610,6 +1611,7 @@ WQReport <- function(id, mdb_files, language) {
     )
 
     observe({
+      req(input$main_ready)
       if (!identical(selected_data_source(), "EQ")) {
         return()
       }

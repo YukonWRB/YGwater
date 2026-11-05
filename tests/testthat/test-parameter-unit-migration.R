@@ -337,6 +337,7 @@ test_that("dev migration preserves extrema timezone and converts continuous reco
     args = list(language = shiny::reactiveValues(language = "en")),
     session = session, {
       session$flushReact()
+      session$setInputs(ui_ready = "parameter-editor-bound")
       confirmation$busy <- logical()
       assign("set_parameter_save_busy", function(busy, ...) {
         confirmation$busy <- c(confirmation$busy, busy)
@@ -661,6 +662,7 @@ test_that("the modal clears stale conversions and accepts an explicit keep-numbe
   shiny::testServer(editor$manageParameters,
     args = list(language = shiny::reactiveValues(language = "en")), session = session, {
       session$flushReact()
+      session$setInputs(ui_ready = "parameter-editor-bound")
       states <- data.frame(matrix_state_id = 1:2, matrix_state_code = c("liquid", "solid"),
         matrix_state_name = c("Liquid", "Solid"))
       values <- list(units_liquid = 2L, units_solid = 3L, units_gas = NA_integer_, units_na = NA_integer_)

@@ -112,6 +112,9 @@ app_server <- function(input, output, session) {
     session$doBookmark()
   })
 
+  params <- reactiveValues()
+  available_years <- reactiveVal(as.character(format(Sys.Date(), "%Y")))
+
   output$visible_buttons <- renderUI({
     fluidRow(
       class = "button-row",
@@ -125,8 +128,15 @@ app_server <- function(input, output, session) {
       selectizeInput(
         "yrs",
         label = NULL,
-        choices = as.character(format(Sys.Date(), "%Y")),
-        selected = as.character(format(Sys.Date(), "%Y")),
+        # Populate within the server renderer, together with the translated
+        # controls. A separate one-time update can be lost before binding or
+        # overwritten when applying a URL's language recreates these controls.
+        choices = available_years(),
+        selected = isolate(if (is.null(params$yrs)) {
+          as.character(format(Sys.Date(), "%Y"))
+        } else {
+          as.character(params$yrs)
+        }),
         multiple = TRUE,
         options = list(maxItems = 10)
       ),
@@ -148,8 +158,6 @@ app_server <- function(input, output, session) {
   onBookmarked(updateQueryString)
 
   # Parse URL query parameters on app load from URL and trigger plot creation
-  params <- reactiveValues()
-
   # try to JSON-decode; if not JSON, return as-is
   unj <- function(x) {
     tryCatch(jsonlite::fromJSON(x), error = function(e) x)
@@ -196,12 +204,7 @@ app_server <- function(input, output, session) {
           "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 ORDER BY year DESC;",
           params = list(tsid)
         )
-        updateSelectizeInput(
-          session,
-          "yrs",
-          choices = yrs$year,
-          selected = params$yrs
-        )
+        available_years(as.character(yrs$year))
       }
 
       # language

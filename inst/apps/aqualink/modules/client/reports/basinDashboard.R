@@ -242,6 +242,7 @@ basinDashboardUIMod <- function(id) {
     ns <- shiny::NS(id)
     current_year <- as.integer(format(Sys.Date(), "%Y"))
     shiny::tagList(
+        YGwater:::shiny_ui_ready(ns("ui_ready")),
         shiny::h3("Basin SWE Dashboard"),
         shiny::fluidRow(
             shiny::column(2, shiny::selectInput(ns("month"), "Month", choices = c("March" = 3L, "April" = 4L, "May" = 5L), selected = 3L)),
@@ -278,18 +279,6 @@ basinDashboardMod <- function(id, language, inputs = NULL) {
             NULL
         }
     )
-    if (!is.null(latest_bulletin)) {
-        shiny::updateSelectInput(
-            session,
-            "month",
-            selected = as.integer(format(latest_bulletin, "%m", tz = "UTC"))
-        )
-        shiny::updateSelectInput(
-            session,
-            "year",
-            selected = format(latest_bulletin, "%Y", tz = "UTC")
-        )
-    }
     swe_basins <- tryCatch(
         basin_dashboard_swe_basins(),
         error = function(e) {
@@ -297,16 +286,28 @@ basinDashboardMod <- function(id, language, inputs = NULL) {
             NULL
         }
     )
-    if (!is.null(swe_basins)) {
-        basin_names <- sort(unique(swe_basins$polygons$basin_name))
-        shiny::updateSelectizeInput(
-            session,
-            "basin",
-            choices = c("All" = "all", stats::setNames(basin_names, basin_names)),
-            selected = "all",
-            server = TRUE
-        )
-    }
+    shiny::observeEvent(input$ui_ready, {
+        if (!is.null(latest_bulletin)) {
+            shiny::updateSelectInput(
+                session, "month",
+                selected = as.integer(format(latest_bulletin, "%m", tz = "UTC"))
+            )
+            shiny::updateSelectInput(
+                session, "year",
+                selected = format(latest_bulletin, "%Y", tz = "UTC")
+            )
+        }
+        if (!is.null(swe_basins)) {
+            basin_names <- sort(unique(swe_basins$polygons$basin_name))
+            shiny::updateSelectizeInput(
+                session,
+                "basin",
+                choices = c("All" = "all", stats::setNames(basin_names, basin_names)),
+                selected = "all",
+                server = TRUE
+            )
+        }
+    }, once = TRUE, ignoreInit = TRUE)
     selected_basin <- shiny::reactive({
         basin <- input$basin
         if (is.null(basin) || !nzchar(basin)) "all" else basin

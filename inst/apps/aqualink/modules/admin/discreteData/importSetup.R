@@ -487,6 +487,7 @@ importSetup_suggest_layout <- function(raw) {
 importSetupUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     tags$h3("Import setup manager"),
     helpText(
       "Create a workbook format from an example file, then map its analytes and locations. Layout settings save immediately and affect future previews. Mapping changes are saved as drafts and become active when you publish them."
@@ -1529,7 +1530,7 @@ importSetup <- function(id, language) {
         error = function(e) profile_load_error(conditionMessage(e))
       )
     }
-    reload_profiles()
+    observeEvent(input$ui_ready, reload_profiles(), once = TRUE, ignoreInit = TRUE)
     observeEvent(input$manage_source, {
       if (is.null(pending_open())) {
         opened_review_mapping(NULL)
@@ -3036,6 +3037,7 @@ importSetup <- function(id, language) {
       }
     })
     observe({
+      req(input$ui_ready)
       parameter_rows <- params()
       updateSelectizeInput(
         session,

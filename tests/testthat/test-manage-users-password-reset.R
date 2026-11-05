@@ -101,6 +101,7 @@ test_that("Manage users safely resets another user's password", {
     session = mock_session,
     {
       session$flushReact()
+      session$setInputs(ui_ready = "users-form-bound")
       session$setInputs(
         password_reset_user = "manager",
         new_user_password = "SecurePass1",

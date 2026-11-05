@@ -1,6 +1,7 @@
 manageNewsContentUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     uiOutput(ns("banner")),
     tabsetPanel(
       id = ns("tabs"),
@@ -651,7 +652,9 @@ manageNewsContent <- function(id, language) {
       load_page(selected_page)
       invisible(pages)
     }
-    load_pages(preferred_page = NULL)
+    observeEvent(input$ui_ready, {
+      load_pages(preferred_page = NULL)
+    }, once = TRUE, ignoreInit = TRUE)
 
     observeEvent(
       input$content_type,

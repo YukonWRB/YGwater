@@ -2,6 +2,7 @@
 viewForecasterCommentsUI <- function(id) {
   ns <- shiny::NS(id)
   bslib::page_fluid(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     shiny::uiOutput(ns("banner")),
     bslib::layout_columns(
       col_widths = c(3, 3, 3, 3),
@@ -65,7 +66,8 @@ viewForecasterComments <- function(id, language) {
       )
     })
 
-    observe_choices <- shiny::observeEvent(comments_data(), {
+    observe_choices <- shiny::observeEvent(list(input$ui_ready, comments_data()), {
+      shiny::req(input$ui_ready)
       comments <- comments_data()
       if (!nrow(comments)) return()
       shiny::updateSelectizeInput(session, "author",

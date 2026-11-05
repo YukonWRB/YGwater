@@ -4,6 +4,7 @@ manageInstrumentsUI <- function(id) {
   ns <- NS(id)
 
   bslib::page_sidebar(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     title = NULL,
     sidebar = bslib::sidebar(
       width = 440,
@@ -787,18 +788,20 @@ manageInstruments <- function(id, language) {
       )
     })
 
-    refresh_all(
-      record_selected = character(0),
-      lookup_selected = list(
-        observer = character(0),
-        make = character(0),
-        model = character(0),
-        type = character(0),
-        owner = character(0),
-        supplier_id = character(0)
+    observeEvent(input$ui_ready, {
+      refresh_all(
+        record_selected = character(0),
+        lookup_selected = list(
+          observer = character(0),
+          make = character(0),
+          model = character(0),
+          type = character(0),
+          owner = character(0),
+          supplier_id = character(0)
+        )
       )
-    )
-    clear_form(reset_record = FALSE, clear_table = FALSE)
+      clear_form(reset_record = FALSE, clear_table = FALSE)
+    }, once = TRUE, ignoreInit = TRUE)
 
     observeEvent(
       input$timezone,

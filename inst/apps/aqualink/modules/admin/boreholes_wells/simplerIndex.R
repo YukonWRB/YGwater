@@ -9,6 +9,7 @@ simplerIndexUI <- function(id) {
   css <- gsub("%1$s", ns("pdf-container"), readLines(css_file), fixed = TRUE)
 
   tagList(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     tags$head(
       tags$style(HTML(paste(css, collapse = "\n"))),
       tags$script(src = "js/sidebar_resize.js"),
@@ -1608,7 +1609,7 @@ simplerIndex <- function(id, language) {
     }
 
     # Update the 'drillers', 'purpose', and 'share_with' list based on the data loaded from Aquacache
-    observeEvent(moduleData, {
+    observeEvent(input$ui_ready, {
       req(
         moduleData$drillers,
         moduleData$drill_methods,

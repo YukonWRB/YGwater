@@ -2203,12 +2203,14 @@ addTimeseries <- function(id, language) {
 
     observeEvent(
       list(
+        input$main_ready,
         input$mode,
         input$parameter,
         input$ts_table_rows_selected,
         qc_assignments_draft()
       ),
       {
+        req(input$main_ready)
         choices <- available_qc_rule_choices()
         selected <- nullable_text(input$qc_new_rule)
         if (is.na(selected) || !selected %in% unname(choices)) {
@@ -3309,6 +3311,7 @@ addTimeseries <- function(id, language) {
       )
       bounds <- default_correction_bounds()
       tagList(
+        YGwater:::shiny_ui_ready(ns("main_ready")),
         actionButton(
           ns("reload_module"),
           "Reload module data",
@@ -4949,6 +4952,7 @@ addTimeseries <- function(id, language) {
     })
 
     observe({
+      req(input$main_ready)
       available <- available_instrument_deployments()
       current_tsid <- current_timeseries_id_for_association()
       current_input <- if (is.null(input$instrument_deployment)) {

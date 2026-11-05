@@ -84,7 +84,10 @@ plotTimeseries(
 
 \item{unusable}{Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.}
 
-\item{grades}{Should grades be included on the y-axis? Default is FALSE.}
+\item{grades}{Should grades be included on the y-axis? Default is FALSE.
+QC ribbons extend up to half the native recording interval around their
+endpoints for display, meeting at the midpoint of adjacent readings.
+Stored QC intervals and measurement filtering are unchanged.}
 
 \item{approvals}{Should approvals be included on the y-axis? Default is FALSE.}
 

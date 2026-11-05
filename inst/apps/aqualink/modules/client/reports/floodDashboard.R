@@ -76,7 +76,10 @@ floodDashboardUIMod <- function(id, language, parent_inputs = NULL) {
         list()
     } else {
         shiny::isolate(stats::setNames(
-            lapply(saved_ids, function(input_id) parent_inputs[[input_id]]),
+            lapply(saved_ids, function(input_id) {
+                value <- parent_inputs[[ns(input_id)]]
+                if (is.null(value)) parent_inputs[[input_id]] else value
+            }),
             saved_ids
         ))
     }
@@ -97,6 +100,9 @@ floodDashboardUIMod <- function(id, language, parent_inputs = NULL) {
     }
 
     bslib::page_fillable(
+        # Report a distinct value after each UI binding, so server-side choices
+        # are also restored after rendering in another language.
+        YGwater:::shiny_ui_ready(ns("ui_ready")),
         shiny::tags$style(shiny::HTML(paste(
             paste0(
                 "#",
@@ -4794,43 +4800,35 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
         fva <- read_fva_json()
         communities <- names(fva)
+        community_selection <- shiny::reactiveVal(NULL)
+        shiny::observeEvent(input$community, {
+            shiny::req(input$community %in% communities)
+            community_selection(input$community)
+        })
 
+        # Input updates sent before the lazy renderUI binds are discarded by
+        # Shiny. The browser reports ui_ready on every render, including a
+        # language change; onFlushed() alone cannot establish that ordering.
         shiny::observeEvent(
-            TRUE,
+            input$ui_ready,
             {
                 shiny::req(length(communities) > 0)
-
                 current <- input$community
                 selected <- if (!is.null(current) && current %in% communities) {
                     current
+                } else if (isTRUE(community_selection() %in% communities)) {
+                    community_selection()
                 } else {
                     communities[[1]]
                 }
-
                 shiny::updateSelectInput(
                     session,
                     inputId = "community",
                     choices = communities,
                     selected = selected
                 )
-
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "primary_historical_years",
-                    choices = character(0),
-                    selected = character(0),
-                    server = TRUE
-                )
-
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "secondary_historical_years",
-                    choices = character(0),
-                    selected = character(0),
-                    server = TRUE
-                )
             },
-            once = TRUE
+            ignoreInit = FALSE
         )
 
         community_locations <- shiny::reactive({

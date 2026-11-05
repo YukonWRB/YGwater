@@ -15,6 +15,7 @@ addGuidelinesUI <- function(id) {
   }
 
   tagList(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     tags$head(
       tags$script(HTML(
         "
@@ -2092,8 +2093,12 @@ addGuidelines <- function(id, language) {
     }
 
     load_reference_data()
-    session$onFlushed(
-      function() {
+    # A server flush does not mean the lazy renderUI has reached the browser.
+    # Wait for the browser's UI acknowledgement before sending choices
+    # (including the Comparison operators).
+    observeEvent(
+      input$ui_ready,
+      {
         update_choices(clear = TRUE)
         set_rule_input_rows(blank_rule_input_rows(1L))
         update_reporting_basis_visibility(character(0))
@@ -2109,7 +2114,8 @@ addGuidelines <- function(id, language) {
         )
         update_guideline_type_choices("lte", "constant_upper")
       },
-      once = TRUE
+      once = TRUE,
+      ignoreInit = TRUE
     )
 
     output$banner <- renderUI({
@@ -2432,7 +2438,8 @@ addGuidelines <- function(id, language) {
       if (nrow(seed) < n) {
         seed <- rbind(seed, blank_rule_input_rows(n - nrow(seed)))
       }
-      tagList(lapply(seq_len(n), function(i) {
+      ready <- YGwater:::shiny_ui_ready(ns("rule_inputs_ready"))
+      tagList(ready, lapply(seq_len(n), function(i) {
         row <- seed[i, , drop = FALSE]
         selected_parameter <- if (
           identical(row$input_source[[1]], "hardness_helper")
@@ -2647,7 +2654,7 @@ addGuidelines <- function(id, language) {
       }))
     })
 
-    observe({
+    observeEvent(input$rule_inputs_ready, {
       n <- rule_input_count()
       seed <- normalize_rule_input_rows(rule_input_seed())
       choices <- parameter_choices_with_helpers()
@@ -2657,28 +2664,23 @@ addGuidelines <- function(id, language) {
       if (nrow(seed) < n) {
         seed <- rbind(seed, blank_rule_input_rows(n - nrow(seed)))
       }
-      session$onFlushed(
-        function() {
-          for (i in seq_len(n)) {
-            row <- seed[i, , drop = FALSE]
-            selected_parameter <- if (
-              identical(row$input_source[[1]], "hardness_helper")
-            ) {
-              hardness_helper_choice_value
-            } else {
-              selected_or_empty(row$parameter_id)
-            }
-            updateSelectizeInput(
-              session,
-              rule_input_id("parameter", i),
-              choices = choices,
-              selected = selected_parameter,
-              server = TRUE
-            )
-          }
-        },
-        once = TRUE
-      )
+      for (i in seq_len(n)) {
+        row <- seed[i, , drop = FALSE]
+        selected_parameter <- if (
+          identical(row$input_source[[1]], "hardness_helper")
+        ) {
+          hardness_helper_choice_value
+        } else {
+          selected_or_empty(row$parameter_id)
+        }
+        updateSelectizeInput(
+          session,
+          rule_input_id("parameter", i),
+          choices = choices,
+          selected = selected_parameter,
+          server = TRUE
+        )
+      }
     })
 
     update_rule_field_visibility <- function(type = "constant_upper") {

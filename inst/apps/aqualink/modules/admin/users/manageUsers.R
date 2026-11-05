@@ -1,6 +1,7 @@
 manageUsersUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     tagList(
       uiOutput(ns("banner")),
       uiOutput(ns("testdb")),
@@ -552,7 +553,7 @@ ORDER BY rolname"
       )
       update_delete_reassign_choices()
     }
-    load_roles()
+    observeEvent(input$ui_ready, load_roles(), once = TRUE, ignoreInit = TRUE)
 
     observeEvent(
       input$refresh_module_access,

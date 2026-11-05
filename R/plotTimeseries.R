@@ -21,6 +21,9 @@
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param unusable Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.
 #' @param grades Should grades be included on the y-axis? Default is FALSE.
+#'   QC ribbons extend up to half the native recording interval around their
+#'   endpoints for display, meeting at the midpoint of adjacent readings.
+#'   Stored QC intervals and measurement filtering are unchanged.
 #' @param approvals Should approvals be included on the y-axis? Default is FALSE.
 #' @param qualifiers Should qualifiers be included on the y-axis? Default is FALSE.
 #' @param historic_range Should the historic range be plotted? Default is TRUE.
@@ -916,24 +919,6 @@ plotTimeseries <- function(
       )
     )
 
-    # Amalgamate adjacent intervals of the same grade.
-    grades_dt[, "run" := data.table::rleid(grades_dt$grade_type_code)]
-
-    grades_dt <- grades_dt[,
-      .(
-        start_dt = data.table::first(.SD$start_dt),
-        end_dt = data.table::last(.SD$end_dt),
-        grade_type_code = data.table::first(.SD$grade_type_code),
-        grade_type_description = data.table::first(.SD$grade_type_description),
-        grade_type_description_fr = data.table::first(
-          .SD$grade_type_description_fr
-        ),
-        color_code = data.table::first(.SD$color_code)
-      ),
-      by = "run"
-    ]
-    # drop the helper
-    grades_dt[, "run" := NULL]
   }
   if (approvals) {
     approvals_dt <- fetch_continuous_qc_intervals(
@@ -957,26 +942,6 @@ plotTimeseries <- function(
         "approval_type_description_fr"
       )
     )
-    # amalgamate
-    approvals_dt[,
-      "run" := data.table::rleid(approvals_dt$approval_type_code)
-    ]
-    approvals_dt <- approvals_dt[,
-      .(
-        start_dt = data.table::first(.SD$start_dt),
-        end_dt = data.table::last(.SD$end_dt),
-        approval_type_code = data.table::first(.SD$approval_type_code),
-        approval_type_description = data.table::first(
-          .SD$approval_type_description
-        ),
-        approval_type_description_fr = data.table::first(
-          .SD$approval_type_description_fr
-        ),
-        color_code = data.table::first(.SD$color_code)
-      ),
-      by = "run"
-    ]
-    approvals_dt[, "run" := NULL]
   }
   if (qualifiers) {
     qualifiers_dt <- fetch_continuous_qc_intervals(
@@ -1000,26 +965,6 @@ plotTimeseries <- function(
         "qualifier_type_description_fr"
       )
     )
-    # amalgamate
-    qualifiers_dt[,
-      "run" := data.table::rleid(qualifiers_dt$qualifier_type_code)
-    ]
-    qualifiers_dt <- qualifiers_dt[,
-      .(
-        start_dt = data.table::first(.SD$start_dt),
-        end_dt = data.table::last(.SD$end_dt),
-        qualifier_type_code = data.table::first(.SD$qualifier_type_code),
-        qualifier_type_description = data.table::first(
-          .SD$qualifier_type_description
-        ),
-        qualifier_type_description_fr = data.table::first(
-          .SD$qualifier_type_description_fr
-        ),
-        color_code = data.table::first(.SD$color_code)
-      ),
-      by = "run"
-    ]
-    qualifiers_dt[, "run" := NULL]
   }
 
   ## fetch trace and range data ###################
@@ -1466,6 +1411,38 @@ plotTimeseries <- function(
     )
     if (length(range_runs) == 0) {
       historic_range <- FALSE
+    }
+  }
+
+  # Expand only display copies, after unusable-grade filtering. Native
+  # recording cadence keeps singleton flags visible even in resampled plots.
+  if (any(grades, approvals, qualifiers)) {
+    qc_record_rate <- if (
+      !is.null(preloaded_timeseries_context) &&
+        "record_rate_seconds" %in% names(context)
+    ) {
+      as.numeric(context$record_rate_seconds)
+    } else if (exists("historic_range_meta", inherits = FALSE)) {
+      as.numeric(historic_range_meta$record_rate_seconds)
+    } else {
+      as.numeric(
+        fetch_historic_range_timeseries_metadata(con, tsid)$record_rate_seconds
+      )
+    }
+    if (grades) {
+      grades_dt <- continuous_qc_display_intervals(
+        grades_dt, qc_record_rate, "grade_type_code"
+      )
+    }
+    if (approvals) {
+      approvals_dt <- continuous_qc_display_intervals(
+        approvals_dt, qc_record_rate, "approval_type_code"
+      )
+    }
+    if (qualifiers) {
+      qualifiers_dt <- continuous_qc_display_intervals(
+        qualifiers_dt, qc_record_rate, "qualifier_type_code"
+      )
     }
   }
 

@@ -1719,6 +1719,7 @@ referenceTableManagerUI <- function(id, config, title = NULL) {
   editable <- !identical(config$editable, FALSE)
 
   bslib::layout_sidebar(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     sidebar = bslib::sidebar(
       width = 430,
       open = "always",
@@ -2050,7 +2051,7 @@ referenceTableManager <- function(
       ignoreInit = TRUE
     )
 
-    refresh_editor()
+    observeEvent(input$ui_ready, refresh_editor(), once = TRUE, ignoreInit = TRUE)
   })
 }
 
@@ -3662,6 +3663,7 @@ parameterManagerUI <- function(id) {
   config <- reference_table_configs()[["parameters"]]
 
   bslib::layout_sidebar(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     sidebar = bslib::sidebar(
       width = 430,
       open = "always",
@@ -4855,7 +4857,7 @@ manageParameters <- function(id, language) {
       save_parameter()
     }, ignoreInit = TRUE)
 
-    refresh_editor()
+    observeEvent(input$ui_ready, refresh_editor(), once = TRUE, ignoreInit = TRUE)
   })
 }
 

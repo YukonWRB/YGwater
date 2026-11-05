@@ -4,6 +4,7 @@ manageSensorsUI <- function(id) {
   ns <- NS(id)
 
   bslib::page_sidebar(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     title = NULL,
     sidebar = bslib::sidebar(
       width = 440,
@@ -654,8 +655,10 @@ manageSensors <- function(id, language) {
       )
     })
 
-    refresh_all(record_selected = character(0))
-    clear_form(reset_record = FALSE, clear_table = FALSE)
+    observeEvent(input$ui_ready, {
+      refresh_all(record_selected = character(0))
+      clear_form(reset_record = FALSE, clear_table = FALSE)
+    }, once = TRUE, ignoreInit = TRUE)
 
     observeEvent(
       input$record_id,

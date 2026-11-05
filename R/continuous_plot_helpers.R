@@ -1712,6 +1712,58 @@ format_as_of_title <- function(as_of, tzone, lang = "en") {
   }
 }
 
+#' Prepare QC intervals for display at the native recording cadence
+#'
+#' Stored QC runs include their first and last reading. A singleton therefore
+#' has zero duration. Pad each end by at most half one native recording interval,
+#' capped at the midpoint to its neighbour so touching intervals never overlap.
+#' Larger gaps remain visible. Amalgamate equal adjacent display intervals only;
+#' equal codes on either side of a genuine gap must stay separate.
+#'
+#' This returns a copy for rendering, never for filtering measurements or saving
+#' QC. Use the native recording interval, not the resampled plotting resolution.
+#' Missing/invalid cadence leaves endpoints unchanged.
+#' @param intervals QC intervals with start_dt, end_dt and color_code columns.
+#' @param period_seconds Native recording interval in seconds.
+#' @param code_col Name of the QC type-code column.
+#' @return A data.table of display intervals, ordered by start_dt and end_dt.
+#' @noRd
+continuous_qc_display_intervals <- function(
+  intervals,
+  period_seconds,
+  code_col
+) {
+  start_dt <- end_dt <- NULL
+  out <- data.table::copy(data.table::as.data.table(intervals))
+  if (nrow(out) == 0L) {
+    return(out)
+  }
+  data.table::setorder(out, start_dt, end_dt)
+  starts <- as.numeric(out$start_dt)
+  ends <- as.numeric(out$end_dt)
+  gaps <- pmax(0, starts[-1L] - ends[-length(ends)])
+  if (
+    length(period_seconds) == 1L &&
+      is.finite(period_seconds) && period_seconds > 0
+  ) {
+    half_period <- period_seconds / 2
+    out[, start_dt := start_dt - pmin(half_period, c(Inf, gaps / 2))]
+    out[, end_dt := end_dt + pmin(half_period, c(gaps / 2, Inf))]
+  }
+
+  # Keep the existing reduction in polygon count without spanning empty time.
+  run <- cumsum(c(
+    TRUE,
+    diff(data.table::rleidv(out, c(code_col, "color_code"))) != 0L |
+      as.numeric(out$start_dt[-1L]) >
+        as.numeric(out$end_dt[-nrow(out)])
+  ))
+  last_ends <- out[, .(end_dt = max(end_dt)), by = .(run)]$end_dt
+  out <- out[!duplicated(run)]
+  out[, end_dt := last_ends]
+  out
+}
+
 #' Fetch continuous quality-control intervals
 #'
 #' @description

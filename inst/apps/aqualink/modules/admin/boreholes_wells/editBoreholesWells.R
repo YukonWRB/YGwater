@@ -3,6 +3,7 @@
 editBoreholesWellsUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     uiOutput(ns("banner")),
     fluidRow(
       column(
@@ -671,6 +672,7 @@ editBoreholesWells <- function(id, language) {
     load_data()
 
     observe({
+      req(input$ui_ready)
       req(moduleData$records)
       update_record_selector()
 

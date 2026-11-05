@@ -4,6 +4,7 @@ continuousDataReviewUI <- function(id) {
   ns <- NS(id)
 
   tagList(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     tags$style(
       HTML(sprintf(
         "\n      #%s.accordion {\n        --bs-accordion-bg:          #FFFCF5;\n        --bs-accordion-btn-bg:      #FBE5B2;\n        --bs-accordion-active-bg:   #FBE5B2;\n      }\n    ",
@@ -1270,6 +1271,7 @@ continuousDataReview <- function(id, language) {
     })
 
     observe({
+      req(input$ui_ready)
       kind <- active_kind()
       if (identical(kind, "correction")) {
         types <- module_data$correction_types

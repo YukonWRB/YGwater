@@ -1311,9 +1311,11 @@ editSamples <- function(id, language) {
       }
       selected_matrix_state <- selected_value("matrix_state_id")
       matrix_choices <- matrix_state_choices_for_parameter(selected_parameter)
+      modal_token <- YGwater:::shiny_ui_ready_token()
 
       showModal(modalDialog(
         title = if (identical(mode, "add")) "Add result" else "Edit result",
+        YGwater:::shiny_ui_ready(ns("result_modal_ready"), modal_token),
         size = "l",
         easyClose = FALSE,
         fluidRow(
@@ -1621,8 +1623,12 @@ editSamples <- function(id, language) {
           )
         )
       ))
-      session$onFlushed(
-        function() {
+      observeEvent(
+        input$result_modal_ready,
+        {
+          # An acknowledgement from a different modal must not apply this
+          # record's selection if the user closed/reopened it during loading.
+          req(identical(input$result_modal_ready, modal_token))
           updateSelectizeInput(
             session,
             "result_parameter",
@@ -1631,7 +1637,8 @@ editSamples <- function(id, language) {
             server = TRUE
           )
         },
-        once = TRUE
+        once = TRUE,
+        ignoreInit = TRUE
       )
     }
 

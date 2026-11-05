@@ -11,6 +11,7 @@ addImgsUI <- function(id) {
   ns <- NS(id)
 
   page_fluid(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     uiOutput(ns("banner")),
     br(),
     fluidRow(
@@ -618,18 +619,19 @@ addImgs <- function(id, language) {
       "SELECT * FROM public.sub_locations"
     )
 
-    # Update the 'locations' list based on the data loaded from Aquacache
-    updateSelectizeInput(
-      session,
-      "image_location",
-      choices = stats::setNames(locations$location_id, locations$name)
-    )
-
-    updateSelectizeInput(
-      session,
-      "image_type",
-      choices = stats::setNames(types$image_type_id, types$image_type)
-    )
+    # Keep lookup choices on the server, but wait for the lazy UI to bind.
+    observeEvent(input$ui_ready, {
+      updateSelectizeInput(
+        session,
+        "image_location",
+        choices = stats::setNames(locations$location_id, locations$name)
+      )
+      updateSelectizeInput(
+        session,
+        "image_type",
+        choices = stats::setNames(types$image_type_id, types$image_type)
+      )
+    }, once = TRUE, ignoreInit = TRUE)
 
     # Reactive value to track the current image index
     imgid <- reactiveVal(1)

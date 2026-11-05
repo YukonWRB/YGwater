@@ -4,6 +4,7 @@ instrumentMaintenanceUI <- function(id) {
   ns <- NS(id)
 
   bslib::page_sidebar(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     title = NULL,
     sidebar = bslib::sidebar(
       width = 440,
@@ -1383,13 +1384,15 @@ instrumentMaintenance <- function(id, language) {
       content = write_upcoming_maintenance_workbook
     )
 
-    refresh_lookups()
-    shinyWidgets::updateAirDateInput(
-      session,
-      "obs_datetime",
-      value = scalar_utc_datetime(Sys.time()),
-      tz = air_datetime_widget_timezone(default_input_timezone())
-    )
+    observeEvent(input$ui_ready, {
+      refresh_lookups()
+      shinyWidgets::updateAirDateInput(
+        session,
+        "obs_datetime",
+        value = scalar_utc_datetime(Sys.time()),
+        tz = air_datetime_widget_timezone(default_input_timezone())
+      )
+    }, once = TRUE, ignoreInit = TRUE)
 
     observeEvent(
       input$timezone,

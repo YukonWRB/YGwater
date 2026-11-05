@@ -17,6 +17,7 @@ calibrateUI <- function(id) {
     }'
 
   tagList(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     div(
       tags$head(
         tags$meta(
@@ -1678,8 +1679,9 @@ table.on("click", "tr", function() {
         "FALSE"
       }
     }
-    session$onFlushed(
-      function() {
+    observeEvent(
+      input$ui_ready,
+      {
         if (!spc_supports_extended_schema) {
           updateRadioButtons(
             session,
@@ -1698,7 +1700,8 @@ table.on("click", "tr", function() {
           isolate_input = TRUE
         )
       },
-      once = TRUE
+      once = TRUE,
+      ignoreInit = TRUE
     )
     sync_ph_labels <- function() {
       std1 <- if (!is.null(input$ph1_std) && length(input$ph1_std)) {

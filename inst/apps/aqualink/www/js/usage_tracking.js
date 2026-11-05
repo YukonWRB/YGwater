@@ -18,6 +18,7 @@
     /^plotly_/,
     /^_$/,
     /^shinyjs-/,
+    /(^|-)(ui_ready|main_ready|sidebar_ready|rule_inputs_ready|result_modal_ready)$/,
     /_rows_(all|current)$/,
     /_rows_selected$/,
     /_search$/,

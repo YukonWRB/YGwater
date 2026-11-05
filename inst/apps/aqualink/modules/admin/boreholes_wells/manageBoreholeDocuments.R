@@ -3,6 +3,7 @@
 manageBoreholeDocumentsUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     uiOutput(ns("banner")),
     tags$style(HTML(
       ".modal-lg { width: 95% !important; max-width: 95% !important; }"
@@ -195,6 +196,7 @@ manageBoreholeDocuments <- function(id, language) {
     })
 
     observe({
+      req(input$ui_ready)
       req(moduleData$boreholes)
       borehole_labels <- sprintf(
         "%s%s (ID %s)",

@@ -4029,6 +4029,7 @@ addDiscData_style_origin_columns <- function(
 addDiscDataUI <- function(id) {
   ns <- NS(id)
   tagList(
+    YGwater:::shiny_ui_ready(ns("ui_ready")),
     page_fluid(
       tags$head(tags$style(HTML(
         "html body table.dataTable.dataTable.dataTable tbody tr:not(.selected) > td.addDiscData-source-column,
@@ -4986,59 +4987,61 @@ addDiscData <- function(id, language) {
       do.call(updateSelectizeInput, args)
     }
 
-    update_location_selectize()
-    update_sublocation_selectize()
     group_rows <- initial_sample_groups
-    updateSelectizeInput(
-      session,
-      "edit_sample_group",
-      choices = stats::setNames(
-        as.character(group_rows$sample_group_id),
-        addDiscData_sample_group_labels(group_rows)
+    observeEvent(input$ui_ready, {
+      update_location_selectize()
+      update_sublocation_selectize()
+      updateSelectizeInput(
+        session,
+        "edit_sample_group",
+        choices = stats::setNames(
+          as.character(group_rows$sample_group_id),
+          addDiscData_sample_group_labels(group_rows)
+        )
       )
-    )
-    updateSelectizeInput(
-      session,
-      "manual_result_condition",
-      choices = stats::setNames(
-        result_conditions$result_condition_id,
-        result_conditions$result_condition
+      updateSelectizeInput(
+        session,
+        "manual_result_condition",
+        choices = stats::setNames(
+          result_conditions$result_condition_id,
+          result_conditions$result_condition
+        )
       )
-    )
-    updateSelectizeInput(
-      session,
-      "manual_result_type",
-      choices = stats::setNames(
-        result_types$result_type_id,
-        result_types$result_type
-      ),
-      selected = 2L
-    )
-    updateSelectizeInput(
-      session,
-      "manual_sample_fraction",
-      choices = stats::setNames(
-        sample_fractions$sample_fraction_id,
-        sample_fractions$sample_fraction
+      updateSelectizeInput(
+        session,
+        "manual_result_type",
+        choices = stats::setNames(
+          result_types$result_type_id,
+          result_types$result_type
+        ),
+        selected = 2L
       )
-    )
-    updateSelectizeInput(
-      session,
-      "manual_result_value_type",
-      choices = stats::setNames(
-        result_value_types$result_value_type_id,
-        result_value_types$result_value_type
-      ),
-      selected = 1L
-    )
-    updateSelectizeInput(
-      session,
-      "manual_descriptor",
-      choices = stats::setNames(
-        reporting_bases$reporting_basis_id,
-        reporting_bases$reporting_basis
+      updateSelectizeInput(
+        session,
+        "manual_sample_fraction",
+        choices = stats::setNames(
+          sample_fractions$sample_fraction_id,
+          sample_fractions$sample_fraction
+        )
       )
-    )
+      updateSelectizeInput(
+        session,
+        "manual_result_value_type",
+        choices = stats::setNames(
+          result_value_types$result_value_type_id,
+          result_value_types$result_value_type
+        ),
+        selected = 1L
+      )
+      updateSelectizeInput(
+        session,
+        "manual_descriptor",
+        choices = stats::setNames(
+          reporting_bases$reporting_basis_id,
+          reporting_bases$reporting_basis
+        )
+      )
+    }, once = TRUE, ignoreInit = TRUE)
     parameter_requirement <- function(parameter_id, requirement) {
       parameter_id <- addDiscData_int(parameter_id)
       parameter_rows <- params()
@@ -5199,55 +5202,57 @@ addDiscData <- function(id, language) {
       },
       ignoreInit = FALSE
     )
-    updateSelectizeInput(
-      session,
-      "manual_matrix_state",
-      choices = stats::setNames(
-        matrix_states$matrix_state_id,
-        matrix_states$matrix_state_name
-      ),
-      selected = 1L
-    )
-    updateSelectizeInput(
-      session,
-      "manual_protocol",
-      choices = stats::setNames(
-        protocols_methods$protocol_id,
-        protocols_methods$protocol_name
+    observeEvent(input$ui_ready, {
+      updateSelectizeInput(
+        session,
+        "manual_matrix_state",
+        choices = stats::setNames(
+          matrix_states$matrix_state_id,
+          matrix_states$matrix_state_name
+        ),
+        selected = 1L
       )
-    )
-    updateSelectizeInput(
-      session,
-      "manual_laboratory",
-      choices = stats::setNames(
-        laboratories$lab_id,
-        laboratories$lab_name
+      updateSelectizeInput(
+        session,
+        "manual_protocol",
+        choices = stats::setNames(
+          protocols_methods$protocol_id,
+          protocols_methods$protocol_name
+        )
       )
-    )
-    updateSelectizeInput(
-      session,
-      "manual_grade",
-      choices = stats::setNames(
-        grade_types$grade_type_id,
-        grade_types$grade_type_description
-      ),
-      selected = grade_types[
-        grade_types$grade_type_description == "Unspecified",
-        "grade_type_id"
-      ]
-    )
-    updateSelectizeInput(
-      session,
-      "manual_approval",
-      choices = stats::setNames(
-        approval_types$approval_type_id,
-        approval_types$approval_type_description
-      ),
-      selected = approval_types[
-        approval_types$approval_type_description == "Not reviewed",
-        "approval_type_id"
-      ]
-    )
+      updateSelectizeInput(
+        session,
+        "manual_laboratory",
+        choices = stats::setNames(
+          laboratories$lab_id,
+          laboratories$lab_name
+        )
+      )
+      updateSelectizeInput(
+        session,
+        "manual_grade",
+        choices = stats::setNames(
+          grade_types$grade_type_id,
+          grade_types$grade_type_description
+        ),
+        selected = grade_types[
+          grade_types$grade_type_description == "Unspecified",
+          "grade_type_id"
+        ]
+      )
+      updateSelectizeInput(
+        session,
+        "manual_approval",
+        choices = stats::setNames(
+          approval_types$approval_type_id,
+          approval_types$approval_type_description
+        ),
+        selected = approval_types[
+          approval_types$approval_type_description == "Not reviewed",
+          "approval_type_id"
+        ]
+      )
+    }, once = TRUE, ignoreInit = TRUE)
 
     observeEvent(
       input$edit_sample_location,
@@ -5372,7 +5377,7 @@ addDiscData <- function(id, language) {
         selected = selected
       )
     }
-    reload_profiles()
+    observeEvent(input$ui_ready, reload_profiles(), once = TRUE, ignoreInit = TRUE)
     if (is.null(session$userData$import_setup_revision)) {
       session$userData$import_setup_revision <- reactiveVal(0L)
     }
@@ -5429,6 +5434,7 @@ addDiscData <- function(id, language) {
       outputs$change_tab <- "importSetup"
     })
     observe({
+      req(input$ui_ready)
       updateSelectizeInput(
         session,
         "manual_parameter",
