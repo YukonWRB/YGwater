@@ -46,7 +46,7 @@ jobs:
           cache-version: 1
 
       - name: Set up PostgreSQL 18
-        uses: ikalnytskyi/action-setup-postgres@v8
+        uses: ikalnytskyi/action-setup-postgres@v9
         with:
           postgres-version: '18'
           username: runner

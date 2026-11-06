@@ -9,6 +9,8 @@
 
 This repository holds many of the R functions that we use on a day-to-day basis at the Water Science and Stewardship Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application deployed at https://service.yukon.ca/water-data/shiny, and an API that's deployed at https://service.yukon.ca/water-data/api/V1 or (for the in development version) at https://service.yukon.ca/water-data/api/V2/__docs__/.
 
+The Shiny application is named **AquaLink** and can be launched with `AquaLink()` after installing this package. The former `YGwater()` launcher remains available for compatibility and displays a deprecation warning; use `AquaLink()` for new code.
+
 You'll also find a host of other interesting R functions, some more hydrology/climate specific than others:
 
 -   Functions for checking and installing python dependencies. We use these here for automating the installation of dependencies necessary for testing {plotly} objects, but they've been generalized due to their clear applicability for other tasks;

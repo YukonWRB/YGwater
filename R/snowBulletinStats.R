@@ -124,7 +124,7 @@ snowBulletinStats <- function(
       )
     )
     #AND datetime >= '", year_param-40, "-10-01'"))
-    attr(tab$datetime, "tzone") <- "MST"
+    attr(tab$datetime, "tzone") <- "Etc/GMT+7"
     tab$date <- as.Date(tab$datetime - lubridate::days(1))
     tab$month <- format(tab$datetime, "%m")
     tab$year <- format(tab$datetime, "%Y")
@@ -481,7 +481,7 @@ snowBulletinStats <- function(
       )
     )
 
-    attr(tabl$datetime, "tzone") <- "MST"
+    attr(tabl$datetime, "tzone") <- "Etc/GMT+7"
 
     cddf <- data.frame()
     for (l in unique(tabl$location_id)) {

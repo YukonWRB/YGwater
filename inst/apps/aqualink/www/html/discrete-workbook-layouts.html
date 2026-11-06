@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discrete workbook layout guide</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #24343d;
+      background: #f5f7f8;
+    }
+    body { max-width: 1050px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    h1 { margin: 0 0 .5rem; color: #164d5b; }
+    .intro { max-width: 75ch; margin: 0 0 1.5rem; line-height: 1.5; }
+    section { margin: 1.25rem 0; padding: 1.25rem; background: white; border: 1px solid #cbd5da; border-radius: .5rem; }
+    h2 { margin: 0 0 .4rem; font-size: 1.25rem; }
+    .hint { margin: 0 0 .9rem; color: #4e616a; }
+    .sheet { overflow-x: auto; border: 1px solid #aebcc2; }
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; white-space: nowrap; }
+    caption { padding: .55rem; text-align: left; color: #40535b; background: #edf2f4; font-weight: 600; }
+    th, td { padding: .55rem .65rem; border: 1px solid #cbd5da; text-align: left; }
+    thead th { color: #173e4a; background: #dce9ed; }
+    tbody th { color: #40535b; background: #f1f4f5; font-weight: 600; }
+    tbody tr:nth-child(even) td { background: #f8fafb; }
+    .note { margin: .8rem 0 0; color: #4e616a; font-size: .92rem; }
+    .concepts { line-height: 1.55; }
+    .concepts table { white-space: normal; }
+    .concepts details { margin-top: 1rem; }
+    .concepts summary { cursor: pointer; font-weight: 600; }
+    @media (max-width: 640px) {
+      body { padding: 1rem .75rem 2rem; }
+      section { padding: .9rem; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Choose a workbook layout</h1>
+  <p class="intro">
+    Match the option to the shape of the worksheet that contains the results.
+    These examples show the arrangement the importer expects; your column names
+    and sample values can be different. The saved format tells AquaCache where
+    to find each field.
+  </p>
+
+  <section aria-labelledby="long-title">
+    <h2 id="long-title">Long table — one result per row</h2>
+    <p class="hint">Sample details repeat as each analyte result gets its own row.</p>
+    <div class="sheet">
+      <table>
+        <caption>Worksheet snapshot</caption>
+        <thead><tr><th>Sample ID</th><th>Station Code</th><th>Sample Date</th><th>Parameter Code</th><th>Parameter Name</th><th>Units</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>VA26B9810-001</td><td>TC-RB-DS200</td><td>2026-07-23</td><td>Al-T</td><td>Aluminum, total</td><td>mg/L</td><td>0.012</td></tr>
+          <tr><td>VA26B9810-001</td><td>TC-RB-DS200</td><td>2026-07-23</td><td>Ca-D</td><td>Calcium, dissolved</td><td>mg/L</td><td>18.4</td></tr>
+          <tr><td>VA26B9810-002</td><td>TC-RB-DS200-R</td><td>2026-07-23</td><td>Al-T</td><td>Aluminum, total</td><td>mg/L</td><td>0.009</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Choose this for a conventional row-based data table, including EQWin-style exports.</p>
+  </section>
+
+  <section aria-labelledby="transposed-title">
+    <h2 id="transposed-title">Transposed table — one sample per column</h2>
+    <p class="hint">Sample IDs and details run across columns; each analyte has its own row.</p>
+    <div class="sheet">
+      <table>
+        <caption>Worksheet snapshot</caption>
+        <thead><tr><th>Field / Parameter Name</th><th>Parameter Code</th><th>Units</th><th>Sample 1</th><th>Sample 2</th></tr></thead>
+        <tbody>
+          <tr><th>Lab Sample #</th><td></td><td></td><td>VA26B9810-001</td><td>VA26B9810-002</td></tr>
+          <tr><th>Station Code</th><td></td><td></td><td>TC-RB-DS200</td><td>TC-RB-DS200-R</td></tr>
+          <tr><th>Sample Date</th><td></td><td></td><td>2026-07-23</td><td>2026-07-23</td></tr>
+          <tr><th>Sample Time</th><td></td><td></td><td>12:05</td><td>12:15</td></tr>
+          <tr><td>Aluminum, total</td><td>Al-T</td><td>mg/L</td><td>0.012</td><td>0.009</td></tr>
+          <tr><td>Calcium, dissolved</td><td>Ca-D</td><td>mg/L</td><td>18.4</td><td>19.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Choose this when result values for several samples are arranged in separate columns.</p>
+  </section>
+
+  <section aria-labelledby="wide-title">
+    <h2 id="wide-title">Wide table — one sample per row</h2>
+    <p class="hint">Sample details occupy the first columns. Each analyte has a separate result column.</p>
+    <div class="sheet">
+      <table>
+        <caption>Worksheet snapshot — an optional group row distinguishes repeated analyte names</caption>
+        <thead>
+          <tr><th></th><th></th><th>Dissolved Metals</th><th>Total Metals</th><th>Physicals</th></tr>
+          <tr><th>Client Sample ID</th><th>Sample Collect Date</th><th>Aluminum</th><th>Aluminum</th><th>pH</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>River A</td><td>2026-07-23</td><td>0.002</td><td>0.010</td><td>8.1</td></tr>
+          <tr><td>River B</td><td>2026-07-24</td><td>0.003</td><td>0.020</td><td>7.9</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Select the column heading row, sample metadata columns, and first/last analyte columns. Select a group heading row to preserve distinctions such as dissolved versus total. Sample row bounds can exclude summaries below the data. Select a unit row only when units are actually supplied; missing units must be reviewed before mapping measurements.</p>
+  </section>
+
+  <section aria-labelledby="xlr-title">
+    <h2 id="xlr-title">XLR Detailed Report — lab report export</h2>
+    <p class="hint">The detailed report has report pages above a results table headed “Analyte” and “ALS Sample ID”.</p>
+    <div class="sheet">
+      <table>
+        <caption>Worksheet snapshot — the results header can appear below report details</caption>
+        <thead><tr><th>Analyte</th><th>ALS Sample ID</th><th>Sampling Point</th><th>Date/Time</th><th>Result</th><th>Units</th><th>Qualifier</th></tr></thead>
+        <tbody>
+          <tr><td>Aluminum, total</td><td>VA26B9810-001</td><td>TC-RB-DS200</td><td>2026-07-23 12:05</td><td>0.012</td><td>mg/L</td><td></td></tr>
+          <tr><td>Calcium, dissolved</td><td>VA26B9810-001</td><td>TC-RB-DS200</td><td>2026-07-23 12:05</td><td>18.4</td><td>mg/L</td><td></td></tr>
+          <tr><td>Aluminum, total</td><td>VA26B9810-002</td><td>TC-RB-DS200-R</td><td>2026-07-23 12:15</td><td>&lt;0.005</td><td>mg/L</td><td>&lt;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Choose this only for the lab’s XLR Detailed Report export, not for another workbook that happens to have similar columns.</p>
+  </section>
+  <section class="concepts" aria-labelledby="mapping-concepts">
+    <h2 id="mapping-concepts">How formats and mappings fit together</h2>
+    <p>A source groups data from the same provider or system. A workbook format belongs to that source and describes how to read a particular worksheet. The mappings describe what the incoming values mean in AquaCache.</p>
+    <table>
+      <thead><tr><th>Concept</th><th>Question it answers</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><th>Source</th><td>Which provider or system supplies these data?</td><td>ALS laboratory exports.</td></tr>
+        <tr><th>Workbook format</th><td>Where are the samples, dates, parameter labels, units and results?</td><td>The Samples worksheet has sample columns; the Detailed Report worksheet has one result per row.</td></tr>
+        <tr><th>Parameter mapping</th><td>Which AquaCache parameter and analytical qualifiers describe this source result?</td><td>The source code pH-L with pH units maps to AquaCache pH, with a laboratory result type and liquid matrix.</td></tr>
+        <tr><th>Location mapping</th><td>Which existing AquaCache location represents this source location label?</td><td>A provider's station code maps to the corresponding monitoring location. Confirm the geographic identity before using a mapping.</td></tr>
+        <tr><th>Result-flag mapping</th><td>How should a source qualifier affect a result?</td><td>Assign a result condition or deliberately exclude results carrying a particular flag.</td></tr>
+        <tr><th>Mapping revision</th><td>Which saved collection of mappings is currently in use?</td><td>Published version 2 stays in use while edits wait in draft version 3.</td></tr>
+      </tbody>
+    </table>
+    <h3>Sharing a mapping between workbook and package imports</h3>
+    <p>Save a mapping for <strong>all formats for this source</strong> when the same incoming labels mean the same thing in each format. Those source-wide mappings can also be used by AquaCache package imports configured for that source. A format-specific mapping overrides the shared mapping for that workbook format. Creating another format does not require duplicating its source's shared mappings.</p>
+    <p>For example, two ALS workbooks can both supply pH-L and pH units and reuse one shared mapping, even when their cells are arranged differently. A report that supplies the name Conductivity instead of the corresponding code can have its own format-specific mapping. The parser handles the different arrangement; the mapping handles the different label.</p>
+    <h3>Matching several source columns</h3>
+    <p>A source parameter need not be identified by just its name and unit. Choose <strong>Several source columns</strong> to combine name, unit, speciation, sample fraction, result type, or other source fields. Every listed condition must match. This keeps two otherwise identical source rows distinct when their chemical form or fraction differs.</p>
+    <p>In the workbook format, retain these fields under <strong>Additional columns used for matching</strong>. Then add their source names and expected values to the parameter mapping. For example, an XLR mapping can require Analyte = Conductivity, Units = µS/cm, and Matrix = Water together. A transfer from another AquaCache instance can retain its separate chemistry columns in the same way.</p>
+    <p>The source conditions identify the incoming row. The destination fields independently specify the AquaCache parameter, matrix, fraction, reporting basis, chemical form and result type. Review both sides; an incoming fraction label does not automatically assign the destination fraction. An explicitly empty unit condition matches missing source units. Omit the unit condition when the mapping should not constrain units, and ensure any required conversion is still defined correctly.</p>
+    <h3>Editing and publishing</h3>
+    <ol>
+      <li>Select the source and, when appropriate, the workbook format. Review a saved mapping before editing it.</li>
+      <li>Save the mapping as a draft. The current published revision continues to control imports.</li>
+      <li>Review and publish the selected scope. Publication activates that scope's parameter, location and result-flag mappings together.</li>
+      <li>Parse an already-open workbook again to use the new revision. Its preview reports results that remain unmapped or excluded.</li>
+    </ol>
+    <p>The previous published revision becomes <strong>retired history</strong>. Open it to see what earlier imports used, then choose <strong>Open current version</strong> to make a new change. Earlier uploads retain their recorded mapping revision. Workbook layout settings themselves save immediately; the draft/published/retired lifecycle applies to mapping revisions.</p>
+    <details>
+      <summary>Related database tables</summary>
+      <p>You can use the application without editing these tables directly. They store different parts of the same workflow:</p>
+      <table>
+        <thead><tr><th>Tables</th><th>Responsibility</th></tr></thead>
+        <tbody>
+          <tr><th><code>discrete.import_sources</code></th><td>Provider or system identity.</td></tr>
+          <tr><th><code>discrete.import_profiles</code></th><td>Workbook layout, field locations, retained matching columns and defaults.</td></tr>
+          <tr><th><code>discrete.import_mapping_sets</code></th><td>Draft, published and retired revisions for one source-wide or workbook-format scope.</td></tr>
+          <tr><th><code>discrete.import_parameter_mappings</code><br><code>discrete.import_location_mappings</code><br><code>discrete.import_result_flag_mappings</code></th><td>The matching conditions and destination assignments within each revision.</td></tr>
+          <tr><th><code>public.parameters</code>, <code>public.locations</code> and chemistry lookup tables</th><td>The actual AquaCache catalogue entries to which source data are assigned.</td></tr>
+          <tr><th><code>discrete.import_runs</code><br><code>discrete.import_run_rows</code></th><td>Upload history, the mapping revisions used, source row information and committed sample/result references.</td></tr>
+          <tr><th><code>discrete.samples</code><br><code>discrete.results</code></th><td>The sample records and measurements created by a successful upload.</td></tr>
+        </tbody>
+      </table>
+    </details>
+  </section>
+</body>
+</html>

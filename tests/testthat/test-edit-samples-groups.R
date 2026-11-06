@@ -1,6 +1,6 @@
 edit_samples_module_environment <- function() {
   module_path <- system.file(
-    "apps/YGwater/modules/admin/discreteData/editSamples.R",
+    "apps/aqualink/modules/admin/discreteData/editSamples.R",
     package = "YGwater"
   )
 
@@ -24,7 +24,7 @@ test_that("sample association synchronization changes only selected links", {
 test_that("sample editor uses normalized qualifiers and observers", {
   module_code <- readLines(
     system.file(
-      "apps/YGwater/modules/admin/discreteData/editSamples.R",
+      "apps/aqualink/modules/admin/discreteData/editSamples.R",
       package = "YGwater"
     ),
     warn = FALSE

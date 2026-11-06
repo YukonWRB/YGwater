@@ -1,7 +1,7 @@
 discrete_plot_module_environment <- function() {
   module_path <-
     system.file(
-      "apps/YGwater/modules/client/plot/discretePlot.R",
+      "apps/aqualink/modules/client/plot/discretePlot.R",
       package = "YGwater"
     )
 
@@ -29,11 +29,11 @@ test_that("QA/QC module text is sourced from the translation catalogue", {
 
   module_paths <- c(
     system.file(
-      "apps/YGwater/modules/client/plot/discretePlot.R",
+      "apps/aqualink/modules/client/plot/discretePlot.R",
       package = "YGwater"
     ),
     system.file(
-      "apps/YGwater/modules/client/data/discreteData.R",
+      "apps/aqualink/modules/client/data/discreteData.R",
       package = "YGwater"
     )
   )
@@ -134,7 +134,7 @@ test_that("component retrieval handles an empty result selection", {
 test_that("component retrieval includes inherited Patch 60 result metadata", {
   module_code <- readLines(
     system.file(
-      "apps/YGwater/modules/client/plot/discretePlot.R",
+      "apps/aqualink/modules/client/plot/discretePlot.R",
       package = "YGwater"
     ),
     warn = FALSE
@@ -161,4 +161,83 @@ test_that("plot downloads omit QA/QC sheets when no blank is linked", {
   )
 
   expect_named(tables, "plot_data")
+})
+
+test_that("plot downloads support human and stable machine column headings", {
+  env <- discrete_plot_module_environment()
+  plot_data <- data.frame(
+    result_id = 10L,
+    sample_id = 20L,
+    result_speciation = "dissolved",
+    endpoint_mode = "fixed",
+    endpoint_ph = 4.5,
+    stringsAsFactors = FALSE
+  )
+  qaqc <- env$disc_plot_empty_qaqc_data()
+
+  human <- env$disc_plot_download_tables(
+    plot_data,
+    qaqc,
+    header_style = "human"
+  )
+  machine <- env$disc_plot_download_tables(
+    plot_data,
+    qaqc,
+    header_style = "machine"
+  )
+  french <- env$disc_plot_download_tables(
+    plot_data,
+    qaqc,
+    header_style = "human",
+    header_language = "fr"
+  )
+  french_machine <- env$disc_plot_download_tables(
+    plot_data,
+    qaqc,
+    header_style = "machine",
+    header_language = "fr"
+  )
+
+  expect_named(human, "Plotted results")
+  expect_named(
+    human[["Plotted results"]],
+    c(
+      "Result ID",
+      "Sample ID",
+      "Chemical form / species scope",
+      "Endpoint determination",
+      "Endpoint pH"
+    )
+  )
+  expect_named(
+    machine$plot_data,
+    c(
+      "result_id",
+      "sample_id",
+      "result_speciation",
+      "endpoint_mode",
+      "endpoint_ph"
+    )
+  )
+  expect_equal(human[["Plotted results"]][["Endpoint pH"]], 4.5)
+  expect_equal(machine$plot_data$endpoint_ph, 4.5)
+  as_ascii <- function(value) {
+    Encoding(value) <- "UTF-8"
+    iconv(value, from = "UTF-8", to = "ASCII//TRANSLIT")
+  }
+  french_sheet <- which(grepl("sultats trac", names(french), fixed = TRUE))
+  expect_length(french_sheet, 1L)
+  french_table <- french[[french_sheet]]
+  expect_identical(as_ascii(names(french)[[french_sheet]]), "Resultats traces")
+  expect_identical(
+    as_ascii(names(french_table)),
+    as_ascii(c(
+      "ID du r\u00e9sultat",
+      "ID de l'\u00e9chantillon",
+      "Forme chimique / port\u00e9e de sp\u00e9ciation",
+      "D\u00e9termination du point final",
+      "pH au point final"
+    ))
+  )
+  expect_named(french_machine$plot_data, names(machine$plot_data))
 })

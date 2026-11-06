@@ -3,7 +3,8 @@ floodAtlas_ts_globals <- function(
   dbHost,
   dbPort = dbPort,
   dbUser = dbUser,
-  dbPass = dbPass
+  dbPass = dbPass,
+  timezone = "Etc/GMT+7"
 ) {
   library(shiny)
   library(shinyjs)
@@ -13,6 +14,7 @@ floodAtlas_ts_globals <- function(
     dbHost = dbHost,
     dbPort = dbPort,
     dbUser = dbUser,
-    dbPass = dbPass
+    dbPass = dbPass,
+    timezone = timezone
   )
 }

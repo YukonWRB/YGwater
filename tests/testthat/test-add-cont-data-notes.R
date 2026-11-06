@@ -1,6 +1,6 @@
 add_cont_data_notes_module <- function() {
   path <- system.file(
-    "apps/YGwater/modules/admin/continuousData/addContData.R",
+    "apps/aqualink/modules/admin/continuousData/addContData.R",
     package = "YGwater"
   )
   env <- new.env(parent = globalenv())

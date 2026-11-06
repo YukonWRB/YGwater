@@ -2,7 +2,7 @@ test_that("addTimeseries explains timeseries uniqueness conflicts", {
   module_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/admin/continuousData/addTimeseries.R",
+        "apps/aqualink/modules/admin/continuousData/addTimeseries.R",
         package = "YGwater"
       ),
       warn = FALSE

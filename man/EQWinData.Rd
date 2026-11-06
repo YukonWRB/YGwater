@@ -21,9 +21,9 @@ EQWinData(
 )
 }
 \arguments{
-\item{start}{The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'.}
+\item{start}{The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with fixed UTC-7 timezone 'Etc/GMT+7'.}
 
-\item{end}{The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Default is the current date.}
+\item{end}{The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with fixed UTC-7 timezone 'Etc/GMT+7'. Default is the current date.}
 
 \item{stations}{A vector of station names as listed in the EQWiN eqstns table, column StnCode. Leave NULL to use stnGrp instead.}
 

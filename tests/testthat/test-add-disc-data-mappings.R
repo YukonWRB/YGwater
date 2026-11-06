@@ -1,10 +1,17 @@
 add_disc_data_mapping_environment <- function() {
   module_path <- system.file(
-    "apps/YGwater/modules/admin/discreteData/addDiscData.R",
+    "apps/aqualink/modules/admin/discreteData/addDiscData.R",
     package = "YGwater"
   )
-  env <- new.env(parent = asNamespace("shiny"))
+  env <- new.env(parent = asNamespace("YGwater"))
   sys.source(module_path, envir = env)
+  sys.source(
+    system.file(
+      "apps/aqualink/modules/admin/discreteData/importSetup.R",
+      package = "YGwater"
+    ),
+    envir = env
+  )
   env
 }
 
@@ -121,6 +128,10 @@ test_that("unmapped parameter choices start with an explicit blank", {
     unit_solid = c("mg/kg", "mg/kg"),
     unit_gas = NA_character_
   )
+  matrix_states <- data.frame(
+    matrix_state_id = c(1L, 2L),
+    matrix_state_code = c("liquid", "solid")
+  )
 
   choices <- env$addDiscData_parameter_choices(parameters)
 
@@ -128,7 +139,12 @@ test_that("unmapped parameter choices start with an explicit blank", {
   expect_identical(names(choices)[[1]], "Select AquaCache parameter")
   expect_match(names(choices)[[2]], "Liquid: mg/l", fixed = TRUE)
   expect_identical(
-    env$addDiscData_target_unit(parameters, c(10L, 10L), c(1L, 2L)),
+    env$addDiscData_target_unit(
+      parameters,
+      c(10L, 10L),
+      c(1L, 2L),
+      matrix_states
+    ),
     c("mg/l", "mg/kg")
   )
 })
@@ -156,7 +172,7 @@ test_that("mapping conversion and offset are applied once", {
       result_type = 2L,
       sample_fraction_id = 5L,
       result_value_type = 1L,
-      result_speciation_id = NA_integer_,
+      reporting_basis_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
       result_offset = 0.5
@@ -205,7 +221,7 @@ test_that("source-specific result-flag mappings use typed detection limits", {
       result_type = 2L,
       sample_fraction_id = 5L,
       result_value_type = 1L,
-      result_speciation_id = NA_integer_,
+      reporting_basis_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
       result_offset = 0
@@ -370,6 +386,156 @@ test_that("Excel and textual dates are parsed without partial-year matches", {
     ),
     "2025-10-02 17:50:00"
   )
+  expect_identical(
+    format(
+      env$addDiscData_datetime(
+        "7/2/2026 10:35 AM",
+        NA_character_,
+        "America/Whitehorse"
+      ),
+      "%Y-%m-%d %H:%M:%S",
+      tz = "UTC"
+    ),
+    "2026-07-02 17:35:00"
+  )
+  expect_identical(
+    format(
+      env$addDiscData_datetime(
+        "2025-06-10",
+        "12:30:00.0000000",
+        "America/Whitehorse"
+      ),
+      "%Y-%m-%d %H:%M:%S",
+      tz = "UTC"
+    ),
+    "2025-06-10 19:30:00"
+  )
+})
+
+test_that("EHS component workbooks suggest a long layout without a unit column", {
+  env <- add_disc_data_mapping_environment()
+  raw <- as.data.frame(
+    as.list(c(
+      "Sample ID",
+      "CustomerId",
+      "JobName",
+      "SampledDate",
+      "LocationId",
+      "Area",
+      "SamplingPoint",
+      "Analysis",
+      "ComponentName",
+      "ResultText"
+    )),
+    check.names = FALSE
+  )
+
+  suggested <- env$importSetup_suggest_layout(raw)
+
+  expect_identical(suggested$parser_family, "long")
+  expect_identical(suggested$column_map$parameter_code, "ComponentName")
+  expect_identical(suggested$column_map$result, "ResultText")
+  expect_null(suggested$column_map$unit)
+})
+
+test_that("Mayo-style sample reports suggest and parse transposed results", {
+  env <- add_disc_data_mapping_environment()
+  raw <- matrix("", nrow = 28L, ncol = 8L)
+  raw[1L, 1L] <- "Report Id"
+  raw[1L, 7:8] <- "3148108"
+  raw[4L, 1L] <- "Sample Id"
+  raw[4L, 7:8] <- c("S1", "S2")
+  raw[16L, 1L] <- "Site Id"
+  raw[16L, 7:8] <- c("W3", "W5")
+  raw[18L, 1L] <- "Sample Date"
+  raw[18L, 7:8] <- "2025-06-10"
+  raw[19L, 1L] <- "Sampled Time"
+  raw[19L, 7:8] <- c("12:30:00.0000000", "12:20:00.0000000")
+  raw[26L, ] <- c(
+    "Report Results Group",
+    "Method Reference",
+    "Analyte",
+    "Descriptor",
+    "Unit",
+    "Detection Limit",
+    "Result Text",
+    "Result Text"
+  )
+  raw[27L, c(1L, 2L, 3L, 5L, 6L, 7L, 8L)] <- c(
+    "Routine Water",
+    "APHA [4500-H+ B]",
+    "pH",
+    "",
+    "0.01",
+    "7.2",
+    "7.3"
+  )
+  raw[28L, c(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L)] <- c(
+    "Routine Water",
+    "APHA [4110 B]",
+    "Nitrate",
+    "Dissolved",
+    "mg/L",
+    "0.01",
+    "<0.01",
+    "0.02"
+  )
+
+  suggested <- env$importSetup_suggest_layout(as.data.frame(raw))
+  expect_identical(suggested$parser_family, "transposed")
+  expect_identical(suggested$header_row, 26L)
+  expect_identical(suggested$column_map$data_start_row, 27L)
+  expect_identical(suggested$column_map$first_sample_column, 7L)
+  expect_setequal(
+    suggested$column_map$match_columns,
+    c(
+      "Report Results Group",
+      "Method Reference",
+      "Descriptor",
+      "Detection Limit"
+    )
+  )
+
+  path <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(path), add = TRUE)
+  wb <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(wb, "Test Results")
+  openxlsx::writeData(wb, "Test Results", raw, colNames = FALSE)
+  openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
+
+  profile <- add_disc_data_test_profile("transposed")
+  profile$sheet_name <- "Test Results"
+  profile$header_row <- suggested$header_row
+  profile$column_map[[1]] <- suggested$column_map
+  parsed <- env$addDiscData_parse_upload(path, profile)
+
+  expect_equal(nrow(parsed), 4L)
+  expect_identical(
+    parsed$source_parameter_name,
+    c("pH", "Nitrate", "pH", "Nitrate")
+  )
+  expect_identical(
+    parsed$result_condition,
+    c(NA_integer_, 1L, NA_integer_, NA_integer_)
+  )
+  nitrate_context <- jsonlite::fromJSON(
+    parsed$source_matching_values[[2]],
+    simplifyVector = FALSE
+  )
+  expect_identical(nitrate_context[["source.Descriptor"]], "Dissolved")
+  expect_identical(
+    nitrate_context[["source.Method Reference"]],
+    "APHA [4110 B]"
+  )
+  expect_identical(
+    format(parsed$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    c(
+      "2025-06-10 19:30:00",
+      "2025-06-10 19:30:00",
+      "2025-06-10 19:20:00",
+      "2025-06-10 19:20:00"
+    )
+  )
 })
 
 test_that("location choices expose name, code, and alias", {
@@ -458,13 +624,13 @@ test_that("profile keys are source-specific and profile fields are human editabl
 
   expect_identical(
     env$addDiscData_profile_key(c("ALS", "OTHER"), c("shared", "shared")),
-    c("ALS\rshared", "OTHER\rshared")
+    c("ALS::shared", "OTHER::shared")
   )
   json <- env$addDiscData_profile_json(profile, "column_map")
   expect_true(jsonlite::validate(json))
   expect_match(json, '"parameter_code"', fixed = TRUE)
 
-  server_code <- paste(deparse(body(env$addDiscData)), collapse = "\n")
+  server_code <- paste(deparse(body(env$importSetup)), collapse = "\n")
   profile_loader_code <- paste(
     deparse(body(env$addDiscData_read_profiles)),
     collapse = "\n"
@@ -533,12 +699,23 @@ test_that("mapped-result preview uses source text and lookup labels", {
       result_value_type_id = 1L,
       result_value_type = "Measured"
     ),
-    result_speciations = data.frame(
-      result_speciation_id = integer(),
-      result_speciation = character()
+    reporting_bases = data.frame(
+      reporting_basis_id = integer(),
+      reporting_basis = character()
+    ),
+    chemistry_catalogues = list(
+      result_speciations = data.frame(
+        result_speciation_id = integer(),
+        result_speciation = character()
+      ),
+      result_targets = data.frame(
+        result_target_id = integer(),
+        result_target = character()
+      )
     ),
     matrix_states = data.frame(
       matrix_state_id = 1L,
+      matrix_state_code = "liquid",
       matrix_state_name = "Liquid"
     ),
     laboratories = data.frame(lab_id = 2L, lab_name = "ALS Environmental"),
@@ -547,11 +724,23 @@ test_that("mapped-result preview uses source text and lookup labels", {
       collection_method_id = 27L,
       collection_method = "Grab"
     ),
-    sample_types = data.frame(sample_type_id = 34L, sample_type = "Routine")
+    sample_types = data.frame(sample_type_id = 34L, sample_type = "Routine"),
+    protocols_methods = data.frame(
+      protocol_id = integer(),
+      protocol_name = character()
+    ),
+    grade_types = data.frame(
+      grade_type_id = integer(),
+      grade_type_description = character()
+    ),
+    approval_types = data.frame(
+      approval_type_id = integer(),
+      approval_type_description = character()
+    )
   )
 
   expect_identical(display$`Source result`, "<0.010")
-  expect_identical(display$Result, "")
+  expect_identical(display$`Result value`, "")
   expect_identical(display$`Result condition`, "Less than")
   expect_identical(display$Laboratory, "ALS Environmental")
   expect_identical(display$`Sample fraction`, "Dissolved")
@@ -587,13 +776,187 @@ test_that("mapping persistence accepts all editable mapping details", {
 test_that("file uploads write generalized import-run provenance", {
   env <- add_disc_data_mapping_environment()
   server_code <- paste(deparse(body(env$addDiscData)), collapse = "\n")
+  upload_code <- paste(
+    deparse(body(env$addDiscData_run_upload)),
+    collapse = "\n"
+  )
 
-  expect_match(server_code, "AquaCache::createImportRun", fixed = TRUE)
-  expect_match(server_code, "AquaCache::appendImportRunRows", fixed = TRUE)
-  expect_match(server_code, "AquaCache::completeImportRun", fixed = TRUE)
+  expect_match(server_code, "addDiscData_run_upload(request)", fixed = TRUE)
+  expect_match(upload_code, "AquaCache::createImportRun", fixed = TRUE)
+  expect_match(upload_code, "AquaCache::appendImportRunRows", fixed = TRUE)
+  expect_match(upload_code, "AquaCache::completeImportRun", fixed = TRUE)
   expect_match(
-    server_code,
+    upload_code,
     "source_adapter_function = \"addDiscData\"",
     fixed = TRUE
   )
+})
+
+test_that("negative numeric results are opt-in MDLs with source exclusions", {
+  env <- add_disc_data_mapping_environment()
+  parsed <- env$addDiscData_parse_result(
+    c("-0.25", "-2", "-3"),
+    negative_values_are_mdl = TRUE,
+    negative_mdl_excluded = c(FALSE, TRUE, TRUE)
+  )
+
+  expect_true(is.na(parsed$result[[1]]))
+  expect_identical(parsed$result_condition[[1]], 1L)
+  expect_equal(parsed$result_condition_value[[1]], 0.25)
+  expect_identical(parsed$result[2:3], c(-2, -3))
+  expect_true(all(is.na(parsed$result_condition[2:3])))
+
+  unchanged <- env$addDiscData_parse_result(
+    "-0.25",
+    negative_values_are_mdl = FALSE
+  )
+  expect_identical(unchanged$result[[1]], -0.25)
+  expect_true(is.na(unchanged$result_condition[[1]]))
+})
+
+test_that("signed and non-Kelvin temperature parameters are auto-excluded", {
+  env <- add_disc_data_mapping_environment()
+  parameter <- c(
+    "Temperature Celsius",
+    "Temperature_K",
+    "Temperature_K",
+    "Temperature",
+    "Temperature K",
+    "ORP",
+    "redox potential",
+    "pH",
+    "delta_18O",
+    "water depth",
+    "gauge pressure",
+    "flow velocity",
+    "discharge",
+    "Dissolved aluminum"
+  )
+
+  expect_identical(
+    env$addDiscData_negative_mdl_auto_excluded(
+      parameter,
+      parameter,
+      c(
+        "deg C", "K", "", "", "deg C", "mV", "mV", "pH", "per mil",
+        "m", "kPa", "m/s", "m3/s", "ug/L"
+      )
+    ),
+    c(
+      TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE,
+      TRUE, TRUE, FALSE
+    )
+  )
+})
+
+test_that("wide workbook headers retain Unicode-minus units", {
+  env <- add_disc_data_mapping_environment()
+  minus <- intToUtf8(0x2212)
+  micro <- intToUtf8(0x00B5)
+  headers <- c(
+    paste0("F", minus, "-D (mg L", minus, "1)"),
+    paste0("SpC ", micro, "S cm", minus, "1"),
+    paste0("Alk mg L", minus, "1 as CaCO3")
+  )
+
+  parsed <- env$addDiscData_split_wide_header_units(headers)
+
+  expect_identical(parsed$parameter, c(
+    paste0("F", minus, "-D"),
+    "SpC",
+    "Alk"
+  ))
+  expect_identical(parsed$unit, c(
+    paste0("mg L", minus, "1"),
+    paste0(micro, "S cm", minus, "1"),
+    paste0("mg L", minus, "1 as CaCO3")
+  ))
+})
+
+test_that("wide workbook parsing requires its configured sample date", {
+  env <- add_disc_data_mapping_environment()
+  path <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(path), add = TRUE)
+  workbook <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(workbook, "together")
+  openxlsx::writeData(
+    workbook,
+    "together",
+    data.frame(
+      No. = "S1",
+      datetime = NA_character_,
+      ID = "ST01",
+      `B-T ppb` = "-1",
+      check.names = FALSE
+    ),
+    colNames = TRUE
+  )
+  openxlsx::saveWorkbook(workbook, path, overwrite = TRUE)
+
+  profile <- add_disc_data_test_profile("wide")
+  profile$sheet_name <- "together"
+  profile$column_map[[1]] <- list(
+    station_code = "ID",
+    sample_date = "datetime",
+    lab_sample_id = "No.",
+    first_result_column = 4L,
+    last_result_column = 4L,
+    data_start_row = 2L
+  )
+
+  expect_error(
+    env$addDiscData_parse_upload(path, profile),
+    "Every sample row needs a valid sample date/time"
+  )
+})
+
+test_that("wide workbook parsing preserves worksheet row numbers", {
+  env <- add_disc_data_mapping_environment()
+  path <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(path), add = TRUE)
+  workbook <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(workbook, "Data")
+  openxlsx::writeData(
+    workbook,
+    "Data",
+    data.frame("", "", "", "Dissolved metals", check.names = FALSE),
+    startRow = 1L,
+    colNames = FALSE
+  )
+  openxlsx::writeData(
+    workbook,
+    "Data",
+    data.frame(
+      `No.` = "S1",
+      datetime = "2025-06-10",
+      ID = "ST01",
+      Aluminum = "1.2",
+      check.names = FALSE
+    ),
+    startRow = 2L,
+    colNames = TRUE
+  )
+  openxlsx::saveWorkbook(workbook, path, overwrite = TRUE)
+
+  profile <- add_disc_data_test_profile("wide")
+  profile$parser_type <- "wide"
+  profile$sheet_name <- "Data"
+  profile$header_row <- 2L
+  profile$data_start_row <- 3L
+  profile$datetime_origin <- "text"
+  profile$column_map[[1]] <- list(
+    lab_sample_id = "No.",
+    sample_date = "datetime",
+    station_code = "ID",
+    first_result_column = 4L,
+    last_result_column = 4L,
+    data_start_row = 3L,
+    group_header_row = 1L
+  )
+
+  parsed <- env$addDiscData_parse_upload(path, profile)
+
+  expect_equal(nrow(parsed), 1L)
+  expect_identical(parsed$source_sample_id, "S1")
+  expect_identical(parsed$source_parameter_code, "Dissolved metals / Aluminum")
 })

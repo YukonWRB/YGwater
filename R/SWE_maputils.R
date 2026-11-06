@@ -4486,9 +4486,9 @@ generate_popup_content <- function(
     label_tr_key <- switch(
         label,
         "swe_poly_discrete" = "snowbull_swe_basin",
-        "swe_point_discrete" = "snowbull_snow_survey",
+        "swe_point_discrete" = "snow_survey",
         "swe_point_continuous" = "snowbull_snow_pillow",
-        "snowbull_snow_survey"
+        "snow_survey"
     )
     datatype_label <- paste0(
         "<b>Type: </b>",
@@ -5349,7 +5349,7 @@ make_leaflet_map <- function(
                 html = paste0(
                     "<div style='padding: 8px; border-radius: 6px; font-size: 13px; line-height: 1.4; min-width: 140px;'>",
                     "<svg width='18' height='18' style='vertical-align:middle;'><circle cx='9' cy='9' r='7' fill='none' stroke='black' stroke-width='2'/></svg> ",
-                    tr("snowbull_snow_survey", language),
+                    tr("snow_survey", language),
                     "<br>",
                     "<svg width='18' height='18' style='vertical-align:middle;'><rect x='3' y='3' width='12' height='12' fill='none' stroke='black' stroke-width='2'/><circle cx='9' cy='9' r='5' fill='none' stroke='black' stroke-width='2'/></svg> ",
                     tr("snowbull_snow_pillow", language),
@@ -5920,10 +5920,10 @@ make_ggplot_map <- function(
             " "
         ),
         "precipitation, total" = paste0(
-            tr("snowbull_precipitation", language),
+            tr("precipitation", language),
             " "
         ),
-        "temperature, air" = paste0(tr("snowbull_temperature", language), " "),
+        "temperature, air" = paste0(tr("temperature", language), " "),
         ""
     )
 
