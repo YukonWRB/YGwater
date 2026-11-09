@@ -1580,7 +1580,7 @@ mapParams <- function(id, language) {
               SELECT timeseries_id, ",
             paste(stats_select[c("max", "min", "doy_count")], collapse = ", "),
             ", ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
-              FROM continuous.measurements_calculated_daily
+              FROM continuous.measurements_calculated_daily d
               WHERE ",
             stats_filter_count,
             " >= ",
@@ -1673,7 +1673,7 @@ mapParams <- function(id, language) {
               c("timeseries_id", "date", "value", stats_select),
               collapse = ", "
             ),
-            " FROM continuous.measurements_calculated_daily WHERE ",
+            " FROM continuous.measurements_calculated_daily d WHERE ",
             stats_filter_count,
             " >= ",
             as.numeric(map_params$yrs1),
@@ -1752,7 +1752,7 @@ mapParams <- function(id, language) {
                   c("timeseries_id", "date", "value", stats_select),
                   collapse = ", "
                 ),
-                " FROM continuous.measurements_calculated_daily WHERE ",
+                " FROM continuous.measurements_calculated_daily d WHERE ",
                 stats_filter_count,
                 " >= ",
                 as.numeric(map_params$yrs2),
