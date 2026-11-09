@@ -17,7 +17,7 @@ mapRaster <- function(id, language) {
       return(ref_id)
     }
 
-    getRasterSWE <- function(con, reference_id) {
+    getRasterLayer <- function(con, reference_id, parameter) {
       r <- getRaster(
         con = con,
         tbl_name = c("spatial", "rasters"),
@@ -25,7 +25,10 @@ mapRaster <- function(id, language) {
         bands = 1
       )
       terra::crs(r) <- "EPSG:4326"
-      r <- r * 1000 # Convert from meters to mm
+      # SWE rasters are stored in metres; the map convention is millimetres.
+      if (identical(parameter, "snow water equivalent")) {
+        r <- r * 1000
+      }
       return(r)
     }
 
@@ -102,11 +105,13 @@ mapRaster <- function(id, language) {
     SELECT 
         r.reference_id,
         rsi.model,
+        rsi.parameter,
+        rr.units,
         rr.valid_from as datetime
     FROM spatial.raster_series_index rsi
     JOIN spatial.rasters_reference rr ON rsi.raster_series_id = rr.raster_series_id
     JOIN spatial.rasters r ON r.reference_id = rr.reference_id
-    WHERE parameter = 'snow water equivalent' AND rsi.model = 'ERA5_land'
+    WHERE rsi.parameter IS NOT NULL
     ORDER BY rr.valid_from, r.reference_id"
 
     raster_reference_list <- DBI::dbGetQuery(
@@ -115,14 +120,85 @@ mapRaster <- function(id, language) {
     )
 
     raster_reference_list$datetime <- as.POSIXct(raster_reference_list$datetime)
-    models <- unique(raster_reference_list$model)
+    variables <- sort(unique(raster_reference_list$parameter))
+    initial_variable <- if ("snow water equivalent" %in% variables) {
+      "snow water equivalent"
+    } else {
+      variables[1]
+    }
+    models <- sort(unique(raster_reference_list$model[
+      raster_reference_list$parameter == initial_variable
+    ]))
+    initial_model <- models[1]
+    initial_model_references <- raster_reference_list[
+      raster_reference_list$parameter == initial_variable &
+        raster_reference_list$model == initial_model,
+      ,
+      drop = FALSE
+    ]
 
-    # NOTE (ES): Currently, this module only supports 'ERA5_land' model.
-    # Future enhancements can include additional models if available.
-    # this would require (1), creation of a reactive subset of raster_reference_list, which would update Date selection
-    # a potential issue is if available dates aren't continuous, there's no way of 'blocking them' in date select.
-    # would need to add a modal warning if selected date has no data for selected model.
-    # next, reference_raster_mask would also need to be updated for every model change
+    colour_palettes <- list(
+      "Snow bulletin" = c("#EBB966", "#EEE383", "#C1FB80", "#6CFC88", "#8CEFE1", "#85B4F8", "#6772F7"),
+      Viridis = c("#440154", "#443983", "#31688E", "#21918C", "#35B779", "#90D743", "#FDE725"),
+      Blues = c("#F7FBFF", "#DEEBF7", "#C6DBEF", "#9ECAE1", "#6BAED6", "#3182BD", "#08519C"),
+      "Yellow-green-blue" = c("#FFFFD9", "#EDF8B1", "#C7E9B4", "#7FCDBB", "#41B6C4", "#1D91C0", "#225EA8"),
+      Plasma = c("#0D0887", "#5B02A3", "#9A179B", "#CB4679", "#ED7953", "#FDB32E", "#F0F921")
+    )
+
+    selected_raster_references <- shiny::reactive({
+      shiny::req(input$raster_variable, input$raster_type)
+      raster_reference_list[
+        raster_reference_list$parameter == input$raster_variable &
+          raster_reference_list$model == input$raster_type,
+        ,
+        drop = FALSE
+      ]
+    })
+
+    updating_raster_selector <- shiny::reactiveVal(FALSE)
+
+    update_raster_date <- function(refs) {
+      shiny::req(nrow(refs) > 0)
+      shiny::freezeReactiveValue(input, "date")
+      shiny::updateDateInput(
+        session,
+        "date",
+        value = as.Date(max(refs$datetime)),
+        min = as.Date(min(refs$datetime)),
+        max = as.Date(max(refs$datetime))
+      )
+    }
+
+    shiny::observeEvent(input$raster_variable, {
+      available_models <- sort(unique(raster_reference_list$model[
+        raster_reference_list$parameter == input$raster_variable
+      ]))
+      shiny::req(length(available_models) > 0)
+      selected_model <- available_models[1]
+      refs <- raster_reference_list[
+        raster_reference_list$parameter == input$raster_variable &
+          raster_reference_list$model == selected_model,
+        ,
+        drop = FALSE
+      ]
+      updating_raster_selector(TRUE)
+      shiny::freezeReactiveValue(input, "raster_type")
+      shiny::updateSelectInput(session, "raster_type",
+        choices = available_models, selected = selected_model
+      )
+      update_raster_date(refs)
+    }, ignoreInit = TRUE)
+
+    # Each model can have a different period of record. Keep the date control
+    # within the selected model's range and default to its newest raster.
+    shiny::observeEvent(input$raster_type, {
+      if (isTRUE(updating_raster_selector())) {
+        updating_raster_selector(FALSE)
+        return(invisible())
+      }
+      refs <- selected_raster_references()
+      update_raster_date(refs)
+    }, ignoreInit = TRUE)
 
     output$banner <- shiny::renderUI({
       application_notifications_ui(
@@ -137,6 +213,12 @@ mapRaster <- function(id, language) {
       bslib::page_sidebar(
         sidebar = bslib::sidebar(
           shiny::selectInput(
+            ns("raster_variable"),
+            "Variable",
+            choices = variables,
+            selected = initial_variable
+          ),
+          shiny::selectInput(
             ns("raster_type"),
             tr("maps_raster", language$language),
             choices = models,
@@ -145,9 +227,9 @@ mapRaster <- function(id, language) {
           shiny::dateInput(
             ns("date"), # already namespaced
             "Date",
-            value = max(raster_reference_list$datetime),
-            min = min(raster_reference_list$datetime),
-            max = max(raster_reference_list$datetime),
+            value = as.Date(max(initial_model_references$datetime)),
+            min = as.Date(min(initial_model_references$datetime)),
+            max = as.Date(max(initial_model_references$datetime)),
             language = language$abbrev
           ),
           shiny::selectInput(
@@ -159,6 +241,20 @@ mapRaster <- function(id, language) {
             selected = "swe_basins"
           ),
           shiny::tags$details(
+            shiny::tags$summary("Advanced display options"),
+            shiny::selectInput(
+              ns("raster_colour_palette"),
+              "Colour palette",
+              choices = names(colour_palettes),
+              selected = "Snow bulletin"
+            ),
+            shiny::checkboxInput(
+              ns("reverse_raster_colours"),
+              "Reverse colour palette",
+              value = FALSE
+            )
+          ),
+          shiny::tags$details(
             shiny::tags$summary(tr("snowbull_details", language$language)),
             shiny::uiOutput(ns("map_details"))
           )
@@ -168,7 +264,8 @@ mapRaster <- function(id, language) {
     })
 
     basins_shp <- shiny::reactive({
-      if (input$shapefile == "swe_basins") {
+      shiny::req(length(input$shapefile) == 1L, nzchar(input$shapefile))
+      if (identical(input$shapefile, "swe_basins")) {
         # input IDs are already namespaced in modules
         shp <- sf::st_read(
           system.file(
@@ -184,31 +281,75 @@ mapRaster <- function(id, language) {
       }
     })
 
-    # Permanent snow mask
+    # Permanent snow mask. It is calculated per model because the reference
+    # rasters may have distinct extents, resolutions, or periods of record.
     permenent_snow_date <- as.Date("2025-09-01")
-    ref_id_perm <- getRasterRefID(raster_reference_list, permenent_snow_date)
-    r_db_perm <- getRasterSWE(session$userData$AquaCache, ref_id_perm)
-    swe_mask <- !is.na(r_db_perm) & (r_db_perm <= 10)
+    swe_mask <- shiny::reactive({
+      refs <- selected_raster_references()
+      shiny::req(nrow(refs) > 0)
+      ref_id_perm <- getRasterRefID(refs, permenent_snow_date)
+      r_db_perm <- getRasterLayer(
+        session$userData$AquaCache,
+        ref_id_perm,
+        "snow water equivalent"
+      )
+      !is.na(r_db_perm) & (r_db_perm <= 10)
+    })
 
-    swe_map_data <- shiny::reactive({
-      shiny::req(input$date)
-
-      swe_pillows <- getPillowSWE(
-        con = session$userData$AquaCache,
-        stations_sf = swe_pillow_stations,
-        date = input$date
+    # Raster references in a series are not guaranteed to share a grid.  The
+    # permanent-snow mask is stored on the September 2025 grid, so align it to
+    # each selected raster before calling `mask()`.
+    align_swe_mask <- function(mask_raster, target_raster) {
+      same_grid <- terra::compareGeom(
+        mask_raster,
+        target_raster,
+        crs = TRUE,
+        ext = TRUE,
+        rowcol = TRUE,
+        res = TRUE,
+        stopOnError = FALSE
       )
 
-      swe_surveys <- getSurveySWE(
-        con = session$userData$AquaCache,
-        stations_sf = swe_survey_stations,
-        date = input$date
-      )
+      if (isTRUE(same_grid)) {
+        return(mask_raster)
+      }
+
+      # A logical mask is categorical, so nearest-neighbour resampling avoids
+      # inventing partial mask values along cell boundaries.
+      terra::resample(mask_raster, target_raster, method = "near")
+    }
+
+    swe_map_data <- shiny::bindEvent(shiny::reactive({
+      shiny::req(input$date, input$raster_variable, input$raster_type)
+      selected_refs <- selected_raster_references()
+      shiny::req(nrow(selected_refs) > 0)
+      is_swe <- identical(input$raster_variable, "snow water equivalent")
+
+      swe_pillows <- if (is_swe) {
+        getPillowSWE(session$userData$AquaCache, swe_pillow_stations, input$date)
+      } else {
+        empty_pillows <- swe_pillow_stations[0, , drop = FALSE]
+        empty_pillows$swe <- numeric(0)
+        empty_pillows
+      }
+      swe_surveys <- if (is_swe) {
+        getSurveySWE(session$userData$AquaCache, swe_survey_stations, input$date)
+      } else {
+        empty_surveys <- swe_survey_stations[0, , drop = FALSE]
+        empty_surveys$swe <- numeric(0)
+        empty_surveys
+      }
 
       # Query raster for selected date
-      ref_id <- getRasterRefID(raster_reference_list, input$date)
-      r_db <- getRasterSWE(session$userData$AquaCache, ref_id)
-      r_db <- terra::mask(r_db, swe_mask, maskvalue = FALSE)
+      ref_id <- getRasterRefID(selected_refs, input$date)
+      r_db <- getRasterLayer(session$userData$AquaCache, ref_id, input$raster_variable)
+      if (is_swe) {
+        r_db <- terra::mask(
+          r_db,
+          align_swe_mask(swe_mask(), r_db),
+          maskvalue = FALSE
+        )
+      }
       # Basins
       basins <- basins_shp()
       if (is.null(basins)) {
@@ -217,45 +358,79 @@ mapRaster <- function(id, language) {
       basin_means <- terra::extract(r_db, basins, fun = mean, na.rm = TRUE)
       basins$mean_raster <- basin_means[, 2]
 
+      values_r <- terra::values(r_db, mat = FALSE)
+      finite_values <- values_r[is.finite(values_r)]
+      shiny::req(length(finite_values) > 0)
+
+      # SWE uses the established bulletin scale. Other variables use their
+      # displayed data range, so e.g. temperature and precipitation are not
+      # compressed into a 0--250 SWE legend.
+      if (is_swe) {
+        colorbar_min <- 0
+        colorbar_max <- 250
+      } else {
+        colorbar_min <- unname(stats::quantile(finite_values, 0.02, na.rm = TRUE))
+        colorbar_max <- unname(stats::quantile(finite_values, 0.98, na.rm = TRUE))
+        if (!is.finite(colorbar_min) || !is.finite(colorbar_max) ||
+            identical(colorbar_min, colorbar_max)) {
+          colorbar_min <- min(finite_values)
+          colorbar_max <- max(finite_values)
+        }
+        if (identical(colorbar_min, colorbar_max)) {
+          colorbar_min <- colorbar_min - 0.5
+          colorbar_max <- colorbar_max + 0.5
+        }
+      }
+
       # Contours
-      contour_levels <- seq(0, 1000, by = 50)
+      contour_levels <- pretty(c(colorbar_min, colorbar_max), n = 10)
       contours <- terra::as.contour(r_db, levels = contour_levels)
       contours_sf <- sf::st_as_sf(contours)
 
-      # Set colorbar limits
-      colorbar_min <- 0
-      colorbar_max <- 250
+      raster_units <- unique(stats::na.omit(selected_refs$units))
+      raster_units <- if (is_swe) "mm" else if (length(raster_units)) raster_units[1] else ""
 
-      # Mask raster values above 250 for colorbar/legend
-      values_r <- terra::values(r_db)
-      values_r[values_r > colorbar_max] <- colorbar_max
+      palette_name <- input$raster_colour_palette
+      if (length(palette_name) != 1L || is.na(palette_name) ||
+          !palette_name %in% names(colour_palettes)) {
+        palette_name <- "Snow bulletin"
+      }
+      palette_values <- colour_palettes[[palette_name]]
+      if (isTRUE(input$reverse_raster_colours)) {
+        palette_values <- rev(palette_values)
+      }
 
       pal <- leaflet::colorNumeric(
-        palette = rev(c(
-          "#6772F7", # Blue (extremely high)
-          "#85B4F8", # Light blue (very high)
-          "#8CEFE1", # Cyan (high)
-          "#6CFC88", # Green (well above normal)
-          "#C1FB80", # Light green (above normal)
-          "#EEE383", # Yellow (normal)
-          "#EBB966" # Orange (near normal)
-        )),
+        palette = palette_values,
         domain = c(colorbar_min, colorbar_max),
         na.color = "transparent"
       )
-      contours_sf$col <- pal(pmin(contours_sf$level, colorbar_max))
+      # Saturate values outside the displayed scale instead of converting
+      # them to NA (the default colorNumeric behaviour).
+      raster_pal <- function(x) {
+        pal(pmin(pmax(x, colorbar_min), colorbar_max))
+      }
+      contours_sf$col <- raster_pal(contours_sf$level)
 
       list(
         r_db = r_db,
         basins = basins,
         contours_sf = contours_sf,
         pal = pal,
+        raster_pal = raster_pal,
         swe_pillows = swe_pillows,
         swe_surveys = swe_surveys,
         colorbar_min = colorbar_min,
-        colorbar_max = colorbar_max
+        colorbar_max = colorbar_max,
+        parameter = input$raster_variable,
+        units = raster_units
       )
-    })
+    }),
+    input$date,
+    input$raster_colour_palette,
+    input$reverse_raster_colours,
+    ignoreInit = FALSE
+    )
 
     output$swe_map <- leaflet::renderLeaflet({
       map_data <- swe_map_data()
@@ -266,14 +441,17 @@ mapRaster <- function(id, language) {
       pillows <- map_data$swe_pillows
       surveys <- map_data$swe_surveys
       pal <- map_data$pal
+      raster_pal <- map_data$raster_pal
       colorbar_min <- map_data$colorbar_min
       colorbar_max <- map_data$colorbar_max
+      parameter <- map_data$parameter
+      raster_units <- map_data$units
 
-      leaflet::leaflet() %>%
+      map <- leaflet::leaflet() %>%
         leaflet::addTiles() %>%
         leaflet::addRasterImage(
           r_db,
-          colors = pal,
+          colors = raster_pal,
           opacity = 0.7,
           project = TRUE,
           group = tr("snowbull_raster", language$language)
@@ -295,7 +473,7 @@ mapRaster <- function(id, language) {
         ) %>%
         leaflet::addPolygons(
           data = basins_shp,
-          fillColor = ~ pal(pmin(mean_raster, colorbar_max)),
+          fillColor = ~ raster_pal(mean_raster),
           color = "black",
           weight = 2,
           fillOpacity = 0.6,
@@ -358,57 +536,38 @@ mapRaster <- function(id, language) {
             )
           ),
           group = tr("communities", language$language)
-        ) %>%
-        leaflet::addCircleMarkers(
-          data = pillows[!is.na(pillows$swe), ],
-          lng = ~longitude,
-          lat = ~latitude,
-          fillColor = ~ pal(pmin(swe, colorbar_max)),
-          color = "black",
-          weight = 2,
-          fillOpacity = 1,
-          opacity = 1,
-          radius = 8,
-          label = ~ paste0(
-            name,
-            ": ",
-            ifelse(
-              swe > colorbar_max,
-              paste0(colorbar_max, "+"),
-              round(swe, 1)
-            ),
-            " mm"
-          ),
-          group = tr("snowbull_snow_pillow", language$language)
-        ) %>%
-        leaflet::addCircleMarkers(
-          data = surveys[!is.na(surveys$swe), ],
-          lng = ~longitude,
-          lat = ~latitude,
-          fillColor = ~ pal(pmin(swe, colorbar_max)),
-          color = "blue",
-          weight = 2,
-          fillOpacity = 1,
-          opacity = 1,
-          radius = 6,
-          label = ~ paste0(
-            name,
-            ": ",
-            ifelse(
-              swe > colorbar_max,
-              paste0(colorbar_max, "+"),
-              round(swe, 1)
-            ),
-            " mm"
-          ),
-          group = tr("snow_survey", language$language)
-        ) %>%
-        # --- Add colorbar legend for raster ---
+        )
+
+      # These stations only measure SWE. Do not add their layers for another
+      # raster variable: Leaflet evaluates formula fields even with zero rows.
+      if (identical(parameter, "snow water equivalent")) {
+        map <- map %>%
+          leaflet::addCircleMarkers(
+            data = pillows[!is.na(pillows$swe), ],
+            lng = ~longitude,
+            lat = ~latitude,
+            fillColor = ~raster_pal(swe),
+            color = "black", weight = 2, fillOpacity = 1, opacity = 1, radius = 8,
+            label = ~paste0(name, ": ", round(swe, 1), " mm"),
+            group = tr("snowbull_snow_pillow", language$language)
+          ) %>%
+          leaflet::addCircleMarkers(
+            data = surveys[!is.na(surveys$swe), ],
+            lng = ~longitude,
+            lat = ~latitude,
+            fillColor = ~raster_pal(swe),
+            color = "blue", weight = 2, fillOpacity = 1, opacity = 1, radius = 6,
+            label = ~paste0(name, ": ", round(swe, 1), " mm"),
+            group = tr("snow_survey", language$language)
+          )
+      }
+
+      map <- map %>%
         leaflet::addLegend(
           position = "bottomright",
           pal = pal,
           values = c(colorbar_min, colorbar_max),
-          title = "SWE (mm)",
+          title = paste0(parameter, if (nzchar(raster_units)) paste0(" (", raster_units, ")")),
           opacity = 1,
           labFormat = function(type, cuts, p) {
             cuts <- round(cuts)
@@ -431,6 +590,7 @@ mapRaster <- function(id, language) {
         ) %>%
         leaflet::hideGroup(tr("snowbull_swe_basin", language$language)) %>%
         leaflet::hideGroup(tr("isocontours", language$language))
+      map
     })
 
     # --- Render selected date text with details ---
