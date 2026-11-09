@@ -1089,10 +1089,10 @@ addContData <- function(id, language) {
       nrow(meta) == 1 && identical(meta$timeseries_type_code[[1]], "basic")
     })
 
-    timeseries_units <- function(timeseries_id) {
+    timeseries_units <- function(ts_id) {
       meta <- ts_meta()
       meta <- meta[
-        meta$timeseries_id == as.integer(timeseries_id),
+        meta$timeseries_id == as.integer(ts_id),
         ,
         drop = FALSE
       ]
