@@ -25,11 +25,48 @@ mapRaster <- function(id, language) {
         bands = 1
       )
       terra::crs(r) <- "EPSG:4326"
-      # SWE rasters are stored in metres; the map convention is millimetres.
-      if (identical(parameter, "snow water equivalent")) {
-        r <- r * 1000
-      }
       return(r)
+    }
+
+    normalize_raster_units <- function(r, parameter, source_units = "") {
+      source_units <- if (length(source_units)) tolower(trimws(source_units[1])) else ""
+      parameter <- tolower(parameter)
+
+      if (identical(parameter, "snow water equivalent")) {
+        return(list(raster = r * 1000, units = "mm"))
+      }
+
+      if (grepl("precip", parameter)) {
+        # Gridded precipitation is commonly stored as metres of water.
+        if (source_units %in% c("m", "metre", "metres", "meter", "meters")) {
+          r <- r * 1000
+        }
+        return(list(raster = r, units = "mm"))
+      }
+
+      if (grepl("temperature|temp", parameter)) {
+        # ECCC/GRIB temperature rasters are normally Kelvin.  The magnitude
+        # fallback also covers old references whose units were not recorded.
+        mean_value <- tryCatch(
+          terra::global(r, "mean", na.rm = TRUE)[1, 1],
+          error = function(e) NA_real_
+        )
+        if (source_units %in% c("k", "kelvin") ||
+            (is.finite(mean_value) && mean_value > 150)) {
+          r <- r - 273.15
+        }
+        return(list(raster = r, units = "°C"))
+      }
+
+      list(raster = r, units = if (nzchar(source_units)) source_units else "")
+    }
+
+    format_raster_value <- function(x) {
+      x <- as.numeric(x)
+      digits <- ifelse(abs(x) >= 100, 0L, ifelse(abs(x) >= 10, 1L, 2L))
+      vapply(seq_along(x), function(i) {
+        formatC(x[i], format = "f", digits = digits[i])
+      }, character(1))
     }
 
     getPillowSWE <- function(con, stations_sf, date) {
@@ -107,7 +144,9 @@ mapRaster <- function(id, language) {
         rsi.model,
         rsi.parameter,
         rr.units,
-        rr.valid_from as datetime
+        rr.valid_from as datetime,
+        rr.valid_to,
+        rsi.last_issue
     FROM spatial.raster_series_index rsi
     JOIN spatial.rasters_reference rr ON rsi.raster_series_id = rr.raster_series_id
     JOIN spatial.rasters r ON r.reference_id = rr.reference_id
@@ -166,6 +205,12 @@ mapRaster <- function(id, language) {
         value = as.Date(max(refs$datetime)),
         min = as.Date(min(refs$datetime)),
         max = as.Date(max(refs$datetime))
+      )
+      shiny::freezeReactiveValue(input, "time")
+      shiny::updateSelectInput(
+        session,
+        "time",
+        selected = format(max(refs$datetime), "%H:00")
       )
     }
 
@@ -231,6 +276,12 @@ mapRaster <- function(id, language) {
             min = as.Date(min(initial_model_references$datetime)),
             max = as.Date(max(initial_model_references$datetime)),
             language = language$abbrev
+          ),
+          shiny::selectInput(
+            ns("time"),
+            "Time",
+            choices = sprintf("%02d:00", 0:23),
+            selected = format(max(initial_model_references$datetime), "%H:00")
           ),
           shiny::selectInput(
             ns("shapefile"), # already namespaced
@@ -320,10 +371,14 @@ mapRaster <- function(id, language) {
     }
 
     swe_map_data <- shiny::bindEvent(shiny::reactive({
-      shiny::req(input$date, input$raster_variable, input$raster_type)
+      shiny::req(input$date, input$time, input$raster_variable, input$raster_type)
       selected_refs <- selected_raster_references()
       shiny::req(nrow(selected_refs) > 0)
       is_swe <- identical(input$raster_variable, "snow water equivalent")
+      selected_datetime <- as.POSIXct(
+        paste(input$date, input$time),
+        tz = "UTC"
+      )
 
       swe_pillows <- if (is_swe) {
         getPillowSWE(session$userData$AquaCache, swe_pillow_stations, input$date)
@@ -341,8 +396,19 @@ mapRaster <- function(id, language) {
       }
 
       # Query raster for selected date
-      ref_id <- getRasterRefID(selected_refs, input$date)
-      r_db <- getRasterLayer(session$userData$AquaCache, ref_id, input$raster_variable)
+      ref_id <- getRasterRefID(selected_refs, selected_datetime)
+      selected_ref <- selected_refs[selected_refs$reference_id == ref_id, , drop = FALSE]
+      r_source <- getRasterLayer(
+        session$userData$AquaCache,
+        ref_id,
+        input$raster_variable
+      )
+      raster_data <- normalize_raster_units(
+        r_source,
+        input$raster_variable,
+        selected_ref$units
+      )
+      r_db <- raster_data$raster
       if (is_swe) {
         r_db <- terra::mask(
           r_db,
@@ -387,8 +453,7 @@ mapRaster <- function(id, language) {
       contours <- terra::as.contour(r_db, levels = contour_levels)
       contours_sf <- sf::st_as_sf(contours)
 
-      raster_units <- unique(stats::na.omit(selected_refs$units))
-      raster_units <- if (is_swe) "mm" else if (length(raster_units)) raster_units[1] else ""
+      raster_units <- raster_data$units
 
       palette_name <- input$raster_colour_palette
       if (length(palette_name) != 1L || is.na(palette_name) ||
@@ -412,6 +477,32 @@ mapRaster <- function(id, language) {
       }
       contours_sf$col <- raster_pal(contours_sf$level)
 
+      unit_suffix <- if (nzchar(raster_units)) paste0(" (", raster_units, ")") else ""
+      raster_group <- paste0(input$raster_variable, unit_suffix)
+      contour_group <- paste0("Isocontours", unit_suffix)
+      basin_group <- paste0("Basin mean", unit_suffix)
+
+      forecast_info <- NULL
+      if (identical(toupper(selected_ref$model[1]), "HRDPS")) {
+        valid_from <- as.POSIXct(selected_ref$datetime[1], tz = "UTC")
+        valid_to <- as.POSIXct(selected_ref$valid_to[1], tz = "UTC")
+        issue_time <- as.POSIXct(selected_ref$last_issue[1], tz = "UTC")
+        lead_text <- ""
+        if (!is.na(issue_time) && !is.na(valid_from)) {
+          lead_hours <- as.numeric(difftime(valid_from, issue_time, units = "hours"))
+          if (is.finite(lead_hours) && lead_hours >= 0) {
+            lead_text <- paste0("<br/>Lead time: ", round(lead_hours), " h")
+          }
+        }
+        forecast_info <- paste0(
+          "<strong>HRDPS forecast</strong><br/>Valid: ",
+          format(valid_from, "%Y-%m-%d %H:%M UTC"),
+          if (!is.na(valid_to)) paste0(" to ", format(valid_to, "%Y-%m-%d %H:%M UTC")) else "",
+          if (!is.na(issue_time)) paste0("<br/>Issue: ", format(issue_time, "%Y-%m-%d %H:%M UTC")) else "",
+          lead_text
+        )
+      }
+
       list(
         r_db = r_db,
         basins = basins,
@@ -423,10 +514,15 @@ mapRaster <- function(id, language) {
         colorbar_min = colorbar_min,
         colorbar_max = colorbar_max,
         parameter = input$raster_variable,
-        units = raster_units
+        units = raster_units,
+        raster_group = raster_group,
+        contour_group = contour_group,
+        basin_group = basin_group,
+        forecast_info = forecast_info
       )
     }),
     input$date,
+    input$time,
     input$raster_colour_palette,
     input$reverse_raster_colours,
     ignoreInit = FALSE
@@ -446,6 +542,13 @@ mapRaster <- function(id, language) {
       colorbar_max <- map_data$colorbar_max
       parameter <- map_data$parameter
       raster_units <- map_data$units
+      raster_group <- map_data$raster_group
+      contour_group <- map_data$contour_group
+      basin_group <- map_data$basin_group
+      forecast_info <- map_data$forecast_info
+      legend_values <- seq(colorbar_min, colorbar_max, length.out = 7)
+      legend_labels <- format_raster_value(legend_values)
+      legend_labels[length(legend_labels)] <- paste0(legend_labels[length(legend_labels)], "+")
 
       map <- leaflet::leaflet() %>%
         leaflet::addTiles() %>%
@@ -454,14 +557,14 @@ mapRaster <- function(id, language) {
           colors = raster_pal,
           opacity = 0.7,
           project = TRUE,
-          group = tr("snowbull_raster", language$language)
+          group = raster_group
         ) %>%
         leaflet::addPolylines(
           data = contours_sf,
           color = ~col,
           weight = 3,
           opacity = 0.85,
-          group = tr("isocontours", language$language)
+          group = contour_group
         ) %>%
         leaflet::addPolygons(
           data = basins_shp,
@@ -477,25 +580,14 @@ mapRaster <- function(id, language) {
           color = "black",
           weight = 2,
           fillOpacity = 0.6,
-          label = ~ paste0(
-            "Mean Value: ",
-            ifelse(
-              mean_raster > colorbar_max,
-              paste0(colorbar_max, "+"),
-              round(mean_raster, 2)
-            )
-          ),
-          group = tr("snowbull_swe_basin", language$language)
+          label = ~paste0("Mean value: ", format_raster_value(mean_raster), " ", raster_units),
+          group = basin_group
         ) %>%
         leaflet::addLabelOnlyMarkers(
           data = basins_shp,
           lng = sf::st_coordinates(sf::st_centroid(basins_shp))[, 1],
           lat = sf::st_coordinates(sf::st_centroid(basins_shp))[, 2],
-          label = ~ ifelse(
-            mean_raster > colorbar_max,
-            paste0(colorbar_max, "+"),
-            round(mean_raster, 1)
-          ),
+          label = ~format_raster_value(mean_raster),
           labelOptions = leaflet::labelOptions(
             noHide = TRUE,
             direction = "center",
@@ -506,7 +598,7 @@ mapRaster <- function(id, language) {
               "font-size" = "12px"
             )
           ),
-          group = tr("snowbull_swe_basin", language$language)
+          group = basin_group
         ) %>%
         leaflet::addCircleMarkers(
           data = communities,
@@ -565,31 +657,28 @@ mapRaster <- function(id, language) {
       map <- map %>%
         leaflet::addLegend(
           position = "bottomright",
-          pal = pal,
-          values = c(colorbar_min, colorbar_max),
+          colors = rev(raster_pal(legend_values)),
+          labels = rev(legend_labels),
           title = paste0(parameter, if (nzchar(raster_units)) paste0(" (", raster_units, ")")),
-          opacity = 1,
-          labFormat = function(type, cuts, p) {
-            cuts <- round(cuts)
-            labels <- as.character(cuts)
-            labels[length(labels)] <- paste0(colorbar_max, "+")
-            labels
-          }
+          opacity = 1
         ) %>%
         leaflet::addLayersControl(
           overlayGroups = c(
-            tr("snowbull_raster", language$language),
+            raster_group,
             tr("snowbull_snow_pillow", language$language),
             tr("snow_survey", language$language),
             tr("gen_snowBul_basins", language$language),
-            tr("snowbull_swe_basin", language$language),
+            basin_group,
             tr("communities", language$language),
-            tr("isocontours", language$language)
+            contour_group
           ),
           options = leaflet::layersControlOptions(collapsed = FALSE)
         ) %>%
-        leaflet::hideGroup(tr("snowbull_swe_basin", language$language)) %>%
-        leaflet::hideGroup(tr("isocontours", language$language))
+        leaflet::hideGroup(basin_group) %>%
+        leaflet::hideGroup(contour_group)
+      if (!is.null(forecast_info)) {
+        map <- leaflet::addControl(map, forecast_info, position = "topright")
+      }
       map
     })
 
@@ -602,8 +691,9 @@ mapRaster <- function(id, language) {
         as.character(utils::packageVersion("YGwater")),
         "<br/>",
         "<b>",
-        "Dislaimer:</b> ",
-        tr("snowbull_raster_disclaimer", language$language),
+        "Disclaimer:</b> ",
+        "Raster products are modelled or interpolated estimates and may not reflect local conditions. ",
+        "Use them for situational awareness and confirm important decisions with the appropriate source data.",
         "<br/>"
       ))
     })
