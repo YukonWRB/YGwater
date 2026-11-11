@@ -347,6 +347,7 @@ AquaCacheReport <- function(
     )
   }
   clean_location_text <- function(x) {
+    if (!length(x) || is.na(x[[1]])) return("")
     value <- trimws(as.character(x))
     value[is.na(value)] <- ""
     value

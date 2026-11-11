@@ -207,7 +207,7 @@ test_that("report matrices and SD calculations distinguish result value types", 
       )
       matrix <- openxlsx::read.xlsx(
         path,
-        "Report",
+        1L,
         startRow = 5,
         sep.names = " "
       )

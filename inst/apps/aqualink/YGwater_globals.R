@@ -19,7 +19,7 @@ YGwater_globals <- function(
   # Use a user-writable cache directory for sass
   cache_dir <- tools::R_user_dir("YGwater", "cache")
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
-  options(bslib.sass.cache = cache_dir)
+  options(sass.cache = cache_dir, bslib.sass.cache = cache_dir)
 
   # Initialize a shared cache environment available to all sessions
   if (!exists("app_cache", envir = .GlobalEnv)) {
@@ -1337,5 +1337,5 @@ YGwater_globals <- function(
     test_exists = test_exists
   )
 
-  return(config)
+  invisible(config)
 }

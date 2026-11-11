@@ -2350,7 +2350,7 @@ fetch_parameter_unit_usage <- function(con, parameter_id, changed_units, new_val
   if (is.null(changed_units) || !nrow(changed_units)) {
     return(list(
       usage = data.frame(),
-      mapping_sets = data.frame(),
+      mapping_scopes = data.frame(),
       parameter_refs = data.frame(
         schema_name = character(), table_name = character(),
         column_name = character(), stringsAsFactors = FALSE
@@ -2613,23 +2613,18 @@ fetch_parameter_unit_usage <- function(con, parameter_id, changed_units, new_val
       blockers <- c(blockers, "criteria.guideline_value_rules (rounding)")
     }
 
-    has_mapping_sets <- parameter_unit_relation_exists(con, "discrete", "import_mapping_sets")
-    mapping_count <- if (has_mapping_sets) parameter_unit_count(
+    mapping_count <- parameter_unit_count(
       con, "discrete", "import_parameter_mappings",
-      paste(
-        "parameter_id = $1 AND matrix_state_id = $2 AND import_mapping_set_id IN (",
-        "SELECT import_mapping_set_id FROM discrete.import_mapping_sets",
-        "WHERE status IN ('draft', 'published'))"
-      ),
+      "parameter_id = $1 AND matrix_state_id = $2",
       state_params
-    ) else 0
+    )
     add_usage(code, "discrete.import_parameter_mappings", mapping_count)
 
   }
 
   mapping_missing_state_count <- parameter_unit_count(
     con, "discrete", "import_parameter_mappings",
-    "parameter_id = $1 AND matrix_state_id IS NULL AND import_mapping_set_id IN (SELECT import_mapping_set_id FROM discrete.import_mapping_sets WHERE status IN ('draft', 'published'))",
+    "parameter_id = $1 AND matrix_state_id IS NULL",
     list(as.integer(parameter_id))
   )
   if (mapping_missing_state_count > 0) {
@@ -2873,46 +2868,42 @@ fetch_parameter_unit_usage <- function(con, parameter_id, changed_units, new_val
     }
   }
 
-  mapping_sets <- if (parameter_unit_relation_exists(con, "discrete", "import_parameter_mappings")) {
+  mapping_scopes <- if (parameter_unit_relation_exists(con, "discrete", "import_parameter_mappings")) {
     DBI::dbGetQuery(
       con,
-      "SELECT DISTINCT mapping_set.import_mapping_set_id,
-         source.source_code, mapping_set.version, mapping_set.status,
-         mapping_set.import_source_id, mapping_set.import_profile_id,
-         count(*) OVER (PARTITION BY mapping_set.import_mapping_set_id)::INTEGER AS mapping_count,
-         draft.import_mapping_set_id AS open_draft_id,
-         draft.version AS open_draft_version
+      "SELECT source.import_source_id, profile.import_profile_id,
+         source.source_code, profile.profile_code,
+         count(*)::INTEGER AS mapping_count
        FROM discrete.import_parameter_mappings mapping
-       JOIN discrete.import_mapping_sets mapping_set USING (import_mapping_set_id)
        JOIN discrete.import_sources source USING (import_source_id)
-       LEFT JOIN LATERAL (
-         SELECT draft_set.import_mapping_set_id, draft_set.version
-         FROM discrete.import_mapping_sets draft_set
-         WHERE draft_set.import_source_id = mapping_set.import_source_id
-           AND draft_set.import_profile_id IS NOT DISTINCT FROM mapping_set.import_profile_id
-           AND draft_set.status = 'draft'
-         ORDER BY draft_set.version DESC
-         LIMIT 1
-       ) draft ON TRUE
-       WHERE mapping.parameter_id = $1 AND mapping_set.status IN ('draft', 'published')
-       ORDER BY mapping_set.status, source.source_code, mapping_set.version",
+       LEFT JOIN discrete.import_profiles profile USING (import_profile_id)
+       WHERE mapping.parameter_id = $1
+       GROUP BY source.import_source_id, profile.import_profile_id,
+         source.source_code, profile.profile_code
+       ORDER BY source.source_code, profile.profile_code NULLS FIRST",
       params = list(as.integer(parameter_id))
     )
   } else {
     data.frame()
   }
 
-  flag_count <- if (nrow(mapping_sets) && parameter_unit_relation_exists(con, "discrete", "import_result_flag_mappings")) {
-    set_ids <- unique(as.integer(mapping_sets$import_mapping_set_id))
-    placeholders <- paste0("$", seq_along(set_ids))
+  flag_count <- if (nrow(mapping_scopes) && parameter_unit_relation_exists(con, "discrete", "import_result_flag_mappings")) {
     as.numeric(DBI::dbGetQuery(
       con,
-      paste(
-        "SELECT count(*)::TEXT AS n FROM discrete.import_result_flag_mappings",
-        "WHERE import_mapping_set_id IN (", paste(placeholders, collapse = ", "), ")",
-        "AND result_condition_value_literal IS NOT NULL"
-      ),
-      params = as.list(set_ids)
+      "SELECT count(*)::TEXT AS n
+       FROM discrete.import_result_flag_mappings flag
+       WHERE flag.result_condition_value_literal IS NOT NULL
+         AND EXISTS (
+           SELECT 1 FROM discrete.import_parameter_mappings parameter_mapping
+           WHERE parameter_mapping.parameter_id = $1
+             AND parameter_mapping.import_source_id = flag.import_source_id
+             AND (
+               parameter_mapping.import_profile_id IS NULL
+               OR flag.import_profile_id IS NULL
+               OR parameter_mapping.import_profile_id = flag.import_profile_id
+             )
+         )",
+      params = list(as.integer(parameter_id))
     )$n[[1]])
   } else {
     0
@@ -2937,7 +2928,7 @@ fetch_parameter_unit_usage <- function(con, parameter_id, changed_units, new_val
 
   list(
     usage = usage,
-    mapping_sets = mapping_sets,
+    mapping_scopes = mapping_scopes,
     parameter_refs = parameter_refs,
     timeseries_refs = timeseries_refs,
     state_choices = parameter_unit_matrix_state_choices(con, new_values),
@@ -3182,10 +3173,9 @@ parameter_unit_inventory_signature <- function(usage) {
   jsonlite::toJSON(
     list(
       usage = usage$usage[order(usage$usage$table, usage$usage$matrix_state_code), , drop = FALSE],
-      mapping_sets = usage$mapping_sets[order(
-        usage$mapping_sets$import_source_id,
-        usage$mapping_sets$import_profile_id,
-        usage$mapping_sets$version
+      mapping_scopes = usage$mapping_scopes[order(
+        usage$mapping_scopes$import_source_id,
+        usage$mapping_scopes$import_profile_id
       ), , drop = FALSE],
       parameter_refs = usage$parameter_refs[order(
         usage$parameter_refs$schema_name,
@@ -3205,7 +3195,7 @@ parameter_unit_inventory_signature <- function(usage) {
   )
 }
 
-parameter_unit_apply_migration <- function(con, parameter_id, plan, mapping_sets) {
+parameter_unit_apply_migration <- function(con, parameter_id, plan, mapping_scopes) {
   scale_columns <- c("discrete_a", "continuous_a", "transmission_a", "mapping_a")
   offset_columns <- c("discrete_b", "continuous_b", "transmission_b", "mapping_b")
   if (
@@ -3464,139 +3454,55 @@ parameter_unit_apply_migration <- function(con, parameter_id, plan, mapping_sets
     con, "criteria", "guideline_rule_inputs", parameter_id, plan
   )
 
-  # Draft mappings can be adjusted directly. Published snapshots still need a
-  # revision; unpublished edits must not be included in that publication.
-  if (nrow(mapping_sets)) {
-    if (!exists("import_mapping_prepare_revision", envir = asNamespace("AquaCache"), inherits = FALSE)) {
-      stop("This AquaCache installation cannot create import mapping revisions.")
+  # Mapping definitions are live, so unit changes update the affected rows in
+  # place and retain no revision or draft state.
+  for (row_idx in seq_len(nrow(plan))) {
+    row <- plan[row_idx, , drop = FALSE]
+    if (row$mapping_a[[1]] != 1 || row$mapping_b[[1]] != 0) {
+      DBI::dbExecute(
+        con,
+        "UPDATE discrete.import_parameter_mappings
+         SET conversion = COALESCE(conversion, 1) * $3,
+             result_offset = COALESCE(result_offset, 0) * $3 + $4
+         WHERE parameter_id = $1 AND matrix_state_id = $2",
+        params = list(
+          as.integer(parameter_id), as.integer(row$matrix_state_id[[1]]),
+          as.numeric(row$mapping_a[[1]]), as.numeric(row$mapping_b[[1]])
+        )
+      )
     }
-    prepare_revision <- getFromNamespace("import_mapping_prepare_revision", "AquaCache")
-    publish_revision <- getFromNamespace("import_mapping_publish_revision", "AquaCache")
-    migrate_mapping_set <- function(draft_id) {
-      for (row_idx in seq_len(nrow(plan))) {
-        row <- plan[row_idx, , drop = FALSE]
-        if (row$mapping_a[[1]] != 1 || row$mapping_b[[1]] != 0) {
-          DBI::dbExecute(
-            con,
-            "UPDATE discrete.import_parameter_mappings
-             SET conversion = COALESCE(conversion, 1) * $3,
-                 result_offset = COALESCE(result_offset, 0) * $3 + $4
-             WHERE import_mapping_set_id = $1
-               AND parameter_id = $2
-               AND matrix_state_id = $5",
-            params = list(
-              draft_id, as.integer(parameter_id),
-              as.numeric(row$mapping_a[[1]]), as.numeric(row$mapping_b[[1]]),
-              as.integer(row$matrix_state_id[[1]])
-            )
-          )
-        }
-      }
-      mapping_sources <- unique(as.integer(plan$matrix_state_id))
-      mapping_cases <- character(0)
-      mapping_params <- list(draft_id, as.integer(parameter_id))
-      mapping_source_placeholders <- character(0)
-      for (source_id in mapping_sources) {
-        destination_id <- as.integer(
-          plan$destination_id[match(source_id, plan$matrix_state_id)]
-        )
-        mapping_params <- c(mapping_params, list(source_id, destination_id))
-        source_placeholder <- length(mapping_params) - 1L
-        destination_placeholder <- length(mapping_params)
-        mapping_cases <- c(
-          mapping_cases,
-          sprintf(
-            "WHEN $%d::INTEGER THEN $%d::INTEGER",
-            source_placeholder, destination_placeholder
-          )
-        )
-        mapping_source_placeholders <- c(
-          mapping_source_placeholders,
-          paste0("$", source_placeholder, "::INTEGER")
-        )
-      }
-      if (!all(plan$matrix_state_id == plan$destination_id)) {
-        DBI::dbExecute(
-          con,
-          paste0(
-            "UPDATE discrete.import_parameter_mappings SET matrix_state_id = CASE matrix_state_id ",
-            paste(mapping_cases, collapse = " "),
-            " END WHERE import_mapping_set_id = $1 AND parameter_id = $2 AND matrix_state_id IN (",
-            paste(mapping_source_placeholders, collapse = ", "), ")"
-          ),
-          params = mapping_params
-        )
-      }
-    }
-    draft_sets <- mapping_sets[mapping_sets$status == "draft", , drop = FALSE]
-    for (draft_id in unique(draft_sets$import_mapping_set_id)) {
-      migrate_mapping_set(as.integer(draft_id))
-    }
-
-    mapping_tables <- c(
-      import_parameter_mappings = "import_mapping_id",
-      import_result_flag_mappings = "import_result_flag_mapping_id",
-      import_location_mappings = "import_location_mapping_id"
+  }
+  mapping_sources <- unique(as.integer(plan$matrix_state_id))
+  mapping_cases <- character(0)
+  mapping_params <- list(as.integer(parameter_id))
+  mapping_source_placeholders <- character(0)
+  for (source_id in mapping_sources) {
+    destination_id <- as.integer(
+      plan$destination_id[match(source_id, plan$matrix_state_id)]
     )
-    # Used both when cloning published evidence and when restoring unfinished
-    # work. Let identities and generated analytical keys be rebuilt normally.
-    copy_mapping_rows <- function(table, from_relation, from_id, to_id) {
-      columns <- DBI::dbGetQuery(con,
-        "SELECT column_name FROM information_schema.columns
-         WHERE table_schema = 'discrete' AND table_name = $1
-           AND is_generated = 'NEVER' AND is_identity = 'NO'
-         ORDER BY ordinal_position", params = list(table))$column_name
-      columns <- setdiff(columns, c("import_mapping_set_id", mapping_tables[[table]]))
-      columns_sql <- paste(as.character(DBI::dbQuoteIdentifier(con, columns)), collapse = ", ")
-      target <- as.character(DBI::dbQuoteIdentifier(con, DBI::Id(schema = "discrete", table = table)))
-      DBI::dbExecute(con, sprintf(
-        "INSERT INTO %s (import_mapping_set_id, %s)
-         SELECT $1, %s FROM %s WHERE import_mapping_set_id = $2",
-        target, columns_sql, columns_sql, from_relation), params = list(to_id, from_id))
-    }
-    published_sets <- mapping_sets[mapping_sets$status == "published", , drop = FALSE]
-    for (set_idx in seq_len(nrow(published_sets))) {
-      set <- published_sets[set_idx, , drop = FALSE]
-      source_id <- as.integer(set$import_source_id[[1]])
-      profile_id <- as.integer(set$import_profile_id[[1]])
-      draft_id <- prepare_revision(con, source_id, profile_id)
-      preserve_draft <- !is.na(set$open_draft_id[[1]])
-      if (preserve_draft) {
-        draft_note <- DBI::dbGetQuery(con,
-          "SELECT note FROM discrete.import_mapping_sets WHERE import_mapping_set_id = $1",
-          params = list(draft_id))$note[[1]]
-        # Only one draft is allowed per scope. Save its already-adjusted rows,
-        # publish a clean revision of the published snapshot, then carry the
-        # unfinished work forward into a new draft in this same transaction.
-        for (i in seq_along(mapping_tables)) {
-          table <- names(mapping_tables)[[i]]
-          relation <- as.character(DBI::dbQuoteIdentifier(con, DBI::Id(schema = "discrete", table = table)))
-          temp <- as.character(DBI::dbQuoteIdentifier(con, paste0("parameter_unit_draft_", i)))
-          DBI::dbExecute(con, sprintf(
-            "CREATE TEMP TABLE %s ON COMMIT DROP AS SELECT * FROM %s WHERE import_mapping_set_id = $1",
-            temp, relation), params = list(draft_id))
-          DBI::dbExecute(con, paste("DELETE FROM", relation, "WHERE import_mapping_set_id = $1"),
-            params = list(draft_id))
-          copy_mapping_rows(table, relation, as.integer(set$import_mapping_set_id[[1]]), draft_id)
-        }
-      }
-      migrate_mapping_set(draft_id)
-      publish_revision(con, draft_id)
-      if (preserve_draft) {
-        next_draft <- DBI::dbGetQuery(con,
-          "INSERT INTO discrete.import_mapping_sets
-             (import_source_id, import_profile_id, version, status, note)
-           SELECT $1, $2, COALESCE(max(version), 0) + 1, 'draft', $3
-           FROM discrete.import_mapping_sets
-           WHERE import_source_id = $1 AND import_profile_id IS NOT DISTINCT FROM $2
-           RETURNING import_mapping_set_id", params = list(source_id, profile_id, draft_note))$import_mapping_set_id[[1]]
-        for (i in seq_along(mapping_tables)) {
-          temp <- as.character(DBI::dbQuoteIdentifier(con, paste0("parameter_unit_draft_", i)))
-          copy_mapping_rows(names(mapping_tables)[[i]], temp, draft_id, as.integer(next_draft))
-          DBI::dbExecute(con, paste("DROP TABLE", temp))
-        }
-      }
-    }
+    mapping_params <- c(mapping_params, list(source_id, destination_id))
+    source_placeholder <- length(mapping_params) - 1L
+    destination_placeholder <- length(mapping_params)
+    mapping_cases <- c(
+      mapping_cases,
+      sprintf("WHEN $%d::INTEGER THEN $%d::INTEGER", source_placeholder, destination_placeholder)
+    )
+    mapping_source_placeholders <- c(
+      mapping_source_placeholders,
+      paste0("$", source_placeholder, "::INTEGER")
+    )
+  }
+  if (nrow(mapping_scopes) > 0L && !all(plan$matrix_state_id == plan$destination_id)) {
+    DBI::dbExecute(
+      con,
+      paste0(
+        "UPDATE discrete.import_parameter_mappings SET matrix_state_id = CASE matrix_state_id ",
+        paste(mapping_cases, collapse = " "),
+        " END WHERE parameter_id = $1 AND matrix_state_id IN (",
+        paste(mapping_source_placeholders, collapse = ", "), ")"
+      ),
+      params = mapping_params
+    )
   }
   invisible(TRUE)
 }
@@ -4209,20 +4115,14 @@ manageParameters <- function(id, language) {
       } else {
         list(tags$tr(tags$td(colspan = 4, "No dependent rows were found.")))
       }
-      map_rows <- if (nrow(usage$mapping_sets)) {
-        lapply(seq_len(nrow(usage$mapping_sets)), function(i) {
-          row <- usage$mapping_sets[i, , drop = FALSE]
+      map_rows <- if (nrow(usage$mapping_scopes)) {
+        lapply(seq_len(nrow(usage$mapping_scopes)), function(i) {
+          row <- usage$mapping_scopes[i, , drop = FALSE]
           tags$tr(
             tags$td(row$source_code[[1]]),
-            tags$td(if (is.na(row$import_profile_id[[1]])) "Source-wide" else as.character(row$import_profile_id[[1]])),
-            tags$td(paste0("v", row$version[[1]], " (", row$status[[1]], ")")),
-            tags$td(if (identical(row$status[[1]], "draft")) {
-              "Update draft; keep unpublished"
-            } else if (is.na(row$open_draft_id[[1]])) {
-              "Publish a unit-adjusted revision"
-            } else {
-              "Publish a unit-adjusted revision; carry unfinished edits forward as a draft"
-            })
+            tags$td(if (is.na(row$profile_code[[1]])) "Source-wide" else row$profile_code[[1]]),
+            tags$td(format(row$mapping_count[[1]], big.mark = ",")),
+            tags$td("Update live mapping rows in place")
           )
         })
       } else {
@@ -4304,14 +4204,14 @@ manageParameters <- function(id, language) {
       }
       map_ui <- if (length(map_rows)) {
         tags$div(
-          tags$h4("Import mapping revisions"),
+          tags$h4("Import mappings"),
           tags$p(
-            "Draft mappings will be adjusted and kept unpublished. Published mappings will receive a new revision in the same transaction. If an unfinished draft also exists, its edits will be carried forward into a new unpublished draft."
+            "Current mappings for this parameter will be adjusted in place as part of the unit change."
           ),
           tags$table(
             class = "table table-condensed",
             tags$thead(tags$tr(
-              tags$th("Source"), tags$th("Scope"), tags$th("Current revision"),
+              tags$th("Source"), tags$th("Scope"), tags$th("Mapping rows"),
               tags$th("Action")
             )),
             tags$tbody(map_rows)
@@ -4388,7 +4288,6 @@ manageParameters <- function(id, language) {
                 "criteria.guideline_rule_inputs",
                 "criteria.guideline_value_rules",
                 "criteria.guidelines",
-                "discrete.import_mapping_sets",
                 "discrete.import_location_mappings",
                 "discrete.import_parameter_mappings",
                 "discrete.import_result_flag_mappings",
@@ -4453,7 +4352,7 @@ manageParameters <- function(id, language) {
                 as.character(parameter_unit_inventory_signature(current_usage)),
                 migration$usage_signature
               )) {
-                stop("Affected rows or import mapping revisions changed after the review opened. Reopen the unit-change review.")
+                stop("Affected rows or import mapping scopes changed after the review opened. Reopen the unit-change review.")
               }
               if (length(current_usage$blockers)) {
                 stop(paste(
@@ -4472,10 +4371,10 @@ manageParameters <- function(id, language) {
                   affected_tables = current_usage$usage,
                   parameter_references = current_usage$parameter_refs,
                   timeseries_references = current_usage$timeseries_refs,
-                  mapping_sets = current_usage$mapping_sets[
+                  mapping_scopes = current_usage$mapping_scopes[
                     , intersect(
-                      c("import_mapping_set_id", "source_code", "version", "status"),
-                      names(current_usage$mapping_sets)
+                      c("import_source_id", "import_profile_id", "source_code", "profile_code", "mapping_count"),
+                      names(current_usage$mapping_scopes)
                     ), drop = FALSE
                   ]
                 ),
@@ -4506,7 +4405,7 @@ manageParameters <- function(id, language) {
                 con,
                 as.integer(selected_id),
                 migration$plan,
-                current_usage$mapping_sets
+                current_usage$mapping_scopes
               )
             }
 

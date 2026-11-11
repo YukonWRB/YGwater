@@ -1,11 +1,6 @@
-# Standalone administration of the Patch 65 import catalogue. Uses the existing
-# source/profile mapping scopes and immutable published revisions; no additional
-# storage is needed. Inspection uses SELECT privileges. Every write stages a
-# draft through AquaCache, and publication rechecks the reviewed scope under the
-# same advisory lock as package writers. Shared revision state invalidates open
-# workbook previews so their saved provenance agrees with the imported values.
-# These helpers keep matching criteria and publication review independent of
-# Shiny inputs, so workbook and package-download mappings use the same path.
+# Standalone administration of the source/profile import catalogue. Workbook
+# parsing settings and mappings save directly; import runs retain one compact
+# snapshot of the effective configuration used for each upload.
 importSetup_match_values <- function(text) {
   value <- tryCatch(
     jsonlite::fromJSON(text, simplifyVector = FALSE),
@@ -176,115 +171,6 @@ importSetup_criteria_label <- function(text) {
   paste(paste0(names, " = ", values), collapse = "; ")
 }
 
-importSetup_changes <- function(rows, labels = list()) {
-  fields <- c(
-    parameter_id = "Parameter",
-    result_type = "Result type",
-    sample_fraction_id = "Sample fraction",
-    result_value_type = "Value type",
-    reporting_basis_id = "Reporting basis",
-    result_speciation_id = "Chemical form",
-    result_target_id = "Analytical target",
-    endpoint_mode = "Endpoint method",
-    endpoint_ph = "Endpoint pH",
-    analysis_conditions = "Analysis conditions",
-    matrix_state_id = "Matrix",
-    location_id = "Location",
-    sub_location_id = "Sub-location",
-    active = "Active",
-    conversion = "Conversion multiplier",
-    result_offset = "Offset",
-    priority = "Priority",
-    note = "Note",
-    result_action = "Result handling",
-    result_condition_id = "Result condition"
-  )
-  before <- rows[rows$status == "published", , drop = FALSE]
-  after <- rows[rows$status == "draft", , drop = FALSE]
-  old_key <- paste(before$mapping_type, before$source_match, sep = "\r")
-  new_key <- paste(after$mapping_type, after$source_match, sep = "\r")
-  format_value <- function(value, field) {
-    if (is.null(value)) {
-      return("")
-    }
-    if (is.list(value)) {
-      return(as.character(jsonlite::toJSON(
-        value,
-        auto_unbox = TRUE,
-        null = "null"
-      )))
-    }
-    display <- as.character(value)
-    lookup <- labels[[field]]
-    if (
-      !is.null(lookup) && length(display) == 1L && display %in% names(lookup)
-    ) {
-      return(paste0(unname(lookup[[display]]), " [", display, "]"))
-    }
-    paste(display, collapse = ", ")
-  }
-  changes <- list()
-  for (key in union(old_key, new_key)) {
-    old <- match(key, old_key)
-    new <- match(key, new_key)
-    old_def <- if (!is.na(old)) {
-      jsonlite::fromJSON(before$definition[[old]], simplifyVector = FALSE)
-    } else {
-      list()
-    }
-    new_def <- if (!is.na(new)) {
-      jsonlite::fromJSON(after$definition[[new]], simplifyVector = FALSE)
-    } else {
-      list()
-    }
-    row <- if (!is.na(new)) {
-      after[new, , drop = FALSE]
-    } else {
-      before[old, , drop = FALSE]
-    }
-    for (field in setdiff(
-      union(names(old_def), names(new_def)),
-      c("source_match", "analysis_conditions_key")
-    )) {
-      old_value <- format_value(old_def[[field]], field)
-      new_value <- format_value(new_def[[field]], field)
-      if (identical(old_def[[field]], new_def[[field]])) {
-        next
-      }
-      changes[[length(changes) + 1L]] <- data.frame(
-        Type = row$mapping_type,
-        Criteria = importSetup_criteria_label(row$source_match),
-        Change = if (is.na(old)) {
-          "New mapping"
-        } else if (is.na(new)) {
-          "Removed mapping"
-        } else {
-          "Changed"
-        },
-        Field = if (field %in% names(fields)) {
-          unname(fields[[field]])
-        } else {
-          gsub("_", " ", field)
-        },
-        Before = old_value,
-        After = new_value,
-        check.names = FALSE
-      )
-    }
-  }
-  if (!length(changes)) {
-    return(data.frame(
-      Type = character(),
-      Criteria = character(),
-      Change = character(),
-      Field = character(),
-      Before = character(),
-      After = character()
-    ))
-  }
-  as.data.frame(data.table::rbindlist(changes))
-}
-
 # Suggest cell locations only. Parameter meaning, units, ownership and laboratory
 # assignments still require review. Original worksheet labels are retained.
 importSetup_suggest_layout <- function(raw) {
@@ -298,7 +184,9 @@ importSetup_suggest_layout <- function(raw) {
       "client sample id",
       "sampling point",
       "samplingpoint",
-      "location"
+      "location",
+      "site id",
+      "id"
     ),
     sample_date = c(
       "smpl_collectdate",
@@ -306,7 +194,8 @@ importSetup_suggest_layout <- function(raw) {
       "sample collect date",
       "sampleddate",
       "date sampled",
-      "date/time"
+      "date/time",
+      "datetime"
     ),
     sample_time = c(
       "smpl_collecttime",
@@ -319,7 +208,8 @@ importSetup_suggest_layout <- function(raw) {
       "lab sample #",
       "als sample id",
       "lab sample id",
-      "sample id"
+      "sample id",
+      "id"
     ),
     lab_report_no = c(
       "lab_report_#",
@@ -484,13 +374,49 @@ importSetup_suggest_layout <- function(raw) {
   )
 }
 
+importSetup_parse_result_text_values <- function(text) {
+  if (is.null(text) || !length(text) || is.na(text[[1]])) {
+    return(list())
+  }
+  lines <- trimws(unlist(strsplit(as.character(text[[1]]), "\\r?\\n")))
+  lines <- lines[nzchar(lines)]
+  if (!length(lines)) {
+    return(list())
+  }
+
+  labels <- values <- character(length(lines))
+  for (i in seq_along(lines)) {
+    pieces <- strsplit(lines[[i]], "=", fixed = TRUE)[[1]]
+    if (length(pieces) != 2L) {
+      stop(
+        "Enter one text result mapping per line in the form Label = number.",
+        call. = FALSE
+      )
+    }
+    labels[[i]] <- trimws(pieces[[1]])
+    values[[i]] <- trimws(pieces[[2]])
+  }
+  numbers <- suppressWarnings(as.numeric(values))
+  if (
+    any(!nzchar(labels)) ||
+      anyDuplicated(tolower(labels)) ||
+      any(!is.finite(numbers))
+  ) {
+    stop(
+      "Text result mappings need unique labels and finite numeric values.",
+      call. = FALSE
+    )
+  }
+  stats::setNames(as.list(numbers), labels)
+}
+
 importSetupUI <- function(id) {
   ns <- NS(id)
   page_fluid(
     YGwater:::shiny_ui_ready(ns("ui_ready")),
     tags$h3("Import setup manager"),
     helpText(
-      "Create a workbook format from an example file, then map its analytes and locations. Layout settings save immediately and affect future previews. Mapping changes are saved as drafts and become active when you publish them."
+      "Create a workbook format from an example file, then map its analytes and locations. Parsing settings and mappings save directly and affect new previews and imports."
     ),
     uiOutput(ns("banner")),
     actionButton(ns("refresh_setup"), "Refresh saved setups"),
@@ -500,13 +426,12 @@ importSetupUI <- function(id) {
         "Mapping overview",
         value = "overview",
         helpText(
-          "Review saved mappings across all sources and formats. Published revisions are in use; drafts are not used until you publish their full source or workbook-format scope. Published issues can cause results to be omitted, and draft issues must be fixed before publication. Retired revisions are preserved as history.",
-          "With 'Needs attention only' selected, a published issue remains listed until its draft is published. Choose Revision: Draft to inspect saved draft mappings."
+          "Review the current mappings across sources and workbook formats. Changes save immediately and apply to new previews and imports. Earlier mapping values remain available in the audit history."
         ),
         uiOutput(ns("review_summary")),
         fluidRow(
           column(
-            4,
+            6,
             selectizeInput(
               ns("review_source"),
               "Source",
@@ -514,20 +439,7 @@ importSetupUI <- function(id) {
             )
           ),
           column(
-            4,
-            selectInput(
-              ns("review_state"),
-              "Revision",
-              c(
-                "Current published and draft" = "current",
-                "Published" = "published",
-                "Draft" = "draft",
-                "All revisions, including retired" = "history"
-              )
-            )
-          ),
-          column(
-            4,
+            6,
             selectInput(
               ns("review_kind"),
               "Mapping type",
@@ -549,14 +461,14 @@ importSetupUI <- function(id) {
         DT::DTOutput(ns("mapping_review")),
         actionButton(ns("open_review_mapping"), "Edit selected mapping"),
         helpText(
-          "Select a row above to open its saved definition in the editor. Saving creates or updates a draft; it does not change the published mapping."
+          "Select a row above to edit its saved definition. Saving updates the mapping immediately; open workbook previews must be refreshed before upload."
         )
       ),
       tabPanel(
         "Formats and mappings",
         value = "editor",
         helpText(
-          "Editing a published mapping creates a draft copy of its scope, including the unchanged mappings. Saving the draft does not change imports. Publishing makes the complete draft active and keeps the previous revision as read-only history. Shared source mappings apply to all its formats and can be used by package imports; format-specific mappings override them. Preview open workbooks again after publication."
+          "Edit mappings and workbook parsing settings directly. Shared source mappings apply to all its formats and can be used by package imports; format-specific mappings override them. Saved changes apply to new previews and imports. Preview open workbooks again after editing."
         ),
         uiOutput(ns("editing_mapping")),
         fluidRow(
@@ -564,18 +476,22 @@ importSetupUI <- function(id) {
             6,
             selectizeInput(ns("manage_source"), "Source", choices = NULL)
           ),
-          column(6, actionButton(ns("new_source"), "Create source"))
+          column(6, actionButton(ns("new_source"), "Create new source"))
+        ),
+
+        selectizeInput(
+          ns("manage_import_profile"),
+          label = tooltip(
+            trigger = list(
+              "Workbook format (optional)",
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            "Leave the workbook format blank to edit source-wide mappings. Otherwise mappings override source-wide mappings for that format."
+          ),
+          choices = NULL,
+          options = list(placeholder = "Source-wide mappings")
         ),
         fluidRow(
-          column(
-            6,
-            selectizeInput(
-              ns("manage_import_profile"),
-              "Workbook format (optional)",
-              choices = NULL,
-              options = list(placeholder = "Source-wide mappings")
-            )
-          ),
           column(
             4,
             tags$div(
@@ -607,9 +523,7 @@ importSetupUI <- function(id) {
             )
           )
         ),
-        helpText(
-          "Leave the workbook format blank to work with source-wide mappings. Choose a format to work with mappings for that workbook; those mappings override source-wide mappings for the format."
-        ),
+        br(),
         uiOutput(ns("manage_import_profile_status")),
         fluidRow(
           column(
@@ -626,10 +540,13 @@ importSetupUI <- function(id) {
           ),
           column(
             4,
-            checkboxInput(
-              ns("manage_show_inactive"),
-              "Include inactive mappings",
-              value = TRUE
+            tags$div(
+              style = "padding-top: 25px;",
+              checkboxInput(
+                ns("manage_show_inactive"),
+                "Include inactive mappings",
+                value = TRUE
+              )
             )
           ),
           column(
@@ -667,13 +584,28 @@ importSetupUI <- function(id) {
                   6,
                   textInput(
                     ns("manage_source_code"),
-                    "Source parameter code or name"
+                    label = tooltip(
+                      trigger = list(
+                        "Source parameter code or name",
+                        bsicons::bs_icon("info-circle-fill")
+                      ),
+                      "Use the source code or name exactly as reported."
+                    )
                   )
                 ),
-                column(6, textInput(ns("manage_source_unit"), "Source unit"))
-              ),
-              helpText(
-                "Use the source code/name and unit exactly as reported. Leave the unit empty only when the source supplies none. EQWin and ECCC identifiers can also be used by workbook formats for this source."
+                column(
+                  6,
+                  textInput(
+                    ns("manage_source_unit"),
+                    label = tooltip(
+                      trigger = list(
+                        "Source unit",
+                        bsicons::bs_icon("info-circle-fill")
+                      ),
+                      "Use the source unit exactly as reported. Leave it empty only when the source supplies none."
+                    )
+                  )
+                )
               )
             ),
             conditionalPanel(
@@ -773,9 +705,6 @@ importSetupUI <- function(id) {
               )
             ),
             uiOutput(ns("manage_chemistry")),
-            helpText(
-              "Each analytical dimension is independently required by the selected parameter."
-            ),
             fluidRow(
               column(
                 3,
@@ -794,25 +723,32 @@ importSetupUI <- function(id) {
                 )
               ),
               column(
-                3,
-                checkboxInput(
-                  ns("manage_active"),
-                  "Include this mapping",
-                  value = TRUE
+                6,
+                textAreaInput(
+                  ns("manage_mapping_note"),
+                  "Mapping note",
+                  rows = 2,
+                  placeholder = "Optional note to describe this mapping, rationale for creating it, or other information for future reference.",
+                  width = "100%"
                 )
               )
             ),
-            textAreaInput(
-              ns("manage_mapping_note"),
-              "Mapping note",
-              rows = 2
-            ),
-            helpText(
-              "Included mappings will be used when their revision is published. To stop using a mapping, clear Include this mapping, save the draft, then publish it."
-            ),
-            actionButton(
-              ns("manage_save_parameter_mapping"),
-              "Save parameter mapping as draft"
+            fluidRow(
+              column(
+                2,
+                checkboxInput(
+                  ns("manage_active"),
+                  "Active",
+                  value = TRUE
+                )
+              ),
+              column(
+                3,
+                actionButton(
+                  ns("manage_save_parameter_mapping"),
+                  "Save parameter mapping"
+                )
+              )
             )
           )
         ),
@@ -890,7 +826,7 @@ importSetupUI <- function(id) {
             ),
             actionButton(
               ns("manage_save_location_mapping"),
-              "Save location mapping as draft"
+              "Save location mapping"
             )
           )
         ),
@@ -996,32 +932,12 @@ importSetupUI <- function(id) {
             textAreaInput(ns("manage_flag_note"), "Mapping note", rows = 2),
             actionButton(
               ns("manage_save_flag_mapping"),
-              "Save result-flag mapping as draft"
+              "Save result-flag mapping"
             )
           )
         ),
         tags$hr(),
-        tags$div(
-          class = "well",
-          tags$h4("Apply saved changes"),
-          uiOutput(ns("mapping_publication_status")),
-          selectInput(
-            ns("manage_publish_scope"),
-            "Draft scope to publish",
-            choices = c(
-              "Source-wide (AquaCache package downloads)" = "source",
-              "This workbook format" = "profile"
-            )
-          ),
-          helpText(
-            "This defaults to the scope you are editing. Publishing applies every draft mapping in the selected scope; drafts in other scopes remain unchanged."
-          ),
-          actionButton(
-            ns("manage_publish_mappings"),
-            "Review and publish selected scope",
-            class = "btn-primary"
-          )
-        )
+        uiOutput(ns("mapping_status"))
       )
     )
   )
@@ -1038,7 +954,6 @@ importSetup <- function(id, language) {
     pending_open <- reactiveVal(NULL)
     opened_review_mapping <- reactiveVal(NULL)
     pending_profile_selection <- reactiveVal(NULL)
-    pending_publication <- reactiveVal(NULL)
     if (is.null(session$userData$import_setup_revision)) {
       session$userData$import_setup_revision <- reactiveVal(0L)
     }
@@ -1057,7 +972,6 @@ importSetup <- function(id, language) {
     new_profile_mode <- reactiveVal("create")
     new_profile_suggestion <- reactiveVal(NULL)
     new_profile_trial <- reactiveVal(NULL)
-    retired_mapping <- reactiveVal(NULL)
     manage_mapping_selected <- reactiveVal(NULL)
     manager_selection_from_review <- reactiveVal(NULL)
     manage_mapping_error <- reactiveVal(NULL)
@@ -1186,8 +1100,6 @@ importSetup <- function(id, language) {
         "SELECT
            has_table_privilege(current_user, 'discrete.import_sources', 'INSERT')
              AND has_table_privilege(current_user, 'discrete.import_sources', 'UPDATE')
-             AND has_table_privilege(current_user, 'discrete.import_mapping_sets', 'INSERT')
-             AND has_table_privilege(current_user, 'discrete.import_mapping_sets', 'UPDATE')
              AND has_table_privilege(current_user, 'discrete.import_parameter_mappings', 'INSERT')
              AND has_table_privilege(current_user, 'discrete.import_parameter_mappings', 'UPDATE')
              AND has_table_privilege(current_user, 'discrete.import_location_mappings', 'INSERT')
@@ -1196,7 +1108,17 @@ importSetup <- function(id, language) {
              AND has_table_privilege(current_user, 'discrete.import_result_flag_mappings', 'UPDATE')
              AND has_sequence_privilege(
                current_user,
-               pg_get_serial_sequence('discrete.import_mapping_sets', 'import_mapping_set_id'),
+               pg_get_serial_sequence('discrete.import_parameter_mappings', 'import_mapping_id'),
+               'USAGE'
+             )
+             AND has_sequence_privilege(
+               current_user,
+               pg_get_serial_sequence('discrete.import_location_mappings', 'import_location_mapping_id'),
+               'USAGE'
+             )
+             AND has_sequence_privilege(
+               current_user,
+               pg_get_serial_sequence('discrete.import_result_flag_mappings', 'import_result_flag_mapping_id'),
                'USAGE'
              )
              AND has_sequence_privilege(
@@ -1299,7 +1221,7 @@ importSetup <- function(id, language) {
       shinyjs::runjs(script)
       invisible(index)
     }
-    # Catalogue choices do not change when a mapping draft is saved. Reloading
+    # Catalogue choices do not change when mappings are saved. Reloading
     # them would reset the editor and discard an asynchronously loaded selection.
     params <- reactive({
       dbGetQueryDT(
@@ -1530,7 +1452,12 @@ importSetup <- function(id, language) {
         error = function(e) profile_load_error(conditionMessage(e))
       )
     }
-    observeEvent(input$ui_ready, reload_profiles(), once = TRUE, ignoreInit = TRUE)
+    observeEvent(
+      input$ui_ready,
+      reload_profiles(),
+      once = TRUE,
+      ignoreInit = TRUE
+    )
     observeEvent(input$manage_source, {
       if (is.null(pending_open())) {
         opened_review_mapping(NULL)
@@ -1568,31 +1495,10 @@ importSetup <- function(id, language) {
           ""
         ))
         mapping_scope_choices <- c("Source-wide / package downloads" = "source")
-        publish_scope_choices <- c(
-          "Source-wide (AquaCache package downloads)" = "source"
-        )
         if (has_profile) {
           mapping_scope_choices <- c(
             mapping_scope_choices,
             "This workbook format" = "profile"
-          )
-          profiles <- import_profiles()
-          selected_profile <- profiles[
-            profiles$profile_key == input$manage_import_profile,
-            ,
-            drop = FALSE
-          ]
-          profile_name <- if (nrow(selected_profile) == 1L) {
-            selected_profile$profile_name[[1]]
-          } else {
-            "Selected format"
-          }
-          publish_scope_choices <- c(
-            publish_scope_choices,
-            stats::setNames(
-              "profile",
-              paste0("Workbook format: ", profile_name)
-            )
           )
         }
         for (id in c(
@@ -1607,51 +1513,27 @@ importSetup <- function(id, language) {
             selected = if (has_profile) "profile" else "source"
           )
         }
-        updateSelectInput(
-          session,
-          "manage_publish_scope",
-          choices = publish_scope_choices,
-          selected = if (has_profile) "profile" else "source"
-        )
       },
       ignoreNULL = FALSE
     )
     observeEvent(
       input$manage_mapping_scope,
       {
-        scope <- addDiscData_first(input$manage_mapping_scope, "")
-        if (
-          identical(input$manage_mapping_type, "parameter") &&
-            scope %in% c("source", "profile")
-        ) {
-          updateSelectInput(session, "manage_publish_scope", selected = scope)
-        }
+        clear_manager_mapping_selection()
       },
       ignoreInit = TRUE
     )
     observeEvent(
       input$manage_location_scope,
       {
-        scope <- addDiscData_first(input$manage_location_scope, "")
-        if (
-          identical(input$manage_mapping_type, "location") &&
-            scope %in% c("source", "profile")
-        ) {
-          updateSelectInput(session, "manage_publish_scope", selected = scope)
-        }
+        clear_manager_mapping_selection()
       },
       ignoreInit = TRUE
     )
     observeEvent(
       input$manage_flag_scope,
       {
-        scope <- addDiscData_first(input$manage_flag_scope, "")
-        if (
-          identical(input$manage_mapping_type, "result_flag") &&
-            scope %in% c("source", "profile")
-        ) {
-          updateSelectInput(session, "manage_publish_scope", selected = scope)
-        }
+        clear_manager_mapping_selection()
       },
       ignoreInit = TRUE
     )
@@ -1673,7 +1555,7 @@ importSetup <- function(id, language) {
             class = "alert alert-info",
             tags$strong("No mapping selected."),
             tags$p(
-              "Select a saved mapping in the table below, or choose Create mapping. Saving stages a draft; publication is a separate review step."
+              "Select a saved mapping in the table below, or choose Create mapping. Saving updates it immediately."
             )
           ))
         }
@@ -1690,7 +1572,9 @@ importSetup <- function(id, language) {
             },
             context$mapping_type[[1]]
           )),
-          if (nzchar(issue)) tags$p(tags$strong("Needs attention: "), issue)
+          if (nzchar(context_issue)) {
+            tags$p(tags$strong("Needs attention: "), context_issue)
+          }
         ))
       }
       id_field <- switch(
@@ -1700,26 +1584,24 @@ importSetup <- function(id, language) {
         result_flag = "import_result_flag_mapping_id"
       )
       mapping_id <- row[[id_field]][[1]]
-      status <- row$mapping_set_status[[1]]
-      version <- row$mapping_set_version[[1]]
+      status <- if (isTRUE(row$active[[1]])) "Active" else "Inactive"
       current_rows <- review_rows()
       current_issue <- ""
-      current_review_checked <- FALSE
       if (!inherits(current_rows, "error") && nrow(current_rows)) {
         same_scope <- current_rows$source_code == row$source_code[[1]] &
           current_rows$mapping_type == input$manage_mapping_type &
           current_rows$import_mapping_id == mapping_id
         if ("profile_code" %in% names(row)) {
-          same_scope <- same_scope & if (is.na(row$profile_code[[1]])) {
-            is.na(current_rows$profile_code)
-          } else {
-            !is.na(current_rows$profile_code) &
-              current_rows$profile_code == row$profile_code[[1]]
-          }
+          same_scope <- same_scope &
+            if (is.na(row$profile_code[[1]])) {
+              is.na(current_rows$profile_code)
+            } else {
+              !is.na(current_rows$profile_code) &
+                current_rows$profile_code == row$profile_code[[1]]
+            }
         }
         current_match <- which(same_scope)
         if (length(current_match) == 1L) {
-          current_review_checked <- TRUE
           value <- current_rows$issue[[current_match]]
           if (!is.na(value)) current_issue <- trimws(as.character(value))
         }
@@ -1733,15 +1615,12 @@ importSetup <- function(id, language) {
             context$profile_code[[1]]
           )
         }
-        save_note <- if (identical(status, "published")) {
-          "Saving your changes stages them in a draft. The published mapping stays in use until you review and publish the whole scope."
-        } else {
-          "Saving updates the draft. It remains unpublished until you review and publish the whole scope."
-        }
-        opened_different_revision <-
-          !identical(as.character(context$import_mapping_id[[1]]), as.character(mapping_id)) ||
-          !identical(as.character(context$status[[1]]), as.character(status)) ||
-          !identical(as.character(context$version[[1]]), as.character(version))
+        save_note <- "Saving updates this mapping immediately. New uploads record the configuration used when they run."
+        opened_different_mapping <-
+          !identical(
+            as.character(context$import_mapping_id[[1]]),
+            as.character(mapping_id)
+          )
         return(tags$div(
           class = if (nzchar(current_issue) || nzchar(context_issue)) {
             "alert alert-warning"
@@ -1754,38 +1633,12 @@ importSetup <- function(id, language) {
             input$manage_mapping_type,
             mapping_id
           )),
-          tags$p(sprintf(
-            "%s | %s | revision %s",
-            row$source_code[[1]],
-            scope,
-            version
-          )),
-          if (opened_different_revision) {
-            tags$p(
-              "Opened from ",
-              context$status[[1]],
-              " mapping ",
-              context$import_mapping_id[[1]],
-              " (revision ",
-              context$version[[1]],
-              ").",
-              if (nzchar(context_issue)) {
-                paste("It needs attention:", context_issue)
-              }
-            )
+          tags$p(sprintf("%s | %s", row$source_code[[1]], scope)),
+          if (opened_different_mapping) {
+            tags$p("The selected row now points to a different saved mapping.")
           },
           if (nzchar(current_issue)) {
             tags$p(tags$strong("This mapping needs attention: "), current_issue)
-          } else if (
-            opened_different_revision &&
-              identical(status, "draft") &&
-              identical(context$status[[1]], "published") &&
-              nzchar(context_issue) &&
-              current_review_checked
-          ) {
-            tags$p(
-              "The selected draft mapping has no current validation issue; the issue above belongs to the published revision."
-            )
           },
           tags$p(
             tags$strong("Match these source values: "),
@@ -1794,11 +1647,7 @@ importSetup <- function(id, language) {
           tags$p(save_note)
         ))
       }
-      save_note <- if (identical(status, "published")) {
-        "Saving stages your change in a draft. This published revision stays unchanged until you review and publish the scope."
-      } else {
-        "Saving updates this draft. It remains unpublished until you review and publish the scope."
-      }
+      save_note <- "Saving updates this mapping immediately. New uploads record the configuration used when they run."
       tags$div(
         class = "alert alert-info",
         tags$strong(sprintf(
@@ -1806,7 +1655,7 @@ importSetup <- function(id, language) {
           input$manage_mapping_type,
           mapping_id
         )),
-        tags$p(sprintf("%s revision %s", status, row$mapping_set_version[[1]])),
+        tags$p(status),
         tags$p(save_note)
       )
     })
@@ -1993,9 +1842,17 @@ importSetup <- function(id, language) {
         input,
         input$new_profile_parser_family
       )))
-      profile$validation_rules <- I(list(list(
-        parser_family = input$new_profile_parser_family
-      )))
+      validation_rules <- addDiscData_profile_value(
+        profile,
+        "validation_rules",
+        list()
+      )
+      validation_rules$parser_family <- input$new_profile_parser_family
+      validation_rules$result_text_values <-
+        importSetup_parse_result_text_values(
+          input$new_profile_result_text_values
+        )
+      profile$validation_rules <- I(list(validation_rules))
       profile
     }
     observeEvent(input$test_profile_layout, {
@@ -2212,7 +2069,7 @@ importSetup <- function(id, language) {
           if (identical(parser_family, "transposed")) {
             "Enter the worksheet row number (starting at 1) for each sample detail and the first analyte/result row. Enter the worksheet column number (starting at 1) for the parameter name, code, unit, and first sample."
           } else {
-            "Choose headings from the example worksheet, or type a heading when no example is selected. Optional fields can be left blank."
+            "Choose headings from the example worksheet, or type a heading when no example is uploaded above. Optional fields can be left blank."
           }
         ),
         do.call(fluidRow, fields),
@@ -2228,12 +2085,45 @@ importSetup <- function(id, language) {
               selected = unlist(column_map$match_columns, use.names = FALSE),
               multiple = TRUE,
               options = list(create = TRUE)
-            ),
-            helpText(
-              "Retain source fields needed to distinguish results, such as report group, descriptor, sample fraction, chemical form, or result type. Mapping conditions can use any combination of these fields. They are kept as source values and do not automatically set AquaCache metadata."
             )
+            # helpText(
+            #   "Retain source fields needed to distinguish results, such as report group, descriptor, sample fraction, chemical form, or result type. Mapping conditions can use any combination of these fields. They are kept as source values and do not automatically set AquaCache metadata."
+            # )
           )
         }
+      )
+    })
+    output$new_profile_result_text_values <- renderUI({
+      profile <- new_profile_template()
+      rules <- addDiscData_profile_value(
+        profile,
+        "validation_rules",
+        list()
+      )
+      values <- rules$result_text_values
+      value <- if (length(values)) {
+        paste(
+          paste(names(values), unlist(values, use.names = FALSE), sep = " = "),
+          collapse = "\n"
+        )
+      } else {
+        ""
+      }
+      tagList(
+        textAreaInput(
+          ns("new_profile_result_text_values"),
+          label = tooltip(
+            trigger = list(
+              "Text result values mapped to numbers",
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            "Optional. Enter one source label and number per line, no commas. Matching ignores case and surrounding spaces.",
+          ),
+          value = value,
+          rows = 4,
+          width = "100%",
+          placeholder = "Absent = 0\nPresent = 1"
+        )
       )
     })
     output$new_profile_default_fields <- renderUI({
@@ -2246,7 +2136,7 @@ importSetup <- function(id, language) {
       tagList(
         tags$h5("Imported data defaults"),
         helpText(
-          "These values fill fields that are not supplied by the workbook. They remain editable in the preview."
+          "These values fill fields if they are not supplied by the workbook. They remain editable in the preview."
         ),
         fluidRow(
           column(
@@ -2481,11 +2371,15 @@ importSetup <- function(id, language) {
         tags$h5("2. Check an example workbook"),
         fileInput(
           ns("new_profile_example_file"),
-          "Example workbook (optional)",
-          accept = c(".xls", ".xlsx")
-        ),
-        helpText(
-          "The example is used to choose worksheet fields and test this format. Sample data is only saved when you upload it from Add discrete data."
+          label = tooltip(
+            trigger = list(
+              "Example workbook",
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            "Used to help choose worksheet fields and test this format. Data is only saved when you upload it from Add discrete data."
+          ),
+          accept = c(".xls", ".xlsx"),
+          placeholder = "Optional"
         ),
         fluidRow(
           column(
@@ -2569,6 +2463,7 @@ importSetup <- function(id, language) {
           )
         ),
         uiOutput(ns("new_profile_mapping_fields")),
+        uiOutput(ns("new_profile_result_text_values")),
         uiOutput(ns("new_profile_default_fields")),
         tags$h5("4. Check the parsed samples and results"),
         actionButton(ns("test_profile_layout"), "Preview parsed rows"),
@@ -2581,7 +2476,9 @@ importSetup <- function(id, language) {
             profile,
             "profile_description",
             ""
-          )
+          ),
+          width = "100%",
+          height = "80px"
         ),
         footer = tagList(
           modalButton("Cancel"),
@@ -2767,6 +2664,16 @@ importSetup <- function(id, language) {
             list()
           )
           validation_rules$parser_family <- parser_family
+          result_text_values <- importSetup_parse_result_text_values(
+            input$new_profile_result_text_values
+          )
+          validation_rules$result_text_values <- if (
+            length(result_text_values)
+          ) {
+            result_text_values
+          } else {
+            NULL
+          }
           if (!is.null(input$new_profile_example_file)) {
             parsed <- addDiscData_parse_upload(
               input$new_profile_example_file$datapath,
@@ -3010,7 +2917,7 @@ importSetup <- function(id, language) {
           collapse = "; "
         ),
         tags$p(
-          "Complete or deactivate these mappings in the draft before publishing. Imports skip incomplete mappings."
+          "Complete active mappings or deactivate them with a note. Imports skip incomplete mappings."
         )
       )
     })
@@ -3173,8 +3080,7 @@ importSetup <- function(id, language) {
               } else {
                 profile$profile_code[[1]]
               },
-              active = NULL,
-              include_draft = TRUE
+              active = NULL
             ),
             location = AquaCache::getImportLocationMappings(
               con,
@@ -3184,8 +3090,7 @@ importSetup <- function(id, language) {
               } else {
                 profile$profile_code[[1]]
               },
-              active = NULL,
-              include_draft = TRUE
+              active = NULL
             ),
             result_flag = AquaCache::getImportResultFlagMappings(
               con,
@@ -3195,8 +3100,7 @@ importSetup <- function(id, language) {
               } else {
                 profile$profile_code[[1]]
               },
-              active = NULL,
-              include_draft = TRUE
+              active = NULL
             ),
             data.frame()
           )
@@ -3302,19 +3206,6 @@ importSetup <- function(id, language) {
             check.names = FALSE
           )
         }
-        revision_state <- ifelse(
-          rows$mapping_set_status == "published",
-          "Published (in use)",
-          ifelse(
-            rows$mapping_set_status == "draft",
-            "Draft (not applied)",
-            "Retired (history)"
-          )
-        )
-        summary$Revision <- paste(
-          revision_state,
-          paste0("v", rows$mapping_set_version)
-        )
         summary[is.na(summary)] <- ""
         addDiscData_style_origin_columns(
           DT::datatable(
@@ -3373,16 +3264,6 @@ importSetup <- function(id, language) {
           opened_review_mapping(NULL)
         }
         clear_manager_mapping_selection()
-        scope_input <- switch(
-          input$manage_mapping_type,
-          parameter = "manage_mapping_scope",
-          location = "manage_location_scope",
-          result_flag = "manage_flag_scope"
-        )
-        scope <- addDiscData_first(input[[scope_input]], "")
-        if (scope %in% c("source", "profile")) {
-          updateSelectInput(session, "manage_publish_scope", selected = scope)
-        }
       },
       ignoreInit = TRUE
     )
@@ -3795,22 +3676,19 @@ importSetup <- function(id, language) {
             con,
             source_code = profile$source_code[[1]],
             profile_code = profile_code,
-            active = NULL,
-            include_draft = TRUE
+            active = NULL
           ),
           location = AquaCache::getImportLocationMappings(
             con,
             source_code = profile$source_code[[1]],
             profile_code = profile_code,
-            active = NULL,
-            include_draft = TRUE
+            active = NULL
           ),
           result_flag = AquaCache::getImportResultFlagMappings(
             con,
             source_code = profile$source_code[[1]],
             profile_code = profile_code,
-            active = NULL,
-            include_draft = TRUE
+            active = NULL
           )
         )
         if (!is.null(selected)) {
@@ -3965,7 +3843,7 @@ importSetup <- function(id, language) {
               check.names = FALSE
             ),
             match_columns = names(criteria),
-            publish = FALSE
+            publish = TRUE
           )
         } else if (identical(kind, "location")) {
           location_code <- trimws(addDiscData_first(
@@ -4033,7 +3911,7 @@ importSetup <- function(id, language) {
               ),
               stringsAsFactors = FALSE
             ),
-            publish = FALSE
+            publish = TRUE
           )
         } else {
           flag_value <- trimws(addDiscData_first(input$manage_flag_value, ""))
@@ -4115,7 +3993,7 @@ importSetup <- function(id, language) {
               note = addDiscData_first(input$manage_flag_note, NA_character_),
               stringsAsFactors = FALSE
             ),
-            publish = FALSE
+            publish = TRUE
           )
         }
       })
@@ -4135,11 +4013,11 @@ importSetup <- function(id, language) {
           opened_review_mapping(NULL)
           showNotification(
             paste0(
-              "Parameter mapping saved as a draft for ",
+              "Parameter mapping saved for ",
               saved$source,
               " (",
               saved$scope,
-              "). It is not active yet. Next: click 'Review and publish selected scope'."
+              "). It applies to new previews and imports."
             ),
             type = "message"
           )
@@ -4160,11 +4038,11 @@ importSetup <- function(id, language) {
           opened_review_mapping(NULL)
           showNotification(
             paste0(
-              "Location mapping saved as a draft for ",
+              "Location mapping saved for ",
               saved$source,
               " (",
               saved$scope,
-              "). It is not active yet. Next: click 'Review and publish selected scope'."
+              "). It applies to new previews and imports."
             ),
             type = "message"
           )
@@ -4185,11 +4063,11 @@ importSetup <- function(id, language) {
           opened_review_mapping(NULL)
           showNotification(
             paste0(
-              "Result-flag mapping saved as a draft for ",
+              "Result-flag mapping saved for ",
               saved$source,
               " (",
               saved$scope,
-              "). It is not active yet. Next: click 'Review and publish selected scope'."
+              "). It applies to new previews and imports."
             ),
             type = "message"
           )
@@ -4207,191 +4085,67 @@ importSetup <- function(id, language) {
     review_rows <- reactive({
       mapping_revision()
       tryCatch(
-        AquaCache::getImportMappingReview(
-          con,
-          include_history = identical(input$review_state, "history")
-        ),
+        AquaCache::getImportMappingReview(con),
         error = function(e) e
       )
     })
-    observe({
-      profile <- tryCatch(selected_manage_profile(), error = function(e) NULL)
-      rows <- review_rows()
-      can_publish <- FALSE
-      scope <- addDiscData_first(input$manage_publish_scope, "source")
-      if (
-        can_manage_mappings &&
-          !is.null(profile) &&
-          nrow(profile) == 1L &&
-          !inherits(rows, "error") &&
-          scope %in% c("source", "profile")
-      ) {
-        profile_code <- if (identical(scope, "profile")) {
-          profile$profile_code[[1]]
-        } else {
-          NA_character_
-        }
-        if (
-          !identical(scope, "profile") ||
-            (!is.na(profile_code) && nzchar(profile_code))
-        ) {
-          in_scope <- rows$source_code == profile$source_code[[1]]
-          in_scope <- in_scope &
-            if (is.na(profile_code)) {
-              is.na(rows$profile_code)
-            } else {
-              !is.na(rows$profile_code) & rows$profile_code == profile_code
-            }
-          can_publish <- any(in_scope & rows$status == "draft")
-        }
-      }
-      if (can_publish) {
-        shinyjs::enable("manage_publish_mappings")
-      } else {
-        shinyjs::disable("manage_publish_mappings")
-      }
-    })
-    output$mapping_publication_status <- renderUI({
+    output$mapping_status <- renderUI({
       profile <- tryCatch(selected_manage_profile(), error = function(e) NULL)
       if (is.null(profile) || !nrow(profile)) {
         return(tags$div(
           class = "alert alert-info",
-          "Select an import source to see its saved drafts."
+          "Select an import source to see its saved mappings."
         ))
-      }
-      scope <- addDiscData_first(input$manage_publish_scope, "source")
-      profile_code <- if (identical(scope, "profile")) {
-        profile$profile_code[[1]]
-      } else {
-        NA_character_
-      }
-      if (
-        identical(scope, "profile") &&
-          (is.na(profile_code) || !nzchar(profile_code))
-      ) {
-        return(tags$div(
-          class = "alert alert-info",
-          "Select a workbook format to see its saved drafts."
-        ))
-      }
-      scope_label <- if (is.na(profile_code)) {
-        "source-wide mappings for AquaCache package downloads"
-      } else {
-        paste("workbook format", profile$profile_name[[1]])
-      }
-      impact_note <- if (is.na(profile_code)) {
-        "Future source-wide imports and AquaCache package downloads will use this revision. Workbook-format mappings can override it."
-      } else {
-        paste(
-          "Future imports using the",
-          profile$profile_name[[1]],
-          "workbook format will use this revision. Other scopes are unchanged."
-        )
       }
       rows <- review_rows()
       if (inherits(rows, "error")) {
         return(tags$div(
           class = "alert alert-danger",
-          paste("Could not check draft status:", conditionMessage(rows))
+          paste("Could not load mappings:", conditionMessage(rows))
         ))
       }
       in_scope <- rows$source_code == profile$source_code[[1]]
+      profile_code <- profile$profile_code[[1]]
+      source_wide <- is.na(profile_code) || !nzchar(profile_code)
       in_scope <- in_scope &
-        if (is.na(profile_code)) {
+        if (source_wide) {
           is.na(rows$profile_code)
         } else {
           !is.na(rows$profile_code) & rows$profile_code == profile_code
         }
-      drafts <- rows[in_scope & rows$status == "draft", , drop = FALSE]
-      revisions <- DBI::dbGetQuery(
-        con,
-        "SELECT version,status FROM discrete.import_mapping_sets
-        WHERE import_source_id=$1 AND import_profile_id IS NOT DISTINCT FROM $2
-          AND status IN ('published','draft') ORDER BY version",
-        params = list(
-          profile$import_source_id[[1]],
-          if (is.na(profile_code)) {
-            NA_integer_
-          } else {
-            profile$import_profile_id[[1]]
-          }
-        )
-      )
-      revision_text <- if (!nrow(revisions)) {
-        "No mapping revision has been saved for this scope."
+      scope_label <- if (source_wide) {
+        paste0(profile$source_code[[1]], " (source-wide)")
       } else {
-        paste(
-          ifelse(
-            revisions$status == "published",
-            paste0("Published v", revisions$version, " is in use"),
-            paste0(
-              "Draft v",
-              revisions$version,
-              " contains saved changes awaiting publication"
-            )
-          ),
-          collapse = ". "
-        )
+        profile$profile_name[[1]]
       }
-      if (!can_manage_mappings) {
-        return(tags$div(
-          class = "alert alert-info",
-          tags$p(revision_text),
-          if (nrow(drafts)) {
-            tags$strong(sprintf(
-              "%s draft mapping(s) for %s are not active.",
-              nrow(drafts),
-              scope_label
-            ))
-          } else {
-            tags$strong(sprintf(
-              "No draft mappings are waiting for %s.",
-              scope_label
-            ))
-          },
-          tags$p(
-            "Your role can inspect these mappings but cannot publish them. A user with mapping-management permission must publish the draft."
-          )
-        ))
-      }
-      if (!nrow(drafts)) {
-        return(tags$div(
-          class = "alert alert-info",
-          tags$p(revision_text),
-          tags$strong(sprintf(
-            "No draft mappings are waiting for %s.",
-            scope_label
-          )),
-          tags$p(
-            "Saving a mapping creates a draft only. It will not be used by imports or downloads until you review and publish this scope."
-          )
-        ))
-      }
-      incomplete <- drafts$active & !is.na(drafts$issue) & nzchar(drafts$issue)
+      current <- rows[in_scope, , drop = FALSE]
+      incomplete <- current$active &
+        !is.na(current$issue) &
+        nzchar(current$issue)
       tags$div(
         class = if (any(incomplete)) {
           "alert alert-warning"
         } else {
           "alert alert-info"
         },
-        tags$p(revision_text),
         tags$strong(sprintf(
-          "%s draft mapping(s) for %s are not active.",
-          nrow(drafts),
+          "%s current mapping(s) for %s.",
+          nrow(current),
           scope_label
         )),
         tags$p(
-          "Use the button below to review the complete scope and publish it. Publishing applies parameter, location and result-flag mappings together."
+          "Mapping and parser-setting edits save directly and apply to new previews and imports."
         ),
         if (any(incomplete)) {
           tags$p(sprintf(
-            "%s active draft mapping(s) still need attention: %s.",
+            "%s active mapping(s) need attention: %s.",
             sum(incomplete),
-            paste(unique(drafts$issue[incomplete]), collapse = "; ")
+            paste(unique(current$issue[incomplete]), collapse = "; ")
           ))
         },
-        tags$p(impact_note),
-        tags$p("Reparse any workbook that is already open.")
+        tags$p(
+          "Refresh any workbook preview that was open while these settings were changed."
+        )
       )
     })
     output$review_summary <- renderUI({
@@ -4406,22 +4160,19 @@ importSetup <- function(id, language) {
         ))
       }
       bad <- rows$active & !is.na(rows$issue) & nzchar(rows$issue)
-      draft_count <- sum(rows$status == "draft")
       tags$div(
-        class = if (any(bad & rows$status == "published")) {
+        class = if (any(bad)) {
           "alert alert-warning"
         } else {
           "alert alert-info"
         },
         sprintf(
-          "%s incomplete published mappings; %s incomplete draft mappings; %s draft mapping(s) not yet published across %s source(s).",
-          sum(bad & rows$status == "published"),
-          sum(bad & rows$status == "draft"),
-          draft_count,
+          "%s incomplete active mappings across %s source(s).",
+          sum(bad),
           length(unique(rows$source_code))
         ),
         tags$p(
-          "Only active mappings must be complete for publication. Deactivate an unwanted analyte with an explanatory note; retain retired revisions as history."
+          "Active parameter mappings must be complete. Deactivate an unwanted mapping with an explanatory note; every save is recorded in the audit history."
         )
       )
     })
@@ -4438,19 +4189,12 @@ importSetup <- function(id, language) {
       if (nzchar(kind)) {
         rows <- rows[rows$mapping_type == kind, , drop = FALSE]
       }
-      if (
-        addDiscData_first(input$review_state, "current") %in%
-          c("published", "draft")
-      ) {
-        rows <- rows[rows$status == input$review_state, , drop = FALSE]
-      }
       if (!isTRUE(input$review_inactive)) {
         rows <- rows[rows$active, , drop = FALSE]
       }
       if (isTRUE(input$needs_attention)) {
         rows <- rows[
           rows$active &
-            rows$status != "retired" &
             !is.na(rows$issue) &
             nzchar(rows$issue),
           ,
@@ -4481,15 +4225,7 @@ importSetup <- function(id, language) {
           Criteria = vapply(rows$source_match, importSetup_criteria_label, ""),
           Target = rows$target,
           Issue = rows$issue,
-          Revision = ifelse(
-            rows$status == "published",
-            paste0("Published v", rows$version, " (in use)"),
-            ifelse(
-              rows$status == "draft",
-              paste0("Draft v", rows$version, " (not active)"),
-              paste0("Retired v", rows$version, " (history)")
-            )
-          ),
+          State = ifelse(rows$active, "Active", "Inactive"),
           Included = rows$active,
           `Source enabled` = rows$source_active,
           `Changed at` = ifelse(
@@ -4596,84 +4332,7 @@ importSetup <- function(id, language) {
       selected <- input$mapping_review_rows_selected
       req(length(selected) == 1L, selected >= 1L, selected <= nrow(rows))
       row <- rows[selected, , drop = FALSE]
-      if (identical(row$status[[1]], "retired")) {
-        retired_mapping(row)
-        definition <- row
-        definition$status <- "draft"
-        details <- importSetup_changes(definition, mapping_target_labels())
-        showModal(modalDialog(
-          title = "Retired mapping revision — read only",
-          size = "l",
-          tags$p(paste(
-            row$source_code[[1]],
-            if (is.na(row$profile_code[[1]])) {
-              "— shared source mappings —"
-            } else {
-              row$profile_name[[1]]
-            },
-            "revision",
-            row$version[[1]]
-          )),
-          tags$p(tags$strong("AquaCache target: "), row$target[[1]]),
-          tags$p(
-            tags$strong("Matching conditions: "),
-            importSetup_criteria_label(row$source_match[[1]])
-          ),
-          tags$p(
-            "This revision records what imports used previously. To change future imports, open the current version, save a draft, and publish it. Previous uploads retain their recorded mapping revision."
-          ),
-          tags$table(
-            class = "table table-sm",
-            tags$thead(tags$tr(tags$th("Setting"), tags$th("Saved value"))),
-            tags$tbody(lapply(seq_len(nrow(details)), function(i) {
-              tags$tr(tags$th(details$Field[[i]]), tags$td(details$After[[i]]))
-            }))
-          ),
-          tags$details(
-            tags$summary("Advanced stored definition"),
-            tags$pre(row$definition[[1]])
-          ),
-          footer = tagList(
-            modalButton("Close"),
-            actionButton(
-              ns("open_current_from_history"),
-              "Open current version"
-            )
-          )
-        ))
-        return()
-      }
       open_mapping_editor(row)
-    })
-    observeEvent(input$open_current_from_history, {
-      previous <- retired_mapping()
-      req(!is.null(previous))
-      rows <- review_rows()
-      same_scope <- if (is.na(previous$profile_code[[1]])) {
-        is.na(rows$profile_code)
-      } else {
-        !is.na(rows$profile_code) &
-          rows$profile_code == previous$profile_code[[1]]
-      }
-      current <- rows[
-        same_scope &
-          rows$source_code == previous$source_code[[1]] &
-          rows$mapping_type == previous$mapping_type[[1]] &
-          rows$source_match == previous$source_match[[1]] &
-          rows$status != "retired",
-        ,
-        drop = FALSE
-      ]
-      if (!nrow(current)) {
-        showNotification(
-          "There is no current mapping with these source fields. Create a new mapping to use this source item again.",
-          type = "message"
-        )
-        return()
-      }
-      current <- current[order(current$status != "draft"), , drop = FALSE]
-      removeModal()
-      open_mapping_editor(current[1, , drop = FALSE])
     })
     observe({
       pending <- pending_open()
@@ -4768,12 +4427,9 @@ importSetup <- function(id, language) {
       ]
       rows <- rows[,
         c(
-          "import_mapping_set_id",
           "import_source_id",
           "import_profile_id",
           "import_mapping_id",
-          "status",
-          "version",
           "mapping_type",
           "source_match",
           "target",
@@ -4786,251 +4442,5 @@ importSetup <- function(id, language) {
       rownames(rows) <- NULL
       rows
     }
-    output$publication_changes <- DT::renderDT(
-      {
-        pending <- pending_publication()
-        req(!is.null(pending))
-        DT::datatable(
-          pending$changes,
-          rownames = FALSE,
-          selection = "none",
-          options = list(pageLength = 5, lengthChange = FALSE, scrollX = TRUE)
-        )
-      },
-      server = FALSE
-    )
-    output$publication_incomplete <- DT::renderDT(
-      {
-        pending <- pending_publication()
-        req(!is.null(pending), nrow(pending$incomplete) > 0L)
-        DT::datatable(
-          pending$incomplete,
-          rownames = FALSE,
-          selection = "none",
-          options = list(pageLength = 5, lengthChange = FALSE, scrollX = TRUE)
-        )
-      },
-      server = FALSE
-    )
-    observeEvent(input$manage_publish_mappings, {
-      tryCatch(
-        {
-          if (!can_manage_mappings) {
-            stop("Your database role cannot publish mappings.")
-          }
-          profile <- selected_manage_profile()
-          profile_code <- if (
-            identical(input$manage_publish_scope, "profile")
-          ) {
-            profile$profile_code[[1]]
-          } else {
-            NULL
-          }
-          if (
-            !is.null(profile_code) &&
-              (is.na(profile_code) || !nzchar(profile_code))
-          ) {
-            stop("Select a workbook format first.")
-          }
-          rows <- read_scope_review(profile$source_code[[1]], profile_code)
-          if (!any(rows$status == "draft")) {
-            stop("This scope has no unpublished draft.")
-          }
-          bad <- rows$status == "draft" &
-            rows$active &
-            !is.na(rows$issue) &
-            nzchar(rows$issue)
-          incomplete <- data.frame(
-            `Mapping ID` = rows$import_mapping_id[bad],
-            Type = rows$mapping_type[bad],
-            `Source values` = vapply(
-              rows$source_match[bad],
-              importSetup_criteria_label,
-              ""
-            ),
-            `AquaCache target` = rows$target[bad],
-            `Needs attention` = rows$issue[bad],
-            check.names = FALSE
-          )
-          incomplete[is.na(incomplete)] <- ""
-          labels <- mapping_target_labels()
-          changes <- importSetup_changes(rows, labels)
-          scope_label <- if (is.null(profile_code)) {
-            "source-wide mappings for AquaCache package downloads"
-          } else {
-            paste("workbook format", profile$profile_name[[1]])
-          }
-          impact_note <- if (is.null(profile_code)) {
-            "Future source-wide imports and AquaCache package downloads will use this revision. Workbook-format mappings can override it."
-          } else {
-            paste(
-              "Future imports using the",
-              profile$profile_name[[1]],
-              "workbook format will use this revision. Other scopes are unchanged."
-            )
-          }
-          pending_publication(list(
-            source = profile$source_code[[1]],
-            profile_code = profile_code,
-            scope_label = scope_label,
-            impact_note = impact_note,
-            rows = rows,
-            incomplete = incomplete,
-            changes = changes
-          ))
-          showModal(modalDialog(
-            title = "Review draft before publishing",
-            size = "l",
-            easyClose = FALSE,
-            tags$p(paste(
-              "Source:",
-              profile$source_code[[1]],
-              "| Scope:",
-              scope_label
-            )),
-            tags$div(
-              class = "alert alert-warning",
-              tags$strong("Publishing makes this draft active."),
-              tags$p(
-                "It replaces the published snapshot for this source and scope, including its parameter, location and result-flag mappings."
-              ),
-              tags$p(impact_note),
-              tags$p("Reparse any workbook that is already open.")
-            ),
-            tags$p(sprintf(
-              "This draft contains %s mapping(s) across the selected scope.",
-              sum(rows$status == "draft")
-            )),
-            if (any(bad)) {
-              tags$div(
-                class = "alert alert-danger",
-                tags$strong(sprintf(
-                  "%s active draft mapping(s) need attention.",
-                  sum(bad)
-                )),
-                tags$p(
-                  "The table lists each mapping ID, its source values and AquaCache target, and the missing information. Use each ID to find the row in the mappings table. Cancel this review, open each row, complete it or deactivate it, save the draft, then review publication again."
-                )
-              )
-            },
-            if (any(bad)) {
-              tagList(
-                tags$h5("Mappings that need attention"),
-                DT::DTOutput(ns("publication_incomplete"))
-              )
-            },
-            if (!nrow(changes)) {
-              tags$p(
-                "The draft has no definition changes from the current published revision."
-              )
-            },
-            tags$h5("Draft mapping changes"),
-            DT::DTOutput(ns("publication_changes")),
-            footer = tagList(
-              actionButton(ns("cancel_publication"), "Cancel"),
-              if (any(bad)) {
-                shinyjs::disabled(actionButton(
-                  ns("confirm_publication"),
-                  "Publish to make active",
-                  class = "btn-primary"
-                ))
-              } else {
-                actionButton(
-                  ns("confirm_publication"),
-                  "Publish to make active",
-                  class = "btn-primary"
-                )
-              }
-            )
-          ))
-        },
-        error = function(e) {
-          showNotification(conditionMessage(e), type = "error", duration = 15)
-        }
-      )
-    })
-    observeEvent(input$cancel_publication, {
-      pending_publication(NULL)
-      removeModal()
-    })
-    observeEvent(input$confirm_publication, {
-      tryCatch(
-        {
-          if (!can_manage_mappings) {
-            stop("Your database role cannot publish mappings.")
-          }
-          pending <- pending_publication()
-          req(!is.null(pending))
-          DBI::dbWithTransaction(con, {
-            scope <- DBI::dbGetQuery(
-              con,
-              "SELECT s.import_source_id,p.import_profile_id,s.active
-            FROM discrete.import_sources s LEFT JOIN discrete.import_profiles p
-              ON p.import_source_id=s.import_source_id AND p.profile_code=$2
-            WHERE s.source_code=$1",
-              params = list(
-                pending$source,
-                if (is.null(pending$profile_code)) {
-                  NA_character_
-                } else {
-                  pending$profile_code
-                }
-              )
-            )
-            if (nrow(scope) != 1L || !isTRUE(scope$active[[1]])) {
-              stop("The import source is missing or inactive.")
-            }
-            scope_key <- paste(
-              scope$import_source_id[[1]],
-              if (is.null(pending$profile_code)) {
-                "source"
-              } else {
-                scope$import_profile_id[[1]]
-              },
-              sep = ":"
-            )
-            DBI::dbGetQuery(
-              con,
-              "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
-              params = list(scope_key)
-            )
-            current <- read_scope_review(pending$source, pending$profile_code)
-            if (!identical(current, pending$rows)) {
-              stop(
-                "The mapping revision changed after review. Cancel and review it again before publishing."
-              )
-            }
-            AquaCache::publishImportMappings(
-              con,
-              pending$source,
-              profile_code = pending$profile_code
-            )
-          })
-          pending_publication(NULL)
-          removeModal()
-          bump_revision()
-          clear_manager_mapping_selection()
-          showNotification(
-            paste0(
-              "Published ",
-              pending$scope_label,
-              " for ",
-              pending$source,
-              ". ",
-              pending$impact_note,
-              " Reparse any workbook that is already open."
-            ),
-            type = "message"
-          )
-        },
-        error = function(e) {
-          showNotification(
-            paste("Publication failed:", conditionMessage(e)),
-            type = "error",
-            duration = 15
-          )
-        }
-      )
-    })
   })
 }

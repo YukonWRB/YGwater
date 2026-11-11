@@ -5,6 +5,8 @@
 addDiscData_empty_table <- function() {
   data.frame(
     sample_key = character(),
+    existing_sample_id = integer(),
+    existing_sample_version = character(),
     source_location_name = character(),
     location_mapping_status = character(),
     location_id = integer(),
@@ -110,6 +112,46 @@ addDiscData_empty_profiles <- function() {
   )
 }
 
+# Apply an explicitly selected database sample to staged result rows. Source
+# identifiers and result values remain as supplied by the workbook; collection
+# metadata comes from the selected sample and is never written back on upload.
+addDiscData_use_existing_sample <- function(rows, sample_key, target) {
+  stopifnot(nrow(target) == 1L)
+  out <- data.table::copy(rows)
+  ix <- which(out$sample_key == sample_key)
+  fields <- c(
+    "location_id",
+    "sub_location_id",
+    "datetime",
+    "target_datetime",
+    "z",
+    "media_id",
+    "collection_method",
+    "sample_type",
+    "sample_volume_ml",
+    "purge_volume_l",
+    "purge_time_min",
+    "flow_rate_l_min",
+    "wave_hgt_m",
+    "sample_grade",
+    "sample_approval",
+    "owner",
+    "contributor",
+    "commissioning_org",
+    "sampling_org",
+    "sample_note",
+    "sample_no_source_update"
+  )
+  for (field in fields) {
+    out[[field]][ix] <- target[[field]][[1]]
+  }
+  out$sample_group_id[ix] <- NA_integer_
+  out$existing_sample_id[ix] <- as.integer(target$sample_id[[1]])
+  out$existing_sample_version[ix] <- as.character(target$sample_version[[1]])
+  out$location_mapping_status[ix] <- "existing AquaCache sample"
+  out
+}
+
 addDiscData_merge_preview_edits <- function(recalculated, current, previous) {
   if (!nrow(current) || !nrow(previous)) {
     return(recalculated)
@@ -166,6 +208,8 @@ addDiscData_merge_preview_edits <- function(recalculated, current, previous) {
   }
   edit_columns <- intersect(
     c(
+      "existing_sample_id",
+      "existing_sample_version",
       "location_id",
       "sub_location_id",
       "location_mapping_status",
@@ -303,22 +347,21 @@ addDiscData_observer_labels <- function(observers) {
 addDiscData_read_profiles <- function(con) {
   available <- DBI::dbGetQuery(
     con,
-    "SELECT
-       to_regclass('discrete.import_profiles') IS NOT NULL
-       AND to_regclass('discrete.import_mapping_sets') IS NOT NULL
+    "SELECT to_regclass('discrete.import_profiles') IS NOT NULL
+       AND to_regclass('discrete.import_parameter_mappings') IS NOT NULL
        AND to_regclass('discrete.import_location_mappings') IS NOT NULL
+       AND to_regclass('discrete.import_result_flag_mappings') IS NOT NULL
        AND EXISTS (
-         SELECT 1
-         FROM information_schema.columns
-         WHERE table_schema = 'discrete'
-           AND table_name = 'import_parameter_mappings'
-           AND column_name = 'import_mapping_set_id'
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema='discrete'
+           AND table_name='import_parameter_mappings'
+           AND column_name='import_source_id'
        ) AS available;"
   )$available[[1]]
   if (!isTRUE(available)) {
     stop(
       "This database does not have the coherent import mapping schema. ",
-      "Apply AquaCache patch 61 before using file imports.",
+      "Apply AquaCache patch 69 before using file imports.",
       call. = FALSE
     )
   }
@@ -633,17 +676,13 @@ addDiscData_as_date <- function(x) {
     return(as.Date(x, origin = "1899-12-30"))
   }
   x <- trimws(as.character(x))
-  embedded_datetime <- grepl(
-    "^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}[[:space:]]+[0-9]{1,2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?[[:space:]]*([AaPp][Mm])?$",
+  # Remove only a complete clock suffix, then validate the remaining date.
+  # This also accepts ISO timestamps without accepting arbitrary trailing text.
+  x <- sub(
+    "[T[:space:]]+[0-9]{1,2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?[[:space:]]*([AaPp][Mm])?([[:space:]]*(Z|[+-][0-9]{2}:?[0-9]{2}))?$",
+    "",
     x
   )
-  if (any(embedded_datetime)) {
-    x[embedded_datetime] <- sub(
-      "[[:space:]]+[0-9]{1,2}:[0-9]{2}.*$",
-      "",
-      x[embedded_datetime]
-    )
-  }
   out <- as.Date(rep(NA_character_, length(x)))
   format_groups <- list(
     list("^\\d{4}-\\d{1,2}-\\d{1,2}$", c("%Y-%m-%d")),
@@ -714,34 +753,13 @@ addDiscData_datetime <- function(date, time = NA, tz = "America/Whitehorse") {
       )
     }
     has_embedded_datetime <- grepl(
-      "[[:space:]]+[0-9]{1,2}:[0-9]{2}",
+      "[T[:space:]]+[0-9]{1,2}:[0-9]{2}",
       date_text
     ) &
       !is_excel_serial
-    embedded_datetime <- as.POSIXct(
-      rep(NA_real_, length(date_text)),
-      origin = "1970-01-01",
-      tz = "UTC"
-    )
-    if (any(has_embedded_datetime)) {
-      embedded_datetime[has_embedded_datetime] <- suppressWarnings(as.POSIXct(
-        date_text[has_embedded_datetime],
-        tz = "UTC",
-        tryFormats = c(
-          "%m/%d/%Y %I:%M %p",
-          "%m/%d/%Y %I:%M:%OS %p",
-          "%m/%d/%Y %H:%M",
-          "%m/%d/%Y %H:%M:%OS",
-          "%Y-%m-%d %H:%M:%OS"
-        )
-      ))
-    }
-    has_embedded_time <- !is.na(embedded_datetime)
-    embedded_time[has_embedded_time] <- format(
-      embedded_datetime[has_embedded_time],
-      "%H:%M:%S",
-      tz = "UTC"
-    )
+    clock <- sub("^.*[T[:space:]]+([0-9]{1,2}:[0-9]{2}.*)$", "\\1", date_text)
+    clock <- sub("[[:space:]]*(Z|[+-][0-9]{2}:?[0-9]{2})$", "", clock)
+    embedded_time[has_embedded_datetime] <- trimws(clock[has_embedded_datetime])
   }
 
   if (is.null(time) || !length(time)) {
@@ -785,18 +803,61 @@ addDiscData_datetime <- function(date, time = NA, tz = "America/Whitehorse") {
       (as.integer(offset_parts[[3]]) * 60L + as.integer(offset_parts[[4]]))
     parse_tz <- "UTC"
   }
-  parsed[date_present] <- suppressWarnings(as.POSIXct(
-    value[date_present],
-    tz = parse_tz,
-    tryFormats = c(
-      "%Y-%m-%d %H:%M:%S",
-      "%Y-%m-%d %H:%M",
-      "%Y-%m-%d %I:%M:%S %p",
-      "%Y-%m-%d %I:%M %p"
-    )
-  ))
+  # Parse each clock format separately: a workbook may mix 12- and 24-hour
+  # values. as.POSIXct(tryFormats=...) chooses a format for the entire vector.
+  for (fmt in c(
+    "%Y-%m-%d %I:%M:%OS %p",
+    "%Y-%m-%d %I:%M %p",
+    "%Y-%m-%d %H:%M:%OS",
+    "%Y-%m-%d %H:%M"
+  )) {
+    missing <- date_present & is.na(parsed)
+    if (!any(missing)) {
+      break
+    }
+    parsed[missing] <- suppressWarnings(as.POSIXct(
+      value[missing],
+      tz = parse_tz,
+      format = fmt
+    ))
+  }
   if (!is.na(offset_minutes)) {
     parsed <- parsed - offset_minutes * 60
+  }
+  # A timezone explicitly supplied in a source timestamp takes precedence
+  # over the workbook's default timezone when no separate time is supplied.
+  if (is.character(date)) {
+    date_text <- trimws(date)
+    zoned <- date_present &
+      missing_time &
+      grepl(
+        "[T[:space:]]+[0-9]{1,2}:[0-9]{2}.*(Z|[+-][0-9]{2}:?[0-9]{2})$",
+        date_text
+      )
+    if (any(zoned)) {
+      zone <- sub("^.*(Z|[+-][0-9]{2}:?[0-9]{2})$", "\\1", date_text[zoned])
+      zone <- sub("Z", "+0000", zone, fixed = TRUE)
+      zone <- sub(":", "", zone, fixed = TRUE)
+      text <- paste0(value[zoned], zone)
+      values <- rep(as.POSIXct(NA, tz = "UTC"), length(text))
+      for (fmt in c(
+        "%Y-%m-%d %I:%M:%OS %p%z",
+        "%Y-%m-%d %I:%M %p%z",
+        "%Y-%m-%d %H:%M:%OS%z",
+        "%Y-%m-%d %H:%M%z"
+      )) {
+        missing <- is.na(values)
+        if (!any(missing)) {
+          break
+        }
+        values[missing] <- suppressWarnings(as.POSIXct(
+          text[missing],
+          format = fmt,
+          tz = "UTC"
+        ))
+      }
+      parsed[zoned] <- values
+    }
   }
   attr(parsed, "tzone") <- "UTC"
   parsed
@@ -949,6 +1010,44 @@ addDiscData_parse_result <- function(
   )
 }
 
+addDiscData_map_result_text <- function(x, profile) {
+  validation_rules <- addDiscData_profile_value(
+    profile,
+    "validation_rules",
+    list()
+  )
+  values <- validation_rules$result_text_values
+  if (is.null(values) || !length(values)) {
+    return(as.character(x))
+  }
+
+  labels <- names(values)
+  numeric_values <- suppressWarnings(as.numeric(unlist(
+    values,
+    use.names = FALSE
+  )))
+  if (
+    is.null(labels) ||
+      length(labels) != length(numeric_values) ||
+      anyNA(labels) ||
+      any(!nzchar(trimws(labels))) ||
+      anyDuplicated(tolower(trimws(labels))) ||
+      any(!is.finite(numeric_values))
+  ) {
+    stop(
+      "Text result values must have unique labels and finite numeric values.",
+      call. = FALSE
+    )
+  }
+
+  raw <- as.character(x)
+  key <- tolower(trimws(raw))
+  hit <- match(key, tolower(trimws(labels)))
+  mapped <- !is.na(hit)
+  raw[mapped] <- as.character(numeric_values[hit[mapped]])
+  raw
+}
+
 addDiscData_defaults <- function(profile) {
   defaults <- profile$defaults[[1]]
   if (is.null(defaults) || !length(defaults)) {
@@ -1025,13 +1124,15 @@ addDiscData_common_rows <- function(
     source_parameter_name,
     source_unit
   )
+  source_result_text <- as.character(result_raw)
+  mapped_result_raw <- addDiscData_map_result_text(result_raw, profile)
   manual_excluded <- addDiscData_negative_mdl_key(
     source_parameter_code,
     source_unit
   ) %in%
     negative_mdl_exclusions
   parsed_result <- addDiscData_parse_result(
-    result_raw,
+    mapped_result_raw,
     negative_values_are_mdl = negative_values_are_mdl,
     negative_mdl_excluded = auto_excluded | manual_excluded
   )
@@ -1090,7 +1191,7 @@ addDiscData_common_rows <- function(
     endpoint_mode = defaults$endpoint_mode,
     endpoint_ph = defaults$endpoint_ph,
     analysis_conditions = defaults$analysis_conditions,
-    source_result_text = as.character(result_raw),
+    source_result_text = source_result_text,
     source_result = parsed_result$result,
     source_result_condition = parsed_result$result_condition,
     source_result_condition_value = parsed_result$result_condition_value,
@@ -1114,6 +1215,8 @@ addDiscData_common_rows <- function(
     stringsAsFactors = FALSE
   )
   out$source_code <- source_code
+  out$existing_sample_id <- rep(NA_integer_, nrow(out))
+  out$existing_sample_version <- rep(NA_character_, nrow(out))
   out$source_row_number <- source_row_number
   out$source_matching_values <- rep("{}", nrow(out))
   out
@@ -1236,6 +1339,7 @@ addDiscData_parse_als_eqwin <- function(
     as.data.frame(check.names = FALSE)
   addDiscData_clean_colnames(x)
 
+  result_raw <- addDiscData_col(x, cmap$result)
   out <- addDiscData_common_rows(
     source_code = profile$source_code[[1]],
     profile = profile,
@@ -1247,7 +1351,7 @@ addDiscData_parse_als_eqwin <- function(
     source_parameter_code = addDiscData_col(x, cmap$parameter_code),
     source_parameter_name = addDiscData_col(x, cmap$parameter_name),
     source_unit = addDiscData_col(x, cmap$unit),
-    result_raw = addDiscData_col(x, cmap$result),
+    result_raw = result_raw,
     result_flag = addDiscData_col(x, cmap$result_flag),
     result_flag_column = addDiscData_first(
       cmap$result_flag,
@@ -1271,7 +1375,12 @@ addDiscData_parse_als_eqwin <- function(
     x,
     cmap$match_columns
   )
-  out[addDiscData_present(out$source_parameter_code), , drop = FALSE]
+  out[
+    addDiscData_present(out$source_parameter_code) &
+      addDiscData_present(result_raw),
+    ,
+    drop = FALSE
+  ]
 }
 
 addDiscData_parse_als_samples <- function(
@@ -1771,6 +1880,10 @@ addDiscData_parse_wide <- function(
       sheet = sheet,
       col_names = FALSE,
       col_types = "text",
+      range = readxl::cell_limits(
+        c(1L, 1L),
+        c(NA_integer_, NA_integer_)
+      ),
       .name_repair = "minimal"
     ),
     check.names = FALSE
@@ -2428,10 +2541,56 @@ addDiscData_mapping_indices <- function(rows, mappings) {
         1L
     )
   ) {
-    stop(
-      "Multiple parameter mappings match with equal scope, priority and specificity. Review the matching fields or priority before uploading.",
-      call. = FALSE
+    best_ties <- tied[
+      best,
+      on = c("row_index", "profile", "priority", "specificity")
+    ][N > 1L]
+    semantic_fields <- c(
+      "parameter_id",
+      "result_type",
+      "sample_fraction_id",
+      "result_value_type",
+      "reporting_basis_id",
+      "result_speciation_id",
+      "result_target_id",
+      "endpoint_mode",
+      "endpoint_ph",
+      "matrix_state_id",
+      "analysis_conditions",
+      "conversion",
+      "result_offset",
+      "active"
     )
+    if (!all(semantic_fields %in% names(mappings))) {
+      stop(
+        "Multiple parameter mappings match with equal scope, priority and specificity. Review the matching fields or priority before uploading.",
+        call. = FALSE
+      )
+    }
+    mapping_targets <- data.table::as.data.table(mappings)
+    conflicting_ties <- vapply(
+      seq_len(nrow(best_ties)),
+      function(i) {
+        candidates_for_tie <- candidates[
+          row_index == best_ties$row_index[[i]] &
+            profile == best_ties$profile[[i]] &
+            priority == best_ties$priority[[i]] &
+            specificity == best_ties$specificity[[i]]
+        ]
+        targets <- unique(mapping_targets[
+          candidates_for_tie$mapping_index,
+          ..semantic_fields
+        ])
+        nrow(targets) > 1L
+      },
+      logical(1)
+    )
+    if (any(conflicting_ties)) {
+      stop(
+        "Multiple parameter mappings match with equal scope, priority and specificity but assign different targets. Review the matching fields or priority before uploading.",
+        call. = FALSE
+      )
+    }
   }
   result[best$row_index] <- best$mapping_index
   result
@@ -2653,7 +2812,7 @@ addDiscData_upsert_mapping <- function(
     profile_code = profile_code,
     mappings = mappings,
     match_columns = c("parameter_code", "unit", names(criteria)),
-    publish = FALSE
+    publish = TRUE
   )
 }
 
@@ -2711,23 +2870,33 @@ addDiscData_run_mapping_save <- function(request) {
               active = TRUE,
               note = "Saved from YGwater add discrete data location mapping editor."
             ),
-            publish = FALSE
+            publish = TRUE
           )
         }
       })
       saved <- TRUE
       parsed <- NULL
+      mapping_snapshot <- NULL
       if (isTRUE(request$refresh_preview)) {
+        upload_options <- list(
+          negative_values_are_mdl = isTRUE(request$negative_values_are_mdl),
+          negative_mdl_exclusions = request$negative_mdl_exclusions
+        )
+        configuration <- addDiscData_preview_configuration(
+          con, request$profile, options = upload_options
+        )
+        profile <- configuration$profile
+        mapping_snapshot <- configuration$snapshot
         parsed <- addDiscData_parse_upload(
           request$path,
-          request$profile,
+          profile,
           negative_values_are_mdl = request$negative_values_are_mdl,
           negative_mdl_exclusions = request$negative_mdl_exclusions
         )
         location_mappings <- AquaCache::getImportLocationMappings(
           con = con,
-          source_code = request$profile$source_code[[1]],
-          profile_code = request$profile$profile_code[[1]],
+          source_code = profile$source_code[[1]],
+          profile_code = profile$profile_code[[1]],
           active = TRUE,
           include_draft = TRUE
         )
@@ -2743,15 +2912,22 @@ addDiscData_run_mapping_save <- function(request) {
         parsed <- addDiscData_apply_mappings(
           parsed,
           con,
-          profile_code = request$profile$profile_code[[1]]
+          profile_code = profile$profile_code[[1]]
         )
         parsed <- parsed[names(addDiscData_empty_table())]
+        if (!identical(
+          mapping_snapshot,
+          addDiscData_mapping_snapshot(con, profile, options = upload_options)
+        )) {
+          stop("The parser settings or mappings changed while preparing the preview. Preview the workbook again.")
+        }
       }
       list(
         ok = TRUE,
         saved = TRUE,
         request = request,
-        parsed = parsed
+        parsed = parsed,
+        mapping_snapshot = mapping_snapshot
       )
     },
     error = function(e) {
@@ -2856,7 +3032,7 @@ addDiscData_run_location_create <- function(request) {
             source_code = request$profile$source_code[[1]],
             profile_code = request$profile$profile_code[[1]],
             mappings = mapping_rows,
-            publish = FALSE
+            publish = TRUE
           )
           if (active) {
             DBI::dbExecute(con, "COMMIT")
@@ -2948,10 +3124,14 @@ addDiscData_upload_plan <- function(rows, sample_key = NULL) {
   )
 }
 
-# Capture both mapping scopes so a preview cannot be uploaded against a newer
-# published revision. Drafts may be previewed while editing, but publication is
-# an explicit reviewed action in Import setup manager.
-addDiscData_mapping_snapshot <- function(con, profile, lock = FALSE) {
+# Capture current parser settings, both mapping scopes and upload options so
+# a preview cannot be uploaded after its configuration has changed.
+addDiscData_mapping_snapshot <- function(
+  con,
+  profile,
+  lock = FALSE,
+  options = list()
+) {
   if (isTRUE(lock)) {
     source_id <- profile$import_source_id[[1]]
     for (scope in c("source", as.character(profile$import_profile_id[[1]]))) {
@@ -2962,14 +3142,34 @@ addDiscData_mapping_snapshot <- function(con, profile, lock = FALSE) {
       )
     }
   }
-  DBI::dbGetQuery(
+  AquaCache::getImportConfigurationSnapshot(
     con,
-    "SELECT import_mapping_set_id, import_profile_id, status, version
-    FROM discrete.import_mapping_sets
-    WHERE import_source_id=$1 AND (import_profile_id IS NULL OR import_profile_id=$2)
-      AND status IN ('published','draft') ORDER BY import_mapping_set_id",
-    params = list(profile$import_source_id[[1]], profile$import_profile_id[[1]])
+    source_code = profile$source_code[[1]],
+    profile_code = profile$profile_code[[1]],
+    options = options
   )
+}
+
+# Read the parser and its configuration snapshot together. The UI's profile
+# list may predate another session's edits, so reconstruct the parser row from
+# the snapshot itself. Keep JSON fields as list columns, matching getImportProfiles().
+# Workers carry this snapshot back with their parsed rows; it must still match
+# the database before those rows can become an uploadable preview.
+addDiscData_preview_configuration <- function(con, profile, options = list()) {
+  snapshot <- addDiscData_mapping_snapshot(con, profile, options = options)
+  if (!length(snapshot$profile)) {
+    stop("The selected workbook format is no longer available. Reload the workbook formats.")
+  }
+  current_profile <- addDiscData_empty_profiles()[NA_integer_, , drop = FALSE]
+  for (name in intersect(names(current_profile), names(snapshot$profile))) {
+    value <- snapshot$profile[[name]]
+    if (is.list(current_profile[[name]])) {
+      current_profile[[name]] <- I(list(value))
+    } else if (!is.null(value)) {
+      current_profile[[name]] <- value
+    }
+  }
+  list(profile = current_profile, snapshot = snapshot)
 }
 
 addDiscData_run_upload <- function(request) {
@@ -3055,6 +3255,8 @@ addDiscData_run_upload <- function(request) {
                 file$name
               ),
               tags = c("discrete sample", "discrete upload"),
+              # The row is uncommitted until its linked samples determine the
+              # final visibility below.
               share_with = "public_reader",
               geoms = NULL,
               con = con
@@ -3113,13 +3315,17 @@ addDiscData_run_upload <- function(request) {
           doc_ids <- c(doc_ids, insert_document(file))
         }
       }
+      YGwater:::lock_sample_documents(con, doc_ids)
 
       df <- request$df
       inserted_samples <- 0L
+      reused_samples <- 0L
       inserted_results <- 0L
       sample_lookup <- list()
       samples <- unique(df[, c(
         "sample_key",
+        "existing_sample_id",
+        "existing_sample_version",
         "location_id",
         "sub_location_id",
         "datetime",
@@ -3282,45 +3488,71 @@ addDiscData_run_upload <- function(request) {
         run_source_code <- import_sources$source_code[
           match(run_source_ids[[1]], import_sources$import_source_id)
         ]
-        snapshot <- addDiscData_mapping_snapshot(con, profile, lock = TRUE)
-        if (any(snapshot$status == "draft")) {
-          stop(
-            "Review and publish the source and workbook drafts in Manage import setups, then preview the workbook again."
-          )
-        }
+        snapshot <- addDiscData_mapping_snapshot(
+          con,
+          profile,
+          lock = TRUE,
+          options = request$mapping_snapshot$upload_options
+        )
         if (
           is.null(request$mapping_snapshot) ||
             !identical(snapshot, request$mapping_snapshot)
         ) {
           stop(
-            "The published mappings changed after this preview. Preview the workbook again before uploading."
+            "The parser settings or mappings changed after this preview. Preview the workbook again before uploading."
           )
         }
-        import_run_id <- AquaCache::createImportRun(
-          con = con,
-          import_source_id = run_source_ids[[1]],
-          import_profile_id = profile$import_profile_id[[1]],
-          source_adapter_function = "addDiscData",
-          adapter_version = as.character(utils::packageVersion("YGwater")),
-          source_file_name = request$file$name,
-          source_file_size = request$file$size,
-          summary = c(
-            list(
-              source_rows = length(unique(df$source_row_number)),
-              result_rows = nrow(df)
-            ),
-            request$upload_coverage,
-            list(
-              partial_upload_acknowledged = isTRUE(
-                request$partial_upload_acknowledged
-              )
-            )
-          ),
-          note = "Created by the YGwater discrete-data import workflow."
-        )
       }
 
       for (i in seq_len(nrow(samples))) {
+        existing_sample_id <- addDiscData_int(samples$existing_sample_id[[i]])
+        if (!is.na(existing_sample_id)) {
+          target <- DBI::dbGetQuery(
+            con,
+            "SELECT sample_id, media_id, field_visit_id,
+                    COALESCE(modified, created)::text AS sample_version
+             FROM discrete.samples WHERE sample_id=$1 FOR SHARE",
+            params = list(existing_sample_id)
+          )
+          if (
+            nrow(target) != 1L ||
+              !identical(
+                target$sample_version[[1]],
+                samples$existing_sample_version[[i]]
+              )
+          ) {
+            stop(
+              "An existing sample changed or is no longer available. Select it again before uploading.",
+              call. = FALSE
+            )
+          }
+          if (
+            !identical(
+              as.integer(target$media_id[[1]]),
+              as.integer(samples$media_id[[i]])
+            )
+          ) {
+            stop(
+              "The existing sample has a different media type. Select it again before uploading.",
+              call. = FALSE
+            )
+          }
+          if (
+            !is.na(field_visit_id) &&
+              !identical(
+                as.integer(target$field_visit_id[[1]]),
+                as.integer(field_visit_id)
+              )
+          ) {
+            stop(
+              "An existing sample is not linked to the selected field visit. Link it in the field-visit editor first, or clear the visit selection.",
+              call. = FALSE
+            )
+          }
+          sample_lookup[[samples$sample_key[[i]]]] <- existing_sample_id
+          link_sample_documents(existing_sample_id, doc_ids)
+          next
+        }
         sid <- DBI::dbGetQuery(
           con,
           sample_insert_sql,
@@ -3423,11 +3655,39 @@ addDiscData_run_upload <- function(request) {
         sample_lookup[[samples$sample_key[[i]]]] <- sid
         inserted_samples <- inserted_samples + 1L
       }
+      reused_samples <- length(unique(samples$existing_sample_id[
+        !is.na(samples$existing_sample_id)
+      ]))
 
-      result_ids <- integer(nrow(df))
+      # Calculate from persisted links, including earlier uploads of the same
+      # workbook. Only database samples and locations restrict document access.
+      shared_documents <- YGwater:::sync_sample_document_visibility(con, document_ids = doc_ids)
+      if (any(file_sample)) {
+        snapshot$execution <- list(
+          archived_document_visibility = if (length(doc_ids)) {
+            attr(shared_documents, "visibility")[[as.character(doc_ids[[1]])]]
+          } else character()
+        )
+        import_run_id <- AquaCache::createImportRun(
+          con = con,
+          import_source_id = run_source_ids[[1]],
+          import_profile_id = profile$import_profile_id[[1]],
+          source_adapter_function = "addDiscData",
+          adapter_version = as.character(utils::packageVersion("YGwater")),
+          configuration_snapshot = snapshot,
+          source_document_id = if (length(doc_ids)) as.integer(doc_ids[[1]]) else NULL,
+          summary = c(
+            list(source_rows = length(unique(df$source_row_number)), result_rows = nrow(df)),
+            request$upload_coverage,
+            list(partial_upload_acknowledged = isTRUE(request$partial_upload_acknowledged))
+          ),
+          note = "Created by the YGwater discrete-data import workflow."
+        )
+      }
+
       for (j in seq_len(nrow(df))) {
         sid <- sample_lookup[[df$sample_key[[j]]]]
-        result_ids[[j]] <- DBI::dbGetQuery(
+        DBI::dbGetQuery(
           con,
           "INSERT INTO discrete.results (
              sample_id,
@@ -3448,10 +3708,11 @@ addDiscData_run_upload <- function(request) {
              approval_type_id,
              matrix_state_id,
              no_source_update,
-             note, result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions
+             note, result_speciation_id, result_target_id, endpoint_mode, endpoint_ph,
+             analysis_conditions, import_run_id
            ) VALUES (
              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb
+             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25
            ) RETURNING result_id",
           params = list(
             sid,
@@ -3489,109 +3750,18 @@ addDiscData_run_upload <- function(request) {
             addDiscData_int(df$result_target_id[[j]]),
             addDiscData_optional_text(df$endpoint_mode[[j]]),
             addDiscData_num(df$endpoint_ph[[j]]),
-            AquaCache::normalizeAnalysisConditions(df$analysis_conditions[[j]])
+            AquaCache::normalizeAnalysisConditions(df$analysis_conditions[[j]]),
+            if (is.null(import_run_id)) {
+              NA_integer_
+            } else {
+              as.integer(import_run_id)
+            }
           )
-        )$result_id[[1]]
+        )
         inserted_results <- inserted_results + 1L
       }
 
       if (!is.null(import_run_id)) {
-        source_columns <- c(
-          "source_location_name",
-          "source_sample_id",
-          "source_parameter_code",
-          "source_parameter_name",
-          "source_unit",
-          "source_matching_values",
-          "source_result_text",
-          "lab_report_no",
-          "lab_sample_no",
-          "analysis_datetime"
-        )
-        sample_columns <- c(
-          "sample_key",
-          "location_id",
-          "sub_location_id",
-          "datetime",
-          "target_datetime",
-          "z",
-          "media_id",
-          "collection_method",
-          "sample_type",
-          "sample_group_id",
-          "linked_with",
-          "sample_volume_ml",
-          "purge_volume_l",
-          "purge_time_min",
-          "flow_rate_l_min",
-          "wave_hgt_m",
-          "sample_grade",
-          "sample_approval",
-          "commissioning_org",
-          "sampling_org",
-          "sample_note",
-          "owner",
-          "contributor",
-          "sample_no_source_update",
-          "field_visit_id"
-        )
-        result_columns <- c(
-          "parameter_id",
-          "result_type",
-          "protocol_method",
-          "matrix_state_id",
-          "sample_fraction_id",
-          "result_value_type",
-          "reporting_basis_id",
-          "result",
-          "result_condition",
-          "result_condition_value",
-          "conversion",
-          "result_offset",
-          "laboratory",
-          "result_no_source_update",
-          "grade_type_id",
-          "approval_type_id"
-        )
-        source_group <- interaction(
-          df$source_row_number,
-          drop = TRUE,
-          lex.order = TRUE
-        )
-        run_rows <- data.frame(
-          sheet_name = rep(
-            addDiscData_first(profile$sheet_name, NA_character_),
-            nrow(df)
-          ),
-          source_row_number = as.integer(df$source_row_number),
-          result_index = as.integer(ave(
-            seq_len(nrow(df)),
-            source_group,
-            FUN = seq_along
-          )),
-          validation_status = rep("committed", nrow(df)),
-          sample_id = as.integer(unlist(sample_lookup[df$sample_key])),
-          result_id = result_ids,
-          stringsAsFactors = FALSE
-        )
-        run_rows$source_record <- lapply(
-          seq_len(nrow(df)),
-          function(i) as.list(df[i, source_columns, drop = FALSE])
-        )
-        run_rows$normalized_sample <- lapply(
-          seq_len(nrow(df)),
-          function(i) as.list(df[i, sample_columns, drop = FALSE])
-        )
-        run_rows$normalized_result <- lapply(
-          seq_len(nrow(df)),
-          function(i) as.list(df[i, result_columns, drop = FALSE])
-        )
-        run_rows$validation_messages <- replicate(
-          nrow(df),
-          list(),
-          simplify = FALSE
-        )
-        AquaCache::appendImportRunRows(con, import_run_id, run_rows)
         AquaCache::completeImportRun(
           con = con,
           import_run_id = import_run_id,
@@ -3599,6 +3769,25 @@ addDiscData_run_upload <- function(request) {
           summary = c(
             list(
               samples = inserted_samples,
+              existing_samples = reused_samples,
+              source_rows = length(unique(df$source_row_number[
+                !is.na(df$source_row_number)
+              ])),
+              sample_links = lapply(seq_len(nrow(samples)), function(i) {
+                list(
+                  sample_id = as.integer(sample_lookup[[samples$sample_key[[
+                    i
+                  ]]]]),
+                  source_sample_id = as.character(samples$source_sample_id[[
+                    i
+                  ]]),
+                  action = if (is.na(samples$existing_sample_id[[i]])) {
+                    "created"
+                  } else {
+                    "results_added"
+                  }
+                )
+              }),
               results = inserted_results
             ),
             request$upload_coverage,
@@ -3643,6 +3832,11 @@ addDiscData_run_upload <- function(request) {
         ),
         AquaCache_location = as.character(destination),
         AquaCache_sub_location = as.character(sub_location),
+        sample_action = ifelse(
+          is.na(samples$existing_sample_id),
+          "Created",
+          "Results added"
+        ),
         stringsAsFactors = FALSE
       )
       summary$AquaCache_sub_location[is.na(
@@ -3653,6 +3847,7 @@ addDiscData_run_upload <- function(request) {
       list(
         ok = TRUE,
         inserted_samples = inserted_samples,
+        reused_samples = reused_samples,
         inserted_results = inserted_results,
         summary = summary
       )
@@ -3661,7 +3856,11 @@ addDiscData_run_upload <- function(request) {
       if (isTRUE(active)) {
         try(DBI::dbExecute(con, "ROLLBACK"), silent = TRUE)
       }
-      list(ok = FALSE, message = conditionMessage(e))
+      message <- conditionMessage(e)
+      if (grepl("results_analytical_identity", message, fixed = TRUE)) {
+        message <- "A result already exists with the same sample, parameter, laboratory and analytical metadata. Nothing was uploaded. Review the existing results or correct the laboratory and analysis details."
+      }
+      list(ok = FALSE, message = message)
     }
   )
 }
@@ -4102,21 +4301,40 @@ addDiscDataUI <- function(id) {
               conditionalPanel(
                 condition = "input.entry_mode == 'file'",
                 ns = ns,
-                fileInput(
-                  ns("file"),
-                  "Upload .csv or Excel",
-                  accept = c(".csv", ".xls", ".xlsx")
-                ),
-                helpText(
-                  "The file selected here is attached to every sample created by this upload. If its exact file hash is already in AquaCache, the existing document is reused."
+                fluidRow(
+                  column(
+                    4,
+                    fileInput(
+                      ns("file"),
+                      "Upload file with samples/results",
+                      accept = c(".csv", ".xls", ".xlsx"),
+                      width = "100%",
+                      placeholder = ".csv, .xls, .xlsx"
+                    )
+                  ),
+                  column(
+                    8,
+                    div(
+                      style = "padding-top: 25px;",
+                      p(
+                        "This file will be associated to every sample in this upload. If the exact file is already in AquaCache it is reused. Additional documents can be added below."
+                      )
+                    )
+                  )
                 ),
                 fluidRow(
                   column(
-                    9,
+                    4,
                     selectizeInput(
                       ns("import_profile"),
                       "Workbook format",
-                      choices = NULL
+                      choices = NULL,
+                      width = "100%",
+                      multiple = TRUE,
+                      options = list(
+                        placeholder = "Select a workbook format",
+                        maxItems = 1 # permits no selection from the start
+                      )
                     )
                   ),
                   column(
@@ -4133,11 +4351,12 @@ addDiscDataUI <- function(id) {
                 uiOutput(ns("import_profile_status")),
                 fluidRow(
                   column(
-                    8,
+                    6,
                     checkboxInput(
                       ns("negative_values_are_mdl"),
                       "Treat negative numeric results as MDLs for this parse",
-                      value = FALSE
+                      value = FALSE,
+                      width = "100%"
                     )
                   ),
                   column(
@@ -4165,7 +4384,7 @@ addDiscDataUI <- function(id) {
                   ns = ns,
                   tags$h5("Map source parameter names and units to AquaCache"),
                   helpText(
-                    "After previewing, select any item that needs a mapping, choose what it means in AquaCache, then save it as a draft. Review and publish these changes in Discrete data → Manage import setups, then preview this workbook again before uploading. Publication applies every mapping change in the selected source or workbook format."
+                    "After previewing, select any item that needs a mapping, choose what it means in AquaCache, then save it. The change applies immediately to new previews and imports; refresh this preview before uploading."
                   ),
                   checkboxInput(
                     ns("show_all_mappings"),
@@ -4238,7 +4457,7 @@ addDiscDataUI <- function(id) {
                 )
               ),
               helpText(
-                "The selected visit will be linked to every sample created by this upload. To use more than one visit, upload each visit's samples separately."
+                "New samples will be linked to this visit. Any existing samples selected for additional results must already belong to this visit. To use more than one visit, upload each visit's samples separately."
               ),
               helpText(
                 "Select a sample in the table below to edit it. Use New sample to add a sample alongside file samples or start another manual sample. Field and trip blanks are assigned a matching QC sample type and must be assigned to a trip or QC group, but they will not be assigned a location."
@@ -4472,7 +4691,7 @@ addDiscDataUI <- function(id) {
             "Leave unchecked to upload all samples with mapped results. Selecting one sample is useful when reviewing a workbook or avoiding a second upload of the same samples in another format."
           ),
           helpText(
-            "Any additional documents selected below will also be attached to every sample created by this upload. HEIC/HEIF files are converted to JPEG when this server supports conversion."
+            "Any additional documents selected below will also be attached to every sample included in this upload. HEIC/HEIF files are converted to JPEG when this server supports conversion."
           ),
           fileInput(
             ns("attach_docs"),
@@ -4556,6 +4775,8 @@ addDiscData <- function(id, language) {
     sample_qualifier_map <- reactiveVal(list())
     sample_observer_map <- reactiveVal(list())
     sample_share_map <- reactiveVal(list())
+    existing_sample_candidates <- reactiveVal(data.frame())
+    pending_existing_sample <- reactiveVal(NULL)
     current_manual_sample <- reactiveVal(0L)
     manual_upload_id <- paste0(
       format(Sys.time(), "%Y%m%dT%H%M%OS6", tz = "UTC"),
@@ -4669,8 +4890,6 @@ addDiscData <- function(id, language) {
         "SELECT
            has_table_privilege(current_user, 'discrete.import_sources', 'INSERT')
              AND has_table_privilege(current_user, 'discrete.import_sources', 'UPDATE')
-             AND has_table_privilege(current_user, 'discrete.import_mapping_sets', 'INSERT')
-             AND has_table_privilege(current_user, 'discrete.import_mapping_sets', 'UPDATE')
              AND has_table_privilege(current_user, 'discrete.import_parameter_mappings', 'INSERT')
              AND has_table_privilege(current_user, 'discrete.import_parameter_mappings', 'UPDATE')
              AND has_table_privilege(current_user, 'discrete.import_location_mappings', 'INSERT')
@@ -4679,7 +4898,17 @@ addDiscData <- function(id, language) {
              AND has_table_privilege(current_user, 'discrete.import_result_flag_mappings', 'UPDATE')
              AND has_sequence_privilege(
                current_user,
-               pg_get_serial_sequence('discrete.import_mapping_sets', 'import_mapping_set_id'),
+               pg_get_serial_sequence('discrete.import_parameter_mappings', 'import_mapping_id'),
+               'USAGE'
+             )
+             AND has_sequence_privilege(
+               current_user,
+               pg_get_serial_sequence('discrete.import_location_mappings', 'import_location_mapping_id'),
+               'USAGE'
+             )
+             AND has_sequence_privilege(
+               current_user,
+               pg_get_serial_sequence('discrete.import_result_flag_mappings', 'import_result_flag_mapping_id'),
                'USAGE'
              )
              AND has_sequence_privilege(
@@ -4988,60 +5217,65 @@ addDiscData <- function(id, language) {
     }
 
     group_rows <- initial_sample_groups
-    observeEvent(input$ui_ready, {
-      update_location_selectize()
-      update_sublocation_selectize()
-      updateSelectizeInput(
-        session,
-        "edit_sample_group",
-        choices = stats::setNames(
-          as.character(group_rows$sample_group_id),
-          addDiscData_sample_group_labels(group_rows)
+    observeEvent(
+      input$ui_ready,
+      {
+        update_location_selectize()
+        update_sublocation_selectize()
+        updateSelectizeInput(
+          session,
+          "edit_sample_group",
+          choices = stats::setNames(
+            as.character(group_rows$sample_group_id),
+            addDiscData_sample_group_labels(group_rows)
+          )
         )
-      )
-      updateSelectizeInput(
-        session,
-        "manual_result_condition",
-        choices = stats::setNames(
-          result_conditions$result_condition_id,
-          result_conditions$result_condition
+        updateSelectizeInput(
+          session,
+          "manual_result_condition",
+          choices = stats::setNames(
+            result_conditions$result_condition_id,
+            result_conditions$result_condition
+          )
         )
-      )
-      updateSelectizeInput(
-        session,
-        "manual_result_type",
-        choices = stats::setNames(
-          result_types$result_type_id,
-          result_types$result_type
-        ),
-        selected = 2L
-      )
-      updateSelectizeInput(
-        session,
-        "manual_sample_fraction",
-        choices = stats::setNames(
-          sample_fractions$sample_fraction_id,
-          sample_fractions$sample_fraction
+        updateSelectizeInput(
+          session,
+          "manual_result_type",
+          choices = stats::setNames(
+            result_types$result_type_id,
+            result_types$result_type
+          ),
+          selected = 2L
         )
-      )
-      updateSelectizeInput(
-        session,
-        "manual_result_value_type",
-        choices = stats::setNames(
-          result_value_types$result_value_type_id,
-          result_value_types$result_value_type
-        ),
-        selected = 1L
-      )
-      updateSelectizeInput(
-        session,
-        "manual_descriptor",
-        choices = stats::setNames(
-          reporting_bases$reporting_basis_id,
-          reporting_bases$reporting_basis
+        updateSelectizeInput(
+          session,
+          "manual_sample_fraction",
+          choices = stats::setNames(
+            sample_fractions$sample_fraction_id,
+            sample_fractions$sample_fraction
+          )
         )
-      )
-    }, once = TRUE, ignoreInit = TRUE)
+        updateSelectizeInput(
+          session,
+          "manual_result_value_type",
+          choices = stats::setNames(
+            result_value_types$result_value_type_id,
+            result_value_types$result_value_type
+          ),
+          selected = 1L
+        )
+        updateSelectizeInput(
+          session,
+          "manual_descriptor",
+          choices = stats::setNames(
+            reporting_bases$reporting_basis_id,
+            reporting_bases$reporting_basis
+          )
+        )
+      },
+      once = TRUE,
+      ignoreInit = TRUE
+    )
     parameter_requirement <- function(parameter_id, requirement) {
       parameter_id <- addDiscData_int(parameter_id)
       parameter_rows <- params()
@@ -5202,57 +5436,62 @@ addDiscData <- function(id, language) {
       },
       ignoreInit = FALSE
     )
-    observeEvent(input$ui_ready, {
-      updateSelectizeInput(
-        session,
-        "manual_matrix_state",
-        choices = stats::setNames(
-          matrix_states$matrix_state_id,
-          matrix_states$matrix_state_name
-        ),
-        selected = 1L
-      )
-      updateSelectizeInput(
-        session,
-        "manual_protocol",
-        choices = stats::setNames(
-          protocols_methods$protocol_id,
-          protocols_methods$protocol_name
+    observeEvent(
+      input$ui_ready,
+      {
+        updateSelectizeInput(
+          session,
+          "manual_matrix_state",
+          choices = stats::setNames(
+            matrix_states$matrix_state_id,
+            matrix_states$matrix_state_name
+          ),
+          selected = 1L
         )
-      )
-      updateSelectizeInput(
-        session,
-        "manual_laboratory",
-        choices = stats::setNames(
-          laboratories$lab_id,
-          laboratories$lab_name
+        updateSelectizeInput(
+          session,
+          "manual_protocol",
+          choices = stats::setNames(
+            protocols_methods$protocol_id,
+            protocols_methods$protocol_name
+          )
         )
-      )
-      updateSelectizeInput(
-        session,
-        "manual_grade",
-        choices = stats::setNames(
-          grade_types$grade_type_id,
-          grade_types$grade_type_description
-        ),
-        selected = grade_types[
-          grade_types$grade_type_description == "Unspecified",
-          "grade_type_id"
-        ]
-      )
-      updateSelectizeInput(
-        session,
-        "manual_approval",
-        choices = stats::setNames(
-          approval_types$approval_type_id,
-          approval_types$approval_type_description
-        ),
-        selected = approval_types[
-          approval_types$approval_type_description == "Not reviewed",
-          "approval_type_id"
-        ]
-      )
-    }, once = TRUE, ignoreInit = TRUE)
+        updateSelectizeInput(
+          session,
+          "manual_laboratory",
+          choices = stats::setNames(
+            laboratories$lab_id,
+            laboratories$lab_name
+          )
+        )
+        updateSelectizeInput(
+          session,
+          "manual_grade",
+          choices = stats::setNames(
+            grade_types$grade_type_id,
+            grade_types$grade_type_description
+          ),
+          selected = grade_types[
+            grade_types$grade_type_description == "Unspecified",
+            "grade_type_id"
+          ]
+        )
+        updateSelectizeInput(
+          session,
+          "manual_approval",
+          choices = stats::setNames(
+            approval_types$approval_type_id,
+            approval_types$approval_type_description
+          ),
+          selected = approval_types[
+            approval_types$approval_type_description == "Not reviewed",
+            "approval_type_id"
+          ]
+        )
+      },
+      once = TRUE,
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$edit_sample_location,
@@ -5377,7 +5616,12 @@ addDiscData <- function(id, language) {
         selected = selected
       )
     }
-    observeEvent(input$ui_ready, reload_profiles(), once = TRUE, ignoreInit = TRUE)
+    observeEvent(
+      input$ui_ready,
+      reload_profiles(),
+      once = TRUE,
+      ignoreInit = TRUE
+    )
     if (is.null(session$userData$import_setup_revision)) {
       session$userData$import_setup_revision <- reactiveVal(0L)
     }
@@ -5538,7 +5782,8 @@ addDiscData <- function(id, language) {
     refresh_current_preview <- function(
       profile,
       preserve_edits = TRUE,
-      parsed = NULL
+      parsed = NULL,
+      snapshot = NULL
     ) {
       path <- data$raw_file_path
       if (
@@ -5554,7 +5799,16 @@ addDiscData <- function(id, language) {
         return(invisible(FALSE))
       }
       data$preview_is_stale <- TRUE
+      upload_options <- list(
+        negative_values_are_mdl = isTRUE(input$negative_values_are_mdl),
+        negative_mdl_exclusions = data$negative_mdl_exclusions
+      )
       if (is.null(parsed)) {
+        configuration <- addDiscData_preview_configuration(
+          con, profile, options = upload_options
+        )
+        profile <- configuration$profile
+        snapshot <- configuration$snapshot
         parsed <- addDiscData_parse_upload(
           path,
           profile,
@@ -5562,7 +5816,12 @@ addDiscData <- function(id, language) {
           negative_mdl_exclusions = data$negative_mdl_exclusions
         )
       }
-      snapshot <- addDiscData_mapping_snapshot(con, profile)
+      if (is.null(snapshot) || !identical(
+        snapshot,
+        addDiscData_mapping_snapshot(con, profile, options = upload_options)
+      )) {
+        stop("The parser settings or mappings changed while parsing the workbook. Preview the workbook again.")
+      }
       location_mappings <- AquaCache::getImportLocationMappings(
         con = con,
         source_code = profile$source_code[[1]],
@@ -5600,9 +5859,14 @@ addDiscData <- function(id, language) {
         profile_code = profile$profile_code[[1]]
       )
       parsed <- parsed[names(addDiscData_empty_table())]
-      if (!identical(snapshot, addDiscData_mapping_snapshot(con, profile))) {
+      if (
+        !identical(
+          snapshot,
+          addDiscData_mapping_snapshot(con, profile, options = upload_options)
+        )
+      ) {
         stop(
-          "The mapping revision changed while preparing the preview. Preview the workbook again."
+          "The parser settings or mappings changed while preparing the preview. Preview the workbook again."
         )
       }
       data$preview_mapping_snapshot <- snapshot
@@ -5663,7 +5927,23 @@ addDiscData <- function(id, language) {
         still_current <- identical(current_path, request$path) &&
           identical(data$raw_file_path, request$path) &&
           identical(data$preview_profile_key, request$profile_key)
-        if (still_current) {
+        current_snapshot <- if (still_current) {
+          tryCatch(
+            addDiscData_mapping_snapshot(
+              con,
+              request$profile,
+              options = list(
+                negative_values_are_mdl = isTRUE(input$negative_values_are_mdl),
+                negative_mdl_exclusions = data$negative_mdl_exclusions
+              )
+            ),
+            error = function(e) e
+          )
+        } else {
+          NULL
+        }
+        if (still_current && !is.null(result$mapping_snapshot) &&
+          identical(result$mapping_snapshot, current_snapshot)) {
           data$df <- addDiscData_merge_preview_edits(
             result$parsed,
             data$df,
@@ -5671,10 +5951,7 @@ addDiscData <- function(id, language) {
           )
           data$preview_base <- result$parsed
           data$preview_profile_key <- request$profile_key
-          data$preview_mapping_snapshot <- addDiscData_mapping_snapshot(
-            con,
-            request$profile
-          )
+          data$preview_mapping_snapshot <- result$mapping_snapshot
           data$negative_mdl_choices <- addDiscData_negative_mdl_choices(
             result$parsed
           )
@@ -5698,12 +5975,12 @@ addDiscData <- function(id, language) {
         paste(
           "Saved",
           label,
-          "but the selected workbook changed before refresh completed."
+          "but the preview could not be confirmed against the current workbook and configuration. Preview the workbook again."
         )
       }
       message <- paste(
         message,
-        "Review and publish the draft in the Import setup manager before uploading."
+        "Saved mappings apply immediately to new previews and imports."
       )
       showNotification(
         message,
@@ -5938,7 +6215,23 @@ addDiscData <- function(id, language) {
 
     observeEvent(input$preview_file, {
       req(input$file)
-      profile <- selected_profile()
+      configuration <- tryCatch(
+        addDiscData_preview_configuration(
+          con,
+          selected_profile(),
+          options = list(
+            negative_values_are_mdl = isTRUE(input$negative_values_are_mdl),
+            negative_mdl_exclusions = data$negative_mdl_exclusions
+          )
+        ),
+        error = function(e) e
+      )
+      if (inherits(configuration, "error")) {
+        data$preview_is_stale <- TRUE
+        showNotification(paste("Preview failed:", configuration$message), type = "error")
+        return()
+      }
+      profile <- configuration$profile
       path <- input$file$datapath
       profile_key <- addDiscData_profile_key(
         profile$source_code[[1]],
@@ -5960,6 +6253,7 @@ addDiscData <- function(id, language) {
       preview_parse_task$invoke(list(
         path = path,
         profile = profile,
+        mapping_snapshot = configuration$snapshot,
         profile_key = profile_key,
         same_file = same_file,
         negative_values_are_mdl = isTRUE(input$negative_values_are_mdl),
@@ -6021,7 +6315,8 @@ addDiscData <- function(id, language) {
           refresh_current_preview(
             request$profile,
             preserve_edits = request$same_file,
-            parsed = result$parsed
+            parsed = result$parsed,
+            snapshot = request$mapping_snapshot
           )
           showNotification(
             sprintf(
@@ -6521,6 +6816,174 @@ addDiscData <- function(id, language) {
       ignoreInit = TRUE
     )
 
+    observeEvent(input$open_existing_sample, {
+      row <- selected_sample_row()
+      req(!is.null(row))
+      can_lock <- DBI::dbGetQuery(
+        con,
+        "SELECT has_table_privilege(current_user,'discrete.samples','UPDATE') AS allowed"
+      )$allowed[[1]]
+      if (!isTRUE(can_lock)) {
+        showNotification(
+          "Appending to an existing sample requires sample update permission.",
+          type = "error"
+        )
+        return()
+      }
+      reference_time <- as.POSIXct(row$datetime[[1]], tz = "UTC")
+      if (is.na(reference_time)) {
+        reference_time <- Sys.time()
+      }
+      candidates <- DBI::dbGetQuery(
+        con,
+        "SELECT s.sample_id, s.datetime, s.external_sample_id, s.z, st.sample_type
+         FROM discrete.samples s JOIN discrete.sample_types st ON st.sample_type_id=s.sample_type
+         WHERE s.location_id IS NOT DISTINCT FROM $1::integer AND s.media_id=$2
+         ORDER BY abs(extract(epoch FROM s.datetime-$3::timestamptz)), s.sample_id DESC LIMIT 200",
+        params = list(
+          addDiscData_int(row$location_id),
+          addDiscData_int(row$media_id),
+          reference_time
+        )
+      )
+      existing_sample_candidates(candidates)
+      pending_existing_sample(as.character(row$sample_key[[1]]))
+      showModal(modalDialog(
+        title = paste(
+          "Choose the existing sample for",
+          row$source_sample_id[[1]]
+        ),
+        helpText(
+          "Select a sample at the same location with the same media. The closest 200 collection dates are shown. You can also enter a known AquaCache sample ID. Existing collection metadata and visibility will be retained."
+        ),
+        numericInput(
+          ns("existing_sample_choice"),
+          "AquaCache sample ID",
+          value = NA,
+          min = 1,
+          step = 1
+        ),
+        DT::DTOutput(ns("existing_sample_table")),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(
+            ns("use_existing_sample"),
+            "Add results to this sample",
+            class = "btn-primary"
+          )
+        ),
+        size = "l",
+        easyClose = TRUE
+      ))
+    })
+
+    output$existing_sample_table <- DT::renderDT(
+      {
+        candidates <- existing_sample_candidates()
+        if (nrow(candidates)) {
+          candidates$datetime <- format(
+            candidates$datetime,
+            "%Y-%m-%d %H:%M:%S UTC",
+            tz = "UTC"
+          )
+          names(candidates) <- c(
+            "Sample ID",
+            "Collection datetime",
+            "Source identifier",
+            "Depth (m)",
+            "Sample type"
+          )
+        }
+        DT::datatable(
+          candidates,
+          rownames = FALSE,
+          selection = "single",
+          options = list(pageLength = 5, scrollX = TRUE)
+        )
+      },
+      server = FALSE
+    )
+
+    observeEvent(input$existing_sample_table_rows_selected, {
+      selected <- input$existing_sample_table_rows_selected
+      if (length(selected) == 1L) {
+        updateNumericInput(
+          session,
+          "existing_sample_choice",
+          value = existing_sample_candidates()$sample_id[[selected]]
+        )
+      }
+    })
+
+    observeEvent(input$use_existing_sample, {
+      key <- pending_existing_sample()
+      req(!is.null(key), key %in% data$df$sample_key)
+      sample_id <- addDiscData_int(input$existing_sample_choice)
+      if (
+        is.na(sample_id) ||
+          length(input$existing_sample_choice) != 1L ||
+          as.numeric(sample_id) != as.numeric(input$existing_sample_choice)
+      ) {
+        showNotification(
+          "Select or enter a whole-number AquaCache sample ID.",
+          type = "error"
+        )
+        return()
+      }
+      target <- DBI::dbGetQuery(
+        con,
+        "SELECT s.*, s.comissioning_org AS commissioning_org, s.note AS sample_note,
+                s.no_source_update AS sample_no_source_update,
+                COALESCE(s.modified,s.created)::text AS sample_version,
+                array_to_json(s.share_with)::text AS share_json
+         FROM discrete.samples s WHERE sample_id=$1",
+        params = list(sample_id)
+      )
+      if (nrow(target) != 1L) {
+        showNotification("That sample is unavailable.", type = "error")
+        return()
+      }
+      row <- data$df[match(key, data$df$sample_key), , drop = FALSE]
+      if (
+        !identical(
+          addDiscData_int(target$location_id),
+          addDiscData_int(row$location_id)
+        ) ||
+          !identical(
+            addDiscData_int(target$media_id),
+            addDiscData_int(row$media_id)
+          )
+      ) {
+        showNotification(
+          "Choose a sample at the same location with the same media. Correct the workbook sample's location or media first if needed.",
+          type = "error"
+        )
+        return()
+      }
+      data$df <- addDiscData_use_existing_sample(data$df, key, target)
+      share <- sample_share_map()
+      share[[key]] <- jsonlite::fromJSON(target$share_json[[1]])
+      sample_share_map(share)
+      pending_existing_sample(NULL)
+      removeModal()
+      showNotification(
+        paste("New results will be added to AquaCache sample", sample_id),
+        type = "message"
+      )
+    })
+
+    observeEvent(input$unlink_existing_sample, {
+      row <- selected_sample_row()
+      req(!is.null(row))
+      ix <- which(data$df$sample_key == row$sample_key[[1]])
+      data$df$existing_sample_id[ix] <- NA_integer_
+      data$df$existing_sample_version[ix] <- NA_character_
+      showNotification(
+        "This upload will create a new sample. Review its collection metadata before uploading.",
+        type = "message"
+      )
+    })
+
     observeEvent(input$save_sample, {
       existing <- selected_sample_row()
       location_id <- addDiscData_int(input$edit_sample_location)
@@ -6702,11 +7165,13 @@ addDiscData <- function(id, language) {
           )
           return()
         }
-        sample_keys <- unique(as.character(data$df$sample_key))
+        sample_keys <- unique(as.character(data$df$sample_key[is.na(
+          data$df$existing_sample_id
+        )]))
         sample_keys <- sample_keys[!is.na(sample_keys) & nzchar(sample_keys)]
         if (!length(sample_keys)) {
           showNotification(
-            "There are no samples in the current upload to update.",
+            "There are no new samples in the current upload to update.",
             type = "warning"
           )
           return()
@@ -6717,7 +7182,7 @@ addDiscData <- function(id, language) {
         }
         sample_share_map(share_state)
         showNotification(
-          sprintf("Applied sharing to %s sample(s).", length(sample_keys)),
+          sprintf("Applied sharing to %s new sample(s).", length(sample_keys)),
           type = "message"
         )
       },
@@ -6778,6 +7243,8 @@ addDiscData <- function(id, language) {
       row[1, ] <- NA
       sample_fields <- c(
         "sample_key",
+        "existing_sample_id",
+        "existing_sample_version",
         "source_location_name",
         "location_mapping_status",
         "location_id",
@@ -6938,6 +7405,11 @@ addDiscData <- function(id, language) {
         )
         summary <- data.frame(
           `Source sample` = df$source_sample_id,
+          `Destination sample` = ifelse(
+            is.na(df$existing_sample_id),
+            "New sample",
+            paste("AquaCache", df$existing_sample_id)
+          ),
           `Source location` = df$source_location_name,
           `Sample datetime (UTC)` = format(
             df$datetime,
@@ -7009,6 +7481,33 @@ addDiscData <- function(id, language) {
     output$sample_editor <- renderUI({
       row <- selected_sample_row()
       selected <- !is.null(row)
+      if (selected && !is.na(addDiscData_int(row$existing_sample_id))) {
+        return(tagList(
+          tags$h5(paste(
+            "Add results to AquaCache sample",
+            row$existing_sample_id[[1]]
+          )),
+          tags$div(
+            class = "alert alert-info",
+            tags$p(paste("Workbook sample:", row$source_sample_id[[1]])),
+            tags$p(paste(
+              "Collection datetime:",
+              format(row$datetime[[1]], "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+            )),
+            tags$p(
+              "The existing sample's collection metadata, groups, samplers, qualifiers and visibility will be retained. Edit the result fields below as needed. Use Edit samples and results to change the sample itself."
+            )
+          ),
+          actionButton(
+            ns("open_existing_sample"),
+            "Choose a different existing sample"
+          ),
+          actionButton(
+            ns("unlink_existing_sample"),
+            "Create a new sample instead"
+          )
+        ))
+      }
       if (!selected) {
         row <- addDiscData_empty_table()
         row[1, ] <- NA
@@ -7072,6 +7571,17 @@ addDiscData <- function(id, language) {
             "New sample details"
           }
         ),
+        if (selected) {
+          tagList(
+            actionButton(
+              ns("open_existing_sample"),
+              "Add results to an existing sample"
+            ),
+            helpText(
+              "Use this when field readings or another laboratory's results already exist for this physical sample."
+            )
+          )
+        },
         fluidRow(
           column(
             3,
@@ -7429,14 +7939,14 @@ addDiscData <- function(id, language) {
               style = "padding-top: 25px;",
               actionButton(
                 ns("apply_sample_share_with"),
-                "Apply to all samples",
-                title = "Use this sharing selection for every sample in the current upload"
+                "Apply to all new samples",
+                title = "Use this sharing selection for every new sample in the current upload"
               )
             )
           )
         ),
         helpText(
-          "New samples are visible to all users by default. To restrict visibility, remove All users and select access groups, then save this sample. Use Apply to all samples to set the same sharing for the current upload."
+          "New samples are visible to all users by default. To restrict visibility, remove All users and select access groups, then save this sample. Use Apply to all new samples to set the same sharing for the current upload."
         ),
         actionButton(
           ns("save_sample"),
@@ -9291,7 +9801,7 @@ addDiscData <- function(id, language) {
               active = TRUE,
               note = "Saved from YGwater add discrete data result-flag mapping editor."
             ),
-            publish = FALSE
+            publish = TRUE
           )
           mapping_revision(mapping_revision() + 1L)
           preview_error <- tryCatch(
@@ -9740,8 +10250,9 @@ addDiscData <- function(id, language) {
           call. = FALSE
         )
       }
-      requires_group <- missing_location |
-        sample_types$requires_sample_group[type_index]
+      requires_group <- (missing_location |
+        sample_types$requires_sample_group[type_index]) &
+        is.na(df$existing_sample_id)
       if (any(requires_group & is.na(df$sample_group_id))) {
         stop(
           "Every locationless sample and any sample type that requires a group must be assigned to a sample group. For field or trip blanks, select or create the related trip or QC group in Sample details.",
@@ -9900,16 +10411,17 @@ addDiscData <- function(id, language) {
         )
       }
       if (any(df$source_code != "YGwater-manual", na.rm = TRUE)) {
-        snapshot <- addDiscData_mapping_snapshot(con, selected_profile())
-        if (any(snapshot$status == "draft")) {
-          stop(
-            "Review and publish the source and workbook drafts in the Import setup manager, then preview the workbook again.",
-            call. = FALSE
+        snapshot <- addDiscData_mapping_snapshot(
+          con,
+          selected_profile(),
+          options = list(
+            negative_values_are_mdl = isTRUE(input$negative_values_are_mdl),
+            negative_mdl_exclusions = data$negative_mdl_exclusions
           )
-        }
+        )
         if (!identical(snapshot, data$preview_mapping_snapshot)) {
           stop(
-            "The published mappings changed after this preview. Preview the workbook again before uploading.",
+            "The parser settings or mappings changed after this preview. Preview the workbook again before uploading.",
             call. = FALSE
           )
         }
@@ -9948,6 +10460,18 @@ addDiscData <- function(id, language) {
         )
       })
       names(sample_share_with) <- sample_keys
+      source_samples <- data$df[
+        which(
+          !is.na(data$df$source_code) & data$df$source_code != "YGwater-manual"
+        ),
+        ,
+        drop = FALSE
+      ]
+      source_samples <- source_samples[
+        !duplicated(source_samples$sample_key),
+        ,
+        drop = FALSE
+      ]
       file <- if (is.null(input$file)) {
         NULL
       } else {
@@ -9996,9 +10520,13 @@ addDiscData <- function(id, language) {
             NULL
           },
           source_samples = plan$total_samples,
+          omitted_samples = length(setdiff(
+            source_samples$sample_key,
+            df$sample_key
+          )),
           uploaded_samples = plan$included_samples,
           omitted_parameters = plan$omissions,
-          omitted_samples = plan$omitted_samples
+          omitted_sample_details = plan$omitted_samples
         ),
         partial_upload_acknowledged = FALSE,
         mapping_snapshot = if (is.null(profile)) {
@@ -10069,6 +10597,9 @@ addDiscData <- function(id, language) {
           "The original workbook will still be attached to the imported samples."
         ),
         DT::DTOutput(session$ns("upload_omissions")),
+        tags$p(
+          "The complete workbook, including omitted samples and results, will be archived. Its access groups are calculated from every source sample in this preview. If whole samples are omitted, later sample edits retain the workbook's existing access limits; broader sharing requires reviewing the complete file in the document editor."
+        ),
         checkboxInput(
           session$ns("acknowledge_partial_upload"),
           sprintf(
@@ -10142,19 +10673,21 @@ addDiscData <- function(id, language) {
       if (!isTRUE(result$ok)) {
         showNotification(
           paste("Upload failed:", result$message),
-          type = "error"
+          type = "error",
+          duration = NULL
         )
         return()
       }
 
       summary <- result$summary
       names(summary) <- c(
-        "New sample ID",
+        "Sample ID",
         "Source",
         "Source sample ID",
         "Sample date/time (UTC)",
         "AquaCache location",
-        "AquaCache sub-location"
+        "AquaCache sub-location",
+        "Sample action"
       )
       upload_summary(summary)
       data$df <- addDiscData_empty_table()
@@ -10173,8 +10706,9 @@ addDiscData <- function(id, language) {
           easyClose = TRUE,
           tags$p(
             sprintf(
-              "Added %s sample(s) and %s result(s). New sample IDs and destination locations are listed below.",
+              "Created %s sample(s), used %s existing sample(s), and added %s result(s). Destination sample IDs and locations are listed below.",
               result$inserted_samples,
+              result$reused_samples,
               result$inserted_results
             )
           ),
@@ -10215,7 +10749,7 @@ addDiscData <- function(id, language) {
         ),
         source_columns = c("Source", "Source sample ID"),
         target_columns = c(
-          "New sample ID",
+          "Sample ID",
           "Sample date/time (UTC)",
           "AquaCache location",
           "AquaCache sub-location"

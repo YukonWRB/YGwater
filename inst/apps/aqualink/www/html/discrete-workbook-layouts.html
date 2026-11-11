@@ -137,14 +137,13 @@
     <p>A source parameter need not be identified by just its name and unit. Choose <strong>Several source columns</strong> to combine name, unit, speciation, sample fraction, result type, or other source fields. Every listed condition must match. This keeps two otherwise identical source rows distinct when their chemical form or fraction differs.</p>
     <p>In the workbook format, retain these fields under <strong>Additional columns used for matching</strong>. Then add their source names and expected values to the parameter mapping. For example, an XLR mapping can require Analyte = Conductivity, Units = µS/cm, and Matrix = Water together. A transfer from another AquaCache instance can retain its separate chemistry columns in the same way.</p>
     <p>The source conditions identify the incoming row. The destination fields independently specify the AquaCache parameter, matrix, fraction, reporting basis, chemical form and result type. Review both sides; an incoming fraction label does not automatically assign the destination fraction. An explicitly empty unit condition matches missing source units. Omit the unit condition when the mapping should not constrain units, and ensure any required conversion is still defined correctly.</p>
-    <h3>Editing and publishing</h3>
+    <h3>Editing current mappings</h3>
     <ol>
       <li>Select the source and, when appropriate, the workbook format. Review a saved mapping before editing it.</li>
-      <li>Save the mapping as a draft. The current published revision continues to control imports.</li>
-      <li>Review and publish the selected scope. Publication activates that scope's parameter, location and result-flag mappings together.</li>
-      <li>Parse an already-open workbook again to use the new revision. Its preview reports results that remain unmapped or excluded.</li>
+      <li>Save changes directly to the selected source-wide or workbook-format scope.</li>
+      <li>Parse an already-open workbook again to use the current settings. Its preview reports results that remain unmapped or excluded.</li>
     </ol>
-    <p>The previous published revision becomes <strong>retired history</strong>. Open it to see what earlier imports used, then choose <strong>Open current version</strong> to make a new change. Earlier uploads retain their recorded mapping revision. Workbook layout settings themselves save immediately; the draft/published/retired lifecycle applies to mapping revisions.</p>
+    <p>Each completed upload stores a compact snapshot of the effective parser settings, mappings and upload options on its import-run record. The uploaded workbook is retained with that record when available, so the import can be reconstructed without keeping separate mapping revisions.</p>
     <details>
       <summary>Related database tables</summary>
       <p>You can use the application without editing these tables directly. They store different parts of the same workflow:</p>
@@ -153,10 +152,10 @@
         <tbody>
           <tr><th><code>discrete.import_sources</code></th><td>Provider or system identity.</td></tr>
           <tr><th><code>discrete.import_profiles</code></th><td>Workbook layout, field locations, retained matching columns and defaults.</td></tr>
-          <tr><th><code>discrete.import_mapping_sets</code></th><td>Draft, published and retired revisions for one source-wide or workbook-format scope.</td></tr>
-          <tr><th><code>discrete.import_parameter_mappings</code><br><code>discrete.import_location_mappings</code><br><code>discrete.import_result_flag_mappings</code></th><td>The matching conditions and destination assignments within each revision.</td></tr>
+          <tr><th><code>discrete.import_parameter_mappings</code><br><code>discrete.import_location_mappings</code><br><code>discrete.import_result_flag_mappings</code></th><td>Current source-wide and workbook-format mapping definitions.</td></tr>
           <tr><th><code>public.parameters</code>, <code>public.locations</code> and chemistry lookup tables</th><td>The actual AquaCache catalogue entries to which source data are assigned.</td></tr>
-          <tr><th><code>discrete.import_runs</code><br><code>discrete.import_run_rows</code></th><td>Upload history, the mapping revisions used, source row information and committed sample/result references.</td></tr>
+          <tr><th><code>discrete.import_runs</code></th><td>One upload record with its configuration snapshot, source workbook reference and summary.</td></tr>
+          <tr><th><code>discrete.results.import_run_id</code></th><td>Connects each imported result to the upload that created it, including when multiple uploads add results to one sample.</td></tr>
           <tr><th><code>discrete.samples</code><br><code>discrete.results</code></th><td>The sample records and measurements created by a successful upload.</td></tr>
         </tbody>
       </table>
