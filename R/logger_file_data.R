@@ -14,7 +14,10 @@
 #'   `OlsonNames()` (for example, `"America/Whitehorse"` or `"UTC"`) or a fixed
 #'   UTC offset in hours (for example, `-7` for UTC-07:00). Fixed offsets may
 #'   also be supplied as strings like `"UTC-07:00"`, `"-07:00"`, or `"GMT-07:00"`.
-#'   Defaults to UTC.
+#'   Run `OlsonNames()` for names available to R. The IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab) lists
+#'   geographic zone names. Prefer these over abbreviations such as `"MST"` for
+#'   consistent behavior across operating systems. Defaults to UTC.
 #'
 #' @return A data frame with `datetime` in UTC and one column per logger
 #'   measurement.
@@ -79,7 +82,9 @@ read_solinst_xle_data <- function(file, default_tz = "UTC") {
 
   dates <- xml2::xml_text(xml2::xml_find_all(xml_file, ".//Data/Log/Date"))
   times <- xml2::xml_text(xml2::xml_find_all(xml_file, ".//Data/Log/Time"))
-  if (length(dates) != length(log_nodes) || length(times) != length(log_nodes)) {
+  if (
+    length(dates) != length(log_nodes) || length(times) != length(log_nodes)
+  ) {
     stop("XLE log rows must each contain Date and Time fields.", call. = FALSE)
   }
 
@@ -147,10 +152,17 @@ read_insitu_html_data <- function(file, default_tz = "UTC") {
   })
   row_lengths <- lengths(rows)
   if (any(row_lengths != length(headers))) {
-    stop("HTML logger data rows do not match the header column count.", call. = FALSE)
+    stop(
+      "HTML logger data rows do not match the header column count.",
+      call. = FALSE
+    )
   }
 
-  mat <- matrix(unlist(rows, use.names = FALSE), ncol = length(headers), byrow = TRUE)
+  mat <- matrix(
+    unlist(rows, use.names = FALSE),
+    ncol = length(headers),
+    byrow = TRUE
+  )
   parsed_headers <- parse_logger_headers(headers)
   offset_seconds <- html_time_offset_seconds(html)
 
@@ -192,7 +204,8 @@ is_insitu_html_logger_file <- function(html) {
   has_time_offset <- length(rvest::html_elements(
     html,
     "[isi-group-member='ReportProperties'][isi-property='TimeOffset']"
-  )) > 0L
+  )) >
+    0L
 
   has_data_table && has_data_rows && has_time_offset
 }

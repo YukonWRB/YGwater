@@ -50,13 +50,22 @@ get_cached <- function(
 #'
 #' @param key The cached key to remove.
 #' @param env The environment from which to remove the cached key. Defaults to `.GlobalEnv`.
+#' @param all_scopes Also remove entries whose keys begin with `key` followed by
+#'   a colon, such as database/user-scoped copies. Defaults to FALSE for exact
+#'   key matching. Unrelated keys with similar names are retained.
 #' @export
 
-clear_cached <- function(key, env = .GlobalEnv) {
-  if (exists("app_cache", envir = env)) {
-    cache_env <- get("app_cache", envir = env)
-    if (exists(key, envir = cache_env, inherits = FALSE)) {
-      rm(list = key, envir = cache_env)
-    }
+clear_cached <- function(key, env = .GlobalEnv, all_scopes = FALSE) {
+  cache_env <- get0("app_cache", envir = env, inherits = FALSE)
+  if (!is.environment(cache_env)) return(invisible(NULL))
+  keys <- if (all_scopes) {
+    stored_keys <- ls(envir = cache_env, all.names = TRUE)
+    stored_keys[stored_keys == key | startsWith(stored_keys, paste0(key, ":"))]
+  } else if (exists(key, envir = cache_env, inherits = FALSE)) {
+    key
+  } else {
+    character()
   }
+  if (length(keys)) rm(list = keys, envir = cache_env)
+  invisible(NULL)
 }

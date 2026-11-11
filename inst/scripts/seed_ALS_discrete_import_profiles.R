@@ -163,13 +163,18 @@ upsert_parameter_mappings <- function(con, source_id, key) {
   key <- key[ignore_bool == FALSE]
   key <- key[is_present(input_param) & !is.na(suppressWarnings(as.integer(parameter_id)))]
 
+  # Resolve stable catalogue codes and source-key aliases with the same
+  # resolver used by normal imports, including species and operational targets.
+  key <- AquaCache:::import_mapping_resolve_targets(con, key)
   optional_defaults <- list(
     result_type = 2L,
     matrix_state = 1L,
     sample_fraction = NA_integer_,
     sample_fraction_AC = NA_integer_,
     result_value_type = 1L,
-    result_speciation_id = NA_integer_,
+    reporting_basis_id = NA_integer_,
+    result_speciation_id = NA_integer_, result_target_id = NA_integer_,
+    endpoint_mode = NA_character_, endpoint_ph = NA_real_, analysis_conditions = "{}",
     conversion = 1,
     result_offset = 0,
     FLAG_notes_combined = NA_character_
@@ -183,6 +188,10 @@ upsert_parameter_mappings <- function(con, source_id, key) {
   valid_parameters <- DBI::dbGetQuery(
     con,
     "SELECT parameter_id FROM public.parameters;"
+  )$parameter_id
+  endpoint_parameters <- DBI::dbGetQuery(
+    con,
+    "SELECT parameter_id FROM public.parameters WHERE endpoint;"
   )$parameter_id
   key[, parameter_id_int := suppressWarnings(as.integer(parameter_id))]
   missing_parameter <- !(key$parameter_id_int %in% valid_parameters)
@@ -203,10 +212,10 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     con,
     "SELECT result_value_type_id FROM discrete.result_value_types;"
   )$result_value_type_id
-  valid_result_speciations <- DBI::dbGetQuery(
+  valid_reporting_bases <- DBI::dbGetQuery(
     con,
-    "SELECT result_speciation_id FROM discrete.result_speciations;"
-  )$result_speciation_id
+    "SELECT reporting_basis_id FROM discrete.reporting_bases;"
+  )$reporting_basis_id
 
   resolved <- vector("list", nrow(key))
   for (i in seq_len(nrow(key))) {
@@ -228,9 +237,24 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     if (!(result_value_type %in% valid_result_value_types)) {
       result_value_type <- 1L
     }
-    result_speciation_id <- scalar_int(key$result_speciation_id[[i]])
-    if (!is.na(result_speciation_id) && !(result_speciation_id %in% valid_result_speciations)) {
-      result_speciation_id <- NA_integer_
+    reporting_basis_id <- scalar_int(key$reporting_basis_id[[i]])
+    if (!is.na(reporting_basis_id) && !(reporting_basis_id %in% valid_reporting_bases)) {
+      stop("Unknown reporting basis in source-key row ", i, ". Migrate legacy descriptors explicitly.")
+    }
+
+    endpoint_mode <- as.character(key$endpoint_mode[[i]])
+    mapping_note <- as.character(key$FLAG_notes_combined[[i]])
+    if (
+      key$parameter_id_int[[i]] %in% endpoint_parameters &&
+        (is.na(endpoint_mode) || !nzchar(trimws(endpoint_mode)))
+    ) {
+      # The legacy EQWin key identifies alkalinity but carries no titration
+      # endpoint metadata. Preserve that omission explicitly instead of
+      # creating an invalid active mapping or guessing a fixed endpoint.
+      endpoint_mode <- "unknown"
+      if (is.na(mapping_note) || !nzchar(trimws(mapping_note))) {
+        mapping_note <- "The source key omits titration endpoint details; endpoint is unknown."
+      }
     }
 
     resolved[[i]] <- data.frame(
@@ -240,17 +264,73 @@ upsert_parameter_mappings <- function(con, source_id, key) {
       result_type = scalar_int(key$result_type[[i]], 2L),
       sample_fraction_id = sample_fraction_id,
       result_value_type = result_value_type,
-      result_speciation_id = result_speciation_id,
-      matrix_state_id = scalar_int(key$matrix_state[[i]], 1L),
+      reporting_basis_id = reporting_basis_id,
+      result_speciation_id = scalar_int(key$result_speciation_id[[i]]),
+      result_target_id = scalar_int(key$result_target_id[[i]]),
+      endpoint_mode = endpoint_mode,
+      endpoint_ph = scalar_num(key$endpoint_ph[[i]]),
+      analysis_conditions = AquaCache::normalizeAnalysisConditions(key$analysis_conditions[[i]]),
+      matrix_state_id = scalar_int(key$matrix_state_id[[i]]),
       conversion = scalar_num(key$conversion[[i]], 1),
       result_offset = scalar_num(key$result_offset[[i]], 0),
       priority = 100L,
       active = TRUE,
-      note = as.character(key$FLAG_notes_combined[[i]]),
+      note = mapping_note,
       stringsAsFactors = FALSE
     )
   }
   resolved <- data.table::rbindlist(resolved, fill = TRUE)
+
+  # Keep malformed source-key rows out of the active mapping table. The
+  # database exposes the same requirement check used by its write guard, so
+  # this seed operation can report incomplete targets without rolling back
+  # otherwise valid mappings.
+  nullable_value <- function(value) {
+    if (length(value) == 0L || is.na(value[[1]])) NULL else value[[1]]
+  }
+  mapping_candidates <- lapply(seq_len(nrow(resolved)), function(i) list(
+    parameter_id = resolved$parameter_id[[i]],
+    sample_fraction_id = nullable_value(resolved$sample_fraction_id[[i]]),
+    reporting_basis_id = nullable_value(resolved$reporting_basis_id[[i]]),
+    result_speciation_id = nullable_value(resolved$result_speciation_id[[i]]),
+    result_target_id = nullable_value(resolved$result_target_id[[i]]),
+    endpoint_mode = nullable_value(resolved$endpoint_mode[[i]]),
+    matrix_state_id = nullable_value(resolved$matrix_state_id[[i]]),
+    analysis_conditions = jsonlite::fromJSON(
+      resolved$analysis_conditions[[i]],
+      simplifyVector = FALSE
+    )
+  ))
+  mapping_json <- jsonlite::toJSON(
+    mapping_candidates,
+    auto_unbox = TRUE,
+    null = "null",
+    na = "null"
+  )
+  invalid <- DBI::dbGetQuery(
+    con,
+    "WITH candidates AS (
+       SELECT ord::INTEGER AS source_row,
+              jsonb_populate_record(
+                NULL::discrete.import_parameter_mappings,
+                candidate
+              ) AS mapping
+       FROM jsonb_array_elements($1::JSONB) WITH ORDINALITY AS rows(candidate, ord)
+     )
+     SELECT source_row,
+            discrete.import_parameter_mapping_error(mapping) AS missing_dimension
+     FROM candidates
+     WHERE discrete.import_parameter_mapping_error(mapping) IS NOT NULL",
+    params = list(mapping_json)
+  )
+  if (nrow(invalid)) {
+    message(
+      "Skipping ", nrow(invalid), " incomplete source-key mapping row(s): ",
+      paste(sort(unique(invalid$missing_dimension)), collapse = ", "), "."
+    )
+    resolved <- resolved[!seq_len(nrow(resolved)) %in% invalid$source_row]
+  }
+
   source <- DBI::dbGetQuery(
     con,
     "SELECT source_code, source_name
@@ -327,7 +407,8 @@ upsert_parameter_mappings <- function(con, source_id, key) {
       result_type,
       sample_fraction_id,
       result_value_type,
-      result_speciation_id,
+      reporting_basis_id, result_speciation_id, result_target_id,
+      endpoint_mode, endpoint_ph, analysis_conditions,
       matrix_state_id,
       conversion = 1,
       result_offset = 0,
@@ -387,7 +468,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
           NA_integer_
         },
         result_value_type = 1L,
-        result_speciation_id = NA_integer_,
+        reporting_basis_id = NA_integer_,
         matrix_state_id = 1L,
         conversion = 1,
         result_offset = 0,
@@ -458,7 +539,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     result_type = 2L,
     sample_fraction_id = dissolved_fraction[[1]],
     result_value_type = 1L,
-    result_speciation_id = NA_integer_,
+    reporting_basis_id = NA_integer_,
     matrix_state_id = 1L,
     conversion = 1,
     result_offset = 0,
@@ -470,7 +551,45 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     xlr,
     explicit_xlr_aliases[, setdiff(names(explicit_xlr_aliases), "param_name"), with = FALSE]
   ), fill = TRUE)
-  xlr <- unique(xlr, by = c("parameter_code", "unit"))
+  xlr[, source_key := paste(
+    tolower(trimws(parameter_code)),
+    tolower(trimws(unit)),
+    sep = "\r"
+  )]
+  semantic_fields <- c(
+    "parameter_id",
+    "result_type",
+    "sample_fraction_id",
+    "result_value_type",
+    "reporting_basis_id",
+    "result_speciation_id",
+    "result_target_id",
+    "endpoint_mode",
+    "endpoint_ph",
+    "matrix_state_id",
+    "analysis_conditions",
+    "conversion",
+    "result_offset",
+    "active"
+  )
+  conflicting <- xlr[, .(target_count = data.table::uniqueN(.SD)),
+    by = "source_key", .SDcols = semantic_fields][target_count > 1L]
+  if (nrow(conflicting)) {
+    message(
+      "Skipping ", nrow(conflicting),
+      " ALS XLR source key(s) that resolve to different targets."
+    )
+  }
+  xlr <- xlr[!source_key %in% conflicting$source_key]
+  duplicate_count <- sum(duplicated(xlr$source_key))
+  if (duplicate_count) {
+    message(
+      "Consolidating ", duplicate_count,
+      " case-insensitive duplicate ALS XLR source key(s)."
+    )
+  }
+  xlr <- xlr[!duplicated(source_key)]
+  xlr[, source_key := NULL]
   AquaCache::upsertImportParameterMappings(
     con = con,
     source_code = source$source_code[[1]],
@@ -505,7 +624,8 @@ profile_definitions <- function() {
     "matrix_state_id",
     "sample_fraction_id",
     "result_value_type",
-    "result_speciation_id",
+    "reporting_basis_id", "result_speciation_id", "result_target_id",
+    "endpoint_mode", "endpoint_ph", "analysis_conditions",
     "laboratory",
     "analysis_datetime"
   )
@@ -730,17 +850,21 @@ required <- DBI::dbGetQuery(
      to_regclass('discrete.import_parameter_mappings') IS NOT NULL AS has_parameter_mappings,
      to_regclass('discrete.import_result_flag_mappings') IS NOT NULL AS has_result_flag_mappings,
      to_regclass('discrete.import_location_mappings') IS NOT NULL AS has_location_mappings,
+     to_regclass('discrete.reporting_bases') IS NOT NULL AS has_reporting_bases,
+     to_regclass('discrete.result_targets') IS NOT NULL AS has_result_targets,
      EXISTS (
        SELECT 1
        FROM information_schema.columns
        WHERE table_schema = 'discrete'
          AND table_name = 'import_parameter_mappings'
-         AND column_name = 'import_mapping_set_id'
-     ) AS has_versioned_parameter_mappings;"
+         AND column_name IN ('import_source_id', 'import_profile_id')
+       GROUP BY table_schema, table_name
+       HAVING count(DISTINCT column_name) = 2
+     ) AS has_direct_parameter_mappings;"
 )
 if (!all(unlist(required))) {
   stop(
-    "The Patch 61 import mapping schema is missing. Apply AquaCache patch 61 before running this script."
+    "The current chemistry/import mapping schema is missing. Apply AquaCache patch 69 before running this script."
   )
 }
 

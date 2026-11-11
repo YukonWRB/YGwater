@@ -1,7 +1,7 @@
 read_app_module <- function(path) {
   paste(
     readLines(
-      system.file("apps", "YGwater", "modules", path, package = "YGwater"),
+      system.file("apps", "aqualink", "modules", path, package = "YGwater"),
       warn = FALSE
     ),
     collapse = "\n"

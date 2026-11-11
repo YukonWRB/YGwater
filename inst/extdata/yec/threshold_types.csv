@@ -1,0 +1,7 @@
+code,description
+Min flow,Minimum flow
+FSL,Full supply level
+LSL,Low supply level
+Datum,Gauge elevation above sea level
+Max flow,Maximum flow
+Alert,Alert

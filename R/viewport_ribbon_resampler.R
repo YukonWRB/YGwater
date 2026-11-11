@@ -32,6 +32,10 @@ viewport_ribbon_target_bins <- function(
 }
 
 #' Convert various x-axis inputs to POSIXct for viewport calculations
+#' @param tz Timezone to use for parsing character inputs; defaults to UTC.
+#'   Available R names can be checked with `OlsonNames()`. See the IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab) for
+#'   geographic names.
 #' @keywords internal
 #' @noRd
 viewport_ribbon_as_posixct <- function(x, tz = "UTC") {
@@ -48,6 +52,10 @@ viewport_ribbon_as_posixct <- function(x, tz = "UTC") {
 }
 
 #' Extract x-axis limits from plotly relayout data for viewport resampling
+#' @param tz Timezone to use for parsing character inputs; defaults to UTC.
+#'   Available R names can be checked with `OlsonNames()`. See the IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab) for
+#'   geographic names.
 #' @keywords internal
 #' @noRd
 viewport_ribbon_relayout_xlim <- function(relayout, tz = "UTC") {

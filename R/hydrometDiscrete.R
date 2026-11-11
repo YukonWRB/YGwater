@@ -5,7 +5,7 @@
 #'
 #' Generate plots of snow survey data (snow water equivalent and snow depth) or other variables sampled at regular intervals (weekly or monthly).
 #'
-#' Notice: in many cases, you're better off using the Shiny app at [YGwater()] to generate and export your plot. Read on if you need additional control over the final product.
+#' Notice: in many cases, you're better off using the Shiny app at [AquaLink()] to generate and export your plot. Read on if you need additional control over the final product.
 #'
 #' This function plots data from the aquacache database (maintained by the AquaCache package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
 #'
@@ -14,7 +14,14 @@
 #' @param startDay Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
 #' @param binwidth The width of the bins in the violin/boxplot in days, specified as an integer of **n** days or as "1 day", "1 week", "1 month", etc. Default is one month.
-#' @param tzone The timezone to use for fetching data. Datetimes are stored in the database in UTC offset, so this parameter could make a difference to what day a particular sample is considered to be on. In most cases you can ignore this parameter.
+#' @param tzone The timezone to use for fetching data. Defaults to fixed UTC-7
+#'   (`Etc/GMT+7`). Pass an IANA region name such as "America/Yellowknife" to
+#'   apply local daylight-saving rules. Run `OlsonNames()` for names installed
+#'   in R; the IANA [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab)
+#'   lists geographic zone names. Prefer these over abbreviations such as
+#'   `"MST"`, which may not be recognized on every operating system. This can
+#'   affect which day a sample is assigned to. In most cases, you can ignore
+#'   this parameter.
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as such: Location 09AB004: Marsh Lake Near Whitehorse.
@@ -36,7 +43,7 @@ hydrometDiscrete <- function(
   startDay = 1,
   endDay = 365,
   binwidth = "1 month",
-  tzone = "MST",
+  tzone = "Etc/GMT+7",
   years = NULL,
   title = TRUE,
   custom_title = NULL,
@@ -519,53 +526,53 @@ hydrometDiscrete <- function(
 
   # x axis settings
   if (length(day_seq) > 200) {
-    date_breaks = "2 months"
+    date_breaks <- "2 months"
     if (lang == "fr") {
-      labs = "%d %b"
+      labs <- "%d %b"
     } else {
-      labs = "%b %d"
+      labs <- "%b %d"
     }
   } else if (length(day_seq) > 60) {
-    date_breaks = "1 month"
+    date_breaks <- "1 month"
     if (lang == "fr") {
-      labs = "%d %b"
+      labs <- "%d %b"
     } else {
-      labs = "%b %d"
+      labs <- "%b %d"
     }
   } else if (length(day_seq) > 14) {
-    date_breaks = "1 week"
+    date_breaks <- "1 week"
     if (lang == "fr") {
-      labs = "%d %b"
+      labs <- "%d %b"
     } else {
-      labs = "%b %d"
+      labs <- "%b %d"
     }
   } else if (length(day_seq) > 7) {
-    date_breaks = "2 days"
+    date_breaks <- "2 days"
     if (lang == "fr") {
-      labs = "%d %b"
+      labs <- "%d %b"
     } else {
-      labs = "%b %d"
+      labs <- "%b %d"
     }
   } else if (length(day_seq) >= 2) {
-    date_breaks = "1 days"
+    date_breaks <- "1 days"
     if (lang == "fr") {
-      labs = "%d %b"
+      labs <- "%d %b"
     } else {
-      labs = "%b %d"
+      labs <- "%b %d"
     }
   } else if (length(day_seq) > 1) {
-    date_breaks = "24 hours"
+    date_breaks <- "24 hours"
     if (lang == "fr") {
-      labs = "%H:%M"
+      labs <- "%H:%M"
     } else {
-      labs = "%H:%M"
+      labs <- "%H:%M"
     }
   } else if (length(day_seq) == 1) {
-    date_breaks = "12 hour"
+    date_breaks <- "12 hour"
     if (lang == "fr") {
-      labs = "%H:%M"
+      labs <- "%H:%M"
     } else {
-      labs = "%H:%M"
+      labs <- "%H:%M"
     }
   }
 
@@ -622,7 +629,7 @@ hydrometDiscrete <- function(
 
   #### ---------------------------- Make the plot --------------------------- ####
 
-  colours = c(
+  colours <- c(
     "black",
     "blue",
     "darkorchid3",

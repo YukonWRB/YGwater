@@ -36,7 +36,12 @@
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set
 #'   to FALSE to force standard scatter traces.
 #' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
-#' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
+#' @param tzone The timezone to use for the plot. Default is "auto", which uses
+#'   the system timezone. Otherwise pass a name returned by `OlsonNames()`.
+#'   The IANA [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab)
+#'   lists geographic zone names. Prefer these over abbreviations such as
+#'   `"MST"`, which may not be recognized on every operating system. Region
+#'   names follow local daylight-saving rules.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #' @param as_of Optional point-in-time timestamp at which measurement values,
