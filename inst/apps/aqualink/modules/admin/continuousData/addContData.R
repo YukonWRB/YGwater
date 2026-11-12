@@ -27,7 +27,8 @@ add_cont_data_class_runs <- function(datetime, code) {
   # Assign runs before removing blanks so an unclassified row separates
   # otherwise identical class codes into distinct database intervals.
   x[, run := data.table::rleid(code)]
-  out <- x[!is.na(code) & nzchar(code),
+  out <- x[
+    !is.na(code) & nzchar(code),
     .(
       code = data.table::first(code),
       start_datetime = format(
@@ -128,8 +129,11 @@ add_cont_data_prepare_notes <- function(ranges, no_source_update = TRUE) {
     as.character(ranges$end_datetime),
     tz = "UTC"
   ))
-  invalid <- is.na(note) | !nzchar(note) |
-    is.na(start_dt) | is.na(end_dt) | start_dt > end_dt
+  invalid <- is.na(note) |
+    !nzchar(note) |
+    is.na(start_dt) |
+    is.na(end_dt) |
+    start_dt > end_dt
   if (any(invalid)) {
     stop(
       "Invalid note text or start/end datetime in row(s): ",
@@ -245,7 +249,7 @@ addContDataUI <- function(id) {
               )
             ),
             div(
-              style = "flex: 0 0 260px;",
+              style = "flex: 0 0 300px;",
               selectizeInput(
                 ns("UTC_offset"),
                 "UTC offset (applied to all uploaded data)",
@@ -2810,11 +2814,15 @@ addContData <- function(id, language) {
         end_datetime = as.character(ranges$end_datetime),
         stringsAsFactors = FALSE
       )
-      out <- out[order(
-        out$start_datetime,
-        out$end_datetime,
-        out$note
-      ), , drop = FALSE]
+      out <- out[
+        order(
+          out$start_datetime,
+          out$end_datetime,
+          out$note
+        ),
+        ,
+        drop = FALSE
+      ]
       row.names(out) <- NULL
       out
     }
@@ -4057,55 +4065,63 @@ addContData <- function(id, language) {
 
     suppress_note_apply_all_observer <- reactiveVal(FALSE)
 
-    observeEvent(input$note_apply_all_timeseries, {
-      if (isTRUE(suppress_note_apply_all_observer())) {
-        suppress_note_apply_all_observer(FALSE)
-        return()
-      }
-
-      if (isTRUE(input$note_apply_all_timeseries)) {
-        if (target_note_ranges_disagree()) {
-          updateCheckboxInput(
-            session,
-            "note_apply_all_timeseries",
-            value = FALSE
-          )
-          showModal(modalDialog(
-            title = "Apply notes to all timeseries?",
-            tags$p(
-              "Note ranges are not currently the same for every selected timeseries."
-            ),
-            tags$p(
-              "Switching to 'Apply to all timeseries' will erase the existing per-timeseries notes."
-            ),
-            easyClose = TRUE,
-            footer = tagList(
-              modalButton("Cancel"),
-              actionButton(
-                ns("confirm_apply_all_notes"),
-                "Erase notes and apply to all",
-                class = "btn-danger"
-              )
-            )
-          ))
+    observeEvent(
+      input$note_apply_all_timeseries,
+      {
+        if (isTRUE(suppress_note_apply_all_observer())) {
+          suppress_note_apply_all_observer(FALSE)
           return()
         }
-        promote_target_notes_to_shared()
-      } else {
-        populate_target_notes_from_shared()
-      }
-    }, ignoreInit = TRUE)
 
-    observeEvent(input$confirm_apply_all_notes, {
-      removeModal()
-      clear_note_ranges_for_all_targets()
-      suppress_note_apply_all_observer(TRUE)
-      updateCheckboxInput(
-        session,
-        "note_apply_all_timeseries",
-        value = TRUE
-      )
-    }, ignoreInit = TRUE)
+        if (isTRUE(input$note_apply_all_timeseries)) {
+          if (target_note_ranges_disagree()) {
+            updateCheckboxInput(
+              session,
+              "note_apply_all_timeseries",
+              value = FALSE
+            )
+            showModal(modalDialog(
+              title = "Apply notes to all timeseries?",
+              tags$p(
+                "Note ranges are not currently the same for every selected timeseries."
+              ),
+              tags$p(
+                "Switching to 'Apply to all timeseries' will erase the existing per-timeseries notes."
+              ),
+              easyClose = TRUE,
+              footer = tagList(
+                modalButton("Cancel"),
+                actionButton(
+                  ns("confirm_apply_all_notes"),
+                  "Erase notes and apply to all",
+                  class = "btn-danger"
+                )
+              )
+            ))
+            return()
+          }
+          promote_target_notes_to_shared()
+        } else {
+          populate_target_notes_from_shared()
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$confirm_apply_all_notes,
+      {
+        removeModal()
+        clear_note_ranges_for_all_targets()
+        suppress_note_apply_all_observer(TRUE)
+        updateCheckboxInput(
+          session,
+          "note_apply_all_timeseries",
+          value = TRUE
+        )
+      },
+      ignoreInit = TRUE
+    )
 
     observe({
       targets <- selected_upload_timeseries_meta()
@@ -4246,9 +4262,7 @@ addContData <- function(id, language) {
 
     observeEvent(input$edit_note_range, {
       target_id <- active_note_timeseries()
-      table_id <- if (
-        isTRUE(multi_upload_active()) && !note_apply_all()
-      ) {
+      table_id <- if (isTRUE(multi_upload_active()) && !note_apply_all()) {
         note_range_output_id(target_id)
       } else {
         "note_ranges_table"
@@ -4260,9 +4274,7 @@ addContData <- function(id, language) {
 
     observeEvent(input$delete_note_range, {
       target_id <- active_note_timeseries()
-      table_id <- if (
-        isTRUE(multi_upload_active()) && !note_apply_all()
-      ) {
+      table_id <- if (isTRUE(multi_upload_active()) && !note_apply_all()) {
         note_range_output_id(target_id)
       } else {
         "note_ranges_table"
@@ -4314,9 +4326,7 @@ addContData <- function(id, language) {
         )
         return()
       }
-      if (
-        is.na(start_value) || is.na(end_value) || end_value < start_value
-      ) {
+      if (is.na(start_value) || is.na(end_value) || end_value < start_value) {
         showNotification(
           "Invalid note start/end datetime.",
           type = "error",
@@ -4350,9 +4360,7 @@ addContData <- function(id, language) {
       target_id <- active_note_timeseries()
       rows <- active_note_ranges()
       edit_idx <- session$userData$edit_note_row
-      if (
-        !is.null(edit_idx) && !is.na(edit_idx) && nrow(rows) >= edit_idx
-      ) {
+      if (!is.null(edit_idx) && !is.na(edit_idx) && nrow(rows) >= edit_idx) {
         rows[edit_idx, ] <- new_row
       } else {
         rows <- rbind(rows, new_row)
@@ -6648,11 +6656,109 @@ addContData <- function(id, language) {
       refresh_data_table()
     }
 
+    format_qc_rule_argument <- function(argument, values) {
+      value <- values[[argument$name]]
+      if (is.null(value)) {
+        value <- argument$default
+      }
+      if (is.null(value)) {
+        return(NULL)
+      }
+      if (is.logical(value)) {
+        value <- ifelse(value, "yes", "no")
+      }
+      label <- argument$label
+      if (is.null(label) || !nzchar(label)) {
+        label <- argument$name
+      }
+      units <- argument$units
+      if (!is.null(units) && nzchar(units)) {
+        units <- paste0(" ", units)
+      } else {
+        units <- ""
+      }
+      paste0(label, ": ", paste(as.character(value), collapse = ", "), units)
+    }
+
+    qc_rule_ui <- function(rule) {
+      schema <- rule$argument_schema[[1L]]
+      values <- rule$rule_args[[1L]]
+      arguments <- schema$arguments
+      configured <- if (length(arguments)) {
+        Filter(Negate(is.null), lapply(arguments, format_qc_rule_argument, values = values))
+      } else {
+        character()
+      }
+      outputs <- as.character(unlist(rule$emits[[1L]], use.names = FALSE))
+      tags$li(
+        tags$strong(paste0(rule$rule_fx[[1L]], " v", rule$rule_version[[1L]], ": ")),
+        rule$description[[1L]],
+        if (!is.na(rule$note[[1L]]) && nzchar(rule$note[[1L]])) tags$div(
+          class = "text-muted small",
+          paste("Upload rule note:", rule$note[[1L]])
+        ),
+        if (length(outputs)) tags$div(
+          class = "text-muted small",
+          paste("Qualifier code(s):", paste(outputs, collapse = ", "))
+        ),
+        if (length(configured)) tags$div(
+          class = "text-muted small",
+          paste("Configured behavior:", paste(configured, collapse = "; "))
+        )
+      )
+    }
+
+    upload_qc_rules_ui <- function(req) {
+      tags$div(
+        tags$strong("Automatic QC: "),
+        "Active rules run on these timeseries as part of this upload, before the upload transaction commits. QC runs only where approval is unknown (UNK), unspecified (UNS), or not reviewed (N); other approval levels are preserved and skipped. Screened readings receive approval S (auto screened, no human review). Rule descriptions and configured outputs come from the database.",
+        tags$ul(lapply(req$jobs, function(job) {
+          target_id <- as.character(as.integer(job$timeseries_id))
+          rules <- req$qc_rules[[target_id]]
+          if (inherits(rules, "error")) {
+            return(tags$li(
+              tags$strong(job$label, ": "),
+              paste("Could not load rule assignments:", conditionMessage(rules))
+            ))
+          }
+          rules <- rules[rules$active & rules$enabled, , drop = FALSE]
+          if (!nrow(rules)) {
+            return(tags$li(
+              tags$strong(job$label, ": "),
+              "No active automatic QC rules are assigned."
+            ))
+          }
+          tags$li(
+            tags$strong(job$label, ":"),
+            tags$ul(lapply(seq_len(nrow(rules)), function(i) {
+              qc_rule_ui(rules[i, , drop = FALSE])
+            }))
+          )
+        }))
+      )
+    }
+
     build_upload_request <- function(overwrite) {
       req(upload_validation$jobs)
+      jobs <- upload_validation$jobs
+      qc_rules <- lapply(jobs, function(job) {
+        tryCatch(
+          AquaCache::getTimeseriesQCRules(
+            con = session$userData$AquaCache,
+            timeseries_id = as.integer(job$timeseries_id)
+          ),
+          error = function(e) e
+        )
+      })
+      names(qc_rules) <- vapply(
+        jobs,
+        function(job) as.character(as.integer(job$timeseries_id)),
+        character(1)
+      )
 
       list(
-        jobs = upload_validation$jobs,
+        jobs = jobs,
+        qc_rules = qc_rules,
         overwrite = overwrite,
         config = session$userData$config
       )
@@ -6803,14 +6909,17 @@ addContData <- function(id, language) {
             tags$strong("Units: "),
             "the values are already in, or have been converted to, the units expected by the database for the selected timeseries."
           ),
-          if (note_count > 0L) tags$li(
-            tags$strong("Notes: "),
-            paste(
-              note_count,
-              if (note_count == 1L) "note range will" else "note ranges will",
-              "be saved with this upload."
+          tags$li(upload_qc_rules_ui(req)),
+          if (note_count > 0L) {
+            tags$li(
+              tags$strong("Notes: "),
+              paste(
+                note_count,
+                if (note_count == 1L) "note range will" else "note ranges will",
+                "be saved with this upload."
+              )
             )
-          )
+          }
         ),
         tags$div(
           class = "text-muted small",

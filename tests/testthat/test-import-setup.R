@@ -24,36 +24,23 @@ test_that("malformed and empty criteria cannot become catch-all mappings", {
   expect_error(env$importSetup_match_values('{"parameter_id":"12"}'),"reserved")
 })
 
-test_that("publication review includes deactivation, chemistry and all mapping types", {
+test_that("profile text result mappings validate labels and numbers", {
   env <- import_setup_environment()
-  rows <- data.frame(status=rep(c("published","draft"),each=3),
-    mapping_type=rep(c("parameter","location","result_flag"),2),
-    source_match=rep(c('{"ParamCode":"AL","input_unit":"mg/L"}',
-      '{"source_location_code":"SITE"}','{"source_flag_value":"Q"}'),2),
-    definition=c('{"parameter_id":1,"active":true,"analysis_conditions":{}}',
-      '{"location_id":1,"active":true}','{"result_action":"keep_result","active":true}',
-      '{"parameter_id":2,"active":false,"analysis_conditions":{"mass_basis":"dry"}}',
-      '{"location_id":2,"active":true}','{"result_action":"skip_result","active":true}'))
-  changes <- env$importSetup_changes(rows,labels=list(parameter_id=c("1"="Same label","2"="Same label")))
-  expect_setequal(changes$Type,c("parameter","location","result_flag"))
-  expect_true(all(c("Parameter","Active","Analysis conditions","Location","Result handling") %in% changes$Field))
-  expect_identical(changes$Before[changes$Field=="Parameter"],"Same label [1]")
-  expect_identical(changes$After[changes$Field=="Parameter"],"Same label [2]")
-  expect_identical(changes$After[changes$Field=="Active"],"FALSE")
-  expect_match(changes$After[changes$Field=="Analysis conditions"],"dry",fixed=TRUE)
+  expect_identical(
+    env$importSetup_parse_result_text_values("Absent = 0\nPresent = 1"),
+    list(Absent = 0, Present = 1)
+  )
+  expect_identical(env$importSetup_parse_result_text_values(" \n"), list())
+  expect_error(
+    env$importSetup_parse_result_text_values("Present = 1\npresent = 0"),
+    "unique labels"
+  )
+  expect_error(
+    env$importSetup_parse_result_text_values("Present = yes"),
+    "unique labels and finite numeric values"
+  )
 })
 
-test_that("unchanged definitions and new mappings have distinct review results", {
-  env <- import_setup_environment()
-  rows <- data.frame(status=c("published","draft"),mapping_type="parameter",
-    source_match='{"code":"A"}',definition='{"parameter_id":1,"active":true}')
-  expect_equal(nrow(env$importSetup_changes(rows)),0)
-  rows$status <- "draft"
-  rows <- rows[1,,drop=FALSE]
-  changes <- env$importSetup_changes(rows)
-  expect_true(all(changes$Change=="New mapping"))
-  expect_true(all(changes$Before==""))
-})
 
 test_that("an unspecified laboratory stays unassigned in workbook defaults", {
   env <- import_setup_environment()
@@ -64,16 +51,6 @@ test_that("an unspecified laboratory stays unassigned in workbook defaults", {
   expect_identical(env$addDiscData_defaults(profile)$laboratory,7L)
 })
 
-test_that("review labels show source conditions and hide derived storage fields", {
-  env <- import_setup_environment()
-  expect_identical(env$importSetup_criteria_label('{"source.Speciation":"as N","unit":""}'),
-    "Speciation = as N; Unit = (empty)")
-  rows <- data.frame(status="draft", mapping_type="parameter", source_match='{"source.Analyte":"pH"}',
-    definition='{"source_match":{"source.Analyte":"pH"},"analysis_conditions_key":"hash","parameter_id":1}')
-  changes <- env$importSetup_changes(rows)
-  expect_identical(changes$Field,"Parameter")
-  expect_identical(changes$Criteria,"Analyte = pH")
-})
 
 test_that("review context does not label a complete mapping as needing attention", {
   env <- import_setup_environment()
@@ -85,20 +62,40 @@ test_that("review context does not label a complete mapping as needing attention
   state <- new.env(parent=env)
   state$tags <- htmltools::tags
   state$input <- list(manage_mapping_type="parameter")
-  state$row <- data.frame(import_mapping_id=4L)
+  state$row <- data.frame(import_mapping_id=4L, source_code="ALS", profile_code="xlr", active=TRUE)
   state$context <- data.frame(source_code="ALS",profile_code="xlr",profile_name="Detailed Report",
     mapping_type="parameter",issue=NA_character_,status="published",version=3L,
-    source_match='{"source.Analyte":"Conductivity"}')
+    import_mapping_id=4L, source_match='{"source.Analyte":"Conductivity"}')
+  state$review_rows <- function() state$context
   state$manage_mapping_selected <- function() state$row
   state$opened_review_mapping <- function() state$context
   environment(render) <- state
   complete <- as.character(render())
   expect_false(grepl("Needs attention",complete,fixed=TRUE))
   expect_match(complete,"alert-info",fixed=TRUE)
-  expect_match(complete,"published revision 3",fixed=TRUE)
+  expect_match(complete,"Saving updates this mapping immediately",fixed=TRUE)
   state$context$issue <- "Unit missing"
   incomplete <- as.character(render())
-  expect_match(incomplete,"Needs attention",fixed=TRUE)
+  expect_match(incomplete,"needs attention",fixed=TRUE)
   expect_match(incomplete,"Unit missing",fixed=TRUE)
   expect_match(incomplete,"alert-warning",fixed=TRUE)
+})
+
+test_that("source-wide mapping summaries count real rows and name the source", {
+  env <- import_setup_environment()
+  statements <- as.list(body(env$importSetup)[[2]][[3]][[3]])[-1]
+  assignment <- Filter(function(x) is.call(x) && identical(x[[1]], quote(`<-`)) &&
+    identical(x[[2]], quote(output$mapping_status)), statements)[[1]]
+  render <- function() NULL
+  body(render) <- assignment[[3]][[2]]
+  state <- new.env(parent = env)
+  state$tags <- htmltools::tags
+  state$selected_manage_profile <- function() data.frame(source_code = "LAB",
+    profile_code = NA_character_, profile_name = NA_character_)
+  state$review_rows <- function() data.frame(source_code = "LAB",
+    profile_code = c(NA_character_, NA_character_, "workbook"), active = TRUE, issue = NA_character_)
+  environment(render) <- state
+  html <- as.character(render())
+  expect_match(html, "2 current mapping(s) for LAB (source-wide).", fixed = TRUE)
+  expect_false(grepl("for NA", html, fixed = TRUE))
 })

@@ -91,6 +91,9 @@ addTimeseries <- function(id, language) {
     qc_assignments_load_error <- reactiveVal(NULL)
     qc_preview_result <- reactiveVal(NULL)
 
+    qc_remove_pending <- reactiveVal(NULL)
+    qc_remove_running <- reactiveVal(FALSE)
+
     safe_text <- function(x) {
       if (is.null(x) || length(x) == 0L) {
         return("")
@@ -2340,6 +2343,86 @@ addTimeseries <- function(id, language) {
       updateSelectizeInput(session, "qc_new_rule", selected = character())
     }, ignoreInit = TRUE)
 
+    qc_rule_draft_ids <- function(rules) {
+      vapply(rules, function(rule) {
+        value <- rule$timeseries_qc_rule_id
+        if (
+          is.null(value) || !length(value) ||
+            is.na(value[[1L]])
+        ) {
+          return(NA_integer_)
+        }
+        suppressWarnings(as.integer(value[[1L]]))
+      }, integer(1))
+    }
+
+    qc_remove_task <- ExtendedTask$new(function(request, db_config) {
+      mirai::mirai(
+        {
+          con <- NULL
+          tryCatch(
+            {
+              con <- YGwater::AquaConnect(
+                name = db_config$dbName,
+                host = db_config$dbHost,
+                port = db_config$dbPort,
+                username = db_config$dbUser,
+                password = db_config$dbPass,
+                silent = TRUE
+              )
+              on.exit({
+                if (!is.null(con)) {
+                  try(DBI::dbDisconnect(con), silent = TRUE)
+                }
+              }, add = TRUE)
+              DBI::dbExecute(
+                con,
+                "SET application_name TO 'YGwater_shiny'"
+              )
+              cleanup <- AquaCache::removeTimeseriesQCRule(
+                con,
+                timeseries_id = request$timeseries_id,
+                timeseries_qc_rule_id = request$rule_id,
+                action = request$action
+              )
+              list(ok = TRUE, request = request, cleanup = cleanup)
+            },
+            error = function(error) {
+              list(
+                ok = FALSE,
+                request = request,
+                message = conditionMessage(error)
+              )
+            }
+          )
+        },
+        request = request,
+        db_config = db_config,
+        .compute = "YGwater_aqualink"
+      )
+    }) |>
+      bslib::bind_task_button("qc_remove_confirm")
+
+    output$qc_remove_cancel_ui <- renderUI({
+      if (
+        is.null(qc_remove_pending()) ||
+          isTRUE(qc_remove_running())
+      ) {
+        return(NULL)
+      }
+      actionButton(
+        ns("qc_remove_cancel"),
+        "Cancel",
+        class = "btn btn-secondary"
+      )
+    })
+
+    observeEvent(input$qc_remove_cancel, {
+      if (isTRUE(qc_remove_running())) return()
+      qc_remove_pending(NULL)
+      removeModal()
+    }, ignoreInit = TRUE)
+
     observeEvent(input$qc_remove_rule_button, {
       draft <- qc_assignments_draft()
       index <- suppressWarnings(as.integer(input$qc_remove_rule))
@@ -2347,8 +2430,11 @@ addTimeseries <- function(id, language) {
         length(index) != 1L || is.na(index) ||
           index < 1L || index > length(draft)
       ) {
-        showNotification("Select a configured rule to remove.",
-                         type = "error", duration = 8)
+        showNotification(
+          "Select a configured rule to remove.",
+          type = "error",
+          duration = 8
+        )
         return()
       }
       draft <- tryCatch(
@@ -2356,16 +2442,211 @@ addTimeseries <- function(id, language) {
           shiny::reactiveValuesToList(input),
           draft
         ),
-        error = function(e) {
-          showNotification(conditionMessage(e), type = "error", duration = 8)
+        error = function(error) {
+          showNotification(
+            conditionMessage(error),
+            type = "error",
+            duration = 8
+          )
           NULL
         }
       )
       if (is.null(draft)) return()
-      draft <- draft[-index]
       qc_assignments_draft(draft)
+
+      rule_ids <- qc_rule_draft_ids(draft)
+      rule_id <- rule_ids[[index]]
+      if (is.na(rule_id)) {
+        pending <- list(kind = "draft", index = index)
+        body <- tags$div(
+          class = "alert alert-info",
+          "This rule has not been saved. Confirmation removes it from the editor only. No database entry or qualifier is changed."
+        )
+        confirm_label <- "Discard unsaved rule"
+      } else {
+        timeseries_id <- nullable_integer(selected_tsid())
+        if (is.na(timeseries_id)) {
+          showNotification(
+            "Select an existing timeseries before removing a saved QC rule.",
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+        remaining_saved <- sum(!is.na(rule_ids[-index]))
+        actions <- c("best_effort", "leave")
+        if (remaining_saved > 0L) {
+          actions <- c(actions, "regrade_remaining")
+        } else {
+          actions <- c(actions, "clear_unprotected")
+        }
+        action_labels <- c(
+          "Attempt to remove qualifier ranges uniquely predicted by this rule.",
+          "Remove the rule only and leave existing qualifiers unchanged.",
+          if (remaining_saved > 0L) {
+            "Remove the rule then delete all unprotected qualifiers and re-grade using the remaining saved rules."
+          } else {
+            "Remove the final rule and delete all unprotected qualifiers without re-grading."
+          }
+        )
+        pending <- list(
+          kind = "saved",
+          index = index,
+          rule_id = rule_id,
+          timeseries_id = timeseries_id,
+          actions = actions
+        )
+        body <- tagList(
+          tags$p("Confirming removes the saved rule immediately. You do not need to click Modify timeseries. This operation may take a little while."),
+          tags$p("Cleanup uses the rule settings currently saved in the database. Other edits on this form remain unsaved."),
+          radioButtons(
+            ns("qc_remove_action"),
+            "What should happen to existing qualifiers?",
+            choices = stats::setNames(actions, action_labels),
+            selected = "best_effort"
+          ),
+          tags$div(
+            class = "alert alert-warning",
+            tags$p(
+              "Qualifiers do not record which rule created them. A matching unprotected manual qualifier may be removed and an old output no longer predicted by the rule may remain."
+            ),
+            tags$p(
+              "Re-grade and clear actions delete all unprotected qualifiers on this timeseries including user-entered qualifiers. Protected qualifiers are retained."
+            )
+          ),
+          tags$p(
+            class = "text-muted",
+            "Current QC workflows write qualifier outputs. If future QC workflows also write grades or approvals, these choices could be extended to cover those outputs."
+          )
+        )
+        confirm_label <- "Confirm removal now"
+      }
+
+      qc_remove_running(FALSE)
+      qc_remove_pending(pending)
+      showModal(modalDialog(
+        title = "Remove automatic QC rule",
+        body,
+        footer = tagList(
+          uiOutput(ns("qc_remove_cancel_ui")),
+          bslib::input_task_button(
+            ns("qc_remove_confirm"),
+            confirm_label
+          )
+        ),
+        easyClose = FALSE
+      ))
     }, ignoreInit = TRUE)
 
+    observeEvent(input$qc_remove_confirm, {
+      pending <- qc_remove_pending()
+      if (is.null(pending) || isTRUE(qc_remove_running())) return()
+
+      if (identical(pending$kind, "draft")) {
+        draft <- qc_assignments_draft()
+        if (
+          length(pending$index) == 1L &&
+            pending$index >= 1L &&
+            pending$index <= length(draft)
+        ) {
+          draft <- draft[-pending$index]
+          qc_assignments_draft(draft)
+        }
+        qc_remove_pending(NULL)
+        removeModal()
+        showNotification(
+          "Unsaved rule removed from the editor. No database change was made.",
+          type = "message",
+          duration = 8
+        )
+        return()
+      }
+
+      action <- nullable_text(input$qc_remove_action)
+      if (is.na(action) || !action %in% pending$actions) {
+        showNotification(
+          "Select what should happen to existing qualifiers.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      config <- session$userData$config
+      db_config <- list(
+        dbName = config$dbName,
+        dbHost = config$dbHost,
+        dbPort = config$dbPort,
+        dbUser = config$dbUser,
+        dbPass = config$dbPass
+      )
+      qc_remove_running(TRUE)
+      tryCatch(
+        qc_remove_task$invoke(
+          request = list(
+            timeseries_id = pending$timeseries_id,
+            rule_id = pending$rule_id,
+            action = action
+          ),
+          db_config = db_config
+        ),
+        error = function(error) {
+          qc_remove_running(FALSE)
+          showNotification(
+            paste(
+              "Could not remove QC rule:",
+              conditionMessage(error)
+            ),
+            type = "error",
+            duration = NULL
+          )
+        }
+      )
+    }, ignoreInit = TRUE)
+
+    observeEvent(qc_remove_task$result(), {
+      result <- qc_remove_task$result()
+      if (is.null(result)) return()
+      qc_remove_running(FALSE)
+      if (!is.list(result) || !isTRUE(result$ok)) {
+        message <- if (is.list(result) && !is.null(result$message)) {
+          result$message
+        } else {
+          "The removal task returned an invalid result."
+        }
+        showNotification(
+          paste("Could not remove QC rule:", message),
+          type = "error",
+          duration = NULL
+        )
+        return()
+      }
+
+      request <- result$request
+      draft <- qc_assignments_draft()
+      rule_ids <- qc_rule_draft_ids(draft)
+      qc_assignments_draft(
+        draft[is.na(rule_ids) | rule_ids != request$rule_id]
+      )
+      qc_preview_result(NULL)
+      qc_remove_pending(NULL)
+      removeModal()
+
+      cleanup <- result$cleanup
+      message <- switch(
+        request$action,
+        best_effort = sprintf(
+          "Best-effort cleanup deleted %s qualifier rows; adjusted %s rows; added %s split segments.",
+          cleanup$qualifier_rows_deleted,
+          cleanup$qualifier_rows_updated,
+          cleanup$qualifier_segments_inserted
+        ),
+        leave = "The rule was removed. Existing qualifiers were left unchanged.",
+        regrade_remaining = "All unprotected qualifiers were cleared then the remaining saved rules were re-graded.",
+        clear_unprotected = "All unprotected qualifiers were cleared."
+      )
+      showNotification(message, type = "message", duration = 12)
+    }, ignoreInit = TRUE)
     observeEvent(input$qc_preview, {
       timeseries_id <- nullable_integer(selected_tsid())
       if (is.na(timeseries_id)) {

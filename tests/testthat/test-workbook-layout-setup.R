@@ -130,3 +130,42 @@ test_that("mapping scope, specificity, and ambiguous matches are explicit", {
   mapping$source_match <- '{"parameter_code":"pH-L"}'
   expect_identical(env$addDiscData_mapping_indices(rows, mapping), c(1L, 1L))
 })
+
+test_that("case-only duplicate mappings are accepted only when targets agree", {
+  env <- workbook_layout_environment()
+  rows <- env$addDiscData_empty_table()[NA_integer_, ]
+  rows$source_parameter_code <- "Uranium, dissolved"
+  rows$source_unit <- "mg/L"
+  rows$source_matching_values <- "{}"
+  mappings <- data.frame(
+    source_match = c(
+      '{"parameter_code":"Uranium, dissolved","unit":"mg/l"}',
+      '{"parameter_code":"Uranium, dissolved","unit":"mg/L"}'
+    ),
+    priority = c(100L, 100L),
+    profile_specific = c(TRUE, TRUE),
+    parameter_id = c(90L, 90L),
+    result_type = c(2L, 2L),
+    sample_fraction_id = c(5L, 5L),
+    result_value_type = c(1L, 1L),
+    reporting_basis_id = c(NA_integer_, NA_integer_),
+    result_speciation_id = c(NA_integer_, NA_integer_),
+    result_target_id = c(NA_integer_, NA_integer_),
+    endpoint_mode = c(NA_character_, NA_character_),
+    endpoint_ph = c(NA_real_, NA_real_),
+    matrix_state_id = c(1L, 1L),
+    analysis_conditions = c("{}", "{}"),
+    conversion = c(1000, 1000),
+    result_offset = c(0, 0),
+    active = c(TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+
+  expect_identical(env$addDiscData_mapping_indices(rows, mappings), 1L)
+
+  mappings$conversion[[2]] <- 1
+  expect_error(
+    env$addDiscData_mapping_indices(rows, mappings),
+    "assign different targets"
+  )
+})

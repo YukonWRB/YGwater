@@ -21,6 +21,31 @@ test_that("sample association synchronization changes only selected links", {
   expect_identical(changes$add, 30L)
 })
 
+test_that("sample document saves retain existing link metadata in the current schema", {
+  skip_if(Sys.getenv("YGWATER_TEST_IMPORT_DB") != "true", "testdb integration opt-in required")
+  env <- edit_samples_module_environment()
+  con <- AquaCache::AquaConnect(name = "testdb", host = "10.250.12.154", check = FALSE, silent = TRUE)
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbBegin(con)
+  on.exit(DBI::dbRollback(con), add = TRUE, after = FALSE)
+  sample <- DBI::dbGetQuery(con, "SELECT sample_id FROM discrete.samples ORDER BY sample_id LIMIT 1")$sample_id
+  documents <- DBI::dbGetQuery(con, "SELECT document_id FROM files.documents ORDER BY document_id LIMIT 2")$document_id
+  skip_if(length(documents) < 2L, "Upload fixtures required")
+  env$edit_samples_sync_document_links(con, sample, documents[[1]])
+  DBI::dbExecute(con,
+    "UPDATE discrete.sample_documents SET document_role='lab_submission',note='Keep this link metadata'
+     WHERE sample_id=$1 AND document_id=$2", params = list(sample, documents[[1]]))
+  before <- DBI::dbGetQuery(con, "SELECT * FROM discrete.sample_documents WHERE sample_id=$1", params = list(sample))
+  env$edit_samples_sync_document_links(con, sample, documents)
+  after <- DBI::dbGetQuery(con, "SELECT * FROM discrete.sample_documents WHERE sample_id=$1 AND document_id=$2",
+    params = list(sample, documents[[1]]))
+  expect_identical(after, before)
+  expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM discrete.sample_documents WHERE sample_id=$1", params = list(sample))), 2L)
+  env$edit_samples_sync_document_links(con, sample, documents[[2]])
+  expect_identical(DBI::dbGetQuery(con, "SELECT document_id FROM discrete.sample_documents WHERE sample_id=$1",
+    params = list(sample))$document_id, documents[[2]])
+})
+
 test_that("sample editor uses normalized qualifiers and observers", {
   module_code <- readLines(
     system.file(

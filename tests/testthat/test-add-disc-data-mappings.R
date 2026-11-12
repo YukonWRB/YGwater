@@ -412,6 +412,24 @@ test_that("Excel and textual dates are parsed without partial-year matches", {
   )
 })
 
+test_that("ISO analysis timestamps retain their times and explicit offsets", {
+  env <- add_disc_data_mapping_environment()
+  parsed <- env$addDiscData_datetime(c("2032-02-01 12:00:00", "2032-02-01T12:00:00",
+    "2032-02-01T12:00:00Z", "2032-02-01T12:00:00-07:00"), tz = "America/Whitehorse")
+  expect_identical(format(parsed, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    c("2032-02-01 19:00:00", "2032-02-01 19:00:00", "2032-02-01 12:00:00", "2032-02-01 19:00:00"))
+  expect_true(is.na(env$addDiscData_datetime("2032-02-01 12:00:00 trailing text")))
+  parsed <- env$addDiscData_datetime(c("2032-02-01T12:34Z",
+    " 2032-02-01T12:34:00+05:30 ", "02-Oct-2025 1:05 PM",
+    "2032-02-01 15:05"), tz = "America/Whitehorse")
+  expect_identical(format(parsed, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    c("2032-02-01 12:34:00", "2032-02-01 07:04:00", "2025-10-02 20:05:00", "2032-02-01 22:05:00"))
+  parsed <- env$addDiscData_datetime(rep("2032-02-01", 2), c("1:05 PM", "15:05"), "UTC")
+  expect_identical(format(parsed, "%H:%M:%S", tz = "UTC"), c("13:05:00", "15:05:00"))
+  expect_identical(format(env$addDiscData_datetime("2032-02-01T12:00Z", "13:00", "America/Whitehorse"),
+    "%H:%M:%S", tz = "UTC"), "20:00:00")
+})
+
 test_that("EHS component workbooks suggest a long layout without a unit column", {
   env <- add_disc_data_mapping_environment()
   raw <- as.data.frame(
@@ -436,6 +454,75 @@ test_that("EHS component workbooks suggest a long layout without a unit column",
   expect_identical(suggested$column_map$parameter_code, "ComponentName")
   expect_identical(suggested$column_map$result, "ResultText")
   expect_null(suggested$column_map$unit)
+})
+
+test_that("sample ID and datetime headings suggest a wide workbook layout", {
+  env <- add_disc_data_mapping_environment()
+  raw <- as.data.frame(
+    as.list(c("No.", "datetime", "ID", "pH", "SpC")),
+    check.names = FALSE
+  )
+
+  suggested <- env$importSetup_suggest_layout(raw)
+
+  expect_identical(suggested$parser_family, "wide")
+  expect_identical(suggested$column_map$station_code, "ID")
+  expect_identical(suggested$column_map$sample_date, "datetime")
+  expect_identical(suggested$column_map$lab_sample_id, "ID")
+  expect_identical(suggested$column_map$first_result_column, 4L)
+})
+
+test_that("long workbook parsing omits rows without a result", {
+  env <- add_disc_data_mapping_environment()
+  path <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(path), add = TRUE)
+  openxlsx::write.xlsx(
+    data.frame(
+      Station_Code = c("River", "River", "River"),
+      Smpl_CollectDate = rep("2026-07-01", 3L),
+      `Lab_Smpl_#` = rep("S1", 3L),
+      Lab_Param_Code = rep("Al-D", 3L),
+      `Parameter Description` = rep("Aluminum, dissolved", 3L),
+      Units = rep("mg/L", 3L),
+      Result = c("1.2", NA, "   "),
+      check.names = FALSE
+    ),
+    path
+  )
+  profile <- add_disc_data_test_profile("long")
+  profile$column_map[[1]]$result <- "Result"
+
+  parsed <- env$addDiscData_parse_upload(path, profile)
+
+  expect_equal(nrow(parsed), 1L)
+  expect_identical(parsed$source_result_text, "1.2")
+  expect_identical(parsed$source_row_number, 2L)
+})
+
+test_that("profile text result values recode numerically and retain source text", {
+  env <- add_disc_data_mapping_environment()
+  profile <- add_disc_data_test_profile("long")
+  profile$validation_rules[[1]]$result_text_values <- list(
+    Absent = 0,
+    Present = 1
+  )
+
+  rows <- env$addDiscData_common_rows(
+    source_code = "EHS",
+    profile = profile,
+    source_location_name = rep("Test site", 3L),
+    sample_date = rep("2026-07-01", 3L),
+    sample_time = rep(NA_character_, 3L),
+    source_sample_id = rep("BIO-1", 3L),
+    source_parameter_code = rep("E. coli", 3L),
+    source_parameter_name = rep("E. coli", 3L),
+    source_unit = rep(NA_character_, 3L),
+    result_raw = c("Absent", " Present ", "Other")
+  )
+
+  expect_identical(rows$source_result_text, c("Absent", " Present ", "Other"))
+  expect_identical(rows$source_result, c(0, 1, NA_real_))
+  expect_identical(rows$result, c(0, 1, NA_real_))
 })
 
 test_that("Mayo-style sample reports suggest and parse transposed results", {
@@ -783,7 +870,9 @@ test_that("file uploads write generalized import-run provenance", {
 
   expect_match(server_code, "addDiscData_run_upload(request)", fixed = TRUE)
   expect_match(upload_code, "AquaCache::createImportRun", fixed = TRUE)
-  expect_match(upload_code, "AquaCache::appendImportRunRows", fixed = TRUE)
+  expect_false(grepl("AquaCache::appendImportRunRows", upload_code, fixed = TRUE))
+  expect_match(upload_code, "configuration_snapshot = snapshot", fixed = TRUE)
+  expect_match(upload_code, "source_document_id", fixed = TRUE)
   expect_match(upload_code, "AquaCache::completeImportRun", fixed = TRUE)
   expect_match(
     upload_code,

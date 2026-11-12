@@ -954,7 +954,8 @@ addLocation <- function(id, inputs, language) {
             # try to refresh version
             db_path <- safe(tidyhydat::hy_downloaded_db())
             local_ver <- if (!is.null(db_path)) {
-              safe(as.Date(tidyhydat::hy_version(db_path)$Date))
+              safe(as.Date(tidyhydat::hy_version(db_path)$Date)) |>
+                gsub("-", "", x = _)
             } else {
               NULL
             }
@@ -1204,9 +1205,15 @@ addLocation <- function(id, inputs, language) {
         lat <- suppressWarnings(as.numeric(input$lat))
         lon <- suppressWarnings(as.numeric(input$lon))
         if (
-          !identical(input$mode, "add") || length(lat) != 1L ||
-            length(lon) != 1L || !is.finite(lat) || !is.finite(lon) ||
-            lat < -90 || lat > 90 || lon < -180 || lon > 180
+          !identical(input$mode, "add") ||
+            length(lat) != 1L ||
+            length(lon) != 1L ||
+            !is.finite(lat) ||
+            !is.finite(lon) ||
+            lat < -90 ||
+            lat > 90 ||
+            lon < -180 ||
+            lon > 180
         ) {
           showModal(modalDialog(
             "Enter valid latitude and longitude before fetching an elevation.",

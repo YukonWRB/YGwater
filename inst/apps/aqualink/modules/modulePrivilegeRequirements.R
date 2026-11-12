@@ -244,7 +244,6 @@ ygwater_module_privilege_requirements <- function() {
       c(
         "discrete.import_sources",
         "discrete.import_profiles",
-        "discrete.import_mapping_sets",
         "discrete.import_parameter_mappings",
         "discrete.import_location_mappings",
         "discrete.import_result_flag_mappings",
@@ -280,7 +279,10 @@ ygwater_module_privilege_requirements <- function() {
         "discrete.sample_observers",
         "discrete.sample_documents",
         "discrete.sample_group_members",
-        "files.documents"
+        "files.documents",
+        "discrete.import_runs",
+        "discrete.import_sources",
+        "discrete.import_profiles"
       ),
       list(
         "UPDATE",
@@ -289,7 +291,10 @@ ygwater_module_privilege_requirements <- function() {
         c("DELETE", "INSERT"),
         c("DELETE", "INSERT"),
         c("DELETE", "INSERT"),
-        c("DELETE", "INSERT")
+        c("DELETE", "INSERT", "UPDATE"),
+        "SELECT",
+        "SELECT",
+        "SELECT"
       )
     ),
     addSampleSeries = req(

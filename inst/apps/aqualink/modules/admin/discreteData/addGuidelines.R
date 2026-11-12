@@ -111,30 +111,39 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
         h4("Guideline"),
         textInput(ns("guideline_code"), "Code", width = "100%"),
         textInput(ns("guideline_name"), "Name", width = "100%"),
-        selectizeInput(
-          ns("publisher"),
-          "Publisher",
-          choices = NULL,
-          width = "100%",
-          selected = character(0),
-          multiple = TRUE,
-          options = single_selectize_options(
-            "Select or type to add publisher",
-            create = TRUE
+        fluidRow(
+          column(
+            6,
+            selectizeInput(
+              ns("publisher"),
+              "Publisher",
+              choices = NULL,
+              width = "100%",
+              selected = character(0),
+              multiple = TRUE,
+              options = single_selectize_options(
+                "Select or type to add publisher",
+                create = TRUE
+              )
+            )
+          ),
+          column(
+            6,
+            selectizeInput(
+              ns("series"),
+              "Series",
+              choices = NULL,
+              width = "100%",
+              selected = character(0),
+              multiple = TRUE,
+              options = single_selectize_options(
+                "Select or type to add series",
+                create = TRUE
+              )
+            )
           )
         ),
-        selectizeInput(
-          ns("series"),
-          "Series",
-          choices = NULL,
-          width = "100%",
-          selected = character(0),
-          multiple = TRUE,
-          options = single_selectize_options(
-            "Select or type to add series",
-            create = TRUE
-          )
-        ),
+
         selectizeInput(
           ns("media_type"),
           "Applicable media types for guideline",
@@ -144,24 +153,33 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
           multiple = TRUE,
           options = list(placeholder = "Select one or more media types")
         ),
-        selectizeInput(
-          ns("parameter_id"),
-          "Parameter",
-          choices = NULL,
-          width = "100%",
-          selected = character(0),
-          multiple = TRUE,
-          options = single_selectize_options("Select a parameter")
+        fluidRow(
+          column(
+            6,
+            selectizeInput(
+              ns("parameter_id"),
+              "Parameter",
+              choices = NULL,
+              width = "100%",
+              selected = character(0),
+              multiple = TRUE,
+              options = single_selectize_options("Select a parameter")
+            ),
+          ),
+          column(
+            6,
+            selectizeInput(
+              ns("matrix_state"),
+              "Matrix state",
+              choices = NULL,
+              width = "100%",
+              selected = character(0),
+              multiple = TRUE,
+              options = single_selectize_options("Select a matrix state")
+            )
+          )
         ),
-        selectizeInput(
-          ns("matrix_state"),
-          "Matrix state",
-          choices = NULL,
-          width = "100%",
-          selected = character(0),
-          multiple = TRUE,
-          options = single_selectize_options("Select a matrix state")
-        ),
+
         uiOutput(ns("parameter_unit_status")),
         uiOutput(ns("guideline_chemistry")),
         shinyjs::hidden(
@@ -205,28 +223,36 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
             create = TRUE
           )
         ),
-        selectizeInput(
-          ns("protection_goal"),
-          "Protection goal",
-          choices = NULL,
-          width = "100%",
-          selected = character(0),
-          multiple = TRUE,
-          options = single_selectize_options(
-            "Select or type to add a protection goal",
-            create = TRUE
-          )
-        ),
-        selectizeInput(
-          ns("exposure_duration"),
-          "Exposure duration",
-          choices = NULL,
-          width = "100%",
-          selected = character(0),
-          multiple = TRUE,
-          options = single_selectize_options(
-            "Select or type to add an exposure duration",
-            create = TRUE
+        fluidRow(
+          column(
+            6,
+            selectizeInput(
+              ns("protection_goal"),
+              "Protection goal",
+              choices = NULL,
+              width = "100%",
+              selected = character(0),
+              multiple = TRUE,
+              options = single_selectize_options(
+                "Select or type to add a protection goal",
+                create = TRUE
+              )
+            )
+          ),
+          column(
+            6,
+            selectizeInput(
+              ns("exposure_duration"),
+              "Exposure duration",
+              choices = NULL,
+              width = "100%",
+              selected = character(0),
+              multiple = TRUE,
+              options = single_selectize_options(
+                "Select or type to add an exposure duration",
+                create = TRUE
+              )
+            )
           )
         ),
         selectizeInput(
@@ -280,9 +306,12 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
               )
             )
           ),
-          column(
-            6,
-            checkboxInput(ns("active"), "Active", value = TRUE)
+          div(
+            style = "margin-top: 30px; margin-left: 10px",
+            column(
+              6,
+              checkboxInput(ns("active"), "Active", value = TRUE)
+            )
           )
         ),
 
@@ -2439,219 +2468,222 @@ addGuidelines <- function(id, language) {
         seed <- rbind(seed, blank_rule_input_rows(n - nrow(seed)))
       }
       ready <- YGwater:::shiny_ui_ready(ns("rule_inputs_ready"))
-      tagList(ready, lapply(seq_len(n), function(i) {
-        row <- seed[i, , drop = FALSE]
-        selected_parameter <- if (
-          identical(row$input_source[[1]], "hardness_helper")
-        ) {
-          hardness_helper_choice_value
-        } else {
-          selected_or_empty(row$parameter_id)
-        }
-        # Seed the saved selection in the HTML. A server-side update can arrive
-        # before this dynamic control is bound, leaving an existing input blank.
-        parameter_choices <- parameter_choices_with_helpers()
-        selected_choices <- parameter_choices[
-          parameter_choices %in% selected_parameter
-        ]
-        result_type_seed <- if (
-          nzchar(text_value(row$result_type_preference))
-        ) {
-          row$result_type_preference[[1]]
-        } else {
-          row$result_type[[1]]
-        }
-        tags$div(
-          style = paste(
-            "border-top:1px solid #d7d7d7;",
-            "padding-top:10px;",
-            "margin-top:10px;"
-          ),
-          tags$h5(paste("Input", i)),
-          fluidRow(
-            column(
-              4,
-              selectizeInput(
-                ns(rule_input_id("parameter", i)),
-                bslib::tooltip(
-                  tags$span("Parameter"),
-                  "Choose the sample result to use. The hardness helper is a database resolver that picks the preferred hardness value for the sample."
-                ),
-                choices = selected_choices,
-                selected = selected_parameter,
-                multiple = TRUE,
-                options = selectize_single_options,
-                width = "100%"
-              )
+      tagList(
+        ready,
+        lapply(seq_len(n), function(i) {
+          row <- seed[i, , drop = FALSE]
+          selected_parameter <- if (
+            identical(row$input_source[[1]], "hardness_helper")
+          ) {
+            hardness_helper_choice_value
+          } else {
+            selected_or_empty(row$parameter_id)
+          }
+          # Seed the saved selection in the HTML. A server-side update can arrive
+          # before this dynamic control is bound, leaving an existing input blank.
+          parameter_choices <- parameter_choices_with_helpers()
+          selected_choices <- parameter_choices[
+            parameter_choices %in% selected_parameter
+          ]
+          result_type_seed <- if (
+            nzchar(text_value(row$result_type_preference))
+          ) {
+            row$result_type_preference[[1]]
+          } else {
+            row$result_type[[1]]
+          }
+          tags$div(
+            style = paste(
+              "border-top:1px solid #d7d7d7;",
+              "padding-top:10px;",
+              "margin-top:10px;"
             ),
-            column(
-              4,
-              selectizeInput(
-                ns(rule_input_id("matrix_state", i)),
-                "Matrix state",
-                choices = choices_with_any(matrix_state_choices()),
-                selected = selected_or_empty(row$matrix_state_id),
-                multiple = TRUE,
-                options = selectize_single_options,
-                width = "100%"
-              )
-            ),
-            column(
-              4,
-              selectInput(
-                ns(rule_input_id("aggregate_method", i)),
-                bslib::tooltip(
-                  tags$span("Multiple results"),
-                  "What to do if the selected preference level has more than one matching result for the sample."
-                ),
-                choices = c(
-                  "Require one result" = "single",
-                  "Average" = "avg",
-                  "Minimum" = "min",
-                  "Maximum" = "max"
-                ),
-                selected = row$aggregate_method[[1]] %||% "single"
-              )
-            )
-          ),
-          fluidRow(
-            column(
-              4,
-              shinyjs::hidden(
-                div(
-                  id = ns(rule_input_id("fraction_section", i)),
-                  selectizeInput(
-                    ns(rule_input_id("sample_fraction", i)),
-                    "Fraction",
-                    choices = choices_with_any(sample_fraction_choices()),
-                    selected = selected_or_empty(row$sample_fraction_id),
-                    multiple = TRUE,
-                    options = selectize_single_options,
-                    width = "100%"
-                  )
-                )
-              )
-            ),
-            column(
-              4,
-              shinyjs::hidden(
-                div(
-                  id = ns(rule_input_id("descriptor_section", i)),
-                  selectizeInput(
-                    ns(rule_input_id("descriptor", i)),
-                    "Reporting basis",
-                    choices = choices_with_any(descriptor_choices()),
-                    selected = selected_or_empty(row$reporting_basis_id),
-                    multiple = TRUE,
-                    options = selectize_single_options,
-                    width = "100%"
-                  )
-                )
-              )
-            ),
-            column(
-              4,
-              selectizeInput(
-                ns(rule_input_id("result_type_preference", i)),
-                bslib::tooltip(
-                  tags$span("Result type preference"),
-                  "Optional fallback order. For example, choose field first and lab second to use field results when present, otherwise lab results."
-                ),
-                choices = choices_with_any(result_type_choices()),
-                selected = selected_or_empty_vector(result_type_seed),
-                multiple = TRUE,
-                options = list(
-                  placeholder = "Any result type, or select fallback order..."
-                ),
-                width = "100%"
-              )
-            )
-          ),
-          YGwater:::chemistry_metadata_ui(
-            ns,
-            paste0("rule_chem_", i, "_"),
-            moduleData$chemistry_catalogues,
-            row
-          ),
-          tags$details(
-            open = FALSE,
-            tags$summary("Input matching options"),
+            tags$h5(paste("Input", i)),
             fluidRow(
               column(
-                3,
-                checkboxInput(
-                  ns(rule_input_id("required", i)),
+                4,
+                selectizeInput(
+                  ns(rule_input_id("parameter", i)),
                   bslib::tooltip(
-                    tags$span("Required"),
-                    "If checked, the guideline returns a missing-input status when this value cannot be resolved."
+                    tags$span("Parameter"),
+                    "Choose the sample result to use. The hardness helper is a database resolver that picks the preferred hardness value for the sample."
                   ),
-                  value = isTRUE(row$required[[1]])
+                  choices = selected_choices,
+                  selected = selected_parameter,
+                  multiple = TRUE,
+                  options = selectize_single_options,
+                  width = "100%"
                 )
               ),
               column(
-                3,
-                checkboxInput(
-                  ns(rule_input_id("allow_condition_value", i)),
-                  bslib::tooltip(
-                    tags$span("Use condition value"),
-                    "Use a numeric condition value for censored/qualified results when the primary result value is blank. Leave unchecked unless the source method explicitly allows it."
-                  ),
-                  value = isTRUE(row$allow_condition_value[[1]])
+                4,
+                selectizeInput(
+                  ns(rule_input_id("matrix_state", i)),
+                  "Matrix state",
+                  choices = choices_with_any(matrix_state_choices()),
+                  selected = selected_or_empty(row$matrix_state_id),
+                  multiple = TRUE,
+                  options = selectize_single_options,
+                  width = "100%"
                 )
               ),
               column(
-                3,
-                numericInput(
-                  ns(rule_input_id("lower_calibrated_bound", i)),
-                  bslib::tooltip(
-                    tags$span("Calibration low"),
-                    "Optional lower domain limit for an external model or calibrated formula. Out-of-range handling is set below."
-                  ),
-                  value = row$lower_calibrated_bound[[1]]
-                )
-              ),
-              column(
-                3,
-                numericInput(
-                  ns(rule_input_id("upper_calibrated_bound", i)),
-                  bslib::tooltip(
-                    tags$span("Calibration high"),
-                    "Optional upper domain limit for an external model or calibrated formula. Out-of-range handling is set below."
-                  ),
-                  value = row$upper_calibrated_bound[[1]]
-                )
-              )
-            ),
-            fluidRow(
-              column(
-                3,
+                4,
                 selectInput(
-                  ns(rule_input_id("bounds_action", i)),
+                  ns(rule_input_id("aggregate_method", i)),
                   bslib::tooltip(
-                    tags$span("Out-of-range input"),
-                    "For calibration limits: flag the value, clamp it to the limit, or reject the guideline calculation."
+                    tags$span("Multiple results"),
+                    "What to do if the selected preference level has more than one matching result for the sample."
                   ),
                   choices = c(
-                    "Flag" = "flag",
-                    "Clamp" = "clamp",
-                    "Reject" = "reject"
+                    "Require one result" = "single",
+                    "Average" = "avg",
+                    "Minimum" = "min",
+                    "Maximum" = "max"
                   ),
-                  selected = row$bounds_action[[1]] %||% "flag"
+                  selected = row$aggregate_method[[1]] %||% "single"
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                4,
+                shinyjs::hidden(
+                  div(
+                    id = ns(rule_input_id("fraction_section", i)),
+                    selectizeInput(
+                      ns(rule_input_id("sample_fraction", i)),
+                      "Fraction",
+                      choices = choices_with_any(sample_fraction_choices()),
+                      selected = selected_or_empty(row$sample_fraction_id),
+                      multiple = TRUE,
+                      options = selectize_single_options,
+                      width = "100%"
+                    )
+                  )
                 )
               ),
               column(
-                9,
-                textInput(
-                  ns(rule_input_id("note", i)),
-                  "Input note",
-                  value = row$note[[1]] %||% "",
+                4,
+                shinyjs::hidden(
+                  div(
+                    id = ns(rule_input_id("descriptor_section", i)),
+                    selectizeInput(
+                      ns(rule_input_id("descriptor", i)),
+                      "Reporting basis",
+                      choices = choices_with_any(descriptor_choices()),
+                      selected = selected_or_empty(row$reporting_basis_id),
+                      multiple = TRUE,
+                      options = selectize_single_options,
+                      width = "100%"
+                    )
+                  )
+                )
+              ),
+              column(
+                4,
+                selectizeInput(
+                  ns(rule_input_id("result_type_preference", i)),
+                  bslib::tooltip(
+                    tags$span("Result type preference"),
+                    "Optional fallback order. For example, choose field first and lab second to use field results when present, otherwise lab results."
+                  ),
+                  choices = choices_with_any(result_type_choices()),
+                  selected = selected_or_empty_vector(result_type_seed),
+                  multiple = TRUE,
+                  options = list(
+                    placeholder = "Any result type, or select fallback order..."
+                  ),
                   width = "100%"
+                )
+              )
+            ),
+            YGwater:::chemistry_metadata_ui(
+              ns,
+              paste0("rule_chem_", i, "_"),
+              moduleData$chemistry_catalogues,
+              row
+            ),
+            tags$details(
+              open = FALSE,
+              tags$summary("Input matching options"),
+              fluidRow(
+                column(
+                  3,
+                  checkboxInput(
+                    ns(rule_input_id("required", i)),
+                    bslib::tooltip(
+                      tags$span("Required"),
+                      "If checked, the guideline returns a missing-input status when this value cannot be resolved."
+                    ),
+                    value = isTRUE(row$required[[1]])
+                  )
+                ),
+                column(
+                  3,
+                  checkboxInput(
+                    ns(rule_input_id("allow_condition_value", i)),
+                    bslib::tooltip(
+                      tags$span("Use condition value"),
+                      "Use a numeric condition value for censored/qualified results when the primary result value is blank. Leave unchecked unless the source method explicitly allows it."
+                    ),
+                    value = isTRUE(row$allow_condition_value[[1]])
+                  )
+                ),
+                column(
+                  3,
+                  numericInput(
+                    ns(rule_input_id("lower_calibrated_bound", i)),
+                    bslib::tooltip(
+                      tags$span("Calibration low"),
+                      "Optional lower domain limit for an external model or calibrated formula. Out-of-range handling is set below."
+                    ),
+                    value = row$lower_calibrated_bound[[1]]
+                  )
+                ),
+                column(
+                  3,
+                  numericInput(
+                    ns(rule_input_id("upper_calibrated_bound", i)),
+                    bslib::tooltip(
+                      tags$span("Calibration high"),
+                      "Optional upper domain limit for an external model or calibrated formula. Out-of-range handling is set below."
+                    ),
+                    value = row$upper_calibrated_bound[[1]]
+                  )
+                )
+              ),
+              fluidRow(
+                column(
+                  3,
+                  selectInput(
+                    ns(rule_input_id("bounds_action", i)),
+                    bslib::tooltip(
+                      tags$span("Out-of-range input"),
+                      "For calibration limits: flag the value, clamp it to the limit, or reject the guideline calculation."
+                    ),
+                    choices = c(
+                      "Flag" = "flag",
+                      "Clamp" = "clamp",
+                      "Reject" = "reject"
+                    ),
+                    selected = row$bounds_action[[1]] %||% "flag"
+                  )
+                ),
+                column(
+                  9,
+                  textInput(
+                    ns(rule_input_id("note", i)),
+                    "Input note",
+                    value = row$note[[1]] %||% "",
+                    width = "100%"
+                  )
                 )
               )
             )
           )
-        )
-      }))
+        })
+      )
     })
 
     observeEvent(input$rule_inputs_ready, {
@@ -2787,10 +2819,8 @@ addGuidelines <- function(id, language) {
         "reporting_basis"
       )
 
-      notes <- c(
-        "Leave guideline fractions empty unless the source guideline applies only to named fractions. Empty means all fractions, including results where fraction is empty.",
-        "Select the reporting expression, chemical form, target, endpoint, and analysis conditions defined by the source guideline. Unspecified chemical identity does not match a specified variant."
-      )
+      notes <-
+        "Leave guideline fractions empty unless the source guideline applies only to named fractions. Empty means all fractions, including results where fraction is empty."
       if (!fraction_required) {
         notes <- c(
           notes,

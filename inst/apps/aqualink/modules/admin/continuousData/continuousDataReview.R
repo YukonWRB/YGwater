@@ -538,7 +538,8 @@ continuousDataReview <- function(id, language) {
       approval_types = safe_query(
         DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT approval_type_id, approval_type_description,
+          "SELECT approval_type_id, approval_type_code,
+                  approval_type_description,
                   COALESCE(color_code, '#F28E2B') AS color_code
            FROM public.approval_types
            ORDER BY approval_type_description"
@@ -547,7 +548,8 @@ continuousDataReview <- function(id, language) {
       qualifier_types = safe_query(
         DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT qualifier_type_id, qualifier_type_description,
+          "SELECT qualifier_type_id, qualifier_type_code,
+                  qualifier_type_description,
                   COALESCE(color_code, '#E15759') AS color_code
            FROM public.qualifier_types
            ORDER BY qualifier_type_description"
@@ -950,6 +952,7 @@ continuousDataReview <- function(id, language) {
                  ORDER BY g.start_dt",
         approval = "SELECT a.approval_id AS record_id,
                            a.approval_type_id AS type_id,
+                           at.approval_type_code AS type_code,
                            at.approval_type_description AS description,
                            COALESCE(at.color_code, '#F28E2B') AS color_code,
                            COALESCE(a.no_source_update, FALSE) AS no_source_update,
@@ -961,6 +964,7 @@ continuousDataReview <- function(id, language) {
                     ORDER BY a.start_dt",
         qualifier = "SELECT q.qualifier_id AS record_id,
                             q.qualifier_type_id AS type_id,
+                            qt.qualifier_type_code AS type_code,
                             qt.qualifier_type_description AS description,
                             COALESCE(qt.color_code, '#E15759') AS color_code,
                             COALESCE(q.no_source_update, FALSE) AS no_source_update,
@@ -1987,6 +1991,22 @@ continuousDataReview <- function(id, language) {
         action$end_dt,
         exclude_id = exclude_id
       )
+      auto_screened_notice <- NULL
+      if (action$kind %in% c("grade", "qualifier")) {
+        screened <- data$approvals[
+          data$approvals$type_code == "S" &
+            data$approvals$start_dt < action$end_dt &
+            data$approvals$end_dt > action$start_dt,
+          ,
+          drop = FALSE
+        ]
+        if (nrow(screened)) {
+          auto_screened_notice <- tags$div(
+            class = "alert alert-warning",
+            "This manual change overlaps approval 'Auto screened, no human review'. If this edit reflects human review, consider changing the approval as well. The approval will remain unchanged unless you edit it separately."
+          )
+        }
+      }
 
       if (action$kind %in% c("grade", "approval") && nrow(overlaps)) {
         return(tagList(
@@ -2003,7 +2023,8 @@ continuousDataReview <- function(id, language) {
               action$end_dt
             ),
             tags$li
-          ))
+          )),
+          auto_screened_notice
         ))
       }
 
@@ -2016,16 +2037,17 @@ continuousDataReview <- function(id, language) {
           exclude_id = exclude_id
         )
         if (!nrow(merge$rows)) {
-          return(NULL)
+          return(auto_screened_notice)
         }
         return(tagList(
           p(sprintf(
-            "This %s qualifier will merge with the listed range(s) for the same qualifier into one range: [%s, %s). Different qualifier types may still overlap.",
+            "This %s qualifier will merge with the listed range(s) for the same qualifier into one range: [%s, %s). Different specific qualifier types may overlap; UNK and UNS cannot overlap any other qualifier.",
             if (is.null(action$record)) "new" else "edited",
             format_datetime(merge$start),
             format_datetime(merge$end)
           )),
-          tags$ul(lapply(describe_overlaps(merge$rows), tags$li))
+          tags$ul(lapply(describe_overlaps(merge$rows), tags$li)),
+          auto_screened_notice
         ))
       }
 
@@ -2046,7 +2068,7 @@ continuousDataReview <- function(id, language) {
         ))
       }
 
-      NULL
+      auto_screened_notice
     }
 
     write_range_assignment <- function(action) {
@@ -2100,6 +2122,49 @@ continuousDataReview <- function(id, language) {
           ),
           params = list(ts_id)
         )
+        if (identical(action$kind, "qualifier")) {
+          existing$type_code <- module_data$qualifier_types$qualifier_type_code[
+            match(
+              existing$type_id,
+              module_data$qualifier_types$qualifier_type_id
+            )
+          ]
+          editing_row <- if (is.null(action$record)) {
+            rep(TRUE, nrow(existing))
+          } else {
+            as.character(existing$record_id) != as.character(action$record$record_id)
+          }
+          conflict_start <- action$start_dt
+          conflict_end <- action$end_dt
+          merge <- qualifier_merge_component(
+            existing,
+            action$type_id,
+            action$start_dt,
+            action$end_dt,
+            exclude_id = if (is.null(action$record)) {
+              NULL
+            } else {
+              action$record$record_id
+            }
+          )
+          if (nrow(merge$rows)) {
+            conflict_start <- merge$start
+            conflict_end <- merge$end
+          }
+          interval_overlap <-
+            as.numeric(existing$start_dt) < as.numeric(conflict_end) &
+            as.numeric(existing$end_dt) > as.numeric(conflict_start)
+          conflict <- if (action$type_code %in% c("UNK", "UNS")) {
+            editing_row & interval_overlap & existing$type_code != action$type_code
+          } else {
+            editing_row & interval_overlap & existing$type_code %in% c("UNK", "UNS")
+          }
+          if (any(conflict, na.rm = TRUE)) {
+            stop(
+              "Unknown (UNK) and unspecified (UNS) qualifiers cannot overlap any other qualifier. Remove or trim the conflicting qualifier range first."
+            )
+          }
+        }
 
         record <- action$record
         record_id <- if (is.null(record)) NULL else record$record_id
@@ -2475,6 +2540,14 @@ continuousDataReview <- function(id, language) {
           return()
         }
         action$type_id <- as.integer(type_id)
+        if (identical(kind, "qualifier")) {
+          action$type_code <- module_data$qualifier_types$qualifier_type_code[
+            match(
+              action$type_id,
+              module_data$qualifier_types$qualifier_type_id
+            )
+          ]
+        }
         action$no_source_update <- !identical(input$no_source_update, FALSE)
       }
 

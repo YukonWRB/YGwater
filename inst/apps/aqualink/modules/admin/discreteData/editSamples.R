@@ -27,6 +27,35 @@ edit_samples_link_changes <- function(existing_ids, selected_ids) {
   )
 }
 
+#' Save document selection without replacing unchanged link metadata
+#'
+#' Uses the current sample-document schema and retains document roles, notes,
+#' and original audit fields on links the user has kept selected.
+#' @param con AquaCache connection within the caller's transaction.
+#' @param sample_id Sample to update.
+#' @param document_ids Selected document IDs.
+#' @return Invisibly returns `NULL`.
+#' @keywords internal
+#' @noRd
+edit_samples_sync_document_links <- function(con, sample_id, document_ids) {
+  existing_ids <- DBI::dbGetQuery(con,
+    "SELECT document_id FROM discrete.sample_documents WHERE sample_id=$1",
+    params = list(as.integer(sample_id)))$document_id
+  changes <- edit_samples_link_changes(existing_ids, document_ids)
+  for (document_id in changes$remove) {
+    DBI::dbExecute(con,
+      "DELETE FROM discrete.sample_documents WHERE sample_id=$1 AND document_id=$2",
+      params = list(as.integer(sample_id), document_id))
+  }
+  for (document_id in changes$add) {
+    DBI::dbExecute(con,
+      "INSERT INTO discrete.sample_documents(sample_id,document_id,document_role)
+       VALUES ($1,$2,'supporting') ON CONFLICT (sample_id,document_id) DO NOTHING",
+      params = list(as.integer(sample_id), document_id))
+  }
+  invisible(NULL)
+}
+
 editSamplesUI <- function(id) {
   ns <- NS(id)
 
@@ -100,6 +129,8 @@ editSamples <- function(id, language) {
     selected_sample_ids <- reactiveVal(integer())
     selected_result_id <- reactiveVal(NA_integer_)
     result_edit_mode <- reactiveVal("add")
+    pending_sample_update <- reactiveVal(NULL)
+    provenance_result_id <- reactiveVal(NA_integer_)
 
     multi_editable_fields <- list(
       collection_method = list(
@@ -243,29 +274,34 @@ editSamples <- function(id, language) {
       unique(as.integer(linked_ids))
     }
 
-    sync_sample_document_links <- function(con, sample_id, document_ids) {
-      document_ids <- normalize_document_ids(document_ids)
-      DBI::dbExecute(
-        con,
-        "DELETE FROM discrete.sample_documents WHERE sample_id = $1;",
-        params = list(as.integer(sample_id))
-      )
-
-      for (document_id in document_ids) {
-        DBI::dbExecute(
-          con,
-          "INSERT INTO discrete.sample_documents (
-             sample_id,
-             document_id,
-             document_role,
-             link_source
-           ) VALUES ($1, $2, 'supporting', 'editSamples')
-           ON CONFLICT (sample_id, document_id) DO NOTHING;",
-          params = list(as.integer(sample_id), as.integer(document_id))
-        )
+    normalize_share_values <- function(values) {
+      if (is.null(values) || !length(values)) {
+        return(character())
       }
+      values <- unlist(values, use.names = FALSE)
+      if (length(values) == 1L && grepl("^\\{.*\\}$", values)) {
+        values <- array_to_text(values)
+      }
+      values <- unique(as.character(values))
+      sort(values[!is.na(values) & nzchar(values)])
+    }
 
-      invisible(NULL)
+    linked_document_ids <- function(con, sample_ids) {
+      sample_ids <- unique(as.integer(sample_ids))
+      sample_ids <- sample_ids[!is.na(sample_ids)]
+      if (!length(sample_ids)) {
+        return(integer())
+      }
+      placeholders <- paste0("$", seq_along(sample_ids), collapse = ", ")
+      DBI::dbGetQuery(
+        con,
+        paste0(
+          "SELECT DISTINCT document_id
+           FROM discrete.sample_documents
+           WHERE sample_id IN (", placeholders, ")"
+        ),
+        params = as.list(sample_ids)
+      )$document_id
     }
 
     current_sample_group_ids <- function(sample_id) {
@@ -1731,6 +1767,10 @@ editSamples <- function(id, language) {
       updateSelectizeInput(
         session,
         "sub_location",
+        choices = named_choices(
+          moduleData$sub_locations$sub_location_id[moduleData$sub_locations$location_id %in% details$location_id],
+          moduleData$sub_locations$sub_location_name[moduleData$sub_locations$location_id %in% details$location_id]
+        ),
         selected = if (is.na(details$sub_location_id)) {
           character(0)
         } else {
@@ -2097,7 +2137,8 @@ editSamples <- function(id, language) {
             choices = named_choices(
               moduleData$sub_locations$sub_location_id,
               moduleData$sub_locations$sub_location_name
-            )
+            ),
+            selected = input$sub_location
           )
         } else {
           available <- moduleData$sub_locations[
@@ -2109,7 +2150,8 @@ editSamples <- function(id, language) {
             choices = named_choices(
               available$sub_location_id,
               available$sub_location_name
-            )
+            ),
+            selected = intersect(input$sub_location, as.character(available$sub_location_id))
           )
         }
       },
@@ -2806,6 +2848,7 @@ editSamples <- function(id, language) {
                   )
                 )
               ),
+              actionButton(ns("view_result_provenance"), "Import provenance", icon = icon("file-lines")),
               DT::DTOutput(ns("results_table"))
             )
           )
@@ -3031,6 +3074,91 @@ editSamples <- function(id, language) {
       selected_result_id(NA_integer_)
       show_result_modal("add")
     })
+
+    observeEvent(input$view_result_provenance, {
+      id <- selected_result_id()
+      if (is.na(id)) {
+        showNotification("Select a result first.", type = "warning")
+        return()
+      }
+      info <- tryCatch(YGwater:::discrete_result_provenance(session$userData$AquaCache, id), error = function(e) e)
+      if (inherits(info, "error") || !nrow(info)) {
+        showNotification("The selected result or its provenance is unavailable. Refresh the sample list and try again.", type = "error")
+        return()
+      }
+      provenance_result_id(id)
+      value <- function(x) {
+        if (!length(x) || is.na(x[[1]]) || !nzchar(as.character(x[[1]]))) "Not recorded" else as.character(x[[1]])
+      }
+      message <- switch(info$provenance_state[[1]],
+        unrecorded = "No import run is recorded for this result. It may have been entered manually or imported before run provenance was captured. Existing sample source fields and the audit history may provide additional context.",
+        restricted = "This result is visible, but its source workbook and import details are not shared with your database role.",
+        recorded = "This is the import run that originally inserted this result. Later result edits are recorded in the audit history. The archived workbook contains the original file, including any results omitted from the upload."
+      )
+      fields <- if (info$provenance_state[[1]] == "recorded") {
+        list("Import run" = info$import_run_id, "Source" = info$source_name,
+          "Workbook format" = info$profile_name, "Uploaded by" = info$created_by,
+          "Completed at" = info$completed_at, "Source file" = info$document_name,
+          "Lab report number" = info$lab_report_no, "Lab sample number" = info$lab_sample_no)
+      } else {
+        list("Sample source adapter" = info$sample_source_adapter,
+          "Sample external identifier" = info$sample_external_id,
+          "Lab report number" = info$lab_report_no, "Lab sample number" = info$lab_sample_no)
+      }
+      showModal(modalDialog(
+        title = paste("Import provenance for result", id), size = "l",
+        tags$p(message),
+        tags$table(class = "table table-sm", tags$tbody(lapply(names(fields), function(label) {
+          tags$tr(tags$th(label), tags$td(value(fields[[label]])))
+        }))),
+        if (!is.na(info$document_id[[1]])) downloadButton(ns("download_import_source"), "Download original workbook"),
+        if (info$provenance_state[[1]] == "recorded" && !identical(info$configuration_snapshot[[1]], "{}")) {
+          downloadButton(ns("download_import_provenance"), "Download configuration and upload metadata (JSON)")
+        },
+        if (info$provenance_state[[1]] == "recorded" && identical(info$configuration_snapshot[[1]], "{}")) {
+          tags$p("Configuration was not captured for this older import run.")
+        },
+        footer = modalButton("Close"), easyClose = TRUE
+      ))
+    })
+
+    output$download_import_source <- downloadHandler(
+      filename = function() {
+        info <- YGwater:::discrete_result_provenance(session$userData$AquaCache, provenance_result_id())
+        if (!nrow(info) || is.na(info$document_id[[1]])) stop("The source workbook is unavailable.")
+        name <- basename(info$document_name[[1]])
+        if (!nzchar(tools::file_ext(name))) name <- paste0(name, ".", info$document_format[[1]])
+        name
+      },
+      content = function(file) {
+        info <- YGwater:::discrete_result_provenance(session$userData$AquaCache, provenance_result_id())
+        if (!nrow(info) || is.na(info$document_id[[1]])) stop("The source workbook is unavailable.")
+        document <- DBI::dbGetQuery(session$userData$AquaCache,
+          "SELECT document FROM files.documents WHERE document_id=$1", params = list(info$document_id[[1]]))
+        if (nrow(document) != 1L) stop("The source workbook is no longer available.")
+        writeBin(document$document[[1]], file)
+      }, contentType = "application/octet-stream"
+    )
+
+    output$download_import_provenance <- downloadHandler(
+      filename = function() paste0("result-", provenance_result_id(), "-import-provenance.json"),
+      content = function(file) {
+        info <- YGwater:::discrete_result_provenance(session$userData$AquaCache, provenance_result_id())
+        if (!nrow(info) || info$provenance_state[[1]] != "recorded") stop("Import provenance is no longer available.")
+        # Embed the stored JSON verbatim so empty objects/arrays and exact
+        # mapping definitions keep their original JSON types.
+        document <- if (is.na(info$document_id[[1]])) "null" else jsonlite::toJSON(list(
+          document_id = info$document_id[[1]], name = info$document_name[[1]],
+          format = info$document_format[[1]], bytes = info$document_size[[1]], file_hash = info$file_hash[[1]]
+        ), auto_unbox = TRUE, na = "null")
+        run <- jsonlite::toJSON(as.list(info[1L, c("source_code", "profile_code", "created_by",
+          "started_at", "completed_at", "source_adapter_function", "adapter_version", "source_uri", "status")]),
+          auto_unbox = TRUE, na = "null", POSIXt = "ISO8601")
+        json <- sprintf('{"result_id":%d,"import_run_id":%d,"run":%s,"source_document":%s,"summary":%s,"configuration":%s}',
+          info$result_id[[1]], info$import_run_id[[1]], run, document, info$summary[[1]], info$configuration_snapshot[[1]])
+        writeLines(jsonlite::prettify(json), file, useBytes = TRUE)
+      }, contentType = "application/json"
+    )
 
     observeEvent(input$edit_result, {
       show_result_modal("edit")
@@ -3434,7 +3562,9 @@ editSamples <- function(id, language) {
           }
 
           selected_ids <- unique(c(existing_ids, uploaded_ids))
-          sync_sample_document_links(con, sample_id, selected_ids)
+          YGwater:::lock_sample_documents(con, union(linked_document_ids(con, sample_id), selected_ids))
+          edit_samples_sync_document_links(con, sample_id, selected_ids)
+          YGwater:::sync_sample_document_visibility(con, sample_ids = sample_id)
 
           DBI::dbExecute(con, "COMMIT")
           active <- FALSE
@@ -3475,8 +3605,13 @@ editSamples <- function(id, language) {
       )
     })
 
-    observeEvent(input$update_sample, {
-      sample_ids <- selected_sample_ids()
+    perform_sample_update <- function(
+      sample_ids,
+      form,
+      multi_mode,
+      update_documents = FALSE,
+      selected_fields = NULL
+    ) {
       if (!length(sample_ids)) {
         showNotification(
           "Select at least one sample from the table to modify.",
@@ -3484,14 +3619,10 @@ editSamples <- function(id, language) {
         )
         return()
       }
-      form <- collect_sample_inputs()
-      multi_mode <- isTRUE(input$multi_edit)
-
       if (multi_mode) {
-        selected_fields <- intersect(
-          input$multi_fields,
-          names(multi_editable_fields)
-        )
+        if (is.null(selected_fields)) {
+          selected_fields <- intersect(input$multi_fields, names(multi_editable_fields))
+        }
         if (!length(selected_fields)) {
           showNotification(
             "Choose at least one field to update in multi-sample mode.",
@@ -3563,15 +3694,20 @@ editSamples <- function(id, language) {
         update_error <- tryCatch(
           {
             DBI::dbWithTransaction(con, {
+              # Capture links before changing visibility; the new sharing may
+              # make a sample unreadable to this database role.
+              document_ids <- if (isTRUE(update_documents)) linked_document_ids(con, sample_ids) else integer()
+              YGwater:::lock_sample_documents(con, document_ids)
               for (id in sample_ids) {
                 tryCatch(
                   {
                     if (!is.null(update_sql)) {
-                      DBI::dbExecute(
+                      updated <- DBI::dbExecute(
                         con,
                         update_sql,
                         params = c(params, list(id))
                       )
+                      if (updated != 1L) stop("The selected sample is no longer available.", call. = FALSE)
                     }
                     if ("sample_qualifier_ids" %in% association_fields) {
                       sync_sample_qualifier_links(
@@ -3592,6 +3728,12 @@ editSamples <- function(id, language) {
                     stop(sprintf("Sample %s: %s", id, e$message), call. = FALSE)
                   }
                 )
+              }
+              if (
+                isTRUE(update_documents) &&
+                  "share_with" %in% selected_fields
+              ) {
+                YGwater:::sync_sample_document_visibility(con, document_ids = document_ids)
               }
             })
             NULL
@@ -3753,11 +3895,16 @@ editSamples <- function(id, language) {
           {
             con <- session$userData$AquaCache
             DBI::dbWithTransaction(con, {
+              current_documents <- linked_document_ids(con, sample_id)
+              changed_documents <- edit_samples_link_changes(current_documents, form$document_ids)
+              YGwater:::lock_sample_documents(con, if (isTRUE(update_documents)) {
+                union(current_documents, form$document_ids)
+              } else c(changed_documents$remove, changed_documents$add))
               updated <- DBI::dbExecute(con, update_sql, params = params)
               if (updated != 1L) {
                 stop("The selected sample was not updated.", call. = FALSE)
               }
-              sync_sample_document_links(con, sample_id, form$document_ids)
+              edit_samples_sync_document_links(con, sample_id, form$document_ids)
               sync_sample_group_links(con, sample_id, form$sample_group_ids)
               sync_sample_qualifier_links(
                 con,
@@ -3769,6 +3916,9 @@ editSamples <- function(id, language) {
                 sample_id,
                 form$sample_observer_ids
               )
+              if (isTRUE(update_documents)) {
+                YGwater:::sync_sample_document_visibility(con, document_ids = form$document_ids)
+              }
             })
             cleanup_messages <- cleanup_removed_documents(
               session$userData$AquaCache,
@@ -3786,6 +3936,132 @@ editSamples <- function(id, language) {
           }
         )
       }
+    }
+
+    observeEvent(input$update_sample, {
+      sample_ids <- selected_sample_ids()
+      form <- collect_sample_inputs()
+      multi_mode <- isTRUE(input$multi_edit)
+      con <- session$userData$AquaCache
+      visibility_changed <- FALSE
+      has_documents <- FALSE
+
+      if (multi_mode) {
+        selected_fields <- intersect(
+          input$multi_fields,
+          names(multi_editable_fields)
+        )
+        if ("share_with" %in% selected_fields && length(sample_ids)) {
+          placeholders <- paste0("$", seq_along(sample_ids), collapse = ", ")
+          current <- DBI::dbGetQuery(
+            con,
+            paste0(
+              "SELECT sample_id, share_with
+               FROM discrete.samples
+               WHERE sample_id IN (", placeholders, ")"
+            ),
+            params = as.list(as.integer(sample_ids))
+          )
+          desired <- normalize_share_values(form$share_with)
+          visibility_changed <- any(vapply(
+            seq_len(nrow(current)),
+            function(i) !identical(
+              normalize_share_values(current$share_with[[i]]),
+              desired
+            ),
+            logical(1)
+          ))
+          has_documents <- length(linked_document_ids(con, sample_ids)) > 0L
+        }
+      } else if (length(sample_ids)) {
+        sample_id <- as.integer(sample_ids[[1]])
+        current <- DBI::dbGetQuery(
+          con,
+          "SELECT share_with FROM discrete.samples WHERE sample_id = $1",
+          params = list(sample_id)
+        )
+        visibility_changed <- nrow(current) > 0L && !identical(
+          normalize_share_values(current$share_with[[1]]),
+          normalize_share_values(form$share_with)
+        )
+        has_documents <- length(form$document_ids) > 0L ||
+          length(current_sample_document_ids(sample_id)) > 0L
+      }
+
+      if (visibility_changed && has_documents) {
+        pending_sample_update(list(
+          sample_ids = sample_ids,
+          form = form,
+          multi_mode = multi_mode,
+          selected_fields = if (multi_mode) selected_fields else NULL
+        ))
+        showModal(modalDialog(
+          title = "Update linked document visibility?",
+          p(
+            "Also update the visibility of documents linked to these samples? ",
+            "Yes is recommended. A document linked to multiple samples will ",
+            "be restricted to group names shared by every linked sample and its location. ",
+            "No keeps its current visibility."
+          ),
+          footer = tagList(
+            actionButton(
+              ns("update_document_visibility_yes"),
+              "Yes, update documents",
+              class = "btn-primary"
+            ),
+            actionButton(
+              ns("update_document_visibility_no"),
+              "No, keep document visibility",
+              class = "btn-secondary"
+            ),
+            actionButton(
+              ns("cancel_sample_visibility_update"),
+              "Cancel",
+              class = "btn-default"
+            )
+          ),
+          easyClose = FALSE
+        ))
+        return()
+      }
+
+      perform_sample_update(sample_ids, form, multi_mode)
+    })
+
+    observeEvent(input$update_document_visibility_yes, {
+      pending <- pending_sample_update()
+      if (is.null(pending)) {
+        return()
+      }
+      removeModal()
+      pending_sample_update(NULL)
+      perform_sample_update(
+        pending$sample_ids,
+        pending$form,
+        pending$multi_mode,
+        update_documents = TRUE,
+        selected_fields = pending$selected_fields
+      )
+    })
+
+    observeEvent(input$update_document_visibility_no, {
+      pending <- pending_sample_update()
+      if (is.null(pending)) {
+        return()
+      }
+      removeModal()
+      pending_sample_update(NULL)
+      perform_sample_update(
+        pending$sample_ids,
+        pending$form,
+        pending$multi_mode,
+        selected_fields = pending$selected_fields
+      )
+    })
+
+    observeEvent(input$cancel_sample_visibility_update, {
+      pending_sample_update(NULL)
+      removeModal()
     })
   })
 }
