@@ -1,3 +1,5 @@
+##does not work - flow acc rasters super weird
+
 # [x for x in dir(wbe.hydrology) if "burn" in x.lower()]
 # [x for x in dir(wbe) if "burn" in x.lower()]
 
@@ -9,13 +11,16 @@
 
 # [x for x in dir(wbe.hydrology) if "fill" in x.lower()]
 # [x for x in dir(wbe.hydrology.depressions_storage) if "fill" in x.lower()]
-
-import whitebox_workflows as wbw
+import math
+import rasterio
+import matplotlib.pyplot as plt
+import numpy as np
 from pathlib import Path
+import whitebox_workflows as wbw
 
 wbe = wbw.WbEnvironment()
 
-project_dir = Path(r"H:\cmfmacne\basins\pycode\burn")
+project_dir = Path(r"H:\cmfmacne\basins\code\burn")
 
 def cond_dem_burn(dem_file):
 
@@ -90,7 +95,7 @@ for dem_file in sorted(project_dir.glob("dtm_*.tif")):
 
 ########################################################
 #just to take a look
-flow_file = project_dir / "dtm_1_flow_accum.tif"
+flow_file = project_dir / "dtm_3_fillburn10_flow_accum.tif"
 
 with rasterio.open(flow_file) as src:
 

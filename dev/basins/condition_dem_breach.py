@@ -7,7 +7,7 @@ import whitebox_workflows as wbw
 
 wbe = wbw.WbEnvironment()
 
-project_dir = Path(r"H:\cmfmacne\basins\pycode")
+project_dir = Path(r"H:\cmfmacne\basins\code")
 
 def cond_dem_breach(dem_file):
 
@@ -42,9 +42,16 @@ def cond_dem_breach(dem_file):
         str(project_dir / f"{stem}_flow_accum.tif")
     )
 
+    wbe.write_raster(
+        d8_pointer,
+        str(project_dir / f"{stem}_flow_dir.tif")
+    )    
+
 
 for dem_file in sorted(project_dir.glob("dtm_*.tif")):
     cond_dem_breach(dem_file)
+
+
 
 #just to take a look
 flow_file = project_dir / "dtm_1_flow_accum.tif"
