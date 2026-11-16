@@ -2128,48 +2128,61 @@ importSetup <- function(id, language) {
     })
     output$new_profile_default_fields <- renderUI({
       profile <- new_profile_template()
-      defaults <- if (is.null(profile)) {
-        default_metadata
-      } else {
-        addDiscData_defaults(profile)
-      }
+      defaults <- addDiscData_defaults(profile)
       tagList(
         tags$h5("Imported data defaults"),
         helpText(
-          "These values fill fields if they are not supplied by the workbook. They remain editable in the preview."
+          "All defaults are optional. These values fill fields if they are not supplied by the workbook and available for parsing."
         ),
         fluidRow(
           column(
             4,
             selectizeInput(
               ns("new_profile_default_media"),
-              "Media",
-              choices = stats::setNames(media$media_id, media$media_type),
-              selected = defaults$media_id
+              "Default media",
+              choices = c(
+                "None" = "",
+                stats::setNames(media$media_id, media$media_type)
+              ),
+              selected = if (is.na(defaults$media_id)) "" else defaults$media_id
             )
           ),
           column(
             4,
             selectizeInput(
               ns("new_profile_default_method"),
-              "Collection method",
-              choices = stats::setNames(
-                collection_methods$collection_method_id,
-                collection_methods$collection_method
+              "Default collection method",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  collection_methods$collection_method_id,
+                  collection_methods$collection_method
+                )
               ),
-              selected = defaults$collection_method
+              selected = if (is.na(defaults$collection_method)) {
+                ""
+              } else {
+                defaults$collection_method
+              }
             )
           ),
           column(
             4,
             selectizeInput(
               ns("new_profile_default_sample_type"),
-              "Sample type",
-              choices = stats::setNames(
-                sample_types$sample_type_id,
-                sample_types$sample_type
+              "Default sample type",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  sample_types$sample_type_id,
+                  sample_types$sample_type
+                )
               ),
-              selected = defaults$sample_type
+              selected = if (is.na(defaults$sample_type)) {
+                ""
+              } else {
+                defaults$sample_type
+              }
             )
           )
         ),
@@ -2178,9 +2191,9 @@ importSetup <- function(id, language) {
             4,
             selectizeInput(
               ns("new_profile_default_owner"),
-              "Owner",
+              "Default owner",
               choices = c(
-                "Choose an owner" = "",
+                "None" = "",
                 stats::setNames(
                   organizations$organization_id,
                   organizations$name
@@ -2193,7 +2206,7 @@ importSetup <- function(id, language) {
             4,
             selectizeInput(
               ns("new_profile_default_lab"),
-              "Laboratory",
+              "Default laboratory",
               choices = c(
                 "None" = "",
                 stats::setNames(
@@ -2212,12 +2225,19 @@ importSetup <- function(id, language) {
             4,
             selectizeInput(
               ns("new_profile_default_result_type"),
-              "Result type",
-              choices = stats::setNames(
-                result_types$result_type_id,
-                result_types$result_type
+              "Default result type",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  result_types$result_type_id,
+                  result_types$result_type
+                )
               ),
-              selected = defaults$result_type
+              selected = if (is.na(defaults$result_type)) {
+                ""
+              } else {
+                defaults$result_type
+              }
             )
           )
         ),
@@ -2226,24 +2246,38 @@ importSetup <- function(id, language) {
             6,
             selectizeInput(
               ns("new_profile_default_matrix"),
-              "Matrix state",
-              choices = stats::setNames(
-                matrix_states$matrix_state_id,
-                matrix_states$matrix_state_name
+              "Default matrix state",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  matrix_states$matrix_state_id,
+                  matrix_states$matrix_state_name
+                )
               ),
-              selected = defaults$matrix_state_id
+              selected = if (is.na(defaults$matrix_state_id)) {
+                ""
+              } else {
+                defaults$matrix_state_id
+              }
             )
           ),
           column(
             6,
             selectizeInput(
               ns("new_profile_default_value_type"),
-              "Result value type",
-              choices = stats::setNames(
-                result_value_types$result_value_type_id,
-                result_value_types$result_value_type
+              "Default result value type",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  result_value_types$result_value_type_id,
+                  result_value_types$result_value_type
+                )
               ),
-              selected = defaults$result_value_type
+              selected = if (is.na(defaults$result_value_type)) {
+                ""
+              } else {
+                defaults$result_value_type
+              }
             )
           )
         ),
@@ -2623,41 +2657,30 @@ importSetup <- function(id, language) {
           }
           defaults <- list(
             media_id = addDiscData_int(
-              input$new_profile_default_media,
-              default_metadata$media_id
+              input$new_profile_default_media
             ),
             collection_method = addDiscData_int(
-              input$new_profile_default_method,
-              default_metadata$collection_method
+              input$new_profile_default_method
             ),
             sample_type = addDiscData_int(
-              input$new_profile_default_sample_type,
-              default_metadata$sample_type
+              input$new_profile_default_sample_type
             ),
             owner = addDiscData_int(
-              input$new_profile_default_owner,
-              default_metadata$owner
+              input$new_profile_default_owner
             ),
             result_type = addDiscData_int(
-              input$new_profile_default_result_type,
-              default_metadata$result_type
+              input$new_profile_default_result_type
             ),
             matrix_state_id = addDiscData_int(
-              input$new_profile_default_matrix,
-              default_metadata$matrix_state_id
+              input$new_profile_default_matrix
             ),
             result_value_type = addDiscData_int(
-              input$new_profile_default_value_type,
-              default_metadata$result_value_type
+              input$new_profile_default_value_type
             ),
             laboratory = addDiscData_int(
-              input$new_profile_default_lab,
-              default_metadata$laboratory
+              input$new_profile_default_lab
             )
           )
-          if (is.na(defaults$owner)) {
-            stop("Choose the owner for samples imported with this format.")
-          }
           validation_rules <- addDiscData_profile_value(
             profile,
             "validation_rules",

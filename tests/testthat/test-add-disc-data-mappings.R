@@ -119,6 +119,37 @@ test_that("typed profile defaults reach imported samples and results", {
   expect_identical(rows$approval_type_id[[1]], 4L)
 })
 
+test_that("missing workbook defaults remain empty in parsed preview rows", {
+  env <- add_disc_data_mapping_environment()
+  profile <- add_disc_data_test_profile()
+  profile$defaults <- I(list(list()))
+  rows <- env$addDiscData_common_rows(
+    source_code = "ALS",
+    profile = profile,
+    source_location_name = "Test Station",
+    sample_date = "2026-01-02",
+    sample_time = "12:00",
+    source_sample_id = "S1",
+    source_parameter_code = "AL",
+    source_parameter_name = "Aluminum",
+    source_unit = "ug/L",
+    result_raw = "1.2"
+  )
+  fields <- c(
+    "media_id",
+    "collection_method",
+    "sample_type",
+    "owner",
+    "result_type",
+    "matrix_state_id",
+    "result_value_type",
+    "laboratory"
+  )
+  expect_true(all(is.na(rows[fields])))
+  expect_equal(rows$result, 1.2)
+  expect_false(is.na(rows$datetime))
+})
+
 test_that("unmapped parameter choices start with an explicit blank", {
   env <- add_disc_data_mapping_environment()
   parameters <- data.frame(
@@ -414,20 +445,66 @@ test_that("Excel and textual dates are parsed without partial-year matches", {
 
 test_that("ISO analysis timestamps retain their times and explicit offsets", {
   env <- add_disc_data_mapping_environment()
-  parsed <- env$addDiscData_datetime(c("2032-02-01 12:00:00", "2032-02-01T12:00:00",
-    "2032-02-01T12:00:00Z", "2032-02-01T12:00:00-07:00"), tz = "America/Whitehorse")
-  expect_identical(format(parsed, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-    c("2032-02-01 19:00:00", "2032-02-01 19:00:00", "2032-02-01 12:00:00", "2032-02-01 19:00:00"))
-  expect_true(is.na(env$addDiscData_datetime("2032-02-01 12:00:00 trailing text")))
-  parsed <- env$addDiscData_datetime(c("2032-02-01T12:34Z",
-    " 2032-02-01T12:34:00+05:30 ", "02-Oct-2025 1:05 PM",
-    "2032-02-01 15:05"), tz = "America/Whitehorse")
-  expect_identical(format(parsed, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-    c("2032-02-01 12:34:00", "2032-02-01 07:04:00", "2025-10-02 20:05:00", "2032-02-01 22:05:00"))
-  parsed <- env$addDiscData_datetime(rep("2032-02-01", 2), c("1:05 PM", "15:05"), "UTC")
-  expect_identical(format(parsed, "%H:%M:%S", tz = "UTC"), c("13:05:00", "15:05:00"))
-  expect_identical(format(env$addDiscData_datetime("2032-02-01T12:00Z", "13:00", "America/Whitehorse"),
-    "%H:%M:%S", tz = "UTC"), "20:00:00")
+  parsed <- env$addDiscData_datetime(
+    c(
+      "2032-02-01 12:00:00",
+      "2032-02-01T12:00:00",
+      "2032-02-01T12:00:00Z",
+      "2032-02-01T12:00:00-07:00"
+    ),
+    tz = "America/Whitehorse"
+  )
+  expect_identical(
+    format(parsed, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    c(
+      "2032-02-01 19:00:00",
+      "2032-02-01 19:00:00",
+      "2032-02-01 12:00:00",
+      "2032-02-01 19:00:00"
+    )
+  )
+  expect_true(is.na(env$addDiscData_datetime(
+    "2032-02-01 12:00:00 trailing text"
+  )))
+  parsed <- env$addDiscData_datetime(
+    c(
+      "2032-02-01T12:34Z",
+      " 2032-02-01T12:34:00+05:30 ",
+      "02-Oct-2025 1:05 PM",
+      "2032-02-01 15:05"
+    ),
+    tz = "America/Whitehorse"
+  )
+  expect_identical(
+    format(parsed, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    c(
+      "2032-02-01 12:34:00",
+      "2032-02-01 07:04:00",
+      "2025-10-02 20:05:00",
+      "2032-02-01 22:05:00"
+    )
+  )
+  parsed <- env$addDiscData_datetime(
+    rep("2032-02-01", 2),
+    c("1:05 PM", "15:05"),
+    "UTC"
+  )
+  expect_identical(
+    format(parsed, "%H:%M:%S", tz = "UTC"),
+    c("13:05:00", "15:05:00")
+  )
+  expect_identical(
+    format(
+      env$addDiscData_datetime(
+        "2032-02-01T12:00Z",
+        "13:00",
+        "America/Whitehorse"
+      ),
+      "%H:%M:%S",
+      tz = "UTC"
+    ),
+    "20:00:00"
+  )
 })
 
 test_that("EHS component workbooks suggest a long layout without a unit column", {
@@ -870,7 +947,11 @@ test_that("file uploads write generalized import-run provenance", {
 
   expect_match(server_code, "addDiscData_run_upload(request)", fixed = TRUE)
   expect_match(upload_code, "AquaCache::createImportRun", fixed = TRUE)
-  expect_false(grepl("AquaCache::appendImportRunRows", upload_code, fixed = TRUE))
+  expect_false(grepl(
+    "AquaCache::appendImportRunRows",
+    upload_code,
+    fixed = TRUE
+  ))
   expect_match(upload_code, "configuration_snapshot = snapshot", fixed = TRUE)
   expect_match(upload_code, "source_document_id", fixed = TRUE)
   expect_match(upload_code, "AquaCache::completeImportRun", fixed = TRUE)
@@ -927,13 +1008,37 @@ test_that("signed and non-Kelvin temperature parameters are auto-excluded", {
       parameter,
       parameter,
       c(
-        "deg C", "K", "", "", "deg C", "mV", "mV", "pH", "per mil",
-        "m", "kPa", "m/s", "m3/s", "ug/L"
+        "deg C",
+        "K",
+        "",
+        "",
+        "deg C",
+        "mV",
+        "mV",
+        "pH",
+        "per mil",
+        "m",
+        "kPa",
+        "m/s",
+        "m3/s",
+        "ug/L"
       )
     ),
     c(
-      TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE,
-      TRUE, TRUE, FALSE
+      TRUE,
+      FALSE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      FALSE
     )
   )
 })
@@ -950,16 +1055,22 @@ test_that("wide workbook headers retain Unicode-minus units", {
 
   parsed <- env$addDiscData_split_wide_header_units(headers)
 
-  expect_identical(parsed$parameter, c(
-    paste0("F", minus, "-D"),
-    "SpC",
-    "Alk"
-  ))
-  expect_identical(parsed$unit, c(
-    paste0("mg L", minus, "1"),
-    paste0(micro, "S cm", minus, "1"),
-    paste0("mg L", minus, "1 as CaCO3")
-  ))
+  expect_identical(
+    parsed$parameter,
+    c(
+      paste0("F", minus, "-D"),
+      "SpC",
+      "Alk"
+    )
+  )
+  expect_identical(
+    parsed$unit,
+    c(
+      paste0("mg L", minus, "1"),
+      paste0(micro, "S cm", minus, "1"),
+      paste0("mg L", minus, "1 as CaCO3")
+    )
+  )
 })
 
 test_that("wide workbook parsing requires its configured sample date", {

@@ -1053,15 +1053,17 @@ addDiscData_defaults <- function(profile) {
   if (is.null(defaults) || !length(defaults)) {
     defaults <- list()
   }
+  # Missing profile metadata stays unset until supplied by the workbook or
+  # explicitly completed during preview review. Never assume catalogue IDs.
   list(
-    media_id = addDiscData_int(defaults$media_id, 1L),
-    collection_method = addDiscData_int(defaults$collection_method, 27L),
-    sample_type = addDiscData_int(defaults$sample_type, 34L),
-    owner = addDiscData_int(defaults$owner, 1L),
+    media_id = addDiscData_int(defaults$media_id),
+    collection_method = addDiscData_int(defaults$collection_method),
+    sample_type = addDiscData_int(defaults$sample_type),
+    owner = addDiscData_int(defaults$owner),
     contributor = addDiscData_int(defaults$contributor),
-    result_type = addDiscData_int(defaults$result_type, 2L),
-    matrix_state_id = addDiscData_int(defaults$matrix_state_id, 1L),
-    result_value_type = addDiscData_int(defaults$result_value_type, 1L),
+    result_type = addDiscData_int(defaults$result_type),
+    matrix_state_id = addDiscData_int(defaults$matrix_state_id),
+    result_value_type = addDiscData_int(defaults$result_value_type),
     reporting_basis_id = addDiscData_int(defaults$reporting_basis_id),
     result_speciation_id = addDiscData_int(defaults$result_speciation_id),
     result_target_id = addDiscData_int(defaults$result_target_id),
@@ -2883,7 +2885,9 @@ addDiscData_run_mapping_save <- function(request) {
           negative_mdl_exclusions = request$negative_mdl_exclusions
         )
         configuration <- addDiscData_preview_configuration(
-          con, request$profile, options = upload_options
+          con,
+          request$profile,
+          options = upload_options
         )
         profile <- configuration$profile
         mapping_snapshot <- configuration$snapshot
@@ -2915,11 +2919,15 @@ addDiscData_run_mapping_save <- function(request) {
           profile_code = profile$profile_code[[1]]
         )
         parsed <- parsed[names(addDiscData_empty_table())]
-        if (!identical(
-          mapping_snapshot,
-          addDiscData_mapping_snapshot(con, profile, options = upload_options)
-        )) {
-          stop("The parser settings or mappings changed while preparing the preview. Preview the workbook again.")
+        if (
+          !identical(
+            mapping_snapshot,
+            addDiscData_mapping_snapshot(con, profile, options = upload_options)
+          )
+        ) {
+          stop(
+            "The parser settings or mappings changed while preparing the preview. Preview the workbook again."
+          )
         }
       }
       list(
@@ -3158,7 +3166,9 @@ addDiscData_mapping_snapshot <- function(
 addDiscData_preview_configuration <- function(con, profile, options = list()) {
   snapshot <- addDiscData_mapping_snapshot(con, profile, options = options)
   if (!length(snapshot$profile)) {
-    stop("The selected workbook format is no longer available. Reload the workbook formats.")
+    stop(
+      "The selected workbook format is no longer available. Reload the workbook formats."
+    )
   }
   current_profile <- addDiscData_empty_profiles()[NA_integer_, , drop = FALSE]
   for (name in intersect(names(current_profile), names(snapshot$profile))) {
@@ -3661,12 +3671,17 @@ addDiscData_run_upload <- function(request) {
 
       # Calculate from persisted links, including earlier uploads of the same
       # workbook. Only database samples and locations restrict document access.
-      shared_documents <- YGwater:::sync_sample_document_visibility(con, document_ids = doc_ids)
+      shared_documents <- YGwater:::sync_sample_document_visibility(
+        con,
+        document_ids = doc_ids
+      )
       if (any(file_sample)) {
         snapshot$execution <- list(
           archived_document_visibility = if (length(doc_ids)) {
             attr(shared_documents, "visibility")[[as.character(doc_ids[[1]])]]
-          } else character()
+          } else {
+            character()
+          }
         )
         import_run_id <- AquaCache::createImportRun(
           con = con,
@@ -3675,11 +3690,22 @@ addDiscData_run_upload <- function(request) {
           source_adapter_function = "addDiscData",
           adapter_version = as.character(utils::packageVersion("YGwater")),
           configuration_snapshot = snapshot,
-          source_document_id = if (length(doc_ids)) as.integer(doc_ids[[1]]) else NULL,
+          source_document_id = if (length(doc_ids)) {
+            as.integer(doc_ids[[1]])
+          } else {
+            NULL
+          },
           summary = c(
-            list(source_rows = length(unique(df$source_row_number)), result_rows = nrow(df)),
+            list(
+              source_rows = length(unique(df$source_row_number)),
+              result_rows = nrow(df)
+            ),
             request$upload_coverage,
-            list(partial_upload_acknowledged = isTRUE(request$partial_upload_acknowledged))
+            list(
+              partial_upload_acknowledged = isTRUE(
+                request$partial_upload_acknowledged
+              )
+            )
           ),
           note = "Created by the YGwater discrete-data import workflow."
         )
@@ -5805,7 +5831,9 @@ addDiscData <- function(id, language) {
       )
       if (is.null(parsed)) {
         configuration <- addDiscData_preview_configuration(
-          con, profile, options = upload_options
+          con,
+          profile,
+          options = upload_options
         )
         profile <- configuration$profile
         snapshot <- configuration$snapshot
@@ -5816,11 +5844,16 @@ addDiscData <- function(id, language) {
           negative_mdl_exclusions = data$negative_mdl_exclusions
         )
       }
-      if (is.null(snapshot) || !identical(
-        snapshot,
-        addDiscData_mapping_snapshot(con, profile, options = upload_options)
-      )) {
-        stop("The parser settings or mappings changed while parsing the workbook. Preview the workbook again.")
+      if (
+        is.null(snapshot) ||
+          !identical(
+            snapshot,
+            addDiscData_mapping_snapshot(con, profile, options = upload_options)
+          )
+      ) {
+        stop(
+          "The parser settings or mappings changed while parsing the workbook. Preview the workbook again."
+        )
       }
       location_mappings <- AquaCache::getImportLocationMappings(
         con = con,
@@ -5942,8 +5975,11 @@ addDiscData <- function(id, language) {
         } else {
           NULL
         }
-        if (still_current && !is.null(result$mapping_snapshot) &&
-          identical(result$mapping_snapshot, current_snapshot)) {
+        if (
+          still_current &&
+            !is.null(result$mapping_snapshot) &&
+            identical(result$mapping_snapshot, current_snapshot)
+        ) {
           data$df <- addDiscData_merge_preview_edits(
             result$parsed,
             data$df,
@@ -6228,7 +6264,10 @@ addDiscData <- function(id, language) {
       )
       if (inherits(configuration, "error")) {
         data$preview_is_stale <- TRUE
-        showNotification(paste("Preview failed:", configuration$message), type = "error")
+        showNotification(
+          paste("Preview failed:", configuration$message),
+          type = "error"
+        )
         return()
       }
       profile <- configuration$profile
@@ -7662,8 +7701,11 @@ addDiscData <- function(id, language) {
             selectizeInput(
               ns("edit_sample_media"),
               "Media",
-              choices = stats::setNames(media$media_id, media$media_type),
-              selected = row$media_id[[1]]
+              choices = c(
+                "Choose a value" = "",
+                stats::setNames(media$media_id, media$media_type)
+              ),
+              selected = if (is.na(row$media_id[[1]])) "" else row$media_id[[1]]
             )
           ),
           column(
@@ -7671,11 +7713,18 @@ addDiscData <- function(id, language) {
             selectizeInput(
               ns("edit_sample_method"),
               "Collection method",
-              choices = stats::setNames(
-                collection_methods$collection_method_id,
-                collection_methods$collection_method
+              choices = c(
+                "Choose a value" = "",
+                stats::setNames(
+                  collection_methods$collection_method_id,
+                  collection_methods$collection_method
+                )
               ),
-              selected = row$collection_method[[1]]
+              selected = if (is.na(row$collection_method[[1]])) {
+                ""
+              } else {
+                row$collection_method[[1]]
+              }
             )
           ),
           column(
@@ -7683,11 +7732,18 @@ addDiscData <- function(id, language) {
             selectizeInput(
               ns("edit_sample_type"),
               "Sample type",
-              choices = stats::setNames(
-                sample_types$sample_type_id,
-                sample_types$sample_type
+              choices = c(
+                "Choose a value" = "",
+                stats::setNames(
+                  sample_types$sample_type_id,
+                  sample_types$sample_type
+                )
               ),
-              selected = row$sample_type[[1]]
+              selected = if (is.na(row$sample_type[[1]])) {
+                ""
+              } else {
+                row$sample_type[[1]]
+              }
             )
           ),
           column(
@@ -7723,11 +7779,14 @@ addDiscData <- function(id, language) {
             selectizeInput(
               ns("edit_sample_owner"),
               "Owner",
-              choices = stats::setNames(
-                organizations$organization_id,
-                organizations$name
+              choices = c(
+                "Choose a value" = "",
+                stats::setNames(
+                  organizations$organization_id,
+                  organizations$name
+                )
               ),
-              selected = row$owner[[1]]
+              selected = if (is.na(row$owner[[1]])) "" else row$owner[[1]]
             )
           ),
           column(
@@ -10202,13 +10261,18 @@ addDiscData <- function(id, language) {
         matrix_state_id = "matrix state"
       )
       for (nm in names(required)) {
-        missing <- is.na(df[[nm]]) | !addDiscData_present(df[[nm]])
+        missing <- if (nm %in% names(df)) {
+          is.na(df[[nm]]) | !addDiscData_present(df[[nm]])
+        } else {
+          rep(TRUE, nrow(df))
+        }
         if (any(missing)) {
           stop(
             "Missing ",
             required[[nm]],
             " in row(s): ",
             paste(which(missing), collapse = ", "),
+            ". Complete the required fields in the preview before uploading records.",
             call. = FALSE
           )
         }
