@@ -62,7 +62,10 @@ test_that("HEIF uploads are converted to temporary JPEGs before callbacks", {
 
 test_that("HEIF uploads are rejected when JPEG conversion is unavailable", {
   helper_environment <- new.env(parent = globalenv())
-  sys.source("R/heif_upload_helpers.R", envir = helper_environment)
+  sys.source(
+    system.file("R/heif_upload_helpers.R", package = "YGwater"),
+    envir = helper_environment
+  )
   helper_environment$heif_jpeg_conversion_available <- function() FALSE
   callback_called <- FALSE
   expect_error(

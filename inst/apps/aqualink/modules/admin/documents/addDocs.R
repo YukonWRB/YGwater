@@ -107,9 +107,19 @@ addDocs <- function(id, language) {
         session$userData$AquaCache,
         "SELECT document_id, geom_id FROM files.documents_spatial;"
       )
-      moduleData$geoms <- DBI::dbGetQuery(
+      # Walk the layer-name index once per layer. DISTINCT would scan millions
+      # of features, even though there are only a handful of layers.
+      moduleData$geom_layers <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT geom_id, geom_type, layer_name, feature_name, description FROM spatial.vectors ORDER BY layer_name ASC, feature_name ASC;"
+        "WITH RECURSIVE layers AS (
+          (SELECT layer_name FROM spatial.vectors ORDER BY layer_name LIMIT 1)
+          UNION ALL
+          SELECT next_layer.layer_name
+          FROM layers l CROSS JOIN LATERAL (
+            SELECT layer_name FROM spatial.vectors
+            WHERE layer_name > l.layer_name ORDER BY layer_name LIMIT 1
+          ) next_layer
+        ) SELECT layer_name FROM layers;"
       )
       moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -131,19 +141,13 @@ addDocs <- function(id, language) {
       req(
         moduleData$doc_types,
         moduleData$docs,
-        moduleData$geoms,
+        moduleData$geom_layers,
         moduleData$users,
         moduleData$organizations
       )
 
-      geom_labels <- paste(
-        moduleData$geoms$layer_name,
-        moduleData$geoms$feature_name,
-        sep = " - "
-      )
-      geom_choices <- stats::setNames(moduleData$geoms$geom_id, geom_labels)
-
       tagList(
+        YGwater:::shiny_ui_ready(ns("ui_ready")),
         actionButton(
           ns("reload_module"),
           "Reload module data",
@@ -225,10 +229,27 @@ addDocs <- function(id, language) {
           multiple = TRUE,
           width = "100%"
         ),
+        selectInput(
+          ns("geom_layer"),
+          label = "Spatial feature layer",
+          choices = moduleData$geom_layers$layer_name,
+          width = "100%"
+        ),
+        textInput(
+          ns("geom_start"),
+          label = "Browse features starting at name (optional)",
+          width = "100%"
+        ),
+        actionButton(ns("find_geoms"), "Find spatial features"),
+        helpText(
+          "Choose a layer and click Find spatial features. Shows up to 100 features
+          in name order, starting at the name entered. Selected features from
+          other searches remain available."
+        ),
         selectizeInput(
           ns("doc_geoms"),
           label = "Associate spatial feature(s)",
-          choices = geom_choices,
+          choices = NULL,
           multiple = TRUE,
           width = "100%"
         ),
@@ -245,6 +266,61 @@ addDocs <- function(id, language) {
           actionButton(ns("submit_modify"), label = "Update document")
         )
       )
+    })
+
+    # Keep both the query and the browser payload bounded. The (layer_name,
+    # feature_name, geom_type) index supports browsing without a full-table
+    # substring search. Fetch existing associations separately by primary key
+    # so editing a document never drops features outside the current page.
+    refresh_geom_choices <- function(selected = isolate(input$doc_geoms)) {
+      selected <- parse_integer_input(selected)
+      con <- session$userData$AquaCache
+      geoms <- DBI::dbGetQuery(
+        con,
+        "SELECT geom_id, layer_name, feature_name FROM spatial.vectors
+        WHERE geom_id = ANY($1::integer[]);",
+        params = list(paste0("{", paste(selected, collapse = ","), "}"))
+      )
+      layer <- isolate(input$geom_layer)
+      if (length(layer) == 1L && nzchar(layer)) {
+        start <- isolate(input$geom_start)
+        if (is.null(start)) {
+          start <- ""
+        }
+        candidates <- DBI::dbGetQuery(
+          con,
+          "SELECT geom_id, layer_name, feature_name FROM spatial.vectors
+          WHERE layer_name = $1 AND feature_name >= $2
+          ORDER BY feature_name, geom_type LIMIT 100;",
+          params = list(layer, start)
+        )
+        geoms <- data.table::rbindlist(list(geoms, candidates))
+        geoms <- geoms[!duplicated(geoms$geom_id), ]
+      }
+      updateSelectizeInput(
+        session,
+        "doc_geoms",
+        choices = stats::setNames(
+          geoms$geom_id,
+          paste(geoms$layer_name, geoms$feature_name, sep = " - ")
+        ),
+        selected = as.character(selected),
+        server = TRUE
+      )
+    }
+
+    # The form is recreated after reloads; wait for its inputs to bind before
+    # registering the server-side dropdown data for each new form generation.
+    observeEvent(
+      input$ui_ready,
+      {
+        refresh_geom_choices()
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(input$find_geoms, {
+      refresh_geom_choices()
     })
 
     observeEvent(input$reload_module, {
@@ -344,11 +420,7 @@ addDocs <- function(id, language) {
       doc_geom_ids <- moduleData$doc_geoms$geom_id[
         moduleData$doc_geoms$document_id == doc_id
       ]
-      updateSelectizeInput(
-        session,
-        "doc_geoms",
-        selected = as.character(doc_geom_ids)
-      )
+      refresh_geom_choices(selected = doc_geom_ids)
 
       doc_org_ids <- moduleData$organization_agreements$organization_id[
         moduleData$organization_agreements$document_id == doc_id

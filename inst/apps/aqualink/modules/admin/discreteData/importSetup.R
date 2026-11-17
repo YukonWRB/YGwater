@@ -410,6 +410,19 @@ importSetup_parse_result_text_values <- function(text) {
   stats::setNames(as.list(numbers), labels)
 }
 
+# Only suggest a conversion when the matching criteria identify one source unit.
+importSetup_mapping_unit <- function(criteria) {
+  fields <- tolower(sub("^source[.]", "", names(criteria)))
+  values <- criteria[
+    fields %in% c("unit", "units", "input_unit", "source_unit")
+  ]
+  if (!length(values) || any(lengths(values) != 1L)) {
+    return(NA_character_)
+  }
+  values <- unique(trimws(as.character(unlist(values, use.names = FALSE))))
+  if (length(values) == 1L) values else NA_character_
+}
+
 importSetupUI <- function(id) {
   ns <- NS(id)
   page_fluid(
@@ -479,6 +492,7 @@ importSetupUI <- function(id) {
           column(6, actionButton(ns("new_source"), "Create new source"))
         ),
 
+        uiOutput(ns("source_exclusions_editor")),
         selectizeInput(
           ns("manage_import_profile"),
           label = tooltip(
@@ -705,12 +719,15 @@ importSetupUI <- function(id) {
               )
             ),
             uiOutput(ns("manage_chemistry")),
+            helpText(
+              "Known source-to-target unit conversions fill the multiplier and offset when units change. Saved custom values are retained when opened. Review both values before saving, especially when no catalogue conversion exists."
+            ),
             fluidRow(
               column(
                 3,
                 numericInput(
                   ns("manage_conversion"),
-                  "Conversion multiplier",
+                  "Conversion multiplier (editable)",
                   value = 1
                 )
               ),
@@ -757,6 +774,7 @@ importSetupUI <- function(id) {
           ns = ns,
           wellPanel(
             tags$h5("Location mapping"),
+            uiOutput(ns("manage_location_project_ui")),
             fluidRow(
               column(
                 4,
@@ -1390,9 +1408,14 @@ importSetup <- function(id, language) {
         {
           src <- DBI::dbGetQuery(
             con,
-            "SELECT import_source_id,source_code,source_name,source_description,active
+            "SELECT import_source_id,source_code,source_name,source_description,active,
+                 array_to_json(excluded_analytes)::text AS excluded_analytes
           FROM discrete.import_sources ORDER BY source_code"
           )
+          src$excluded_analytes <- I(lapply(
+            src$excluded_analytes,
+            jsonlite::fromJSON
+          ))
           sources(src)
           profiles <- AquaCache::getImportProfiles(
             con,
@@ -2128,48 +2151,61 @@ importSetup <- function(id, language) {
     })
     output$new_profile_default_fields <- renderUI({
       profile <- new_profile_template()
-      defaults <- if (is.null(profile)) {
-        default_metadata
-      } else {
-        addDiscData_defaults(profile)
-      }
+      defaults <- addDiscData_defaults(profile)
       tagList(
         tags$h5("Imported data defaults"),
         helpText(
-          "These values fill fields if they are not supplied by the workbook. They remain editable in the preview."
+          "All defaults are optional. These values fill fields if they are not supplied by the workbook and available for parsing."
         ),
         fluidRow(
           column(
             4,
             selectizeInput(
               ns("new_profile_default_media"),
-              "Media",
-              choices = stats::setNames(media$media_id, media$media_type),
-              selected = defaults$media_id
+              "Default media",
+              choices = c(
+                "None" = "",
+                stats::setNames(media$media_id, media$media_type)
+              ),
+              selected = if (is.na(defaults$media_id)) "" else defaults$media_id
             )
           ),
           column(
             4,
             selectizeInput(
               ns("new_profile_default_method"),
-              "Collection method",
-              choices = stats::setNames(
-                collection_methods$collection_method_id,
-                collection_methods$collection_method
+              "Default collection method",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  collection_methods$collection_method_id,
+                  collection_methods$collection_method
+                )
               ),
-              selected = defaults$collection_method
+              selected = if (is.na(defaults$collection_method)) {
+                ""
+              } else {
+                defaults$collection_method
+              }
             )
           ),
           column(
             4,
             selectizeInput(
               ns("new_profile_default_sample_type"),
-              "Sample type",
-              choices = stats::setNames(
-                sample_types$sample_type_id,
-                sample_types$sample_type
+              "Default sample type",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  sample_types$sample_type_id,
+                  sample_types$sample_type
+                )
               ),
-              selected = defaults$sample_type
+              selected = if (is.na(defaults$sample_type)) {
+                ""
+              } else {
+                defaults$sample_type
+              }
             )
           )
         ),
@@ -2178,9 +2214,9 @@ importSetup <- function(id, language) {
             4,
             selectizeInput(
               ns("new_profile_default_owner"),
-              "Owner",
+              "Default owner",
               choices = c(
-                "Choose an owner" = "",
+                "None" = "",
                 stats::setNames(
                   organizations$organization_id,
                   organizations$name
@@ -2193,7 +2229,7 @@ importSetup <- function(id, language) {
             4,
             selectizeInput(
               ns("new_profile_default_lab"),
-              "Laboratory",
+              "Default laboratory",
               choices = c(
                 "None" = "",
                 stats::setNames(
@@ -2212,12 +2248,19 @@ importSetup <- function(id, language) {
             4,
             selectizeInput(
               ns("new_profile_default_result_type"),
-              "Result type",
-              choices = stats::setNames(
-                result_types$result_type_id,
-                result_types$result_type
+              "Default result type",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  result_types$result_type_id,
+                  result_types$result_type
+                )
               ),
-              selected = defaults$result_type
+              selected = if (is.na(defaults$result_type)) {
+                ""
+              } else {
+                defaults$result_type
+              }
             )
           )
         ),
@@ -2226,24 +2269,38 @@ importSetup <- function(id, language) {
             6,
             selectizeInput(
               ns("new_profile_default_matrix"),
-              "Matrix state",
-              choices = stats::setNames(
-                matrix_states$matrix_state_id,
-                matrix_states$matrix_state_name
+              "Default matrix state",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  matrix_states$matrix_state_id,
+                  matrix_states$matrix_state_name
+                )
               ),
-              selected = defaults$matrix_state_id
+              selected = if (is.na(defaults$matrix_state_id)) {
+                ""
+              } else {
+                defaults$matrix_state_id
+              }
             )
           ),
           column(
             6,
             selectizeInput(
               ns("new_profile_default_value_type"),
-              "Result value type",
-              choices = stats::setNames(
-                result_value_types$result_value_type_id,
-                result_value_types$result_value_type
+              "Default result value type",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  result_value_types$result_value_type_id,
+                  result_value_types$result_value_type
+                )
               ),
-              selected = defaults$result_value_type
+              selected = if (is.na(defaults$result_value_type)) {
+                ""
+              } else {
+                defaults$result_value_type
+              }
             )
           )
         ),
@@ -2623,41 +2680,30 @@ importSetup <- function(id, language) {
           }
           defaults <- list(
             media_id = addDiscData_int(
-              input$new_profile_default_media,
-              default_metadata$media_id
+              input$new_profile_default_media
             ),
             collection_method = addDiscData_int(
-              input$new_profile_default_method,
-              default_metadata$collection_method
+              input$new_profile_default_method
             ),
             sample_type = addDiscData_int(
-              input$new_profile_default_sample_type,
-              default_metadata$sample_type
+              input$new_profile_default_sample_type
             ),
             owner = addDiscData_int(
-              input$new_profile_default_owner,
-              default_metadata$owner
+              input$new_profile_default_owner
             ),
             result_type = addDiscData_int(
-              input$new_profile_default_result_type,
-              default_metadata$result_type
+              input$new_profile_default_result_type
             ),
             matrix_state_id = addDiscData_int(
-              input$new_profile_default_matrix,
-              default_metadata$matrix_state_id
+              input$new_profile_default_matrix
             ),
             result_value_type = addDiscData_int(
-              input$new_profile_default_value_type,
-              default_metadata$result_value_type
+              input$new_profile_default_value_type
             ),
             laboratory = addDiscData_int(
-              input$new_profile_default_lab,
-              default_metadata$laboratory
+              input$new_profile_default_lab
             )
           )
-          if (is.na(defaults$owner)) {
-            stop("Choose the owner for samples imported with this format.")
-          }
           validation_rules <- addDiscData_profile_value(
             profile,
             "validation_rules",
@@ -2812,6 +2858,87 @@ importSetup <- function(id, language) {
         }
       )
     })
+    output$source_exclusions_editor <- renderUI({
+      src <- sources()
+      src <- src[src$source_code == input$manage_source, , drop = FALSE]
+      req(nrow(src) == 1L)
+      tagList(
+        fluidRow(
+          column(
+            6,
+
+            textAreaInput(
+              ns("source_excluded_analytes"),
+              label = tooltip(
+                trigger = list(
+                  "Excluded analytes (all source formats)",
+                  bsicons::bs_icon("info-circle-fill")
+                ),
+                "One complete source analyte name per line. Exact matching only, ignores case and surrounding spaces. An empty list excludes nothing."
+              ),
+              value = paste(src$excluded_analytes[[1]], collapse = "\n"),
+              rows = 3
+            )
+          ),
+          column(
+            4,
+            if (can_manage_mappings) {
+              actionButton(
+                ns("save_source_exclusions"),
+                "Save source exclusions"
+              )
+            }
+          )
+        )
+      )
+    })
+    observeEvent(input$save_source_exclusions, {
+      req(can_manage_mappings, nzchar(input$manage_source))
+      tryCatch(
+        {
+          values <- trimws(strsplit(
+            addDiscData_first(input$source_excluded_analytes, ""),
+            "\n",
+            fixed = TRUE
+          )[[1]])
+          values <- values[nzchar(values)]
+          values <- values[!duplicated(tolower(values))]
+          DBI::dbWithTransaction(con, {
+            src <- sources()
+            id <- src$import_source_id[match(
+              input$manage_source,
+              src$source_code
+            )]
+            req(length(id) == 1L, !is.na(id))
+            # Use the same source lock as uploads and mapping changes.
+            DBI::dbGetQuery(
+              con,
+              "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+              params = list(paste(id, "source", sep = ":"))
+            )
+            DBI::dbExecute(
+              con,
+              "UPDATE discrete.import_sources
+                SET excluded_analytes = ARRAY(SELECT jsonb_array_elements_text($1::jsonb))
+              WHERE import_source_id = $2",
+              params = list(
+                as.character(jsonlite::toJSON(values, auto_unbox = FALSE)),
+                id
+              )
+            )
+          })
+          reload_profiles()
+          bump_revision()
+          showNotification(
+            "Source exclusions saved. Reparse open workbooks to apply them."
+          )
+        },
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error")
+        }
+      )
+    })
+
     selected_manage_profile <- reactive({
       src <- sources()
       src <- src[src$source_code == input$manage_source, , drop = FALSE]
@@ -2844,6 +2971,24 @@ importSetup <- function(id, language) {
       }
       as.character(value[[1]])
     }
+    mapping_projects <- DBI::dbGetQuery(
+      con,
+      "SELECT project_id, name FROM public.projects ORDER BY name"
+    )
+    output$manage_location_project_ui <- renderUI({
+      selectizeInput(
+        ns("manage_location_project"),
+        "Mapping project (optional)",
+        choices = c(
+          "All projects / fallback" = "",
+          stats::setNames(
+            as.character(mapping_projects$project_id),
+            mapping_projects$name
+          )
+        ),
+        selected = isolate(input$manage_location_project)
+      )
+    })
     output$manage_import_profile_status <- renderUI({
       error <- profile_load_error()
       if (!is.null(error)) {
@@ -3179,6 +3324,11 @@ importSetup <- function(id, language) {
           summary <- data.frame(
             `Mapping ID` = rows[[id_field]],
             Scope = scope,
+            Project = ifelse(
+              is.na(rows$project_name),
+              "All projects / fallback",
+              rows$project_name
+            ),
             `Source location code` = rows$source_location_code,
             `Source location name` = rows$source_location_name,
             `AquaCache location` = addDiscData_location_labels(locations())[
@@ -3267,6 +3417,97 @@ importSetup <- function(id, language) {
       },
       ignoreInit = TRUE
     )
+    mapping_unit_conversions <- YGwater:::ac_mapping_unit_conversions(con)
+    manager_conversion_context <- reactive({
+      style <- addDiscData_first(input$manage_match_style, "workbook")
+      source_unit <- if (style %in% c("json", "columns")) {
+        criteria <- tryCatch(
+          {
+            if (identical(style, "json")) {
+              importSetup_match_values(input$manage_source_match)
+            } else {
+              conditions <- current_criteria_rows()
+              importSetup_column_criteria(
+                vapply(conditions, `[[`, "", "field"),
+                vapply(conditions, `[[`, "", "value")
+              )
+            }
+          },
+          error = function(e) list()
+        )
+        importSetup_mapping_unit(criteria)
+      } else {
+        addDiscData_first(input$manage_source_unit)
+      }
+      list(
+        source_unit = source_unit,
+        parameter_id = addDiscData_int(input$manage_parameter_id),
+        matrix_state_id = addDiscData_int(input$manage_matrix_state, 1L)
+      )
+    })
+    observeEvent(
+      manager_conversion_context(),
+      {
+        context <- manager_conversion_context()
+        if (!identical(input$manage_mapping_type, "parameter")) {
+          return()
+        }
+        row <- manage_mapping_selected()
+        if (!is.null(row)) {
+          saved_unit <- importSetup_mapping_unit(importSetup_match_values(row$source_match[[
+            1
+          ]]))
+          if (
+            identical(
+              context$parameter_id,
+              addDiscData_int(row$parameter_id)
+            ) &&
+              identical(
+                context$matrix_state_id,
+                addDiscData_int(row$matrix_state_id, 1L)
+              ) &&
+              identical(context$source_unit, saved_unit)
+          ) {
+            updateNumericInput(
+              session,
+              "manage_conversion",
+              value = addDiscData_num(row$conversion, 1)
+            )
+            updateNumericInput(
+              session,
+              "manage_result_offset",
+              value = addDiscData_num(row$result_offset, 0)
+            )
+            return()
+          }
+        }
+        target <- addDiscData_target_unit(
+          params(),
+          context$parameter_id,
+          context$matrix_state_id,
+          matrix_states
+        )
+        suggestion <- YGwater:::ac_mapping_conversion(
+          context$source_unit,
+          target,
+          mapping_unit_conversions
+        )
+        if (!is.null(suggestion)) {
+          updateNumericInput(
+            session,
+            "manage_conversion",
+            value = suggestion$scale_a
+          )
+          updateNumericInput(
+            session,
+            "manage_result_offset",
+            value = suggestion$scale_b
+          )
+        }
+      },
+      ignoreInit = TRUE
+    )
+
     load_manager_mapping <- function(row) {
       if (is.null(row)) {
         return()
@@ -3385,6 +3626,15 @@ importSetup <- function(id, language) {
         updateCheckboxInput(session, "manage_active", value = active)
         updateTextAreaInput(session, "manage_mapping_note", value = note)
       } else if (identical(input$manage_mapping_type, "location")) {
+        updateSelectizeInput(
+          session,
+          "manage_location_project",
+          selected = if (is.na(row$project_id[[1]])) {
+            ""
+          } else {
+            as.character(row$project_id[[1]])
+          }
+        )
         updateTextInput(
           session,
           "manage_location_code",
@@ -3545,6 +3795,7 @@ importSetup <- function(id, language) {
       updateNumericInput(session, "manage_result_offset", value = 0)
       updateCheckboxInput(session, "manage_active", value = TRUE)
       updateTextAreaInput(session, "manage_mapping_note", value = "")
+      updateSelectizeInput(session, "manage_location_project", selected = "")
       updateTextInput(session, "manage_location_code", value = "")
       updateTextInput(session, "manage_location_name", value = "")
       updateSelectInput(
@@ -3850,6 +4101,16 @@ importSetup <- function(id, language) {
             input$manage_location_code,
             ""
           ))
+          mapping_project_id <- addDiscData_int(input$manage_location_project)
+          if (
+            !is.null(selected) &&
+              !identical(
+                mapping_project_id,
+                as.integer(selected$project_id[[1]])
+              )
+          ) {
+            stop("Create a new mapping to use a different project scope.")
+          }
           location_id <- addDiscData_int(input$manage_location_id)
           sub_location_id <- addDiscData_int(input$manage_sub_location_id)
           if (
@@ -3866,8 +4127,15 @@ importSetup <- function(id, language) {
           if (
             is.null(selected) &&
               any(
-                fresh$source_location_code == location_code &
-                  fresh$profile_specific == !is.null(profile_code)
+                tolower(trimws(fresh$source_location_code)) ==
+                  tolower(location_code) &
+                  fresh$profile_specific == !is.null(profile_code) &
+                  (if (is.na(mapping_project_id)) {
+                    is.na(fresh$project_id)
+                  } else {
+                    (!is.na(fresh$project_id) &
+                      fresh$project_id == mapping_project_id)
+                  })
               )
           ) {
             stop(
@@ -3899,6 +4167,7 @@ importSetup <- function(id, language) {
             source_name = source_name,
             profile_code = profile_code,
             mappings = data.frame(
+              project_id = mapping_project_id,
               source_location_code = location_code,
               source_location_name = source_location_name,
               location_id = location_id,
@@ -4355,11 +4624,15 @@ importSetup <- function(id, language) {
         rows$source_match
       } else if (identical(input$manage_mapping_type, "location")) {
         vapply(
-          rows$source_location_code,
-          function(x) {
+          seq_len(nrow(rows)),
+          function(i) {
             as.character(jsonlite::toJSON(
-              list(source_location_code = x),
-              auto_unbox = TRUE
+              list(
+                source_location_code = rows$source_location_code[[i]],
+                project_id = rows$project_id[[i]]
+              ),
+              auto_unbox = TRUE,
+              na = "null"
             ))
           },
           character(1)
