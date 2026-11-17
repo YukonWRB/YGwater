@@ -13,6 +13,74 @@ import_setup_environment <- function() {
   env
 }
 
+test_that("the mapping manager permits repeated names in distinct projects", {
+  env <- import_setup_environment()
+  state <- new.env(parent = env)
+  profile <- data.frame(
+    source_code = "ALS",
+    source_name = "ALS",
+    import_source_id = 1L,
+    import_profile_id = 1L,
+    profile_code = "xlr",
+    profile_name = "XLR"
+  )
+  state$can_manage_mappings <- TRUE
+  state$selected_manage_profile <- function() profile
+  state$manage_mapping_selected <- function() NULL
+  state$sources <- function() data.frame(source_code = "ALS", active = TRUE)
+  state$manager_text <- function(value, default) value[[1]]
+  state$input <- list(
+    manage_location_scope = "source",
+    manage_location_project = "2",
+    manage_location_code = "SW01",
+    manage_location_id = "12",
+    manage_location_active = TRUE
+  )
+  state$con <- NULL
+  state$bump_revision <- function() NULL
+  state$clear_manager_mapping_selection <- function() NULL
+  existing <- data.frame(
+    source_location_code = "SW01",
+    project_id = 1L,
+    profile_specific = FALSE,
+    location_id = 11L
+  )
+  saved <- NULL
+  local_mocked_bindings(
+    dbWithTransaction = function(conn, code, ...) force(code),
+    dbGetQuery = function(conn, statement, ...) {
+      if (grepl("SELECT source_name", statement, fixed = TRUE)) {
+        data.frame(source_name = "ALS", active = TRUE)
+      } else {
+        data.frame()
+      }
+    },
+    .package = "DBI"
+  )
+  local_mocked_bindings(
+    getImportLocationMappings = function(...) existing,
+    upsertImportLocationMappings = function(con, mappings, ...) {
+      saved <<- mappings
+    },
+    .package = "AquaCache"
+  )
+  statements <- as.list(body(env$importSetup)[[2]][[3]][[3]])[-1]
+  assignment <- Filter(
+    function(x) {
+      is.call(x) &&
+        identical(x[[1]], quote(`<-`)) &&
+        identical(x[[2]], quote(save_manager_mapping))
+    },
+    statements
+  )[[1]]
+  eval(assignment, state)
+  state$save_manager_mapping("location")
+  expect_identical(saved$project_id, 2L)
+  expect_identical(saved$location_id, 12L)
+  state$input$manage_location_project <- "1"
+  expect_error(state$save_manager_mapping("location"), "already exists")
+})
+
 test_that("source criteria preserve package field names, case and blank units", {
   env <- import_setup_environment()
   eqwin <- env$importSetup_match_values(
