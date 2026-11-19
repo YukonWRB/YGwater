@@ -662,3 +662,36 @@ test_that("the complete sample form renders for selected and new samples", {
     expect_false(grepl("Selected sample note", html, fixed = TRUE))
   })
 })
+
+test_that("the sample location follows the selected row through catalogue refreshes", {
+  fixture <- discrete_result_editor_fixture(sample_form = TRUE)
+  shiny::testServer(fixture$server, {
+    data$df$location_id <- c(1L, 1L, NA_integer_, 1L)
+    session$setInputs(sample_location_summary_rows_selected = 1L)
+    expect_match(
+      output$sample_editor$html, '<option value="1" selected>Station A | Code: A',
+      fixed = TRUE
+    )
+
+    session$setInputs(sample_location_summary_rows_selected = 2L)
+    expect_match(
+      output$sample_editor$html, '<option value="" selected>Select a location',
+      fixed = TRUE
+    )
+    locations(rbind(locations(), data.frame(
+      location_id = 2L, name = "Station B", location_code = "B", alias = ""
+    )))
+    data$df$location_id[3L] <- 2L
+    session$flushReact()
+    expect_match(
+      output$sample_editor$html, '<option value="2" selected>Station B | Code: B',
+      fixed = TRUE
+    )
+
+    session$setInputs(sample_location_summary_rows_selected = 1L)
+    expect_match(
+      output$sample_editor$html, '<option value="1" selected>Station A | Code: A',
+      fixed = TRUE
+    )
+  })
+})

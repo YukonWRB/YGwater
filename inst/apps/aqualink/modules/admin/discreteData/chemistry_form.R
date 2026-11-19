@@ -1,3 +1,184 @@
+# Build catalogue choices in display order, retaining a saved inactive choice.
+# Suggested choices with the same rank keep the catalogue's alphabetical order.
+chemistry_catalogue_choices <- function(
+  rows,
+  field,
+  selected = NULL,
+  lang = "en",
+  suggestions = NULL,
+  active_only = TRUE
+) {
+  if (is.null(rows) || !nrow(rows)) {
+    return(character())
+  }
+  id <- paste0(field, "_id")
+  if (active_only) {
+    rows <- rows[rows$active | rows[[id]] %in% selected, , drop = FALSE]
+  }
+  if (!is.null(suggestions) && nrow(suggestions)) {
+    rank <- suggestions$display_order[match(rows[[id]], suggestions$choice_id)]
+    rows <- rows[order(rank), , drop = FALSE]
+  }
+  labels <- rows[[field]]
+  fr <- paste0(field, "_fr")
+  if (identical(lang, "fr") && fr %in% names(rows)) {
+    labels <- ifelse(is.na(rows[[fr]]), labels, rows[[fr]])
+  }
+  if (active_only) {
+    labels <- ifelse(rows$active, labels, paste0(labels, " (inactive)"))
+  }
+  stats::setNames(as.character(rows[[id]]), labels)
+}
+
+# Fetch advisory ranks together for reuse while editing several mappings.
+mapping_chemistry_suggestions <- function(con) {
+  DBI::dbGetQuery(
+    con,
+    "SELECT 'reporting_basis' AS field, parameter_id,
+            reporting_basis_id AS choice_id, display_order
+       FROM public.parameter_reporting_basis_suggestions
+     UNION ALL
+     SELECT 'result_speciation', parameter_id, result_speciation_id, display_order
+       FROM public.parameter_speciation_suggestions
+     UNION ALL
+     SELECT 'result_target', parameter_id, result_target_id, display_order
+       FROM public.parameter_target_suggestions"
+  )
+}
+
+# Refresh only the controls that depend on the target parameter. Retain the
+# current values, including saved inactive forms and targets, as choices move.
+update_mapping_chemistry <- function(
+  session,
+  prefix,
+  parameter,
+  matrix_code,
+  catalogues,
+  reporting_bases,
+  suggestions,
+  reporting_basis_input = paste0(prefix, "reporting_basis")
+) {
+  has_parameter <- isTRUE(!is.na(parameter$parameter_id))
+  label <- function(text, required) {
+    if (has_parameter) {
+      paste0(text, if (isTRUE(required)) " (mandatory)" else " (optional)")
+    } else {
+      text
+    }
+  }
+  suggestions <- suggestions[
+    suggestions$parameter_id %in% parameter$parameter_id,
+    ,
+    drop = FALSE
+  ]
+  update_catalogue <- function(
+    input_id,
+    rows,
+    field,
+    text,
+    allow_none = FALSE
+  ) {
+    selected <- as.character(session$input[[input_id]])
+    choices <- chemistry_catalogue_choices(
+      rows,
+      field,
+      selected,
+      suggestions = suggestions[suggestions$field == field, , drop = FALSE],
+      active_only = !allow_none
+    )
+    if (allow_none) {
+      choices <- c("None" = "", choices)
+    }
+    shiny::updateSelectizeInput(
+      session,
+      input_id,
+      label = label(text, parameter[[field]] %in% TRUE),
+      choices = choices,
+      selected = selected
+    )
+  }
+  shiny::updateSelectizeInput(
+    session,
+    paste0(prefix, "sample_fraction"),
+    label = label("Sample fraction", parameter$sample_fraction %in% TRUE)
+  )
+  update_catalogue(
+    reporting_basis_input,
+    reporting_bases,
+    "reporting_basis",
+    "Reporting basis",
+    allow_none = TRUE
+  )
+  update_catalogue(
+    paste0(prefix, "chem_result_speciation_id"),
+    catalogues$result_speciations,
+    "result_speciation",
+    "Chemical form / species scope"
+  )
+  update_catalogue(
+    paste0(prefix, "chem_result_target_id"),
+    catalogues$result_targets,
+    "result_target",
+    "Analytical target / material"
+  )
+  shiny::updateSelectInput(
+    session,
+    paste0(prefix, "chem_endpoint_mode"),
+    label = label("Endpoint determination", parameter$endpoint %in% TRUE)
+  )
+
+  # Parameter-wide and matrix-specific keys are additive in AquaCache.
+  condition_keys <- parameter$analysis_conditions_required_keys[[1L]]
+  matrix_requirements <- parameter$analysis_conditions_required_keys_by_matrix[[
+    1L
+  ]]
+  if (
+    is.character(condition_keys) &&
+      length(condition_keys) == 1L &&
+      !is.na(condition_keys) &&
+      startsWith(condition_keys, "[")
+  ) {
+    condition_keys <- jsonlite::fromJSON(condition_keys)
+  }
+  if (is.character(matrix_requirements) && !is.na(matrix_requirements)) {
+    matrix_requirements <- jsonlite::fromJSON(
+      matrix_requirements,
+      simplifyVector = FALSE
+    )
+  }
+  if (is.list(matrix_requirements) && isTRUE(!is.na(matrix_code))) {
+    condition_keys <- c(condition_keys, matrix_requirements[[matrix_code]])
+  }
+  condition_keys <- unique(unlist(condition_keys, use.names = FALSE))
+  common <- c(
+    mass_basis = "Solid mass basis",
+    gas_basis = "Gas moisture basis",
+    reference_temperature_kelvin = "Reference temperature (K)",
+    reference_pressure_kpa = "Reference pressure (kPa)"
+  )
+  for (field in names(common)) {
+    input_id <- paste0(prefix, "chem_", field)
+    field_label <- label(common[[field]], field %in% condition_keys)
+    if (field %in% c("mass_basis", "gas_basis")) {
+      shiny::updateSelectInput(session, input_id, label = field_label)
+    } else {
+      shiny::updateNumericInput(session, input_id, label = field_label)
+    }
+  }
+  additional <- setdiff(condition_keys, names(common))
+  additional_label <- label("Named conditions", length(additional) > 0L)
+  shiny::updateTextAreaInput(
+    session,
+    paste0(prefix, "chem_analysis_conditions"),
+    label = if (length(additional)) {
+      paste0(additional_label, " [", paste(additional, collapse = ", "), "]")
+    } else {
+      additional_label
+    }
+  )
+  invisible(NULL)
+}
+
 #' Build shared analytical metadata controls
 #'
 #' Render chemical form, analytical target, endpoint, solid/gas basis, reference
@@ -39,23 +220,6 @@ chemistry_metadata_ui <- function(
     }
     x[[1]]
   }
-  choices <- function(table, field) {
-    rows <- catalogues[[table]]
-    if (is.null(rows) || !nrow(rows)) {
-      return(NULL)
-    }
-    id <- paste0(field, "_id")
-    rows <- rows[rows$active | rows[[id]] %in% selected(id), , drop = FALSE]
-    labels <- rows[[field]]
-    fr <- paste0(field, "_fr")
-    if (french && fr %in% names(rows)) {
-      labels <- ifelse(is.na(rows[[fr]]), labels, rows[[fr]])
-    }
-    stats::setNames(
-      as.character(rows[[id]]),
-      ifelse(rows$active, labels, paste0(labels, " (inactive)"))
-    )
-  }
   raw_conditions <- value$analysis_conditions
   if (inherits(value, "data.frame") && length(raw_conditions)) {
     raw_conditions <- raw_conditions[[1]]
@@ -77,7 +241,12 @@ chemistry_metadata_ui <- function(
         shiny::selectizeInput(
           ns(paste0(prefix, "result_speciation_id")),
           label("Chemical form / species scope", "Forme chimique / especes"),
-          choices = choices("result_speciations", "result_speciation"),
+          choices = chemistry_catalogue_choices(
+            catalogues$result_speciations,
+            "result_speciation",
+            selected("result_speciation_id"),
+            lang
+          ),
           selected = selected("result_speciation_id"),
           multiple = TRUE,
           options = list(
@@ -91,7 +260,12 @@ chemistry_metadata_ui <- function(
         shiny::selectizeInput(
           ns(paste0(prefix, "result_target_id")),
           label("Analytical target / material", "Cible analytique / matiere"),
-          choices = choices("result_targets", "result_target"),
+          choices = chemistry_catalogue_choices(
+            catalogues$result_targets,
+            "result_target",
+            selected("result_target_id"),
+            lang
+          ),
           selected = selected("result_target_id"),
           multiple = TRUE,
           options = list(
@@ -133,8 +307,8 @@ chemistry_metadata_ui <- function(
       )
     ),
     shiny::helpText(label(
-      "Use Unknown / not reported when the source does not state the endpoint method; leave endpoint pH blank when the endpoint is unknown.",
-      "Utiliser Inconnu / non indique si la methode du point final n'est pas precisee; laisser le pH vide si le point final est inconnu."
+      "Fixed endpoints require a pH. Use Unknown / not reported when the source does not state the endpoint method, and leave the pH blank.",
+      "Un point final fixe exige un pH. Utiliser Inconnu / non indique si la methode n'est pas precisee et laisser le pH vide."
     )),
     shiny::fluidRow(
       shiny::column(

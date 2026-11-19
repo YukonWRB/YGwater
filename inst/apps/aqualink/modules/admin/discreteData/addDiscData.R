@@ -2733,7 +2733,9 @@ addDiscData_apply_mappings <- function(rows, con, profile_code = NULL) {
       rows$source_result_condition_value[file_rows]
   }
   if ("source_result_condition" %in% names(rows)) {
-    rows$result_condition_id[file_rows] <- rows$source_result_condition[file_rows]
+    rows$result_condition_id[file_rows] <- rows$source_result_condition[
+      file_rows
+    ]
   }
   if ("source_note" %in% names(rows)) {
     rows$note[file_rows] <- rows$source_note[file_rows]
@@ -5225,16 +5227,16 @@ addDiscData <- function(id, language) {
     pending_sublocation_selection <- reactiveVal(character(0))
     pending_sublocation_new <- reactiveVal(NULL)
 
-    update_location_selectize <- function(selected = NULL) {
-      args <- list(
-        session = session,
-        inputId = "edit_sample_location",
-        choices = addDiscData_location_choices(locations())
+    update_location_selectize <- function(selected) {
+      updateSelectizeInput(
+        session,
+        "edit_sample_location",
+        choices = addDiscData_location_choices(
+          locations(),
+          include_blank = TRUE
+        ),
+        selected = normalize_selectize_values(selected)
       )
-      if (!is.null(selected)) {
-        args$selected <- normalize_selectize_values(selected)
-      }
-      do.call(updateSelectizeInput, args)
     }
 
     update_sublocation_selectize <- function(selected = NULL) {
@@ -5256,7 +5258,6 @@ addDiscData <- function(id, language) {
     observeEvent(
       input$ui_ready,
       {
-        update_location_selectize()
         update_sublocation_selectize()
         updateSelectizeInput(
           session,
@@ -5763,9 +5764,9 @@ addDiscData <- function(id, language) {
             !mapped_location_ids %in% locations()$location_id
         )
       ) {
-        current_location_selection <- isolate(input$edit_sample_location)
+        # Both editors rebuild their choices from this catalogue. The sample
+        # editor takes its selection from the refreshed preview row.
         locations(read_locations())
-        update_location_selectize(current_location_selection)
       }
       parsed <- addDiscData_location_match(
         parsed,
@@ -5928,6 +5929,7 @@ addDiscData <- function(id, language) {
       apply_mapping_save_result(location_mapping_save_task$result())
     })
 
+    # result() is unavailable at startup. Observe its first completed value.
     observeEvent(
       location_create_task$result(),
       {
@@ -5970,7 +5972,6 @@ addDiscData <- function(id, language) {
         }
         mapping_revision(mapping_revision() + 1L)
         locations(read_locations())
-        update_location_selectize()
         refresh_error <- tryCatch(
           {
             if (!same_context) {
@@ -6037,8 +6038,7 @@ addDiscData <- function(id, language) {
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
-      },
-      ignoreInit = TRUE
+      }
     )
 
     observeEvent(
@@ -8612,7 +8612,10 @@ addDiscData <- function(id, language) {
           df$sample_fraction_id,
           sample_fractions$sample_fraction_id
         )
-        result_type_index <- match(df$result_type_id, result_types$result_type_id)
+        result_type_index <- match(
+          df$result_type_id,
+          result_types$result_type_id
+        )
         value_type_index <- match(
           df$result_value_type_id,
           result_value_types$result_value_type_id
@@ -8900,9 +8903,6 @@ addDiscData <- function(id, language) {
           selected = applied_mapping$protocol_method_id
         ),
         helpText(
-          "Each analytical dimension is independently required by the selected parameter."
-        ),
-        helpText(
           "Known unit conversions fill the multiplier and offset when the target changes. Both remain editable; review them when no catalogue conversion exists."
         ),
         fluidRow(
@@ -8933,6 +8933,36 @@ addDiscData <- function(id, language) {
         )
       )
     })
+
+    mapping_suggestions <- reactive(mapping_chemistry_suggestions(con))
+    observeEvent(
+      list(
+        input$mapping_editor_ready,
+        input$mapping_parameter,
+        input$mapping_matrix_state
+      ),
+      {
+        req(input$mapping_editor_ready)
+        parameter_rows <- params()
+        parameter_index <- match(
+          addDiscData_int(input$mapping_parameter),
+          parameter_rows$parameter_id
+        )
+        matrix_index <- match(
+          addDiscData_int(input$mapping_matrix_state),
+          matrix_states$matrix_state_id
+        )
+        update_mapping_chemistry(
+          session,
+          "mapping_",
+          parameter_rows[parameter_index, , drop = FALSE],
+          matrix_states$matrix_state_code[matrix_index],
+          chemistry_catalogues,
+          reporting_bases,
+          mapping_suggestions()
+        )
+      }
+    )
 
     observeEvent(
       list(

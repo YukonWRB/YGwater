@@ -70,11 +70,14 @@ discrete_protocol_server <- function(input, session, con, contexts) {
               shiny::textInput(ns("new_protocol_name"), "Name", value = name),
               shiny::textAreaInput(
                 ns("new_protocol_description"),
-                "Description (optional)"
+                "Description (optional)",
+                width = "100%",
+                rows = 10
               ),
               shiny::textInput(
                 ns("new_protocol_url"),
-                "Reference URL (optional)"
+                "Reference URL (optional)",
+                width = "100%"
               ),
               footer = shiny::tagList(
                 shiny::modalButton("Cancel"),
@@ -83,7 +86,8 @@ discrete_protocol_server <- function(input, session, con, contexts) {
                   "Add protocol/method",
                   class = "btn-primary"
                 )
-              )
+              ),
+              size = "m",
             ),
             session = session
           )

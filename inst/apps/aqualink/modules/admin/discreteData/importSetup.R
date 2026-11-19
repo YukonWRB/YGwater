@@ -1297,9 +1297,45 @@ importSetup <- function(id, language) {
         ORDER BY reporting_basis"
     )
     chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(con)
+    manager_chemistry_ui <- function(value = list()) {
+      tagList(
+        YGwater:::shiny_ui_ready(ns("manage_chemistry_ready")),
+        chemistry_metadata_ui(ns, "manage_chem_", chemistry_catalogues, value)
+      )
+    }
     output$manage_chemistry <- renderUI({
-      chemistry_metadata_ui(ns, "manage_chem_", chemistry_catalogues)
+      manager_chemistry_ui()
     })
+    mapping_suggestions <- reactive(mapping_chemistry_suggestions(con))
+    observeEvent(
+      list(
+        input$manage_chemistry_ready,
+        input$manage_parameter_id,
+        input$manage_matrix_state
+      ),
+      {
+        req(input$manage_chemistry_ready)
+        parameter_rows <- params()
+        parameter_index <- match(
+          addDiscData_int(input$manage_parameter_id),
+          parameter_rows$parameter_id
+        )
+        matrix_index <- match(
+          addDiscData_int(input$manage_matrix_state),
+          matrix_states$matrix_state_id
+        )
+        update_mapping_chemistry(
+          session,
+          "manage_",
+          parameter_rows[parameter_index, , drop = FALSE],
+          matrix_states$matrix_state_code[matrix_index],
+          chemistry_catalogues,
+          reporting_bases,
+          mapping_suggestions(),
+          reporting_basis_input = "manage_descriptor"
+        )
+      }
+    )
     laboratories <- DBI::dbGetQuery(
       con,
       "SELECT lab_id, lab_name
@@ -3605,12 +3641,7 @@ importSetup <- function(id, language) {
           }
         )
         output$manage_chemistry <- renderUI({
-          chemistry_metadata_ui(
-            ns,
-            "manage_chem_",
-            chemistry_catalogues,
-            row
-          )
+          manager_chemistry_ui(row)
         })
         updateNumericInput(session, "manage_priority", value = priority)
         updateNumericInput(
@@ -3784,11 +3815,7 @@ importSetup <- function(id, language) {
       )
       updateSelectizeInput(session, "manage_descriptor", selected = "")
       output$manage_chemistry <- renderUI({
-        chemistry_metadata_ui(
-          ns,
-          "manage_chem_",
-          chemistry_catalogues
-        )
+        manager_chemistry_ui()
       })
       updateNumericInput(session, "manage_priority", value = 50)
       updateNumericInput(session, "manage_conversion", value = 1)
