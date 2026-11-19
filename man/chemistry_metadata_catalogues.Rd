@@ -21,15 +21,13 @@ mapping, and guideline editors. Reporting bases and sample fractions are
 supplied separately by the calling module.
 }
 \details{
-No data are modified. \code{\link[=chemistry_metadata_ui]{chemistry_metadata_ui()}} filters choices for
-new selections while retaining an existing retired selection for display.
+No data are modified. The AquaLink form filters choices for new
+selections and retains an existing retired selection for display.
 }
 \seealso{
 Other analytical metadata helpers:
 \code{\link[=chemistry_accessor_keys]{chemistry_accessor_keys()}},
 \code{\link[=chemistry_identity_columns]{chemistry_identity_columns()}},
-\code{\link[=chemistry_metadata_ui]{chemistry_metadata_ui()}},
-\code{\link[=chemistry_metadata_values]{chemistry_metadata_values()}},
 \code{\link[=chemistry_result_labels]{chemistry_result_labels()}},
 \code{\link[=chemistry_sql_accessor_refs]{chemistry_sql_accessor_refs()}}
 }

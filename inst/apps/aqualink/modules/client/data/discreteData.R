@@ -1,3 +1,417 @@
+# Discrete sample search
+#
+# Filter state is independent of the widgets. Date, location, sub-location,
+# media, and sample-type constraints are applied together, in that order, to an
+# immutable catalogue. A selector keeps its own available choices; upstream
+# changes retain compatible downstream selections. All removes a constraint,
+# while an empty network/project or parameter-group intersection matches nothing.
+# Date bounds include both UTC calendar days.
+#
+# Catalogue loading, parameter lookup, sample retrieval, result previews/counts,
+# and export preparation use session-owned ExtendedTasks on AquaLink's shared
+# mirai pool. Workers receive snapshots and current login credentials, open their
+# own read-only transactions, and always roll back/disconnect. Request revisions
+# reject results made obsolete by filter or connection changes. Parameter lookups
+# coalesce rapid changes instead of queuing every intermediate selection.
+#
+# Downloads use the displayed table/preview snapshot. Prepare download builds the
+# selected format in a worker; the download handler only serves the finished file.
+# Worker functions are copied into a small environment with a package-namespace
+# parent, so neither a live DBI connection nor a Shiny session is serialized.
+
+# Helpers operate on plain snapshots, independently of a Shiny session.
+# All means no constraint. An empty modal intersection means no matching IDs.
+disc_data_id_predicate <- function(column, values) {
+  if (identical(values, "all")) {
+    return("TRUE")
+  }
+  ids <- unique(suppressWarnings(as.integer(values)))
+  ids <- ids[!is.na(ids) & ids > 0L]
+  if (!length(ids)) {
+    return("FALSE")
+  }
+  sprintf("%s IN (%s)", column, paste(ids, collapse = ","))
+}
+
+# Recompute from the immutable catalogue, preserving compatible downstream
+# selections. Each selector retains all of its own available choices.
+disc_data_filter_catalogue <- function(cached, state) {
+  out <- cached
+  samples <- data.table::as.data.table(cached$samples)
+  dates <- as.Date(state$date_range)
+  if (length(dates) == 2L && !anyNA(dates)) {
+    start <- as.POSIXct(dates[1], tz = "UTC")
+    end <- as.POSIXct(dates[2] + 1, tz = "UTC")
+    samples <- samples[datetime >= start & datetime < end]
+  }
+  specs <- list(
+    locations = c("locs", "location_id", "location_id"),
+    sub_locations = c("sub_locs", "sub_location_id", "sub_location_id"),
+    media = c("media", "media_id", "media_id"),
+    sample_types = c("sample_types", "sample_type_id", "sample_type")
+  )
+  for (id in names(specs)) {
+    spec <- specs[[id]]
+    choices <- cached[[spec[1]]]
+    choices <- choices[
+      choices[[spec[2]]] %in% samples[[spec[3]]],
+      ,
+      drop = FALSE
+    ]
+    out[[spec[1]]] <- choices
+    selected <- state[[id]]
+    if (!identical(selected, "all")) {
+      valid <- intersect(selected, as.character(choices[[spec[2]]]))
+      if (length(selected) && !length(valid)) {
+        valid <- "all"
+      }
+      state[[id]] <- valid
+      if (!identical(valid, "all")) {
+        samples <- samples[samples[[spec[3]]] %in% valid]
+      }
+    }
+  }
+  out$samples <- samples
+  list(data = out, state = state)
+}
+
+disc_data_run <- function(request) {
+  config <- request$config
+  con <- YGwater::AquaConnect(
+    name = config$dbName,
+    host = config$dbHost,
+    port = config$dbPort,
+    username = config$dbUser,
+    password = config$dbPass,
+    silent = TRUE
+  )
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbBegin(con)
+  on.exit(DBI::dbRollback(con), add = TRUE, after = FALSE)
+  DBI::dbExecute(con, "SET TRANSACTION READ ONLY")
+  kind <- request$kind
+  if (kind == "catalogue") {
+    return(disc_data_module_data(con, env = new.env(parent = emptyenv())))
+  }
+  if (kind == "parameters") {
+    where <- disc_data_id_predicate("s.sample_id", request$sample_ids)
+    return(
+      DBI::dbGetQuery(
+        con,
+        paste0(
+          "SELECT DISTINCT r.parameter_id FROM discrete.results r
+       JOIN discrete.samples s USING (sample_id) WHERE ",
+          where
+        )
+      )$parameter_id
+    )
+  }
+  if (kind == "samples") {
+    state <- request$state
+    where <- vapply(
+      c("locations", "sub_locations", "media", "sample_types"),
+      function(id) {
+        column <- switch(
+          id,
+          locations = "s.location_id",
+          sub_locations = "s.sub_location_id",
+          media = "s.media_id",
+          sample_types = "s.sample_type_id"
+        )
+        disc_data_id_predicate(column, state[[id]])
+      },
+      character(1)
+    )
+    dates <- as.Date(state$date_range)
+    if (length(dates) == 2L && !anyNA(dates)) {
+      where <- c(
+        where,
+        sprintf(
+          "s.datetime >= %s::date AND s.datetime < %s::date",
+          DBI::dbQuoteLiteral(con, as.character(dates[1])),
+          DBI::dbQuoteLiteral(con, as.character(dates[2] + 1))
+        )
+      )
+    }
+    where <- paste(where, collapse = " AND ")
+    parameter_where <- disc_data_id_predicate(
+      "r.parameter_id",
+      request$parameter_ids
+    )
+    samples <- dbGetQueryDT(
+      con,
+      paste0(
+        "SELECT DISTINCT ON (s.sample_id)
+          s.sample_id, l.location_id, l.name, sl.sub_location_name, s.depth_height_m AS depth, s.datetime AS sample_datetime_utc, s.target_datetime AS target_datetime_utc, m.media_type, st.sample_type, cm.collection_method, s.sample_volume_ml, s.purge_volume_l, s.purge_time_min, s.flow_rate_l_min, s.wave_height_m AS wave_hgt_m, s.grade_type_id AS sample_grade, s.approval_type_id AS sample_approval, qualifiers.sample_qualifier_ids, qualifiers.sample_qualifiers, s.note FROM discrete.samples s
+           JOIN public.locations l ON s.location_id = l.location_id
+           LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id
+           JOIN public.media_types m ON s.media_id = m.media_id
+           JOIN discrete.sample_types st ON s.sample_type_id = st.sample_type_id
+           JOIN discrete.collection_methods cm ON s.collection_method_id = cm.collection_method_id
+           LEFT JOIN public.organizations orgs ON s.owner = orgs.organization_id
+           LEFT JOIN LATERAL (
+             SELECT
+               string_agg(
+                 sq.qualifier_type_id::text,
+                 ', ' ORDER BY sq.qualifier_type_id
+               ) AS sample_qualifier_ids,
+               string_agg(
+                 qt.qualifier_type_description,
+                 '; ' ORDER BY sq.qualifier_type_id
+               ) AS sample_qualifiers
+             FROM discrete.sample_qualifiers sq
+             JOIN public.qualifier_types qt USING (qualifier_type_id)
+             WHERE sq.sample_id = s.sample_id
+           ) qualifiers ON TRUE
+           WHERE ",
+        where,
+        "
+           AND EXISTS (SELECT 1 FROM discrete.results r
+                       WHERE r.sample_id = s.sample_id AND ",
+        parameter_where,
+        ")
+           ORDER BY s.sample_id;"
+      )
+    )
+    na_cols <- setdiff(
+      names(samples)[vapply(
+        samples,
+        function(x) {
+          length(x) > 0L && all(is.na(x))
+        },
+        logical(1)
+      )],
+      c("sample_id", "location_id")
+    )
+    samples[, (na_cols) := NULL]
+    return(samples)
+  }
+  selected_sampleids <- request$sample_ids
+  selected_loc_ids <- request$location_ids
+  if (kind == "preview") {
+    sample_ids_str <- paste(selected_sampleids, collapse = ",")
+    # Single query using a window function to limit to 3 rows/results per sample_id
+    query <- paste0(
+      "SELECT * FROM (SELECT r.result_id, r.sample_id, r.result, p.param_name AS parameter, ",
+      ac_parameter_unit_select_sql(
+        con,
+        "p",
+        "units",
+        matrix_state_alias = "r",
+        media_alias = "s"
+      ),
+      ",
+          rs.reporting_basis, spec.result_speciation, target.result_target,
+          r.endpoint_mode, r.endpoint_ph, r.analysis_conditions,
+          rt.result_type,
+          sf.sample_fraction,
+          rc.result_condition,
+          r.result_condition_value,
+          rvt.result_value_type,
+          pm.protocol_name,
+          l.lab_name AS laboratory,
+          r.analysis_datetime,
+          r.lab_report_no,
+          r.lab_sample_no,
+          r.grade_type_id AS result_grade_id,
+          rg.grade_type_code AS result_grade_code,
+          rg.grade_type_description AS result_grade_description,
+          rg.grade_type_description_fr AS result_grade_description_fr,
+          r.approval_type_id AS result_approval_id,
+          rap.approval_type_code AS result_approval_code,
+          rap.approval_type_description AS result_approval_description,
+          rap.approval_type_description_fr AS result_approval_description_fr,
+          rat.aggregation_type,
+          ra.calculation_version,
+          ra.calculation_arguments::text AS calculation_arguments,
+          ra.expected_count,
+          ROW_NUMBER() OVER (
+            PARTITION BY r.sample_id ORDER BY r.result_id
+          ) AS rn
+        FROM discrete.results r
+        JOIN discrete.samples s ON r.sample_id = s.sample_id
+        JOIN public.parameters p ON r.parameter_id = p.parameter_id
+        JOIN discrete.result_types rt ON r.result_type_id = rt.result_type_id
+        LEFT JOIN discrete.sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
+        LEFT JOIN discrete.result_conditions rc ON r.result_condition_id = rc.result_condition_id
+        LEFT JOIN discrete.result_value_types rvt ON r.result_value_type_id = rvt.result_value_type_id
+        LEFT JOIN discrete.reporting_bases rs ON r.reporting_basis_id = rs.reporting_basis_id
+        LEFT JOIN discrete.result_speciations spec ON r.result_speciation_id = spec.result_speciation_id
+        LEFT JOIN discrete.result_targets target ON r.result_target_id = target.result_target_id
+        LEFT JOIN discrete.protocols_methods pm ON r.protocol_method_id = pm.protocol_method_id
+        LEFT JOIN discrete.laboratories l ON r.lab_id = l.lab_id
+        LEFT JOIN public.grade_types rg ON r.grade_type_id = rg.grade_type_id
+        LEFT JOIN public.approval_types rap ON r.approval_type_id = rap.approval_type_id
+        LEFT JOIN discrete.result_aggregations ra ON r.result_id = ra.result_id
+        LEFT JOIN discrete.result_aggregation_types rat USING (result_aggregation_type_id)
+        WHERE r.sample_id IN (",
+      sample_ids_str,
+      ") AND r.parameter_id IN (",
+      paste(request$parameter_ids, collapse = ","),
+      ")) sub WHERE rn <= 3;"
+    )
+
+    subset <- dbGetQueryDT(con, query)
+    subset[, rn := NULL] # Drop column 'rn', left over from the window function
+
+    # Get location metadata
+    location <- DBI::dbGetQuery(
+      con,
+      paste0(
+        "SELECT * FROM ",
+        if (request$lang == "fr") {
+          "location_metadata_fr"
+        } else {
+          "location_metadata_en"
+        },
+        " WHERE location_id IN (",
+        paste(selected_loc_ids, collapse = ", "),
+        ") LIMIT 3;"
+      )
+    ) # Get the location metadata
+
+    qaqc_error <- NULL
+    qaqc <- tryCatch(
+      disc_plot_related_qaqc_data(con, selected_sampleids, request$lang),
+      error = function(e) {
+        qaqc_error <<- conditionMessage(e)
+        disc_plot_empty_qaqc_data()
+      }
+    )
+    rows <- DBI::dbGetQuery(
+      con,
+      paste0(
+        "SELECT COUNT(*) FROM discrete.results r WHERE ",
+        disc_data_id_predicate("r.sample_id", selected_sampleids),
+        " AND ",
+        disc_data_id_predicate("r.parameter_id", request$parameter_ids)
+      )
+    )[[1]]
+    return(list(
+      subset = subset,
+      location = location,
+      qaqc = qaqc,
+      rows = as.numeric(rows),
+      qaqc_error = qaqc_error
+    ))
+  }
+  if (kind == "download") {
+    file <- request$file
+    data <- list()
+    data$location_metadata <- dbGetQueryDT(
+      con,
+      paste0(
+        "SELECT * FROM ",
+        if (request$lang == "fr") {
+          "location_metadata_fr"
+        } else {
+          "location_metadata_en"
+        },
+        " WHERE location_id IN (",
+        paste(selected_loc_ids, collapse = ", "),
+        ");"
+      )
+    ) # Get the location metadata
+    data$samples <- disc_sample_metadata(
+      con,
+      selected_sampleids,
+      request$lang
+    )
+    data$results <- disc_result_metadata(
+      con,
+      selected_sampleids,
+      request$lang,
+      parameter_ids = request$parameter_ids
+    )
+    data$result_components <- disc_result_components(
+      con,
+      data$results$result_id,
+      lang = request$lang
+    )
+    if (!nrow(data$result_components)) {
+      data$result_components <- NULL
+    }
+    data$sample_documents <- disc_sample_documents(
+      con,
+      selected_sampleids
+    )
+    if (!nrow(data$sample_documents)) {
+      data$sample_documents <- NULL
+    }
+    data$sample_group_memberships <- disc_sample_group_memberships(
+      con,
+      selected_sampleids,
+      request$lang
+    )
+    if (!nrow(data$sample_group_memberships)) {
+      data$sample_group_memberships <- NULL
+    }
+
+    qaqc_data <- request$qaqc
+    if (nrow(qaqc_data$samples) > 0L) {
+      data$qaqc_group_links <- qaqc_data$group_links
+      data$qaqc_samples <- qaqc_data$samples
+      data$qaqc_results <- qaqc_data$results
+      if (nrow(qaqc_data$result_components) > 0L) {
+        data$qaqc_result_components <- qaqc_data$result_components
+      }
+      if (nrow(qaqc_data$documents) > 0L) {
+        data$qaqc_documents <- qaqc_data$documents
+      }
+    }
+
+    if ("sample_grade_id" %in% names(data$samples)) {
+      data$grades <- dbGetQueryDT(
+        con,
+        "SELECT * FROM public.grade_types;"
+      )
+    }
+    if ("sample_approval_id" %in% names(data$samples)) {
+      data$approvals <- dbGetQueryDT(
+        con,
+        "SELECT * FROM public.approval_types;"
+      )
+    }
+    if ("sample_qualifier_ids" %in% names(data$samples)) {
+      data$qualifiers <- dbGetQueryDT(
+        con,
+        "SELECT * FROM public.qualifier_types;"
+      )
+    }
+
+    if (request$format == "xlsx") {
+      openxlsx::write.xlsx(data, file)
+    } else if (request$format == "csv") {
+      # Temporary directory to store CSV files
+      temp_dir <- tempfile("discrete-export-")
+      dir.create(temp_dir)
+      on.exit(unlink(temp_dir, recursive = TRUE), add = TRUE)
+      csv_files <- lapply(names(data), function(name) {
+        file_name <- file.path(temp_dir, paste0(name, ".csv"))
+        data.table::fwrite(data[[name]], file_name)
+        return(file_name)
+      })
+      # Use zip to compress the files
+      zip::zipr(file, unlist(csv_files), root = temp_dir)
+    } else if (request$format == "sqlite") {
+      # Create an sqlite database and write the data tables to it
+      db <- DBI::dbConnect(RSQLite::SQLite(), dbname = file)
+      on.exit(DBI::dbDisconnect(db), add = TRUE)
+      lapply(names(data), function(name) {
+        DBI::dbWriteTable(
+          conn = db,
+          name = name,
+          value = data[[name]],
+          overwrite = TRUE
+        )
+      })
+    }
+
+    return(file)
+  }
+  stop("Unknown discrete-data task.")
+}
+
 discDataUI <- function(id) {
   ns <- NS(id)
 
@@ -50,247 +464,285 @@ discDataUI <- function(id) {
 
 discData <- function(id, language, inputs) {
   moduleServer(id, function(input, output, session) {
-    ns <- session$ns # Used to create UI elements within the server code
-
-    # Functions and data fetch ################
-    # Adjust multiple selection based on if 'all' is selected
-    observeFilterInput <- function(inputId) {
-      observeEvent(
-        input[[inputId]],
-        {
-          values <- as.character(input[[inputId]])
-          selected <- data_filter_normalize_selection(values)
-          if (!identical(values, selected)) {
-            updateSelectizeInput(session, inputId, selected = selected)
-          }
-        },
-        ignoreNULL = FALSE
-      )
-    }
-
-    parameter_unit_sql <- function(
-      output_alias = "unit",
-      alias = "p",
-      matrix_state_alias = NULL,
-      media_alias = NULL,
-      media_column = "media_id"
-    ) {
-      ac_parameter_unit_select_sql(
-        session$userData$AquaCache,
-        alias,
-        output_alias,
-        matrix_state_alias = matrix_state_alias,
-        media_alias = media_alias,
-        media_column = media_column
-      )
-    }
-
-    # Get the data to populate drop-downs. Runs every time this module is loaded.
-    if (session$userData$user_logged_in) {
-      # If logged in, get or create data that lives only with this session,
-      cached <- disc_data_module_data(
-        con = session$userData$AquaCache,
-        env = session$userData$app_cache
-      )
-    } else {
-      cached <- disc_data_module_data(con = session$userData$AquaCache)
-    }
-
-    moduleData <- reactiveValues(
-      locs = cached$locs,
-      sub_locs = cached$sub_locs,
-      params = cached$params,
-      media = cached$media,
-      parameter_relationships = cached$parameter_relationships,
-      range = cached$range,
-      sample_types = cached$sample_types,
-      samples = cached$samples,
-      locations_projects = cached$locations_projects,
-      projects = cached$projects,
-      locations_networks = cached$locations_networks,
-      networks = cached$networks,
-      param_groups = cached$param_groups,
-      param_sub_groups = cached$param_sub_groups
+    ns <- session$ns
+    moduleData <- reactiveValues()
+    filteredData <- reactiveValues()
+    defaults <- list(
+      date_range = as.Date(character()),
+      locations = "all",
+      sub_locations = "all",
+      media = "all",
+      sample_types = "all",
+      params = "all"
     )
+    filter_state <- reactiveVal(defaults)
+    revision <- reactiveVal(0L)
+    table_data <- reactiveVal(NULL)
+    table_parameters <- reactiveVal(integer())
+    selected_qaqc_data <- reactiveVal(disc_plot_empty_qaqc_data())
+    preview_data <- reactiveVal(NULL)
+    preview_request <- reactiveVal(NULL)
+    parameter_request <- reactiveVal(NULL)
+    parameter_started <- NULL
+    download_file <- reactiveVal(NULL)
+    task_files <- character()
+    task_handles <- new.env(parent = emptyenv())
+    selector_choices <- new.env(parent = emptyenv())
 
-    # Create a function to create the filteredData reactiveValues object
-    createFilteredData <- function() {
-      data <- reactiveValues(
-        locs = isolate(moduleData$locs),
-        sub_locs = isolate(moduleData$sub_locs),
-        params = isolate(moduleData$params),
-        media = isolate(moduleData$media),
-        parameter_relationships = isolate(moduleData$parameter_relationships),
-        range = isolate(moduleData$range),
-        sample_types = isolate(moduleData$sample_types),
-        samples = isolate(moduleData$samples),
-        projects = isolate(moduleData$projects),
-        networks = isolate(moduleData$networks),
-        locations_networks = isolate(moduleData$locations_networks),
-        locations_projects = isolate(moduleData$locations_projects),
-        param_groups = isolate(moduleData$param_groups),
-        param_sub_groups = isolate(moduleData$param_sub_groups)
-      )
-      return(data)
-    }
-
-    filteredData <- createFilteredData()
-    moduleInputs <- reactiveValues(
-      location_id = NULL,
-      location_request_id = isolate(inputs$location_request_id)
+    # Copy only pure helper functions to the daemon. In particular, neither
+    # session nor the live connection is reachable through this environment.
+    worker_env <- new.env(parent = asNamespace("YGwater"))
+    helper_names <- c(
+      "disc_data_run",
+      "disc_data_id_predicate",
+      "disc_data_module_data",
+      "disc_plot_tabularize",
+      "disc_sample_metadata",
+      "disc_result_metadata",
+      "disc_result_components",
+      "disc_sample_documents",
+      "disc_sample_group_memberships",
+      "disc_plot_empty_qaqc_data",
+      "disc_plot_related_qaqc_data"
     )
-
-    resetFilteredData <- function() {
-      refreshed <- createFilteredData()
-      for (name in isolate(names(refreshed))) {
-        filteredData[[name]] <- isolate(refreshed[[name]])
-      }
+    for (name in helper_names) {
+      fn <- get(name, mode = "function")
+      environment(fn) <- worker_env
+      worker_env[[name]] <- fn
     }
-
-    applyLocationInput <- function(location_id) {
-      resetFilteredData()
-
-      location_id <- suppressWarnings(as.numeric(location_id))
-      if (length(location_id) != 1 || is.na(location_id)) {
-        moduleInputs$location_id <- NULL
-        return(invisible(FALSE))
-      }
-      if (!location_id %in% filteredData$locs$location_id) {
-        moduleInputs$location_id <- NULL
-        return(invisible(FALSE))
-      }
-
-      moduleInputs$location_id <- location_id
-      loc_id <- location_id
-      filteredData$samples <- filteredData$samples[
-        filteredData$samples$location_id %in% loc_id,
-      ]
-      filteredData$locs <- filteredData$locs[
-        filteredData$locs$location_id %in% loc_id,
-      ]
-      filteredData$sub_locs <- filteredData$sub_locs[
-        filteredData$sub_locs$location_id %in% loc_id,
-      ]
-      filteredData$media <- filteredData$media[
-        filteredData$media$media_id %in% filteredData$samples$media_id,
-      ]
-      filteredData$sample_types <- filteredData$sample_types[
-        filteredData$sample_types$sample_type_id %in%
-          filteredData$samples$sample_type,
-      ]
-
-      remain_projects <- filteredData$locations_projects[
-        filteredData$locations_projects$location_id %in% loc_id,
-      ]
-      filteredData$projects <- filteredData$projects[
-        filteredData$projects$project_id %in% remain_projects$project_id,
-      ]
-      remain_networks <- filteredData$locations_networks[
-        filteredData$locations_networks$location_id %in% loc_id,
-      ]
-      filteredData$networks <- filteredData$networks[
-        filteredData$networks$network_id %in% remain_networks$network_id,
-      ]
-
-      filteredData$params <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        paste0(
-          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
-          parameter_unit_sql("unit"),
-          " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
-          paste(filteredData$samples$sample_id, collapse = ", "),
-          ");"
-        )
-      )
-      if (nrow(filteredData$params) > 0) {
-        filteredData$parameter_relationships <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
-            paste(filteredData$samples$sample_id, collapse = ", "),
-            "));"
-          )
-        )
-        if (length(filteredData$parameter_relationships$group_id) > 0) {
-          filteredData$param_groups <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT * FROM public.parameter_groups WHERE group_id IN (",
-              paste(
-                filteredData$parameter_relationships$group_id,
-                collapse = ", "
-              ),
-              ");"
+    run_task <- worker_env$disc_data_run
+    new_task <- function() {
+      ExtendedTask$new(function(request) {
+        job <- mirai::mirai(
+          {
+            tryCatch(
+              list(ok = TRUE, id = request$id, value = run_task(request)),
+              error = function(e) {
+                list(ok = FALSE, id = request$id, message = conditionMessage(e))
+              }
             )
-          )
-        } else {
-          filteredData$param_groups <- data.frame(
-            group_id = numeric(),
-            group_name = character(),
-            group_name_fr = character(),
-            description = character(),
-            description_fr = character()
-          )
+          },
+          request = request,
+          run_task = run_task,
+          .compute = "YGwater_aqualink"
+        )
+        task_handles[[request$kind]] <- job
+        job
+      })
+    }
+    catalogue_task <- new_task()
+    parameter_task <- new_task()
+    samples_task <- new_task() |> bslib::bind_task_button("filter")
+    preview_task <- new_task() |> bslib::bind_task_button("view_data")
+    download_task <- new_task() |> bslib::bind_task_button("prepare_download")
+
+    request <- function(kind, id, ...) {
+      # Snapshot the current login, including credentials changed after startup.
+      cfg <- session$userData$config
+      list(
+        kind = kind,
+        id = id,
+        config = cfg[c(
+          "dbName",
+          "dbHost",
+          "dbPort",
+          "dbUser",
+          "dbPass"
+        )],
+        ...
+      )
+    }
+    task_result <- function(task) {
+      result <- tryCatch(task$result(), error = function(e) {
+        if (inherits(e, "shiny.silent.error")) {
+          stop(e)
         }
-        sub_groups <- filteredData$parameter_relationships$sub_group_id[
-          !is.na(filteredData$parameter_relationships$sub_group_id)
+        showNotification(conditionMessage(e), type = "error", duration = 10)
+        NULL
+      })
+      req(!is.null(result))
+      if (!isTRUE(result$ok)) {
+        showNotification(result$message, type = "error", duration = 10)
+        req(FALSE)
+      }
+      result
+    }
+    invalidate_results <- function() {
+      revision(isolate(revision()) + 1L)
+      table_data(NULL)
+      preview_request(NULL)
+      preview_data(NULL)
+      download_file(NULL)
+      selected_qaqc_data(disc_plot_empty_qaqc_data())
+      DT::selectRows(proxy, NULL)
+      shinyjs::hide("select_all")
+      shinyjs::hide("view_data")
+    }
+    update_selector <- function(id, data, id_col, label_col) {
+      choices <- stats::setNames(
+        c("all", as.character(data[[id_col]])),
+        c(tr("all_m", language$language), data[[label_col]])
+      )
+      selected <- filter_state()[[id]]
+      choices_changed <- !identical(selector_choices[[id]], choices)
+      selection_changed <- !identical(as.character(input[[id]]), selected)
+      if (!choices_changed && !selection_changed) {
+        return(invisible(NULL))
+      }
+      selector_choices[[id]] <- choices
+      freezeReactiveValue(input, id)
+      # These catalogues are small enough to keep in the browser. Re-registering
+      # server-side Selectize AJAX URLs causes late load callbacks to restore old
+      # selections, which then trigger another filter/update cycle.
+      updateSelectizeInput(
+        session,
+        id,
+        choices = if (choices_changed) choices else NULL,
+        selected = selected
+      )
+    }
+    refresh_filters <- function() {
+      cached <- reactiveValuesToList(moduleData)
+      next_state <- disc_data_filter_catalogue(cached, filter_state())
+      filter_state(next_state$state)
+      for (name in names(next_state$data)) {
+        filteredData[[name]] <- next_state$data[[name]]
+      }
+      update_selector(
+        "locations",
+        filteredData$locs,
+        "location_id",
+        tr("generic_name_col", language$language)
+      )
+      update_selector(
+        "sub_locations",
+        filteredData$sub_locs,
+        "sub_location_id",
+        tr("sub_location_col", language$language)
+      )
+      update_selector(
+        "media",
+        filteredData$media,
+        "media_id",
+        tr("media_type_col", language$language)
+      )
+      update_selector(
+        "sample_types",
+        filteredData$sample_types,
+        "sample_type_id",
+        tr("sample_type_col", language$language)
+      )
+      ids <- filteredData$samples$sample_id
+      old <- parameter_request()
+      if (is.null(old) || !identical(ids, old$sample_ids)) {
+        parameter_request(list(id = revision(), sample_ids = ids))
+      }
+    }
+    set_filter <- function(id, values) {
+      state <- filter_state()
+      if (identical(state[[id]], values)) {
+        return(invisible(NULL))
+      }
+      state[[id]] <- values
+      filter_state(state)
+      invalidate_results()
+      if (id != "params") refresh_filters()
+    }
+
+    # Initial catalogue loading also runs outside the Shiny process.
+    observe({
+      version <- session$userData$AquaCache_version
+      if (is.function(version)) {
+        version()
+      }
+      isolate({
+        invalidate_results()
+        moduleData$range <- NULL
+        parameter_request(NULL)
+        parameter_started <<- NULL
+        catalogue_task$invoke(request("catalogue", revision()))
+      })
+    })
+    observe({
+      result <- task_result(catalogue_task)
+      isolate({
+        req(identical(result$id, revision()))
+        for (name in names(result$value)) {
+          moduleData[[name]] <- result$value[[name]]
+          filteredData[[name]] <- result$value[[name]]
+        }
+        state <- defaults
+        state$date_range <- as.Date(
+          c(moduleData$range$min_date, moduleData$range$max_date),
+          tz = "UTC"
+        )
+        if (
+          identical(inputs$location_target, "discData") &&
+            length(inputs$location_id) == 1L &&
+            inputs$location_id %in% moduleData$locs$location_id
+        ) {
+          state$locations <- as.character(inputs$location_id)
+        }
+        filter_state(state)
+        refresh_filters()
+      })
+    })
+
+    # Coalesce rapid selector changes: at most one running query and one latest
+    # pending snapshot. Old results are discarded, never applied to newer inputs.
+    observe({
+      pending <- parameter_request()
+      status <- parameter_task$status()
+      req(!is.null(pending), status != "running")
+      if (identical(pending, parameter_started)) {
+        return()
+      }
+      parameter_started <<- pending
+      parameter_task$invoke(request(
+        "parameters",
+        pending$id,
+        sample_ids = pending$sample_ids
+      ))
+    })
+    observe({
+      result <- task_result(parameter_task)
+      isolate({
+        req(identical(result$id, parameter_request()$id))
+        filteredData$params <- moduleData$params[
+          moduleData$params$parameter_id %in% result$value,
+          ,
+          drop = FALSE
         ]
-        if (length(sub_groups) > 0) {
-          filteredData$param_sub_groups <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
-              paste(sub_groups, collapse = ", "),
-              ");"
-            )
-          )
-        } else {
-          filteredData$param_sub_groups <- data.frame(
-            sub_group_id = numeric(),
-            sub_group_name = character(),
-            sub_group_name_fr = character(),
-            description = character(),
-            description_fr = character()
-          )
+        rel <- moduleData$parameter_relationships
+        rel <- rel[rel$parameter_id %in% result$value, , drop = FALSE]
+        filteredData$parameter_relationships <- rel
+        filteredData$param_groups <- moduleData$param_groups[
+          moduleData$param_groups$group_id %in% rel$group_id,
+          ,
+          drop = FALSE
+        ]
+        filteredData$param_sub_groups <- moduleData$param_sub_groups[
+          moduleData$param_sub_groups$sub_group_id %in% rel$sub_group_id,
+          ,
+          drop = FALSE
+        ]
+        state <- filter_state()
+        if (!identical(state$params, "all") && length(state$params)) {
+          keep <- intersect(state$params, as.character(result$value))
+          state$params <- if (length(keep)) keep else "all"
+          if (!identical(state, filter_state())) {
+            filter_state(state)
+            invalidate_results()
+          }
         }
-      }
-      invisible(TRUE)
-    }
-
-    if (identical(isolate(inputs$location_target), "discData")) {
-      applyLocationInput(isolate(inputs$location_id))
-    }
-
-    observeEvent(
-      inputs$location_request_id,
-      {
-        req(identical(inputs$location_target, "discData"))
-        request_id <- inputs$location_request_id
-        if (identical(request_id, isolate(moduleInputs$location_request_id))) {
-          return()
-        }
-        moduleInputs$location_request_id <- request_id
-        applyLocationInput(inputs$location_id)
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    # Create UI elements and necessary helpers ################
-    # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.
-
-    # Reactive values to store the input values so that inputs can be reset if the user ends up narrowing their selections to 0 samples
-    input_values <- reactiveValues()
-
-    # flags to prevent running observers when the sidebar is first rendered
-    render_flags <- reactiveValues(
-      date_range = FALSE,
-      locations = FALSE,
-      sub_locations = FALSE,
-      media = FALSE,
-      sample_types = FALSE,
-      params = FALSE
-    )
+        update_selector(
+          "params",
+          filteredData$params,
+          "parameter_id",
+          tr("param_name_col", language$language)
+        )
+      })
+    })
 
     output$banner <- renderUI({
       application_notifications_ui(
@@ -320,22 +772,15 @@ discData <- function(id, language, inputs) {
       bindEvent(language$language)
 
     output$sidebar <- renderUI({
-      req(filteredData, language)
-
-      render_flags$date_range <- TRUE
-      render_flags$locations <- TRUE
-      render_flags$sub_locations <- TRUE
-      render_flags$media <- TRUE
-      render_flags$sample_types <- TRUE
-      render_flags$params <- TRUE
+      req(moduleData$range, language)
 
       tags <- tagList(
         # start and end datetime
         dateRangeInput(
           ns("date_range"),
           tr("date_range_lab", language$language),
-          start = as.Date(filteredData$range$min_date),
-          end = as.Date(filteredData$range$max_date),
+          start = filter_state()$date_range[1],
+          end = filter_state()$date_range[2],
           min = as.Date(filteredData$range$min_date),
           format = "yyyy-mm-dd",
           language = language$abbrev,
@@ -353,11 +798,7 @@ discData <- function(id, language, inputs) {
             )
           ),
           multiple = TRUE,
-          selected = if (!is.null(moduleInputs$location_id)) {
-            moduleInputs$location_id
-          } else {
-            "all"
-          }
+          selected = filter_state()$locations
         ),
         # Button for modal to let users filter locations by network or project
         actionButton(
@@ -378,7 +819,7 @@ discData <- function(id, language, inputs) {
             )
           ),
           multiple = TRUE,
-          selected = "all"
+          selected = filter_state()$sub_locations
         ),
         # Selectize input for media type
         selectizeInput(
@@ -392,7 +833,7 @@ discData <- function(id, language, inputs) {
             )
           ),
           multiple = TRUE,
-          selected = "all"
+          selected = filter_state()$media
         ),
         # Selectize input for sample types
         selectizeInput(
@@ -409,7 +850,7 @@ discData <- function(id, language, inputs) {
             )
           ),
           multiple = TRUE,
-          selected = "all"
+          selected = filter_state()$sample_types
         ),
         selectizeInput(
           ns("params"),
@@ -422,7 +863,7 @@ discData <- function(id, language, inputs) {
             )
           ),
           multiple = TRUE,
-          selected = "all"
+          selected = filter_state()$params
         ),
         # Modal button to let users filter parameters by group or sub-group
         actionButton(
@@ -444,7 +885,7 @@ discData <- function(id, language, inputs) {
             style = "font-size: 14px;",
             class = "btn btn-primary"
           ),
-          actionButton(
+          bslib::input_task_button(
             ns("filter"),
             label = tr("view_samples", language$language),
             width = "100%",
@@ -454,16 +895,9 @@ discData <- function(id, language, inputs) {
         )
       ) # End of tagList
 
-      input_values$date_range <- input$date_range
-      input_values$locations <- input$locations
-      input_values$sub_locations <- input$sub_locations
-      input_values$media <- input$media
-      input_values$sample_types <- input$sample_types
-      input_values$params <- input$params
-
       return(tags)
     }) |> # End of renderUI for sidebar
-      bindEvent(language$language)
+      bindEvent(language$language, moduleData$range)
 
     output$main <- renderUI({
       tagList(
@@ -473,9 +907,9 @@ discData <- function(id, language, inputs) {
           tr("select_all", language$language),
           style = "display: none;"
         ), # Button will be hidden until a row is selected
-        actionButton(
+        bslib::input_task_button(
           ns("view_data"),
-          tr("view_data1", language$language),
+          textOutput(ns("view_data_label"), inline = TRUE),
           style = "display: none;"
         ), # Button will be hidden until a row is selected
         # The modal UI elements are created lower down
@@ -483,140 +917,142 @@ discData <- function(id, language, inputs) {
     }) |> # End renderUI
       bindEvent(language$language) # Re-render the UI if the language or changes
 
-    # Functional parts of server ################
-    ## Run observeFilterInput for each selectize input where 'all' is an option #####
-    observeFilterInput("locations")
-    observeFilterInput("sub_locations")
-    observeFilterInput("media")
-    observeFilterInput("pGrps")
-    observeFilterInput("pSubGrps")
-    observeFilterInput("params")
-    observeFilterInput("networks")
-    observeFilterInput("projects")
-    observeFilterInput("sample_types")
-
-    # Flags to prevent running observers unecessarily when the 'reset' button is pressed
-    reset_flags <- reactiveValues(
-      date_range = FALSE,
-      locations = FALSE,
-      sub_locations = FALSE,
-      media = FALSE,
-      sample_types = FALSE,
-      params = FALSE
-    )
-
-    ## Reset button observer ############
+    # A single canonical selection drives filtering and normalization. Browser
+    # echoes of programmatic updates are no-ops, so no reset flags are needed.
+    for (id in c(
+      "locations",
+      "sub_locations",
+      "media",
+      "sample_types",
+      "params"
+    )) {
+      local({
+        input_id <- id
+        observeEvent(
+          input[[input_id]],
+          {
+            req(moduleData$range)
+            values <- as.character(input[[input_id]])
+            if (identical(values, filter_state()[[input_id]])) {
+              return()
+            }
+            selected <- data_filter_normalize_selection(values)
+            changed <- !identical(selected, filter_state()[[input_id]])
+            set_filter(input_id, selected)
+            # Sample-level changes already synchronize the controls in one pass.
+            # Parameters do not change sample choices, so normalize them here.
+            if (
+              (!changed || input_id == "params") && !identical(values, selected)
+            ) {
+              freezeReactiveValue(input, input_id)
+              updateSelectizeInput(session, input_id, selected = selected)
+            }
+          },
+          ignoreNULL = FALSE
+        )
+      })
+    }
+    for (id in c("networks", "projects", "pGrps", "pSubGrps")) {
+      local({
+        input_id <- id
+        observeEvent(
+          input[[input_id]],
+          {
+            values <- as.character(input[[input_id]])
+            selected <- data_filter_normalize_selection(values)
+            if (!identical(values, selected)) {
+              freezeReactiveValue(input, input_id)
+              updateSelectizeInput(session, input_id, selected = selected)
+            }
+          },
+          ignoreNULL = TRUE
+        )
+      })
+    }
+    observeEvent(input$date_range, {
+      req(
+        length(input$date_range) == 2L,
+        !anyNA(input$date_range),
+        moduleData$range
+      )
+      set_filter("date_range", as.Date(input$date_range))
+    })
+    observeEvent(input$reset, {
+      req(moduleData$range)
+      state <- defaults
+      state$date_range <- as.Date(
+        c(moduleData$range$min_date, moduleData$range$max_date),
+        tz = "UTC"
+      )
+      filter_state(state)
+      invalidate_results()
+      freezeReactiveValue(input, "date_range")
+      updateDateRangeInput(
+        session,
+        "date_range",
+        start = state$date_range[1],
+        end = state$date_range[2]
+      )
+      refresh_filters()
+      update_selector(
+        "params",
+        moduleData$params,
+        "parameter_id",
+        tr("param_name_col", language$language)
+      )
+    })
     observeEvent(
-      input$reset,
+      inputs$location_request_id,
       {
-        # Reset the filteredData to its original state
-        # pull back the originals
-        newData <- createFilteredData()
-        # overwrite each slot in the reactiveValues
-        for (nm in names(newData)) {
-          filteredData[[nm]] <- newData[[nm]]
-        }
-
-        # clear out the results table and hide the 'select all' button
-        table_data(NULL)
-        output$tbl <- DT::renderDT(data.frame())
-        shinyjs::hide("select_all")
-        # clear any rows still selected in the table
-        DT::selectRows(proxy, NULL)
-
-        # Reset the selectize inputs
+        req(identical(inputs$location_target, "discData"), moduleData$range)
+        req(
+          length(inputs$location_id) == 1L,
+          inputs$location_id %in% moduleData$locs$location_id
+        )
+        state <- defaults
+        state$date_range <- as.Date(
+          c(moduleData$range$min_date, moduleData$range$max_date),
+          tz = "UTC"
+        )
+        state$locations <- as.character(inputs$location_id)
+        filter_state(state)
+        invalidate_results()
+        freezeReactiveValue(input, "date_range")
         updateDateRangeInput(
           session,
           "date_range",
-          start = as.Date(moduleData$range$min_date),
-          end = as.Date(moduleData$range$max_date),
-          min = as.Date(moduleData$range$min_date),
-          max = as.Date(moduleData$range$max_date)
+          start = state$date_range[1],
+          end = state$date_range[2]
         )
-        updateSelectizeInput(
-          session,
-          "locations",
-          choices = stats::setNames(
-            c("all", moduleData$locs$location_id),
-            c(
-              tr("all_m", language$language),
-              moduleData$locs[, tr("generic_name_col", language$language)]
-            )
-          ),
-          selected = "all"
-        )
-        updateSelectizeInput(
-          session,
-          "sub_locations",
-          choices = stats::setNames(
-            c("all", moduleData$sub_locs$sub_location_id),
-            c(
-              tr("all_m", language$language),
-              moduleData$sub_locs[, tr("sub_location_col", language$language)]
-            )
-          ),
-          selected = "all"
-        )
-        updateSelectizeInput(
-          session,
-          "media",
-          choices = stats::setNames(
-            c("all", moduleData$media$media_id),
-            c(
-              tr("all_m", language$language),
-              moduleData$media[, tr("media_type_col", language$language)]
-            )
-          ),
-          selected = "all"
-        )
-        updateSelectizeInput(
-          session,
-          "sample_types",
-          choices = stats::setNames(
-            c("all", moduleData$sample_types$sample_type_id),
-            c(
-              tr("all_m", language$language),
-              moduleData$sample_types[, tr(
-                "sample_type_col",
-                language$language
-              )]
-            )
-          ),
-          selected = "all"
-        )
-        updateSelectizeInput(
-          session,
-          "params",
-          choices = stats::setNames(
-            c("all", moduleData$params$parameter_id),
-            c(
-              tr("all_m", language$language),
-              moduleData$params[, tr("param_name_col", language$language)]
-            )
-          ),
-          selected = "all"
-        )
-
-        reset_flags$date_range <- TRUE
-        reset_flags$locations <- TRUE
-        reset_flags$sub_locations <- TRUE
-        reset_flags$media <- TRUE
-        reset_flags$sample_types <- TRUE
-        reset_flags$params <- TRUE
-
-        # Reset the input values to their original state
-        input_values$date_range <- input$date_range
-        input_values$locations <- input$locations
-        input_values$sub_locations <- input$sub_locations
-        input_values$media <- input$media
-        input_values$sample_types <- input$sample_types
-        input_values$params <- input$params
+        refresh_filters()
       },
       ignoreInit = TRUE
     )
 
-    ## Modals to narrow selections ################
-    # Observer for a modal that allows for location filtering based on projects and networks
+    observeEvent(input$filter, {
+      req(moduleData$range)
+      state <- filter_state()
+      params <- if (identical(state$params, "all")) {
+        moduleData$params$parameter_id
+      } else {
+        state$params
+      }
+      table_parameters(params)
+      samples_task$invoke(request(
+        "samples",
+        revision(),
+        state = state,
+        parameter_ids = params
+      ))
+    })
+    observe({
+      result <- task_result(samples_task)
+      isolate({
+        req(identical(result$id, revision()))
+        table_data(result$value)
+        DT::selectRows(proxy, NULL)
+      })
+    })
     observeEvent(input$loc_modal, {
       showModal(modalDialog(
         title = tr("loc_modal", language$language),
@@ -653,49 +1089,38 @@ discData <- function(id, language, inputs) {
       ))
     })
 
-    # Observer for the modal close button
-    observeEvent(input$modal_close, {
-      removeModal()
-    })
-
     # Observer for the locations modal filter button
     observeEvent(input$loc_modal_filter, {
       # Filter the locations based on the selected projects and networks, update the locations selectizeInput
       req(
         input$projects,
         input$networks,
-        filteredData$locations_projects,
-        filteredData$locations_networks
+        moduleData$locations_projects,
+        moduleData$locations_networks
       )
 
-      remain_locs <- filteredData$locs
+      remain_locs <- moduleData$locs
 
       if (!("all" %in% input$networks)) {
-        net_ids <- filteredData$locations_networks$location_id[
-          filteredData$locations_networks$network_id %in% input$networks
+        net_ids <- moduleData$locations_networks$location_id[
+          moduleData$locations_networks$network_id %in% input$networks
         ]
         remain_locs <- remain_locs[remain_locs$location_id %in% net_ids, ]
       }
 
       if (!("all" %in% input$projects)) {
-        proj_ids <- filteredData$locations_projects$location_id[
-          filteredData$locations_projects$project_id %in% input$projects
+        proj_ids <- moduleData$locations_projects$location_id[
+          moduleData$locations_projects$project_id %in% input$projects
         ]
         remain_locs <- remain_locs[remain_locs$location_id %in% proj_ids, ]
       }
-      updateSelectizeInput(
-        session,
-        "locations",
-        choices = stats::setNames(
-          c("all", remain_locs$location_id),
-          c(
-            tr("all_m", language$language),
-            remain_locs[, tr("generic_name_col", language$language)]
-          )
-        ),
-        selected = "all"
-      )
+      selected <- if ("all" %in% input$networks && "all" %in% input$projects) {
+        "all"
+      } else {
+        as.character(remain_locs$location_id)
+      }
       removeModal()
+      set_filter("locations", selected)
     })
 
     # Observer for a modal that allows users to filter their parameters by group/sub-group
@@ -754,7 +1179,7 @@ discData <- function(id, language, inputs) {
         filteredData$params
       )
 
-      remain_params <- filteredData$parameter_relationships
+      remain_params <- moduleData$parameter_relationships
       if (!("all" %in% input$pGrps)) {
         remain_params <- remain_params[
           remain_params$group_id %in% input$pGrps,
@@ -768,1023 +1193,15 @@ discData <- function(id, language, inputs) {
       remain_params <- filteredData$params[
         filteredData$params$parameter_id %in% remain_params$parameter_id,
       ]
-      updateSelectizeInput(
-        session,
-        "params",
-        choices = stats::setNames(
-          c("all", remain_params$parameter_id),
-          c(
-            tr("all_m", language$language),
-            remain_params[, tr("param_name_col", language$language)]
-          )
-        ),
-        selected = "all"
-      )
+      selected <- if ("all" %in% input$pGrps && "all" %in% input$pSubGrps) {
+        "all"
+      } else {
+        as.character(remain_params$parameter_id)
+      }
+      set_filter("params", selected)
+      freezeReactiveValue(input, "params")
+      updateSelectizeInput(session, "params", selected = selected)
       removeModal()
-    })
-
-    # Now apply filters top to bottom. If date range gets narrowed, the other filters will be applied to the narrowed date range. If locations gets narrowed, the other filters will be applied to the narrowed locations EXCEPT for date range, and so on down the line.
-
-    ## Filters ###########
-    ### date_range application button and filter ############
-    observeEvent(
-      input$date_range,
-      {
-        req(input$date_range, filteredData)
-
-        # Flags to prevent running the observer when the date range is reset or initially rendered
-        if (reset_flags$date_range) {
-          reset_flags$date_range <- FALSE
-          return()
-        }
-        if (render_flags$date_range) {
-          render_flags$date_range <- FALSE
-          return()
-        }
-
-        # Since this is the top-level filter, we reset the data.
-        # There's no need to check for 0 samples here, because the date range is always valid.
-        newData <- createFilteredData()
-        # overwrite each slot in the reactiveValues
-        for (nm in names(newData)) {
-          filteredData[[nm]] <- newData[[nm]]
-        }
-
-        # clear out the results table
-        table_data(NULL)
-
-        # Filter the data based on the selected date range
-        if (is.na(input$date_range[1]) || is.na(input$date_range[2])) {
-          return()
-        }
-        filteredData$range$min_date <- as.POSIXct(
-          input$date_range[1],
-          tz = "UTC"
-        )
-        filteredData$range$max_date <- as.POSIXct(
-          paste0(input$date_range[2], " 23:59:59"),
-          tz = "UTC"
-        )
-
-        filteredData$samples <- filteredData$samples[
-          filteredData$samples$datetime >= input$date_range[1] &
-            filteredData$samples$datetime <= input$date_range[2],
-        ]
-        filteredData$locs <- filteredData$locs[
-          filteredData$locs$location_id %in% filteredData$samples$location_id,
-        ]
-        filteredData$sub_locs <- filteredData$sub_locs[
-          filteredData$sub_locs$location_id %in% filteredData$locs$location_id,
-        ]
-        filteredData$media <- filteredData$media[
-          filteredData$media$media_id %in% filteredData$samples$media_id,
-        ]
-        filteredData$sample_types <- filteredData$sample_types[
-          filteredData$sample_types$sample_type_id %in%
-            filteredData$samples$sample_type,
-        ]
-
-        remain_projects <- filteredData$locations_projects[
-          filteredData$locations_projects$location_id %in%
-            filteredData$locs$location_id,
-        ]
-        filteredData$projects <- filteredData$projects[
-          filteredData$projects$project_id %in% remain_projects$project_id,
-        ]
-        remain_networks <- filteredData$locations_networks[
-          filteredData$locations_networks$location_id %in%
-            filteredData$locs$location_id,
-        ]
-        filteredData$networks <- filteredData$networks[
-          filteredData$networks$network_id %in% remain_networks$network_id,
-        ]
-
-        filteredData$params <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
-            parameter_unit_sql("unit"),
-            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
-            paste(filteredData$samples$sample_id, collapse = ", "),
-            ");"
-          )
-        )
-        if (nrow(filteredData$params) > 0) {
-          filteredData$parameter_relationships <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
-              paste(filteredData$samples$sample_id, collapse = ", "),
-              "));"
-            )
-          )
-          if (length(filteredData$parameter_relationships$group_id) > 0) {
-            filteredData$param_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
-                paste(
-                  filteredData$parameter_relationships$group_id,
-                  collapse = ", "
-                ),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_groups <- data.frame(
-              group_id = numeric(),
-              group_name = character(),
-              group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-          sub_groups <- filteredData$parameter_relationships$sub_group_id[
-            !is.na(filteredData$parameter_relationships$sub_group_id)
-          ]
-          if (length(sub_groups) > 0) {
-            filteredData$param_sub_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
-                paste(sub_groups, collapse = ", "),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_sub_groups <- data.frame(
-              sub_group_id = numeric(),
-              sub_group_name = character(),
-              sub_group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-        }
-
-        # Update the downstream selectize inputs with the filtered data
-        updateSelectizeInput(
-          session,
-          "locations",
-          choices = stats::setNames(
-            c("all", filteredData$locs$location_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$locs[, tr("generic_name_col", language$language)]
-            )
-          ),
-          selected = if (input$locations %in% filteredData$locs$location_id) {
-            input$locations
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "sub_locations",
-          choices = stats::setNames(
-            c("all", filteredData$sub_locs$sub_location_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$sub_locs[, tr("sub_location_col", language$language)]
-            )
-          ),
-          selected = if (
-            input$sub_locations %in% filteredData$sub_locs$sub_location_id
-          ) {
-            input$sub_locations
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "media",
-          choices = stats::setNames(
-            c("all", filteredData$media$media_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$media[, tr("media_type_col", language$language)]
-            )
-          ),
-          selected = if (input$media %in% filteredData$media$media_id) {
-            input$media
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "sample_types",
-          choices = stats::setNames(
-            c("all", filteredData$sample_types$sample_type_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$sample_types[, tr(
-                "sample_type_col",
-                language$language
-              )]
-            )
-          ),
-          selected = if (
-            input$sample_types %in% filteredData$sample_types$sample_type_id
-          ) {
-            input$sample_types
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "params",
-          choices = stats::setNames(
-            c("all", filteredData$params$parameter_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
-            )
-          ),
-          selected = if (input$params %in% filteredData$params$parameter_id) {
-            input$params
-          } else {
-            "all"
-          }
-        )
-
-        input_values$date_range <- input$date_range
-      },
-      ignoreInit = TRUE
-    )
-
-    ### locations filter ############
-    observeEvent(
-      input$locations,
-      {
-        req(input$locations, filteredData)
-
-        # Flags to prevent running the observer when the locations are reset or initially rendered
-        if (reset_flags$locations) {
-          reset_flags$locations <- FALSE
-          return()
-        }
-        if (render_flags$locations) {
-          render_flags$locations <- FALSE
-          return()
-        }
-
-        # Filter the data based on the selected locations
-        stash <- filteredData$samples
-        filteredData$samples <- moduleData$samples[
-          moduleData$samples$location_id %in% input$locations,
-        ]
-        if (nrow(filteredData$samples) == 0) {
-          # If no samples are found, reset the samples to the original data, show a notification, and reset input$locations to its previous value
-          filteredData$samples <- stash
-          updateSelectizeInput(
-            session,
-            "locations",
-            selected = input_values$locations
-          )
-          showNotification(
-            tr("no_samps_locs", language$language),
-            type = "error",
-            duration = 5
-          )
-          return()
-        }
-
-        filteredData$locs <- moduleData$locs[
-          moduleData$locs$location_id %in% input$locations,
-        ]
-        filteredData$sub_locs <- moduleData$sub_locs[
-          moduleData$sub_locs$location_id %in% filteredData$locs$location_id,
-        ]
-        filteredData$media <- moduleData$media[
-          moduleData$media$media_id %in% filteredData$samples$media_id,
-        ]
-        filteredData$sample_types <- moduleData$sample_types[
-          moduleData$sample_types$sample_type_id %in%
-            filteredData$samples$sample_type,
-        ]
-
-        remain_projects <- moduleData$locations_projects[
-          moduleData$locations_projects$location_id %in% input$locations,
-        ]
-        filteredData$projects <- moduleData$projects[
-          moduleData$projects$project_id %in% remain_projects$project_id,
-        ]
-        remain_networks <- moduleData$locations_networks[
-          moduleData$locations_networks$location_id %in% input$locations,
-        ]
-        filteredData$networks <- moduleData$networks[
-          moduleData$networks$network_id %in% remain_networks$network_id,
-        ]
-
-        filteredData$params <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
-            parameter_unit_sql("unit"),
-            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
-            paste(filteredData$samples$sample_id, collapse = ", "),
-            ");"
-          )
-        )
-        if (nrow(filteredData$params) > 0) {
-          filteredData$parameter_relationships <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
-              paste(filteredData$samples$sample_id, collapse = ", "),
-              "));"
-            )
-          )
-          if (length(filteredData$parameter_relationships$group_id) > 0) {
-            filteredData$param_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
-                paste(
-                  filteredData$parameter_relationships$group_id,
-                  collapse = ", "
-                ),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_groups <- data.frame(
-              group_id = numeric(),
-              group_name = character(),
-              group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-          sub_groups <- filteredData$parameter_relationships$sub_group_id[
-            !is.na(filteredData$parameter_relationships$sub_group_id)
-          ]
-          if (length(sub_groups) > 0) {
-            filteredData$param_sub_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
-                paste(sub_groups, collapse = ", "),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_sub_groups <- data.frame(
-              sub_group_id = numeric(),
-              sub_group_name = character(),
-              sub_group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-        }
-
-        # Update the downstream selectize inputs with the filtered data
-        updateSelectizeInput(
-          session,
-          "sub_locations",
-          choices = stats::setNames(
-            c("all", filteredData$sub_locs$sub_location_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$sub_locs[, tr("sub_location_col", language$language)]
-            )
-          ),
-          selected = if (
-            input$sub_locations %in% filteredData$sub_locs$sub_location_id
-          ) {
-            input$sub_locations
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "media",
-          choices = stats::setNames(
-            c("all", filteredData$media$media_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$media[, tr("media_type_col", language$language)]
-            )
-          ),
-          selected = if (input$media %in% filteredData$media$media_id) {
-            input$media
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "sample_types",
-          choices = stats::setNames(
-            c("all", filteredData$sample_types$sample_type_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$sample_types[, tr(
-                "sample_type_col",
-                language$language
-              )]
-            )
-          ),
-          selected = if (
-            input$sample_types %in% filteredData$sample_types$sample_type_id
-          ) {
-            input$sample_types
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "params",
-          choices = stats::setNames(
-            c("all", filteredData$params$parameter_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
-            )
-          ),
-          selected = if (input$params %in% filteredData$params$parameter_id) {
-            input$params
-          } else {
-            "all"
-          }
-        )
-
-        # Reset the input values reactiveValues to the current selection
-        input_values$locations <- input$locations
-      },
-      ignoreInit = TRUE
-    )
-
-    ### sub_locations filter #########
-    observeEvent(
-      input$sub_locations,
-      {
-        req(input$sub_locations, filteredData)
-
-        # Flags to prevent running the observer when the sub-locations are reset or initially rendered
-        if (reset_flags$sub_locations) {
-          reset_flags$sub_locations <- FALSE
-          return()
-        }
-        if (render_flags$sub_locations) {
-          render_flags$sub_locations <- FALSE
-          return()
-        }
-
-        # Filter the data based on the selected sub-locations
-        stash <- filteredData$samples
-        filteredData$samples <- moduleData$samples[
-          moduleData$samples$sub_location_id %in% input$sub_locations,
-        ]
-        if (nrow(filteredData$samples) == 0) {
-          # If no samples are found, reset the samples to the original data, show a notification, and reset input$sub_locations to its previous value
-          filteredData$samples <- stash
-          updateSelectizeInput(
-            session,
-            "sub_locations",
-            selected = input_values$sub_locations
-          )
-          showNotification(
-            tr("no_samps_sub_locs", language$language),
-            type = "error",
-            duration = 5
-          )
-          return()
-        }
-
-        filteredData$sub_locs <- moduleData$sub_locs[
-          moduleData$sub_locs$sub_location_id %in% input$sub_locations,
-        ]
-        filteredData$media <- moduleData$media[
-          moduleData$media$media_id %in% filteredData$samples$media_id,
-        ]
-        filteredData$sample_types <- moduleData$sample_types[
-          moduleData$sample_types$sample_type_id %in%
-            filteredData$samples$sample_type,
-        ]
-
-        # No impact on projects or networks as these are location based and we're past that point
-
-        filteredData$params <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
-            parameter_unit_sql("unit"),
-            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
-            paste(filteredData$samples$sample_id, collapse = ", "),
-            ");"
-          )
-        )
-        if (nrow(filteredData$params) > 0) {
-          filteredData$parameter_relationships <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
-              paste(filteredData$samples$sample_id, collapse = ", "),
-              "));"
-            )
-          )
-          if (length(filteredData$parameter_relationships$group_id) > 0) {
-            filteredData$param_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
-                paste(
-                  filteredData$parameter_relationships$group_id,
-                  collapse = ", "
-                ),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_groups <- data.frame(
-              group_id = numeric(),
-              group_name = character(),
-              group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-          sub_groups <- filteredData$parameter_relationships$sub_group_id[
-            !is.na(filteredData$parameter_relationships$sub_group_id)
-          ]
-          if (length(sub_groups) > 0) {
-            filteredData$param_sub_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
-                paste(sub_groups, collapse = ", "),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_sub_groups <- data.frame(
-              sub_group_id = numeric(),
-              sub_group_name = character(),
-              sub_group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-        }
-
-        # Update the downstream selectize inputs with the filtered data
-        updateSelectizeInput(
-          session,
-          "media",
-          choices = stats::setNames(
-            c("all", filteredData$media$media_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$media[, tr("media_type_col", language$language)]
-            )
-          ),
-          selected = if (input$media %in% filteredData$media$media_id) {
-            input$media
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "sample_types",
-          choices = stats::setNames(
-            c("all", filteredData$sample_types$sample_type_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$sample_types[, tr(
-                "sample_type_col",
-                language$language
-              )]
-            )
-          ),
-          selected = if (
-            input$sample_types %in% filteredData$sample_types$sample_type_id
-          ) {
-            input$sample_types
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "params",
-          choices = stats::setNames(
-            c("all", filteredData$params$parameter_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
-            )
-          ),
-          selected = if (input$params %in% filteredData$params$parameter_id) {
-            input$params
-          } else {
-            "all"
-          }
-        )
-
-        # Reset the input values reactiveValues to the current selection
-        input_values$sub_locations <- input$sub_locations
-      },
-      ignoreInit = TRUE
-    )
-
-    ### media filter #########
-    observeEvent(
-      input$media,
-      {
-        req(input$media, filteredData)
-
-        # Flags to prevent running the observer when the media types are reset or initially rendered
-        if (reset_flags$media) {
-          reset_flags$media <- FALSE
-          return()
-        }
-        if (render_flags$media) {
-          render_flags$media <- FALSE
-          return()
-        }
-
-        media_selection <- data_filter_normalize_selection(input$media)
-        if (!identical(as.character(input$media), media_selection)) {
-          return()
-        }
-        if (identical(media_selection, "all")) {
-          input_values$media <- media_selection
-          return()
-        }
-
-        # Filter the data based on the selected media types
-        stash <- filteredData$samples
-        filteredData$samples <- moduleData$samples[
-          moduleData$samples$media_id %in% input$media,
-        ]
-        if (nrow(filteredData$samples) == 0) {
-          # If no samples are found, reset the samples to the original data, show a notification, and reset input$media to its previous value
-          filteredData$samples <- stash
-          updateSelectizeInput(session, "media", selected = input_values$media)
-          showNotification(
-            tr("no_samps_medias", language$language),
-            type = "error",
-            duration = 5
-          )
-          return()
-        }
-
-        filteredData$media <- moduleData$media[
-          moduleData$media$media_id %in% input$media,
-        ]
-        filteredData$sample_types <- moduleData$sample_types[
-          moduleData$sample_types$sample_type_id %in%
-            filteredData$samples$sample_type,
-        ]
-
-        # No impact on projects or networks as we're no longer narrowing locations
-
-        filteredData$params <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
-            parameter_unit_sql("unit"),
-            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
-            paste(filteredData$samples$sample_id, collapse = ", "),
-            ");"
-          )
-        )
-        if (nrow(filteredData$params) > 0) {
-          filteredData$parameter_relationships <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
-              paste(filteredData$samples$sample_id, collapse = ", "),
-              "));"
-            )
-          )
-          if (length(filteredData$parameter_relationships$group_id) > 0) {
-            filteredData$param_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
-                paste(
-                  filteredData$parameter_relationships$group_id,
-                  collapse = ", "
-                ),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_groups <- data.frame(
-              group_id = numeric(),
-              group_name = character(),
-              group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-          sub_groups <- filteredData$parameter_relationships$sub_group_id[
-            !is.na(filteredData$parameter_relationships$sub_group_id)
-          ]
-          if (length(sub_groups) > 0) {
-            filteredData$param_sub_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
-                paste(sub_groups, collapse = ", "),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_sub_groups <- data.frame(
-              sub_group_id = numeric(),
-              sub_group_name = character(),
-              sub_group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-        }
-
-        # Update the downstream selectize inputs with the filtered data
-        updateSelectizeInput(
-          session,
-          "sample_types",
-          choices = stats::setNames(
-            c("all", filteredData$sample_types$sample_type_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$sample_types[, tr(
-                "sample_type_col",
-                language$language
-              )]
-            )
-          ),
-          selected = if (
-            input$sample_types %in% filteredData$sample_types$sample_type_id
-          ) {
-            input$sample_types
-          } else {
-            "all"
-          }
-        )
-        updateSelectizeInput(
-          session,
-          "params",
-          choices = stats::setNames(
-            c("all", filteredData$params$parameter_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
-            )
-          ),
-          selected = if (input$params %in% filteredData$params$parameter_id) {
-            input$params
-          } else {
-            "all"
-          }
-        )
-
-        # Reset the input values reactiveValues to the current selection
-        input_values$media <- input$media
-      },
-      ignoreInit = TRUE
-    )
-
-    ### sample_types filter #########
-    observeEvent(
-      input$sample_types,
-      {
-        req(input$sample_types, filteredData)
-
-        # Flags to prevent running the observer when the sample types are reset or initially rendered
-        if (reset_flags$sample_types) {
-          reset_flags$sample_types <- FALSE
-          return()
-        }
-        if (render_flags$sample_types) {
-          render_flags$sample_types <- FALSE
-          return()
-        }
-
-        # Filter the data based on the selected sample types
-        stash <- filteredData$samples
-        filteredData$samples <- moduleData$samples[
-          moduleData$samples$sample_type %in% input$sample_types,
-        ]
-        if (nrow(filteredData$samples) == 0) {
-          # If no samples are found, reset the samples to the original data, show a notification, and reset input$sample_types to its previous value
-          filteredData$samples <- stash
-          updateSelectizeInput(
-            session,
-            "sample_types",
-            selected = input_values$sample_types
-          )
-          showNotification(
-            tr("no_samps_types", language$language),
-            type = "error",
-            duration = 5
-          )
-          return()
-        }
-
-        filteredData$sample_types <- moduleData$sample_types[
-          moduleData$sample_types$sample_type_id %in% input$sample_types,
-        ]
-
-        # No impact on projects or networks as we're no longer narrowing locations
-
-        filteredData$params <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
-            parameter_unit_sql("unit"),
-            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
-            paste(filteredData$samples$sample_id, collapse = ", "),
-            ");"
-          )
-        )
-        if (nrow(filteredData$params) > 0) {
-          filteredData$parameter_relationships <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
-              paste(filteredData$samples$sample_id, collapse = ", "),
-              "));"
-            )
-          )
-          if (length(filteredData$parameter_relationships$group_id) > 0) {
-            filteredData$param_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
-                paste(
-                  filteredData$parameter_relationships$group_id,
-                  collapse = ", "
-                ),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_groups <- data.frame(
-              group_id = numeric(),
-              group_name = character(),
-              group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-          sub_groups <- filteredData$parameter_relationships$sub_group_id[
-            !is.na(filteredData$parameter_relationships$sub_group_id)
-          ]
-          if (length(sub_groups) > 0) {
-            filteredData$param_sub_groups <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
-                paste(sub_groups, collapse = ", "),
-                ");"
-              )
-            )
-          } else {
-            filteredData$param_sub_groups <- data.frame(
-              sub_group_id = numeric(),
-              sub_group_name = character(),
-              sub_group_name_fr = character(),
-              description = character(),
-              description_fr = character()
-            )
-          }
-        }
-
-        # Update the downstream selectize inputs with the filtered data
-        updateSelectizeInput(
-          session,
-          "params",
-          choices = stats::setNames(
-            c("all", filteredData$params$parameter_id),
-            c(
-              tr("all_m", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
-            )
-          ),
-          selected = if (input$params %in% filteredData$params$parameter_id) {
-            input$params
-          } else {
-            "all"
-          }
-        )
-
-        # Reset the input values reactiveValues to the current selection
-        input_values$sample_types <- input$sample_types
-      },
-      ignoreInit = TRUE
-    )
-
-    ### params filter #########
-    observeEvent(
-      input$params,
-      {
-        req(input$params, filteredData)
-
-        # Flags to prevent running the observer when the params are reset or initially rendered
-        if (reset_flags$params) {
-          reset_flags$params <- FALSE
-          return()
-        }
-        if (render_flags$params) {
-          render_flags$params <- FALSE
-          return()
-        }
-
-        # Filter the data based on the selected params
-        filteredData$params <- filteredData$params[
-          filteredData$params$parameter_id %in% input$params,
-        ]
-
-        # No impact on projects or networks as we're no longer narrowing locations
-        # No impact on parameters as we're no longer narrowing parameters
-        # No inputs to update as this is the last filter
-
-        # Reset the input values reactiveValues to the current selection
-        input_values$params <- input$params
-      },
-      ignoreInit = TRUE
-    )
-
-    # Create the samples table and render it ###################################
-    # The results table will be shown only if the user clicks on the 'view results' button in the modal
-    table_data <- reactiveVal()
-    selected_qaqc_data <- reactiveVal(disc_plot_empty_qaqc_data())
-    observeEvent(input$filter, {
-      req(filteredData, language$language)
-      selected_qaqc_data(disc_plot_empty_qaqc_data())
-      samples <- dbGetQueryDT(
-        session$userData$AquaCache,
-        paste0(
-          "SELECT DISTINCT ON (s.sample_id)
-          s.sample_id, l.location_id, l.name, sl.sub_location_name, s.z AS depth, s.datetime AS sample_datetime_utc, s.target_datetime AS target_datetime_utc, m.media_type, st.sample_type, cm.collection_method, s.sample_volume_ml, s.purge_volume_l, s.purge_time_min, s.flow_rate_l_min, s.wave_hgt_m, s.sample_grade, s.sample_approval, qualifiers.sample_qualifier_ids, qualifiers.sample_qualifiers, s.note FROM discrete.samples s
-           JOIN discrete.results r ON s.sample_id = r.sample_id
-           JOIN public.locations l ON s.location_id = l.location_id
-           LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id
-           JOIN public.media_types m ON s.media_id = m.media_id
-           JOIN discrete.sample_types st ON s.sample_type = st.sample_type_id
-           JOIN public.parameters p ON r.parameter_id = p.parameter_id
-           JOIN discrete.collection_methods cm ON s.collection_method = cm.collection_method_id
-           LEFT JOIN public.organizations orgs ON s.owner = orgs.organization_id
-           LEFT JOIN LATERAL (
-             SELECT
-               string_agg(
-                 sq.qualifier_type_id::text,
-                 ', ' ORDER BY sq.qualifier_type_id
-               ) AS sample_qualifier_ids,
-               string_agg(
-                 qt.qualifier_type_description,
-                 '; ' ORDER BY sq.qualifier_type_id
-               ) AS sample_qualifiers
-             FROM discrete.sample_qualifiers sq
-             JOIN public.qualifier_types qt USING (qualifier_type_id)
-             WHERE sq.sample_id = s.sample_id
-           ) qualifiers ON TRUE
-           WHERE s.location_id IN (",
-          paste(filteredData$locs$location_id, collapse = ", "),
-          if (nrow(filteredData$sub_locs) > 0) {
-            paste0(
-              ") AND s.sub_location_id IN (",
-              paste(filteredData$sub_locs$sub_location_id, collapse = ", "),
-              ")"
-            )
-          } else {
-            ")"
-          },
-          " AND s.sample_type IN (",
-          paste(filteredData$sample_types$sample_type_id, collapse = ", "),
-          ")",
-          " AND s.media_id IN (",
-          paste(filteredData$media$media_id, collapse = ", "),
-          ")",
-          " AND s.datetime BETWEEN '",
-          filteredData$range$min_date,
-          "' AND '",
-          filteredData$range$max_date,
-          "'",
-          " AND r.parameter_id IN (",
-          paste(filteredData$params$parameter_id, collapse = ", "),
-          ")",
-          ";"
-        )
-      )
-
-      # Drop columns with all NA values
-      na_cols <- names(samples)[sapply(samples, function(x) all(is.na(x)))]
-      samples[, (na_cols) := NULL]
-
-      table_data(samples)
     })
 
     qaqc_table <- function(name) {
@@ -1867,12 +1284,11 @@ discData <- function(id, language, inputs) {
       )
     })
 
-    #
-    observe({
-      # Render the table
-      req(table_data())
+    output$tbl <- DT::renderDT({
+      # Clear stale results immediately when filters change.
+      req(!is.null(table_data()))
 
-      out_tbl <- DT::datatable(
+      DT::datatable(
         table_data(),
         rownames = FALSE,
         selection = "multiple",
@@ -1908,37 +1324,35 @@ discData <- function(id, language, inputs) {
           pageLength = 10
         )
       )
-      output$tbl <- DT::renderDT(out_tbl)
-
-      if (nrow(table_data()) == 0) {
+    })
+    observe({
+      if (is.null(table_data()) || nrow(table_data()) == 0L) {
         shinyjs::hide("select_all")
       } else {
         shinyjs::show("select_all")
       }
-    }) # End of table render
-    # End of creating and rendering table section
+    })
 
     # Create the proxy for datatable manipulations
     proxy <- DT::dataTableProxy("tbl")
 
     # Show/hide the view button based on if a row is selected #
     observe({
-      if (is.null(input$tbl_rows_selected)) {
+      if (!length(input$tbl_rows_selected) || is.null(table_data())) {
         shinyjs::hide("view_data")
       } else {
         shinyjs::show("view_data")
-        updateActionButton(
-          session,
-          "view_data",
-          label = paste0(
-            tr("view_data1", language$language),
-            " ",
-            length(input$tbl_rows_selected),
-            " ",
-            tr("view_data2_discrete", language$language)
-          )
-        )
       }
+    })
+
+    output$view_data_label <- renderText({
+      paste0(
+        tr("view_data1", language$language),
+        " ",
+        length(input$tbl_rows_selected),
+        " ",
+        tr("view_data2_discrete", language$language)
+      )
     })
 
     # Select/deselect all rows in the table #
@@ -1952,432 +1366,294 @@ discData <- function(id, language, inputs) {
       )
     })
 
-    # Show a modal with the data when the view button is clicked ################
     observeEvent(input$view_data, {
-      # Get the timeseries_ids of the selected rows
-      selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
-      selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
-      selected_qaqc_data(
-        tryCatch(
-          disc_plot_related_qaqc_data(
-            session$userData$AquaCache,
-            selected_sampleids,
-            language$abbrev
-          ),
-          error = function(e) {
-            showNotification(
-              paste(
-                tr("disc_qaqc_retrieval_error", language$language),
-                e$message
-              ),
-              type = "warning",
-              duration = 15
-            )
-            disc_plot_empty_qaqc_data()
-          }
-        )
+      req(
+        length(input$tbl_rows_selected),
+        !is.null(table_data()),
+        length(table_parameters())
       )
-
-      # Query will be for discrete or continuous data, depending on input$type
-      # Show a modal with a subset (first 3 rows per sample_id) of the data. Below this, show a date range picker (with min/max preset based on the selected data), the number of rows that would be returned, and download and close buttons. The download button will give the user the entire dataset within the date range selected
-
-      # Get the sample results
-      # Construct a comma-separated string of sample IDs
-      sample_ids_str <- paste(selected_sampleids, collapse = ",")
-
-      # Single query using a window function to limit to 3 rows/results per sample_id
-      query <- paste0(
-        "SELECT * FROM (SELECT r.result_id, r.sample_id, r.result, p.param_name AS parameter, ",
-        parameter_unit_sql(
-          "units",
-          matrix_state_alias = "r",
-          media_alias = "s"
-        ),
-        ",
-          rs.reporting_basis, spec.result_speciation, target.result_target,
-          r.endpoint_mode, r.endpoint_ph, r.analysis_conditions,
-          rt.result_type,
-          sf.sample_fraction,
-          rc.result_condition,
-          r.result_condition_value,
-          rvt.result_value_type,
-          pm.protocol_name,
-          l.lab_name AS laboratory,
-          r.analysis_datetime,
-          r.lab_report_no,
-          r.lab_sample_no,
-          r.grade_type_id AS result_grade_id,
-          rg.grade_type_code AS result_grade_code,
-          rg.grade_type_description AS result_grade_description,
-          rg.grade_type_description_fr AS result_grade_description_fr,
-          r.approval_type_id AS result_approval_id,
-          rap.approval_type_code AS result_approval_code,
-          rap.approval_type_description AS result_approval_description,
-          rap.approval_type_description_fr AS result_approval_description_fr,
-          rat.aggregation_type,
-          ra.calculation_version,
-          ra.calculation_arguments::text AS calculation_arguments,
-          ra.expected_count,
-          ROW_NUMBER() OVER (
-            PARTITION BY r.sample_id ORDER BY r.result_id
-          ) AS rn
-        FROM discrete.results r
-        JOIN discrete.samples s ON r.sample_id = s.sample_id
-        JOIN public.parameters p ON r.parameter_id = p.parameter_id
-        JOIN discrete.result_types rt ON r.result_type = rt.result_type_id
-        LEFT JOIN discrete.sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
-        LEFT JOIN discrete.result_conditions rc ON r.result_condition = rc.result_condition_id
-        LEFT JOIN discrete.result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN discrete.reporting_bases rs ON r.reporting_basis_id = rs.reporting_basis_id
-        LEFT JOIN discrete.result_speciations spec ON r.result_speciation_id = spec.result_speciation_id
-        LEFT JOIN discrete.result_targets target ON r.result_target_id = target.result_target_id
-        LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
-        LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
-        LEFT JOIN public.grade_types rg ON r.grade_type_id = rg.grade_type_id
-        LEFT JOIN public.approval_types rap ON r.approval_type_id = rap.approval_type_id
-        LEFT JOIN discrete.result_aggregations ra ON r.result_id = ra.result_id
-        LEFT JOIN discrete.result_aggregation_types rat USING (result_aggregation_type_id)
-        WHERE r.sample_id IN (",
-        sample_ids_str,
-        ") AND r.parameter_id IN (",
-        paste(filteredData$params$parameter_id, collapse = ","),
-        ")) sub WHERE rn <= 3;"
+      rows <- table_data()[input$tbl_rows_selected]
+      snapshot <- list(
+        revision = revision(),
+        sample_ids = rows$sample_id,
+        location_ids = unique(rows$location_id),
+        lang = language$abbrev
       )
-
-      subset <- dbGetQueryDT(session$userData$AquaCache, query)
-      subset[, rn := NULL] # Drop column 'rn', left over from the window function
-
-      output$modal_subset <- DT::renderDT({
-        # Create datatable for the measurements
-        DT::datatable(
-          subset,
-          rownames = FALSE,
-          selection = "none",
-          filter = "none",
-          options = list(
-            scrollX = TRUE,
-            initComplete = htmlwidgets::JS(
-              "function(settings, json) {",
-              "$(this.api().table().header()).css({",
-              "  'background-color': '#079',",
-              "  'color': '#fff',",
-              "  'font-size': '90%',",
-              "});",
-              "$(this.api().table().body()).css({",
-              "  'font-size': '80%',",
-              "});",
-              "}"
-            ),
-            language = list(
-              info = "",
-              infoEmpty = tr("tbl_info_empty", language$language),
-              paginate = list(previous = "", `next` = ""),
-              search = tr("tbl_search", language$language),
-              infoFiltered = "",
-              zeroRecords = tr("tbl_zero", language$language)
-            ),
-            layout = list(
-              bottomStart = 'info',
-              bottomEnd = 'paging'
-            )
-          )
-        )
-      }) # End of function creating data subset datatable
-
-      # Get location metadata
-      location <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        paste0(
-          "SELECT * FROM ",
-          if (language$abbrev == "fr") {
-            "location_metadata_fr"
-          } else {
-            "location_metadata_en"
-          },
-          " WHERE location_id IN (",
-          paste(selected_loc_ids, collapse = ", "),
-          ") LIMIT 3;"
-        )
-      ) # Get the location metadata
-
-      output$modal_location_metadata <- DT::renderDT({
-        # Create datatable for the locations
-        DT::datatable(
-          location,
-          rownames = FALSE,
-          selection = "none",
-          filter = "none",
-          options = list(
-            initComplete = htmlwidgets::JS(
-              "function(settings, json) {",
-              "$(this.api().table().header()).css({",
-              "  'background-color': '#079',",
-              "  'color': '#fff',",
-              "  'font-size': '90%',",
-              "});",
-              "$(this.api().table().body()).css({",
-              "  'font-size': '80%',",
-              "});",
-              "}"
-            ),
-            columnDefs = list(
-              list(
-                targets = c(2, 6:9), # Column index numbers start at 0 here again!!!
-                render = htmlwidgets::JS(
-                  # Truncate long strings in the table
-                  "function(data, type, row, meta) {",
-                  "return type === 'display' && data !== null && data.length > 20 ?",
-                  "'<span title=\"' + data + '\">' + data.substr(0, 20) + '...</span>' : data;",
-                  "}"
-                )
-              )
-            ),
-            language = list(
-              info = "",
-              infoEmpty = tr("tbl_info_empty", language$language),
-              paginate = list(previous = "", `next` = ""),
-              search = "",
-              infoFiltered = "",
-              zeroRecords = tr("tbl_zero", language$language)
-            ),
-            scrollX = TRUE
-          )
-        ) |>
-          DT::formatRound(columns = c(4, 5, 5), digits = 3) # Round numbers, here index starts at 1 (not javascript)
-      }) # End of function creating location metatadata datatable
-
-      # Create the modal
-      showModal(modalDialog(
-        h4(tr("discrete_subset_msg", language$language)),
-        DT::DTOutput(ns("modal_subset")),
-        h4(tr("loc_meta_msg", language$language)),
-        DT::DTOutput(ns("modal_location_metadata")),
-        uiOutput(ns("modal_qaqc_ui")),
-        textOutput(ns("num_rows")),
-        selectizeInput(
-          ns("modal_format"),
-          label = tr("dl_format", language$language),
-          choices = stats::setNames(
-            c("xlsx", "csv", "sqlite"),
-            c(
-              tr("dl_format_xlsx", language$language),
-              tr("dl_format_csv", language$language),
-              tr("dl_format_sqlite", language$language)
-            )
-          ),
-          selected = "xlsx"
-        ),
-        footer = tagList(
-          downloadButton(
-            ns("download"),
-            tr("dl_data", language$language),
-            icon = icon("download")
-          ),
-          actionButton(ns("modal_close"), tr("close", language$language))
-        ),
-        size = "xl"
+      preview_request(snapshot)
+      preview_data(NULL)
+      download_file(NULL)
+      preview_task$invoke(request(
+        "preview",
+        snapshot,
+        sample_ids = rows$sample_id,
+        location_ids = unique(rows$location_id),
+        parameter_ids = table_parameters(),
+        lang = language$abbrev
       ))
     })
-
-    # Updates to modal ########################################################
-    # Get the number of rows that will be returned based on the date range selected and update the subset table if necessary
     observe({
-      req(input$tbl_rows_selected, filteredData$params, table_data())
-      selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
-
-      rows <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        paste0(
-          "SELECT COUNT(*) FROM discrete.results WHERE sample_id IN (",
-          paste(selected_sampleids, collapse = ", "),
-          ") AND parameter_id IN (",
-          paste(filteredData$params$parameter_id, collapse = ", "),
-          ");"
+      result <- task_result(preview_task)
+      isolate({
+        req(
+          identical(result$id, preview_request()),
+          identical(result$id$revision, revision())
         )
-      )[[1]]
-      qaqc_rows <- nrow(selected_qaqc_data()$results)
-      total_rows <- rows + qaqc_rows
-
-      # ouput message about number of rows
-      output$num_rows <- renderText({
-        text <- paste0(tr("dl_num_results", language$language), " ", rows)
-        if (qaqc_rows > 0L) {
-          text <- paste(
-            text,
-            tr("disc_qaqc_linked_results", language$language),
-            qaqc_rows
+        current <- table_data()[input$tbl_rows_selected, sample_id]
+        req(identical(result$id$sample_ids, current))
+        preview_data(result$value)
+        selected_qaqc_data(result$value$qaqc)
+        if (!is.null(result$value$qaqc_error)) {
+          showNotification(
+            paste(
+              tr("disc_qaqc_retrieval_error", language$language),
+              result$value$qaqc_error
+            ),
+            type = "warning",
+            duration = 15
           )
         }
-        text
-      })
+        subset <- result$value$subset
+        location <- result$value$location
+        output$modal_subset <- DT::renderDT({
+          # Create datatable for the measurements
+          DT::datatable(
+            subset,
+            rownames = FALSE,
+            selection = "none",
+            filter = "none",
+            options = list(
+              scrollX = TRUE,
+              initComplete = htmlwidgets::JS(
+                "function(settings, json) {",
+                "$(this.api().table().header()).css({",
+                "  'background-color': '#079',",
+                "  'color': '#fff',",
+                "  'font-size': '90%',",
+                "});",
+                "$(this.api().table().body()).css({",
+                "  'font-size': '80%',",
+                "});",
+                "}"
+              ),
+              language = list(
+                info = "",
+                infoEmpty = tr("tbl_info_empty", language$language),
+                paginate = list(previous = "", `next` = ""),
+                search = tr("tbl_search", language$language),
+                infoFiltered = "",
+                zeroRecords = tr("tbl_zero", language$language)
+              ),
+              layout = list(
+                bottomStart = 'info',
+                bottomEnd = 'paging'
+              )
+            )
+          )
+        }) # End of function creating data subset datatable
 
-      # Update selectizeInput based on number of rows
-      if (total_rows > 1000000) {
-        updateSelectizeInput(
-          session,
-          "modal_format",
-          label = tr("dl_format_no_xlsx", language$language),
-          choices = stats::setNames(
-            c("csv", "sqlite"),
-            c(
-              tr("dl_format_csv", language$language),
-              tr("dl_format_sqlite", language$language)
+        output$modal_location_metadata <- DT::renderDT({
+          # Create datatable for the locations
+          DT::datatable(
+            location,
+            rownames = FALSE,
+            selection = "none",
+            filter = "none",
+            options = list(
+              initComplete = htmlwidgets::JS(
+                "function(settings, json) {",
+                "$(this.api().table().header()).css({",
+                "  'background-color': '#079',",
+                "  'color': '#fff',",
+                "  'font-size': '90%',",
+                "});",
+                "$(this.api().table().body()).css({",
+                "  'font-size': '80%',",
+                "});",
+                "}"
+              ),
+              columnDefs = list(
+                list(
+                  targets = c(2, 6:9), # Column index numbers start at 0 here again!!!
+                  render = htmlwidgets::JS(
+                    # Truncate long strings in the table
+                    "function(data, type, row, meta) {",
+                    "return type === 'display' && data !== null && data.length > 20 ?",
+                    "'<span title=\"' + data + '\">' + data.substr(0, 20) + '...</span>' : data;",
+                    "}"
+                  )
+                )
+              ),
+              language = list(
+                info = "",
+                infoEmpty = tr("tbl_info_empty", language$language),
+                paginate = list(previous = "", `next` = ""),
+                search = "",
+                infoFiltered = "",
+                zeroRecords = tr("tbl_zero", language$language)
+              ),
+              scrollX = TRUE
             )
+          ) |>
+            DT::formatRound(
+              columns = intersect(c("latitude", "longitude"), names(location)),
+              digits = 3
+            ) # Round numbers, here index starts at 1 (not javascript)
+        }) # End of function creating location metatadata datatable
+
+        # Create the modal
+        showModal(modalDialog(
+          h4(tr("discrete_subset_msg", language$language)),
+          DT::DTOutput(ns("modal_subset")),
+          h4(tr("loc_meta_msg", language$language)),
+          DT::DTOutput(ns("modal_location_metadata")),
+          uiOutput(ns("modal_qaqc_ui")),
+          textOutput(ns("num_rows")),
+          selectizeInput(
+            ns("modal_format"),
+            label = tr("dl_format", language$language),
+            choices = stats::setNames(
+              c("xlsx", "csv", "sqlite"),
+              c(
+                tr("dl_format_xlsx", language$language),
+                tr("dl_format_csv", language$language),
+                tr("dl_format_sqlite", language$language)
+              )
+            ),
+            selected = "xlsx"
           ),
-          selected = "csv"
-        )
-      } else {
-        updateSelectizeInput(
-          session,
-          "modal_format",
-          label = tr("dl_format", language$language),
-          choices = stats::setNames(
-            c("xlsx", "csv", "sqlite"),
-            c(
-              tr("dl_format_xlsx", language$language),
-              tr("dl_format_csv", language$language),
-              tr("dl_format_sqlite", language$language)
-            )
+          footer = tagList(
+            bslib::input_task_button(
+              ns("prepare_download"),
+              if (identical(language$abbrev, "fr")) {
+                "Pr\u00e9parer le t\u00e9l\u00e9chargement"
+              } else {
+                "Prepare download"
+              }
+            ),
+            uiOutput(ns("download_ready")),
+            actionButton(ns("modal_close"), tr("close", language$language))
           ),
-          selected = "xlsx"
+          size = "xl"
+        ))
+      })
+    })
+    observeEvent(input$modal_close, {
+      preview_request(NULL)
+      preview_data(NULL)
+      download_file(NULL)
+      removeModal()
+    })
+    output$num_rows <- renderText({
+      data <- preview_data()
+      req(data)
+      text <- paste0(tr("dl_num_results", language$language), " ", data$rows)
+      if (nrow(data$qaqc$results)) {
+        text <- paste(
+          text,
+          tr("disc_qaqc_linked_results", language$language),
+          nrow(data$qaqc$results)
         )
       }
-    }) # End of observe for number of rows
-
-    # Download handling #######################################################
+      text
+    })
+    observe({
+      data <- preview_data()
+      req(data)
+      formats <- if (data$rows + nrow(data$qaqc$results) > 1000000) {
+        c("csv", "sqlite")
+      } else {
+        c("xlsx", "csv", "sqlite")
+      }
+      updateSelectizeInput(
+        session,
+        "modal_format",
+        label = tr(
+          if (length(formats) == 2L) "dl_format_no_xlsx" else "dl_format",
+          language$language
+        ),
+        choices = stats::setNames(
+          formats,
+          vapply(
+            paste0("dl_format_", formats),
+            tr,
+            character(1),
+            lang = language$language
+          )
+        ),
+        selected = formats[1]
+      )
+    })
+    observeEvent(input$modal_format, download_file(NULL))
+    observeEvent(input$prepare_download, {
+      data <- preview_data()
+      snapshot <- preview_request()
+      req(data, snapshot, input$modal_format %in% c("xlsx", "csv", "sqlite"))
+      req(
+        data$rows + nrow(data$qaqc$results) <= 1000000 ||
+          input$modal_format != "xlsx"
+      )
+      file <- tempfile(
+        "discrete-download-",
+        fileext = if (input$modal_format == "csv") {
+          ".zip"
+        } else {
+          paste0(".", input$modal_format)
+        }
+      )
+      task_files <<- c(task_files, file)
+      download_file(NULL)
+      download_task$invoke(request(
+        "download",
+        list(snapshot = snapshot, format = input$modal_format),
+        sample_ids = snapshot$sample_ids,
+        location_ids = snapshot$location_ids,
+        parameter_ids = table_parameters(),
+        lang = snapshot$lang,
+        qaqc = data$qaqc,
+        format = input$modal_format,
+        file = file
+      ))
+    })
+    observe({
+      result <- task_result(download_task)
+      isolate({
+        req(
+          identical(result$id$snapshot, preview_request()),
+          identical(result$id$format, input$modal_format)
+        )
+        download_file(result$value)
+      })
+    })
+    output$download_ready <- renderUI({
+      req(download_file())
+      downloadButton(
+        ns("download"),
+        tr("dl_data", language$language),
+        icon = icon("download")
+      )
+    })
     output$download <- downloadHandler(
       filename = function() {
+        req(download_file())
         paste0(
           "discreteData_",
           format(Sys.time(), "%Y%m%d_%H%M%S%Z"),
           ".",
-          if (input$modal_format == "csv") "zip" else input$modal_format
+          tools::file_ext(download_file())
         )
       },
       content = function(file) {
-        showNotification(
-          tr("dl_prep", language$language),
-          id = "download_notification",
-          duration = NULL,
-          type = "message"
-        )
-
-        # Get the data together
-        selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
-
-        selected_loc_ids <- unique(
-          table_data()[input$tbl_rows_selected, location_id]
-        )
-
-        data <- list()
-        data$location_metadata <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT * FROM ",
-            if (language$abbrev == "fr") {
-              "location_metadata_fr"
-            } else {
-              "location_metadata_en"
-            },
-            " WHERE location_id IN (",
-            paste(selected_loc_ids, collapse = ", "),
-            ");"
-          )
-        ) # Get the location metadata
-        data$samples <- disc_sample_metadata(
-          session$userData$AquaCache,
-          selected_sampleids,
-          language$abbrev
-        )
-        data$results <- disc_result_metadata(
-          session$userData$AquaCache,
-          selected_sampleids,
-          language$abbrev,
-          parameter_ids = filteredData$params$parameter_id
-        )
-        data$result_components <- disc_result_components(
-          session$userData$AquaCache,
-          data$results$result_id,
-          lang = language$abbrev
-        )
-        if (!nrow(data$result_components)) {
-          data$result_components <- NULL
+        req(download_file(), file.exists(download_file()))
+        if (!file.copy(download_file(), file, overwrite = TRUE)) {
+          stop("Could not copy prepared download.")
         }
-        data$sample_documents <- disc_sample_documents(
-          session$userData$AquaCache,
-          selected_sampleids
-        )
-        if (!nrow(data$sample_documents)) {
-          data$sample_documents <- NULL
-        }
-        data$sample_group_memberships <- disc_sample_group_memberships(
-          session$userData$AquaCache,
-          selected_sampleids,
-          language$abbrev
-        )
-        if (!nrow(data$sample_group_memberships)) {
-          data$sample_group_memberships <- NULL
-        }
-
-        qaqc_data <- selected_qaqc_data()
-        if (nrow(qaqc_data$samples) > 0L) {
-          data$qaqc_group_links <- qaqc_data$group_links
-          data$qaqc_samples <- qaqc_data$samples
-          data$qaqc_results <- qaqc_data$results
-          if (nrow(qaqc_data$result_components) > 0L) {
-            data$qaqc_result_components <- qaqc_data$result_components
-          }
-          if (nrow(qaqc_data$documents) > 0L) {
-            data$qaqc_documents <- qaqc_data$documents
-          }
-        }
-
-        if ("sample_grade_id" %in% names(data$samples)) {
-          data$grades <- dbGetQueryDT(
-            session$userData$AquaCache,
-            "SELECT * FROM public.grade_types;"
-          )
-        }
-        if ("sample_approval_id" %in% names(data$samples)) {
-          data$approvals <- dbGetQueryDT(
-            session$userData$AquaCache,
-            "SELECT * FROM public.approval_types;"
-          )
-        }
-        if ("sample_qualifier_ids" %in% names(data$samples)) {
-          data$qualifiers <- dbGetQueryDT(
-            session$userData$AquaCache,
-            "SELECT * FROM public.qualifier_types;"
-          )
-        }
-
-        if (input$modal_format == "xlsx") {
-          openxlsx::write.xlsx(data, file)
-        } else if (input$modal_format == "csv") {
-          # Temporary directory to store CSV files
-          temp_dir <- tempdir()
-          csv_files <- lapply(names(data), function(name) {
-            file_name <- file.path(temp_dir, paste0(name, ".csv"))
-            data.table::fwrite(data[[name]], file_name)
-            return(file_name)
-          })
-          # Use zip to compress the files
-          utils::zip(file, unlist(csv_files))
-        } else if (input$modal_format == "sqlite") {
-          # Create an sqlite database and write the data tables to it
-          db <- DBI::dbConnect(RSQLite::SQLite(), dbname = file)
-          lapply(names(data), function(name) {
-            DBI::dbWriteTable(
-              conn = db,
-              name = name,
-              value = data[[name]],
-              overwrite = TRUE
-            )
-          })
-          DBI::dbDisconnect(db)
-        }
-        removeNotification("download_notification")
-      } # End of content function
-    ) # End of downloadHandler
-  }) # End moduleServer
-} # End discData function
+      }
+    )
+    session$onSessionEnded(function() {
+      for (job in as.list(task_handles)) {
+        if (mirai::unresolved(job)) mirai::stop_mirai(job)
+      }
+      unlink(task_files)
+    })
+  })
+}

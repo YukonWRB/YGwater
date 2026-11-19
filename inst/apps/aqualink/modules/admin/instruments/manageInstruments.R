@@ -486,9 +486,9 @@ manageInstruments <- function(id, language) {
         paste(
           "SELECT i.instrument_id, i.obs_datetime, i.observer,",
           "CONCAT(o.observer_first, ' ', o.observer_last, ' (', o.organization, ')') AS observer_name,",
-          "i.make, mk.make AS make_name,",
-          "i.model, mdl.model AS model_name,",
-          "i.type, tp.type AS type_name,",
+          "i.instrument_make_id AS make, mk.make AS make_name,",
+          "i.instrument_model_id AS model, mdl.model AS model_name,",
+          "i.instrument_type_id AS type, tp.type AS type_name,",
           "i.holds_replaceable_sensors, i.serial_no, i.asset_tag,",
           "i.date_in_service, i.date_purchased, i.retired_by, i.date_retired,",
           "i.owner, org.name AS owner_name, i.date_end_of_life,",
@@ -499,9 +499,9 @@ manageInstruments <- function(id, language) {
           "i.can_be_logger, i.can_be_telemetry_component",
           "FROM instruments.instruments AS i",
           "LEFT JOIN instruments.observers AS o ON i.observer = o.observer_id",
-          "LEFT JOIN instruments.instrument_makes AS mk ON i.make = mk.make_id",
-          "LEFT JOIN instruments.instrument_models AS mdl ON i.model = mdl.model_id",
-          "LEFT JOIN instruments.instrument_types AS tp ON i.type = tp.type_id",
+          "LEFT JOIN instruments.instrument_makes AS mk ON i.instrument_make_id = mk.make_id",
+          "LEFT JOIN instruments.instrument_models AS mdl ON i.instrument_model_id = mdl.model_id",
+          "LEFT JOIN instruments.instrument_types AS tp ON i.instrument_type_id = tp.type_id",
           "LEFT JOIN public.organizations AS org ON i.owner = org.organization_id",
           "LEFT JOIN instruments.suppliers AS s ON i.supplier_id = s.supplier_id",
           "ORDER BY i.date_retired NULLS FIRST, i.serial_no, i.instrument_id"
@@ -788,20 +788,25 @@ manageInstruments <- function(id, language) {
       )
     })
 
-    observeEvent(input$ui_ready, {
-      refresh_all(
-        record_selected = character(0),
-        lookup_selected = list(
-          observer = character(0),
-          make = character(0),
-          model = character(0),
-          type = character(0),
-          owner = character(0),
-          supplier_id = character(0)
+    observeEvent(
+      input$ui_ready,
+      {
+        refresh_all(
+          record_selected = character(0),
+          lookup_selected = list(
+            observer = character(0),
+            make = character(0),
+            model = character(0),
+            type = character(0),
+            owner = character(0),
+            supplier_id = character(0)
+          )
         )
-      )
-      clear_form(reset_record = FALSE, clear_table = FALSE)
-    }, once = TRUE, ignoreInit = TRUE)
+        clear_form(reset_record = FALSE, clear_table = FALSE)
+      },
+      once = TRUE,
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$timezone,
@@ -1539,7 +1544,7 @@ manageInstruments <- function(id, language) {
             DBI::dbGetQuery(
               con,
               "INSERT INTO instruments.instruments 
-                  (obs_datetime, observer, make, model, type, holds_replaceable_sensors, serial_no, asset_tag, date_in_service, date_purchased, retired_by, date_retired, owner, date_end_of_life, supplier_id, purchase_price, takes_measurements, can_be_logger, can_be_telemetry_component, cable_length_m, firmware_version, voltage, power_active_ma, power_quiescent_ma)
+                  (obs_datetime, observer, instrument_make_id, instrument_model_id, instrument_type_id, holds_replaceable_sensors, serial_no, asset_tag, date_in_service, date_purchased, retired_by, date_retired, owner, date_end_of_life, supplier_id, purchase_price, takes_measurements, can_be_logger, can_be_telemetry_component, cable_length_m, firmware_version, voltage, power_active_ma, power_quiescent_ma)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
                 RETURNING instrument_id",
               params = params
@@ -1554,9 +1559,9 @@ manageInstruments <- function(id, language) {
                 SET 
                   obs_datetime = $1, 
                   observer = $2, 
-                  make = $3, 
-                  model = $4,
-                  type = $5, 
+                  instrument_make_id = $3,
+                  instrument_model_id = $4,
+                  instrument_type_id = $5,
                   holds_replaceable_sensors = $6, 
                   serial_no = $7,
                   asset_tag = $8, 

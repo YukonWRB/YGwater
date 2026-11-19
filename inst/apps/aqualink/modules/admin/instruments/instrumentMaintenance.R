@@ -584,9 +584,9 @@ instrumentMaintenance <- function(id, language) {
          FROM instruments.instrument_sensor_current AS cur
          INNER JOIN instruments.instruments AS i
            ON cur.instrument_id = i.instrument_id
-         LEFT JOIN instruments.instrument_makes AS mk ON i.make = mk.make_id
-         LEFT JOIN instruments.instrument_models AS mdl ON i.model = mdl.model_id
-         LEFT JOIN instruments.instrument_types AS tp ON i.type = tp.type_id
+         LEFT JOIN instruments.instrument_makes AS mk ON i.instrument_make_id = mk.make_id
+         LEFT JOIN instruments.instrument_models AS mdl ON i.instrument_model_id = mdl.model_id
+         LEFT JOIN instruments.instrument_types AS tp ON i.instrument_type_id = tp.type_id
          LEFT JOIN instruments.sensors AS s ON cur.sensor_id = s.sensor_id
          LEFT JOIN instruments.sensor_types AS st
            ON s.sensor_type = st.sensor_type_id
@@ -728,9 +728,9 @@ instrumentMaintenance <- function(id, language) {
          FROM instruments.instrument_maintenance_due AS due
          INNER JOIN instruments.instruments AS i
            ON due.instrument_id = i.instrument_id
-         LEFT JOIN instruments.instrument_makes AS mk ON i.make = mk.make_id
-         LEFT JOIN instruments.instrument_models AS mdl ON i.model = mdl.model_id
-         LEFT JOIN instruments.instrument_types AS tp ON i.type = tp.type_id
+         LEFT JOIN instruments.instrument_makes AS mk ON i.instrument_make_id = mk.make_id
+         LEFT JOIN instruments.instrument_models AS mdl ON i.instrument_model_id = mdl.model_id
+         LEFT JOIN instruments.instrument_types AS tp ON i.instrument_type_id = tp.type_id
          LEFT JOIN public.organizations AS org ON i.owner = org.organization_id
          LEFT JOIN instruments.observers AS o ON due.observer = o.observer_id
          WHERE due.completed_event_id IS NULL
@@ -862,9 +862,9 @@ instrumentMaintenance <- function(id, language) {
                 due.date_maintenance_due,
                 due.maintenance_due_note
          FROM instruments.instruments AS i
-         LEFT JOIN instruments.instrument_makes AS mk ON i.make = mk.make_id
-         LEFT JOIN instruments.instrument_models AS mdl ON i.model = mdl.model_id
-         LEFT JOIN instruments.instrument_types AS tp ON i.type = tp.type_id
+         LEFT JOIN instruments.instrument_makes AS mk ON i.instrument_make_id = mk.make_id
+         LEFT JOIN instruments.instrument_models AS mdl ON i.instrument_model_id = mdl.model_id
+         LEFT JOIN instruments.instrument_types AS tp ON i.instrument_type_id = tp.type_id
          LEFT JOIN public.organizations AS org ON i.owner = org.organization_id
          LEFT JOIN LATERAL (
            SELECT date_maintenance_due,

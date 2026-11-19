@@ -6,13 +6,16 @@ discrete_result_editor_fixture <- function(
   tables = FALSE
 ) {
   env <- new.env(parent = asNamespace("YGwater"))
-  sys.source(
-    system.file(
-      "apps/aqualink/modules/admin/discreteData/addDiscData.R",
-      package = "YGwater"
-    ),
-    env
-  )
+  for (file in c("chemistry_form.R", "discrete_protocols.R", "addDiscData.R")) {
+    sys.source(
+      system.file(
+        "apps/aqualink/modules/admin/discreteData",
+        file,
+        package = "YGwater"
+      ),
+      env
+    )
+  }
   env$page_fluid <- bslib::page_fluid
   env$tooltip <- bslib::tooltip
   statements <- as.list(body(env$addDiscData)[[2]][[3]][[3]])[-1]
@@ -101,14 +104,14 @@ discrete_result_editor_fixture <- function(
   rows$source_result_condition <- c(NA_integer_, 1L, NA_integer_, NA_integer_)
   rows$source_result_condition_value <- c(NA, 20, NA, NA)
   rows$result <- c(1.2, NA, NA, 5)
-  rows$result_condition <- rows$source_result_condition
+  rows$result_condition_id <- rows$source_result_condition
   rows$result_condition_value <- c(NA, 0.02, NA, NA)
-  rows$result_type <- 2L
+  rows$result_type_id <- 2L
   rows$matrix_state_id <- 1L
-  rows$result_value_type <- 1L
+  rows$result_value_type_id <- 1L
   rows$lab_report_no <- "Report-1"
   rows$lab_sample_no <- "Lab-1"
-  rows$laboratory <- 1L
+  rows$lab_id <- 1L
   rows$conversion <- 0.001
   rows$result_offset <- 0
   rows$analysis_conditions <- '{"reference_temperature_kelvin":293.15,"custom":"keep"}'
@@ -176,7 +179,7 @@ discrete_result_editor_fixture <- function(
     )
     result_types <- data.frame(
       result_type_id = 1:2,
-      result_type = c("field", "laboratory")
+      result_type = c("field", "lab_id")
     )
     field_result_type_id <- 1L
     result_conditions <- data.frame(
@@ -205,7 +208,10 @@ discrete_result_editor_fixture <- function(
         result_target = character()
       )
     )
-    protocols_methods <- data.frame(protocol_id = 1L, protocol_name = "Method")
+    protocols_methods <- reactiveVal(data.frame(
+      protocol_method_id = 1L,
+      protocol_name = "Method"
+    ))
     laboratories <- data.frame(lab_id = 1L, lab_name = "Laboratory")
     grade_types <- data.frame(
       grade_type_id = 1L,
@@ -305,7 +311,7 @@ test_that("New result adds to the selected sample and can then be edited in plac
     expect_equal(nrow(data$df), 5L)
     expect_identical(data$df$sample_key[[5]], "file-a")
     expect_identical(data$df$source_code[[5]], "YGwater-manual")
-    expect_true(is.na(data$df$laboratory[[5]]))
+    expect_true(is.na(data$df$lab_id[[5]]))
     expect_true(is.na(data$df$lab_report_no[[5]]))
     expect_true(is.na(data$df$lab_sample_no[[5]]))
     expect_equal(selected_result_index(), 5L)

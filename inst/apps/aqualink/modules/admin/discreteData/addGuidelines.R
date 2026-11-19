@@ -1038,7 +1038,7 @@ addGuidelines <- function(id, language) {
       "endpoint_mode",
       "endpoint_ph",
       "analysis_conditions",
-      "result_type",
+      "result_type_id",
       "result_type_preference",
       "aggregate_method",
       "required",
@@ -1512,7 +1512,7 @@ addGuidelines <- function(id, language) {
         endpoint_mode = rep(NA_character_, n),
         endpoint_ph = rep(NA_real_, n),
         analysis_conditions = rep("{}", n),
-        result_type = rep(NA_integer_, n),
+        result_type_id = rep(NA_integer_, n),
         result_type_preference = rep("", n),
         aggregate_method = rep("single", n),
         required = rep(TRUE, n),
@@ -1613,11 +1613,11 @@ addGuidelines <- function(id, language) {
           matrix_state_id = matrix_state_id,
           sample_fraction_id = sample_fraction_id,
           reporting_basis_id = reporting_basis_id,
-          YGwater:::chemistry_metadata_values(
+          chemistry_metadata_values(
             input,
             paste0("rule_chem_", i, "_")
           ),
-          result_type = NA_integer_,
+          result_type_id = NA_integer_,
           result_type_preference = collapse_id_vector(
             input[[rule_input_id("result_type_preference", i)]]
           ),
@@ -1881,16 +1881,16 @@ addGuidelines <- function(id, language) {
         con,
         "SELECT p.parameter_id, p.param_name,
                 public.get_parameter_unit_name(p.parameter_id, NULL::integer) AS unit_default,
-                p.units_liquid, ul.unit_name AS unit_liquid_name,
-                p.units_solid, us.unit_name AS unit_solid_name,
-                p.units_gas, ug.unit_name AS unit_gas_name,
-                p.units_na, una.unit_name AS unit_na_name,
+                p.liquid_unit_id AS units_liquid, ul.unit_name AS unit_liquid_name,
+                p.solid_unit_id AS units_solid, us.unit_name AS unit_solid_name,
+                p.gas_unit_id AS units_gas, ug.unit_name AS unit_gas_name,
+                p.not_applicable_unit_id AS units_na, una.unit_name AS unit_na_name,
                 p.reporting_basis, p.result_speciation, p.result_target, p.endpoint, to_jsonb(p.analysis_conditions_required_keys) AS analysis_conditions_required_keys, p.analysis_conditions_required_keys_by_matrix, p.sample_fraction
          FROM public.parameters p
-         LEFT JOIN public.units ul ON ul.unit_id = p.units_liquid
-         LEFT JOIN public.units us ON us.unit_id = p.units_solid
-         LEFT JOIN public.units ug ON ug.unit_id = p.units_gas
-         LEFT JOIN public.units una ON una.unit_id = p.units_na
+         LEFT JOIN public.units ul ON ul.unit_id = p.liquid_unit_id
+         LEFT JOIN public.units us ON us.unit_id = p.solid_unit_id
+         LEFT JOIN public.units ug ON ug.unit_id = p.gas_unit_id
+         LEFT JOIN public.units una ON una.unit_id = p.not_applicable_unit_id
          ORDER BY p.param_name"
       )
       moduleData$chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(
@@ -2490,7 +2490,7 @@ addGuidelines <- function(id, language) {
           ) {
             row$result_type_preference[[1]]
           } else {
-            row$result_type[[1]]
+            row$result_type_id[[1]]
           }
           tags$div(
             style = paste(
@@ -2598,7 +2598,7 @@ addGuidelines <- function(id, language) {
                 )
               )
             ),
-            YGwater:::chemistry_metadata_ui(
+            chemistry_metadata_ui(
               ns,
               paste0("rule_chem_", i, "_"),
               moduleData$chemistry_catalogues,
@@ -2945,7 +2945,7 @@ addGuidelines <- function(id, language) {
                 gri.parameter_id, p.param_name AS parameter_name,
                 gri.matrix_state_id, gri.sample_fraction_id,
                 gri.reporting_basis_id, gri.result_speciation_id, gri.result_target_id,
-                gri.endpoint_mode, gri.endpoint_ph, gri.analysis_conditions, gri.result_type,
+                gri.endpoint_mode, gri.endpoint_ph, gri.analysis_conditions, gri.result_type AS result_type_id,
                 ms.matrix_state_name, sf.sample_fraction, rb.reporting_basis,
                 spec.result_speciation, target.result_target,
                 array_to_string(gri.result_type_preference, ',') AS result_type_preference,
@@ -3240,7 +3240,7 @@ addGuidelines <- function(id, language) {
         `Analytical target / material` = inputs$result_target,
         Endpoint = endpoint,
         `Additional conditions` = conditions,
-        `Result type` = inputs$result_type,
+        `Result type` = inputs$result_type_id,
         `Aggregation method` = inputs$aggregate_method,
         Required = inputs$required,
         Note = inputs$note,
@@ -3276,7 +3276,7 @@ addGuidelines <- function(id, language) {
 
     clear_form <- function() {
       output$guideline_chemistry <- renderUI({
-        YGwater:::chemistry_metadata_ui(
+        chemistry_metadata_ui(
           ns,
           "guideline_chem_",
           moduleData$chemistry_catalogues
@@ -3424,7 +3424,7 @@ addGuidelines <- function(id, language) {
         server = TRUE
       )
       output$guideline_chemistry <- renderUI({
-        YGwater:::chemistry_metadata_ui(
+        chemistry_metadata_ui(
           ns,
           "guideline_chem_",
           moduleData$chemistry_catalogues,
@@ -3823,7 +3823,7 @@ addGuidelines <- function(id, language) {
       missing_result_type <- is.na(df$result_type_id)
       df$result_type_id[
         missing_result_type
-      ] <- suppressWarnings(as.integer(df$result_type[missing_result_type]))
+      ] <- suppressWarnings(as.integer(df$result_type_id[missing_result_type]))
       df$result_type_id[is.na(df$result_type_id)] <- default_result_type_id()
       hardness_rows <- df$input_source %in% "hardness_helper"
       if (any(hardness_rows)) {
@@ -4642,7 +4642,7 @@ FROM vals",
             integer_or_na(df$matrix_state_id[i]),
             integer_or_na(df$sample_fraction_id[i]),
             integer_or_na(df$reporting_basis_id[i]),
-            integer_or_na(df$result_type[i]),
+            integer_or_na(df$result_type_id[i]),
             text_value(df$result_type_preference[i]),
             text_default(df$aggregate_method[i], "single"),
             bool_value(df$required[i], TRUE),
@@ -4982,7 +4982,7 @@ FROM vals",
         parameter_id = parameter_id,
         matrix_state_id = matrix_state_id,
         reporting_basis_id = integer_or_na(input$reporting_basis),
-        chemistry = YGwater:::chemistry_metadata_values(
+        chemistry = chemistry_metadata_values(
           input,
           "guideline_chem_"
         ),
@@ -5276,7 +5276,7 @@ FROM vals",
                     int_or_na(df$matrix_state_id[i]),
                     int_or_na(df$sample_fraction_id[i]),
                     int_or_na(df$reporting_basis_id[i]),
-                    int_or_na(df$result_type[i]),
+                    int_or_na(df$result_type_id[i]),
                     txt_value(df$result_type_preference[i]),
                     if (is_empty(df$aggregate_method[i])) {
                       "single"
@@ -5936,7 +5936,7 @@ FROM vals",
                      WHEN result_type ~* '^field$' THEN 1
                      ELSE 2
                    END,
-                   result_type_id
+                   result_type
                  LIMIT 1"
               )
               if (nrow(out)) out$result_type_id[[1]] else NA_integer_
@@ -5946,7 +5946,7 @@ FROM vals",
                 con,
                 "SELECT result_value_type_id
                  FROM discrete.result_value_types
-                 WHERE lower(result_value_type) = 'actual'
+                 WHERE lower(result_value_type_id) = 'actual'
                  ORDER BY result_value_type_id
                  LIMIT 1"
               )
@@ -6102,9 +6102,9 @@ FROM vals",
               query <- DBI::sqlInterpolate(
                 con,
                 "INSERT INTO discrete.results (
-                   sample_id, result_type, parameter_id, sample_fraction_id,
-                   result, result_condition, result_condition_value,
-                   result_value_type, reporting_basis_id,
+                   sample_id, result_type_id, parameter_id, sample_fraction_id,
+                   result, result_condition_id, result_condition_value,
+                   result_value_type_id, reporting_basis_id,
                    analysis_datetime, share_with, no_source_update, matrix_state_id,
                    result_speciation_id, result_target_id, endpoint_mode, endpoint_ph, analysis_conditions
                  )
@@ -6253,9 +6253,9 @@ FROM vals",
                           THEN s.sub_location_id
                         ELSE NULL::integer
                       END AS sub_location_id,
-                      s.collection_method, s.sample_type,
-                      s.sample_grade, s.sample_approval, s.owner,
-                      s.contributor, s.sampling_org
+                      s.collection_method_id, s.sample_type_id,
+                      s.grade_type_id, s.approval_type_id, s.owner,
+                      s.contributor, s.sampling_org_id
                FROM discrete.samples s
                ORDER BY
                  CASE
@@ -6290,10 +6290,10 @@ FROM vals",
             sample_id <- DBI::dbGetQuery(
               con,
               "INSERT INTO discrete.samples (
-                 location_id, sub_location_id, media_id, z, datetime,
-                 target_datetime, collection_method, sample_type,
-                 sample_volume_ml, sample_grade, sample_approval,
-                 owner, contributor, sampling_org, share_with,
+                 location_id, sub_location_id, media_id, depth_height_m, datetime,
+                 target_datetime, collection_method_id, sample_type_id,
+                 sample_volume_ml, grade_type_id, approval_type_id,
+                 owner, contributor, sampling_org_id, share_with,
                  source_adapter_function, no_source_update, note,
                  external_sample_id
                )
@@ -6311,13 +6311,13 @@ FROM vals",
                 template$sub_location_id[[1]],
                 template$media_id[[1]],
                 sample_datetime,
-                template$collection_method[[1]],
-                template$sample_type[[1]],
-                template$sample_grade[[1]],
-                template$sample_approval[[1]],
+                template$collection_method_id[[1]],
+                template$sample_type_id[[1]],
+                template$grade_type_id[[1]],
+                template$approval_type_id[[1]],
                 template$owner[[1]],
                 template$contributor[[1]],
-                template$sampling_org[[1]],
+                template$sampling_org_id[[1]],
                 source_id
               )
             )$sample_id[[1]]

@@ -286,11 +286,11 @@ AquaLink <- function(
     con,
     "SELECT version FROM information.version_info WHERE item = 'Last patch number';"
   )[1, 1])
-  if (ver < 62) {
+  if (ver < 72) {
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
-      "The aquacache database version is too old. Please update to at least version 62. Current version is ",
+      "The aquacache database version is too old. Please update to at least version 72. Current version is ",
       ver,
       ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache::AquaConnect documentation for more details."
     )

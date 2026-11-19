@@ -2043,10 +2043,10 @@ addTimeseries <- function(id, language) {
           "una.unit_name AS units_na,",
           "una.unit_name AS units_not_applicable",
           "FROM public.parameters p",
-          "LEFT JOIN public.units ul ON p.units_liquid = ul.unit_id",
-          "LEFT JOIN public.units us ON p.units_solid = us.unit_id",
-          "LEFT JOIN public.units ug ON p.units_gas = ug.unit_id",
-          "LEFT JOIN public.units una ON p.units_na = una.unit_id",
+          "LEFT JOIN public.units ul ON p.liquid_unit_id = ul.unit_id",
+          "LEFT JOIN public.units us ON p.solid_unit_id = us.unit_id",
+          "LEFT JOIN public.units ug ON p.gas_unit_id = ug.unit_id",
+          "LEFT JOIN public.units una ON p.not_applicable_unit_id = una.unit_id",
           "ORDER BY p.param_name ASC"
         )
       )
@@ -2113,7 +2113,7 @@ addTimeseries <- function(id, language) {
       # Join on files.document_types.document_type_en = 'data sharing agreement' to get only data sharing agreements
       moduleData$agreements <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT * FROM files.documents as f LEFT JOIN files.document_types as dt ON f.type = dt.document_type_id WHERE dt.document_type_en = 'data sharing agreement';"
+        "SELECT * FROM files.documents as f LEFT JOIN files.document_types as dt ON f.document_type_id = dt.document_type_id WHERE dt.document_type_en = 'data sharing agreement';"
       )
       moduleData$owners_agreements <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -2192,11 +2192,11 @@ addTimeseries <- function(id, language) {
         INNER JOIN instruments.instruments AS i
           ON lmi.instrument_id = i.instrument_id
         LEFT JOIN instruments.instrument_makes AS mk
-          ON i.make = mk.make_id
+          ON i.instrument_make_id = mk.make_id
         LEFT JOIN instruments.instrument_models AS mdl
-          ON i.model = mdl.model_id
+          ON i.instrument_model_id = mdl.model_id
         LEFT JOIN instruments.instrument_types AS it
-          ON i.type = it.type_id
+          ON i.instrument_type_id = it.type_id
         LEFT JOIN public.locations_z AS lz
           ON lmi.z_id = lz.z_id
         WHERE lmi.start_datetime <= NOW()
@@ -3677,14 +3677,14 @@ addTimeseries <- function(id, language) {
       DBI::dbGetQuery(
         session$userData$AquaCache,
         paste(
-          "SELECT c.correction_id, c.start_dt, c.end_dt,",
+          "SELECT c.correction_id, c.start_datetime AS start_dt, c.end_datetime AS end_dt,",
           "ct.priority, ct.correction_type, c.value1, c.value2,",
           "c.timestep_window, c.equation",
           "FROM continuous.corrections c",
           "LEFT JOIN continuous.correction_types ct",
           "ON ct.correction_type_id = c.correction_type",
           "WHERE c.timeseries_id = $1",
-          "ORDER BY c.start_dt, ct.priority, c.correction_id"
+          "ORDER BY c.start_datetime, ct.priority, c.correction_id"
         ),
         params = list(tsid)
       )
@@ -8158,7 +8158,7 @@ addTimeseries <- function(id, language) {
                     con,
                     paste(
                       "INSERT INTO continuous.corrections",
-                      "(timeseries_id, start_dt, end_dt, correction_type,",
+                      "(timeseries_id, start_datetime, end_datetime, correction_type,",
                       " value1, value2, timestep_window, equation)",
                       "VALUES ($1, $2, $3, $4, $5, $6, NULL, NULL)"
                     ),

@@ -167,11 +167,11 @@ upsert_parameter_mappings <- function(con, source_id, key) {
   # resolver used by normal imports, including species and operational targets.
   key <- AquaCache:::import_mapping_resolve_targets(con, key)
   optional_defaults <- list(
-    result_type = 2L,
+    result_type_id = 2L,
     matrix_state = 1L,
     sample_fraction = NA_integer_,
     sample_fraction_AC = NA_integer_,
-    result_value_type = 1L,
+    result_value_type_id = 1L,
     reporting_basis_id = NA_integer_,
     result_speciation_id = NA_integer_, result_target_id = NA_integer_,
     endpoint_mode = NA_character_, endpoint_ph = NA_real_, analysis_conditions = "{}",
@@ -233,9 +233,9 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     if (!is.na(sample_fraction_id) && !(sample_fraction_id %in% valid_sample_fractions)) {
       sample_fraction_id <- NA_integer_
     }
-    result_value_type <- scalar_int(key$result_value_type[[i]], 1L)
-    if (!(result_value_type %in% valid_result_value_types)) {
-      result_value_type <- 1L
+    result_value_type_id <- scalar_int(key$result_value_type_id[[i]], 1L)
+    if (!(result_value_type_id %in% valid_result_value_types)) {
+      result_value_type_id <- 1L
     }
     reporting_basis_id <- scalar_int(key$reporting_basis_id[[i]])
     if (!is.na(reporting_basis_id) && !(reporting_basis_id %in% valid_reporting_bases)) {
@@ -261,9 +261,9 @@ upsert_parameter_mappings <- function(con, source_id, key) {
       parameter_code = as.character(key$input_param[[i]]),
       unit = as.character(key$input_unit[[i]]),
       parameter_id = key$parameter_id_int[[i]],
-      result_type = scalar_int(key$result_type[[i]], 2L),
+      result_type_id = scalar_int(key$result_type_id[[i]], 2L),
       sample_fraction_id = sample_fraction_id,
-      result_value_type = result_value_type,
+      result_value_type_id = result_value_type_id,
       reporting_basis_id = reporting_basis_id,
       result_speciation_id = scalar_int(key$result_speciation_id[[i]]),
       result_target_id = scalar_int(key$result_target_id[[i]]),
@@ -404,9 +404,9 @@ upsert_parameter_mappings <- function(con, source_id, key) {
       parameter_code,
       unit,
       parameter_id,
-      result_type,
+      result_type_id,
       sample_fraction_id,
-      result_value_type,
+      result_value_type_id,
       reporting_basis_id, result_speciation_id, result_target_id,
       endpoint_mode, endpoint_ph, analysis_conditions,
       matrix_state_id,
@@ -461,13 +461,13 @@ upsert_parameter_mappings <- function(con, source_id, key) {
         parameter_code = "Solids, total suspended [TSS]",
         unit = suspended_solids$unit_name[[1]],
         parameter_id = suspended_solids$parameter_id[[1]],
-        result_type = 2L,
+        result_type_id = 2L,
         sample_fraction_id = if (length(total_fraction) == 1L) {
           total_fraction[[1]]
         } else {
           NA_integer_
         },
-        result_value_type = 1L,
+        result_value_type_id = 1L,
         reporting_basis_id = NA_integer_,
         matrix_state_id = 1L,
         conversion = 1,
@@ -536,9 +536,9 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     stop("Could not uniquely resolve the dissolved sample fraction.", call. = FALSE)
   }
   explicit_xlr_aliases[, `:=`(
-    result_type = 2L,
+    result_type_id = 2L,
     sample_fraction_id = dissolved_fraction[[1]],
-    result_value_type = 1L,
+    result_value_type_id = 1L,
     reporting_basis_id = NA_integer_,
     matrix_state_id = 1L,
     conversion = 1,
@@ -558,9 +558,9 @@ upsert_parameter_mappings <- function(con, source_id, key) {
   )]
   semantic_fields <- c(
     "parameter_id",
-    "result_type",
+    "result_type_id",
     "sample_fraction_id",
-    "result_value_type",
+    "result_value_type_id",
     "reporting_basis_id",
     "result_speciation_id",
     "result_target_id",
@@ -612,21 +612,21 @@ profile_definitions <- function() {
     "sub_location_id",
     "media_id",
     "datetime",
-    "sample_type",
-    "collection_method",
+    "sample_type_id",
+    "collection_method_id",
     "source_sample_id"
   )
   result_identity <- c(
     "source_parameter_code",
     "source_unit",
     "parameter_id",
-    "result_type",
+    "result_type_id",
     "matrix_state_id",
     "sample_fraction_id",
-    "result_value_type",
+    "result_value_type_id",
     "reporting_basis_id", "result_speciation_id", "result_target_id",
     "endpoint_mode", "endpoint_ph", "analysis_conditions",
-    "laboratory",
+    "lab_id",
     "analysis_datetime"
   )
 
@@ -671,13 +671,13 @@ profile_definitions <- function() {
       wide_config = list(),
       defaults = list(
         media_id = 1L,
-        collection_method = 27L,
-        sample_type = 34L,
+        collection_method_id = 27L,
+        sample_type_id = 34L,
         owner = 1L,
-        result_type = 2L,
+        result_type_id = 2L,
         matrix_state_id = 1L,
-        result_value_type = 1L,
-        laboratory = 2L
+        result_value_type_id = 1L,
+        lab_id = 2L
       ),
       sample_identity = sample_identity,
       result_identity = result_identity,
@@ -721,13 +721,13 @@ profile_definitions <- function() {
       wide_config = list(),
       defaults = list(
         media_id = 1L,
-        collection_method = 27L,
-        sample_type = 34L,
+        collection_method_id = 27L,
+        sample_type_id = 34L,
         owner = 1L,
-        result_type = 2L,
+        result_type_id = 2L,
         matrix_state_id = 1L,
-        result_value_type = 1L,
-        laboratory = 2L
+        result_value_type_id = 1L,
+        lab_id = 2L
       ),
       sample_identity = sample_identity,
       result_identity = result_identity,
@@ -769,13 +769,13 @@ profile_definitions <- function() {
       wide_config = list(),
       defaults = list(
         media_id = 1L,
-        collection_method = 27L,
-        sample_type = 34L,
+        collection_method_id = 27L,
+        sample_type_id = 34L,
         owner = 1L,
-        result_type = 2L,
+        result_type_id = 2L,
         matrix_state_id = 1L,
-        result_value_type = 1L,
-        laboratory = 2L
+        result_value_type_id = 1L,
+        lab_id = 2L
       ),
       sample_identity = sample_identity,
       result_identity = result_identity,

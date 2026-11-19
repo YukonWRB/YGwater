@@ -88,6 +88,14 @@ api_find_target <- function(version = NULL) {
   )
 }
 
+#' Retry API startup after an httpuv server startup error
+#'
+#' @param expr Unevaluated expression that starts the API server.
+#' @param env Environment in which to evaluate `expr`.
+#' @return The value of `expr` from the first successful evaluation.
+#' @details On the specific startup error, stops httpuv servers in the current process and retries once.
+#' @keywords internal
+#' @noRd
 api_run_with_httpuv_retry <- function(expr, env = parent.frame()) {
   expr <- substitute(expr)
 
@@ -204,7 +212,9 @@ api <- function(
   Sys.setenv(APIaquacachePass = dbPass)
   Sys.setenv(APIaquacachePublicUser = publicDbUser)
   Sys.setenv(APIaquacachePublicPass = publicDbPass)
-  Sys.setenv(APIaquacacheLogRequests = if (isTRUE(logRequests)) "TRUE" else "FALSE")
+  Sys.setenv(
+    APIaquacacheLogRequests = if (isTRUE(logRequests)) "TRUE" else "FALSE"
+  )
 
   # Launch the plumber2 API using the appropriate engine and implementation
   if (identical(api_target$engine, "plumber2")) {

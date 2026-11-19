@@ -128,8 +128,8 @@ timeseries_transmission_choices <- function(con, location_id, source_fx) {
      FROM public.locations_metadata_instruments lmi
      JOIN instruments.instruments i
        ON i.instrument_id = lmi.instrument_id
-     LEFT JOIN instruments.instrument_makes mk ON mk.make_id = i.make
-     LEFT JOIN instruments.instrument_models mdl ON mdl.model_id = i.model
+     LEFT JOIN instruments.instrument_makes mk ON mk.make_id = i.instrument_make_id
+     LEFT JOIN instruments.instrument_models mdl ON mdl.model_id = i.instrument_model_id
      WHERE lmi.location_id = $1
        AND i.can_be_logger
        AND lmi.start_datetime <= CURRENT_TIMESTAMP
@@ -166,8 +166,10 @@ timeseries_route_config_fields <- function(capability, message_format = NULL) {
     return(list())
   }
 
-  filter_by_format <- !is.null(message_format) && length(message_format) &&
-    !is.na(message_format[[1L]]) && nzchar(trimws(message_format[[1L]]))
+  filter_by_format <- !is.null(message_format) &&
+    length(message_format) &&
+    !is.na(message_format[[1L]]) &&
+    nzchar(trimws(message_format[[1L]]))
   normalized_format <- if (filter_by_format) {
     toupper(trimws(as.character(message_format[[1L]])))
   } else {
@@ -182,7 +184,8 @@ timeseries_route_config_fields <- function(capability, message_format = NULL) {
         field$message_formats,
         use.names = FALSE
       ))
-      !filter_by_format || !length(formats) ||
+      !filter_by_format ||
+        !length(formats) ||
         normalized_format %in% toupper(trimws(formats))
     },
     fields
@@ -253,7 +256,9 @@ timeseries_route_config_with_ui_fields <- function(
     }
     value <- values[[name]]
     value_type <- as.character(field$value_type[[1L]])
-    missing <- is.null(value) || !length(value) || is.na(value[[1L]]) ||
+    missing <- is.null(value) ||
+      !length(value) ||
+      is.na(value[[1L]]) ||
       (is.character(value[[1L]]) && !nzchar(trimws(value[[1L]])))
     if (missing) {
       config <- set_path(config, path, NULL)
@@ -338,8 +343,9 @@ timeseries_normalize_transmission_mapping <- function(
   if (is.na(route_id) || route_id <= 0L) {
     stop("Select a transmission route.")
   }
-  if (length(source_field) != 1L || is.na(source_field) ||
-      !nzchar(source_field)) {
+  if (
+    length(source_field) != 1L || is.na(source_field) || !nzchar(source_field)
+  ) {
     stop("Enter the provider or payload field for this timeseries.")
   }
   if (is.na(value_multiplier) || value_multiplier == 0) {
@@ -562,8 +568,12 @@ timeseries_save_transmission_route <- function(
   }
   transmission_config <- nullable_text(transmission_config)
   route_config <- nullable_text(route_config)
-  if (is.na(transmission_config)) transmission_config <- "{}"
-  if (is.na(route_config)) route_config <- "{}"
+  if (is.na(transmission_config)) {
+    transmission_config <- "{}"
+  }
+  if (is.na(route_config)) {
+    route_config <- "{}"
+  }
   for (entry in list(
     transmission_config = transmission_config,
     route_config = route_config
@@ -587,9 +597,12 @@ timeseries_save_transmission_route <- function(
 
   DBI::dbBegin(con)
   active <- TRUE
-  on.exit({
-    if (active) DBI::dbRollback(con)
-  }, add = TRUE)
+  on.exit(
+    {
+      if (active) DBI::dbRollback(con)
+    },
+    add = TRUE
+  )
 
   if (!is.na(route_id)) {
     route_id <- DBI::dbGetQuery(

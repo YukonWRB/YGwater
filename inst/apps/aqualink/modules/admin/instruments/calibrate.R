@@ -592,7 +592,11 @@ table.on("click", "tr", function() {
     select_data <- reactiveValues() # Holds data to populate select menus
     observer_select_value <- function(observer_id) {
       observer_id <- unlist(observer_id, use.names = FALSE)
-      if (length(observer_id) == 0 || is.null(observer_id) || is.na(observer_id[1])) {
+      if (
+        length(observer_id) == 0 ||
+          is.null(observer_id) ||
+          is.na(observer_id[1])
+      ) {
         return(character(0))
       }
       as.character(observer_id[1])
@@ -616,7 +620,9 @@ table.on("click", "tr", function() {
       )
     }
     restarted_observer_value <- function() {
-      restart_observer <- observer_select_value(calibration_data$restart_observer)
+      restart_observer <- observer_select_value(
+        calibration_data$restart_observer
+      )
       if (length(restart_observer) > 0) {
         return(restart_observer)
       }
@@ -640,7 +646,7 @@ table.on("click", "tr", function() {
       }
 
       observer_select_value(
-        calibrations$incomplete_calibrations[row_num, "observer"]
+        calibrations$incomplete_calibrations[row_num, "observer_id"]
       )
     }
     update_observer_input <- function(selected = character(0), clear = TRUE) {
@@ -949,9 +955,9 @@ table.on("click", "tr", function() {
           supplier_name_select,
           "
            FROM instruments.instruments AS i
-           LEFT JOIN instruments.instrument_makes ON i.make = instrument_makes.make_id
-           LEFT JOIN instruments.instrument_models ON i.model = instrument_models.model_id
-           LEFT JOIN instruments.instrument_types ON i.type = instrument_types.type_id
+           LEFT JOIN instruments.instrument_makes ON i.instrument_make_id = instrument_makes.make_id
+           LEFT JOIN instruments.instrument_models ON i.instrument_model_id = instrument_models.model_id
+           LEFT JOIN instruments.instrument_types ON i.instrument_type_id = instrument_types.type_id
            LEFT JOIN public.organizations ON i.owner = organizations.organization_id
            LEFT JOIN instruments.observers ON i.observer = observers.observer_id",
           supplier_join,
@@ -1251,7 +1257,7 @@ table.on("click", "tr", function() {
           incomplete_calibrations <- dplyr::left_join(
             incomplete_calibrations,
             instruments_data$observers[, c("observer_id", "observer_string")],
-            by = dplyr::join_by(observer == observer_id)
+            by = "observer_id"
           )
           complete$incomplete <- data.frame(
             "Calibrator" = as.vector(incomplete_calibrations$observer_string),
@@ -2477,7 +2483,7 @@ table.on("click", "tr", function() {
           calibration_data$restart_observer <- observer_select_value(
             calibrations$incomplete_calibrations[
               restart_value,
-              "observer"
+              "observer_id"
             ]
           )
 
@@ -2821,7 +2827,7 @@ table.on("click", "tr", function() {
                   !is.na(calibrations$incomplete_calibrations[
                     calibrations$incomplete_calibrations$calibration_id ==
                       incomplete_ID,
-                    "id_sensor_holder"
+                    "sensor_holder_instrument_id"
                   ])
                 ) {
                   instruments_data$others[
@@ -2829,7 +2835,7 @@ table.on("click", "tr", function() {
                       calibrations$incomplete_calibrations[
                         calibrations$incomplete_calibrations$calibration_id ==
                           incomplete_ID,
-                        "id_sensor_holder"
+                        "sensor_holder_instrument_id"
                       ],
                     "serial_no"
                   ]
@@ -2850,7 +2856,7 @@ table.on("click", "tr", function() {
                   !is.na(calibrations$incomplete_calibrations[
                     calibrations$incomplete_calibrations$calibration_id ==
                       incomplete_ID,
-                    "id_handheld_meter"
+                    "handheld_meter_instrument_id"
                   ])
                 ) {
                   instruments_data$handhelds[
@@ -2858,7 +2864,7 @@ table.on("click", "tr", function() {
                       calibrations$incomplete_calibrations[
                         calibrations$incomplete_calibrations$calibration_id ==
                           incomplete_ID,
-                        "id_handheld_meter"
+                        "handheld_meter_instrument_id"
                       ],
                     "serial_no"
                   ]
@@ -2937,7 +2943,7 @@ table.on("click", "tr", function() {
           calibrations$incomplete_calibrations <- dplyr::left_join(
             calibrations$incomplete_calibrations,
             instruments_data$observers[, c("observer_id", "observer_string")],
-            by = dplyr::join_by(observer == observer_id)
+            by = "observer_id"
           )
 
           complete$incomplete <- data.frame(
@@ -3299,11 +3305,11 @@ table.on("click", "tr", function() {
 
         dt <- scalar_utc_datetime(input$obs_datetime)
 
-        id_sensor_holder <- instruments_data$sheet[
+        sensor_holder_instrument_id <- instruments_data$sheet[
           instruments_data$sheet$serial_no == input$ID_sensor_holder,
           "instrument_id"
         ]
-        id_handheld_meter <- if (input$ID_handheld_meter == "NA") {
+        handheld_meter_instrument_id <- if (input$ID_handheld_meter == "NA") {
           NA
         } else {
           instruments_data$sheet[
@@ -3318,10 +3324,10 @@ table.on("click", "tr", function() {
         }
 
         calibration_data$basic <- data.frame(
-          observer = input$observer,
+          observer_id = input$observer,
           obs_datetime = dt,
-          id_sensor_holder = id_sensor_holder,
-          id_handheld_meter = id_handheld_meter,
+          sensor_holder_instrument_id = sensor_holder_instrument_id,
+          handheld_meter_instrument_id = handheld_meter_instrument_id,
           purpose = purpose_text,
           complete = FALSE
         )
@@ -3342,17 +3348,17 @@ table.on("click", "tr", function() {
           DBI::dbExecute(
             session$userData$AquaCache,
             paste0(
-              "UPDATE instruments.calibrations SET observer = ",
+              "UPDATE instruments.calibrations SET observer_id = ",
               sql_string_or_null(input$observer),
               ", obs_datetime = ",
               sql_string_or_null(as.character(dt)),
-              ", id_sensor_holder = ",
-              id_sensor_holder,
-              ", id_handheld_meter = ",
-              if (is.na(id_handheld_meter)) {
+              ", sensor_holder_instrument_id = ",
+              sensor_holder_instrument_id,
+              ", handheld_meter_instrument_id = ",
+              if (is.na(handheld_meter_instrument_id)) {
                 "NULL"
               } else {
-                id_handheld_meter
+                handheld_meter_instrument_id
               },
               ", purpose = ",
               sql_string_or_null(purpose_text),

@@ -196,7 +196,7 @@ continuous_trace_uses_corrected_source <- function(
     con,
     paste0(
       "SELECT correction_id FROM continuous.corrections ",
-      "WHERE timeseries_id = $1 AND start_dt <= $2 AND end_dt >= $3 ",
+      "WHERE timeseries_id = $1 AND start_datetime <= $2 AND end_datetime >= $3 ",
       "LIMIT 1;"
     ),
     params = list(timeseries_id, end_date, start_date)
@@ -820,16 +820,16 @@ fetch_continuous_plot_notes <- function(con, req, lang = "en") {
       " AS location, ",
       parameter_sql,
       " AS parameter, n.note, ",
-      "n.start_dt AS start_datetime_utc, ",
-      "n.end_dt AS end_datetime_utc ",
+      "n.start_datetime AS start_datetime_utc, ",
+      "n.end_datetime AS end_datetime_utc ",
       "FROM continuous.notes n ",
       "JOIN continuous.timeseries ts USING (timeseries_id) ",
       "LEFT JOIN public.locations l ON l.location_id = ts.location_id ",
       "LEFT JOIN public.parameters p ON p.parameter_id = ts.parameter_id ",
       "WHERE n.timeseries_id IN (",
       paste(ids, collapse = ", "),
-      ") AND n.start_dt < $2 AND n.end_dt >= $1 ",
-      "ORDER BY n.start_dt, n.end_dt, n.note_id"
+      ") AND n.start_datetime < $2 AND n.end_datetime >= $1 ",
+      "ORDER BY n.start_datetime, n.end_datetime, n.note_id"
     ),
     params = list(min(windows$start_dt), max(windows$end_dt))
   )
@@ -1744,7 +1744,8 @@ continuous_qc_display_intervals <- function(
   gaps <- pmax(0, starts[-1L] - ends[-length(ends)])
   if (
     length(period_seconds) == 1L &&
-      is.finite(period_seconds) && period_seconds > 0
+      is.finite(period_seconds) &&
+      period_seconds > 0
   ) {
     half_period <- period_seconds / 2
     out[, start_dt := start_dt - pmin(half_period, c(Inf, gaps / 2))]
@@ -1755,8 +1756,7 @@ continuous_qc_display_intervals <- function(
   run <- cumsum(c(
     TRUE,
     diff(data.table::rleidv(out, c(code_col, "color_code"))) != 0L |
-      as.numeric(out$start_dt[-1L]) >
-        as.numeric(out$end_dt[-nrow(out)])
+      as.numeric(out$start_dt[-1L]) > as.numeric(out$end_dt[-nrow(out)])
   ))
   last_ends <- out[, .(end_dt = max(end_dt)), by = .(run)]$end_dt
   out <- out[!duplicated(run)]
@@ -1822,8 +1822,7 @@ fetch_continuous_qc_intervals <- function(
 
     statement <- sprintf(
       "SELECT
-         qc.start_dt,
-         qc.end_dt,
+         qc.start_datetime AS start_dt, qc.end_datetime AS end_dt,
          qt.%s AS qc_type_code,
          qt.%s AS qc_type_description,
          qt.%s AS qc_type_description_fr,
@@ -1832,9 +1831,9 @@ fetch_continuous_qc_intervals <- function(
        LEFT JOIN %s qt
          ON qt.%s = qc.%s
        WHERE qc.timeseries_id = $1
-         AND qc.end_dt >= $2
-         AND qc.start_dt <= $3
-       ORDER BY qc.start_dt, qc.end_dt",
+         AND qc.end_datetime >= $2
+         AND qc.start_datetime <= $3
+       ORDER BY qc.start_datetime, qc.end_datetime",
       qc_config$type_code,
       qc_config$type_description,
       qc_config$type_description_fr,

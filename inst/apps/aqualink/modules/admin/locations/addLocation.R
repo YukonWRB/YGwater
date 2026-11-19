@@ -189,7 +189,7 @@ addLocation <- function(id, inputs, language) {
       # limit documents to those that are data sharing agreements, which requires a join on table document_types
       moduleData$agreements <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT document_id, name, description FROM files.documents WHERE type = (SELECT document_type_id FROM files.document_types WHERE document_type_en = 'data sharing agreement')"
+        "SELECT document_id, name, description FROM files.documents WHERE document_type_id = (SELECT document_type_id FROM files.document_types WHERE document_type_en = 'data sharing agreement')"
       )
       moduleData$datums <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -300,7 +300,7 @@ addLocation <- function(id, inputs, language) {
         splitLayout(
           cellWidths = c("33.3%", "33.3%", "33.3%"),
           selectizeInput(
-            ns("datum_id_from"),
+            ns("from_datum_id"),
             "Vertical datum from (Assumed datum is station 0)",
             choices = stats::setNames(
               moduleData$datums$datum_id,
@@ -314,7 +314,7 @@ addLocation <- function(id, inputs, language) {
               "This should almost always be 'Assumed Datum', the local measurements."
             ),
           selectizeInput(
-            ns("datum_id_to"),
+            ns("to_datum_id"),
             "Vertical datum to (Use assumed datum if no conversion to apply)",
             choices = stats::setNames(
               moduleData$datums$datum_id,
@@ -722,8 +722,8 @@ addLocation <- function(id, inputs, language) {
         ]
         if (nrow(datum_details) == 0) {
           datum_details <- data.frame(
-            datum_id_from = 10,
-            datum_id_to = 10,
+            from_datum_id = 10,
+            to_datum_id = 10,
             conversion_m = 0
           )
         }
@@ -758,13 +758,13 @@ addLocation <- function(id, inputs, language) {
           updateTextInput(session, "loc_contact", value = details$contact)
           updateSelectizeInput(
             session,
-            "datum_id_from",
-            selected = datum_details$datum_id_from
+            "from_datum_id",
+            selected = datum_details$from_datum_id
           )
           updateSelectizeInput(
             session,
-            "datum_id_to",
-            selected = datum_details$datum_id_to
+            "to_datum_id",
+            selected = datum_details$to_datum_id
           )
           updateNumericInput(
             session,
@@ -864,8 +864,8 @@ addLocation <- function(id, inputs, language) {
         selected = "public_reader"
       )
       updateTextInput(session, "loc_contact", value = "")
-      updateSelectizeInput(session, "datum_id_from", selected = 10)
-      updateSelectizeInput(session, "datum_id_to", selected = character(0))
+      updateSelectizeInput(session, "from_datum_id", selected = 10)
+      updateSelectizeInput(session, "to_datum_id", selected = character(0))
       updateNumericInput(session, "elev", value = NA)
       updateSelectizeInput(session, "network", selected = character(0))
       updateSelectizeInput(session, "project", selected = character(0))
@@ -1111,10 +1111,10 @@ addLocation <- function(id, inputs, language) {
               actionButton(ns("close"), "Close")
             )
           ))
-          updateSelectizeInput(session, "datum_id_from", selected = 10)
+          updateSelectizeInput(session, "from_datum_id", selected = 10)
           updateSelectizeInput(
             session,
-            "datum_id_to",
+            "to_datum_id",
             selected = character(0)
           )
           updateNumericInput(session, "elev", value = NA)
@@ -1140,12 +1140,12 @@ addLocation <- function(id, inputs, language) {
           )]
           updateSelectizeInput(
             session,
-            "datum_id_from",
+            "from_datum_id",
             selected = datum$DATUM_FROM_ID[nrow(datum)]
           )
           updateSelectizeInput(
             session,
-            "datum_id_to",
+            "to_datum_id",
             selected = datum$DATUM_TO_ID[nrow(datum)]
           )
           updateNumericInput(
@@ -1323,13 +1323,13 @@ addLocation <- function(id, inputs, language) {
           return()
         }
 
-        updateSelectizeInput(session, "datum_id_from", selected = 10)
+        updateSelectizeInput(session, "from_datum_id", selected = 10)
         if (is.na(estimate$datum_id)) {
-          updateSelectizeInput(session, "datum_id_to", selected = character(0))
+          updateSelectizeInput(session, "to_datum_id", selected = character(0))
         } else {
           updateSelectizeInput(
             session,
-            "datum_id_to",
+            "to_datum_id",
             selected = estimate$datum_id
           )
         }
@@ -1715,14 +1715,14 @@ addLocation <- function(id, inputs, language) {
     observe({
       if (
         missing_numeric_input(input$elev) ||
-          !isTruthy(input$datum_id_from) ||
-          !isTruthy(input$datum_id_to)
+          !isTruthy(input$from_datum_id) ||
+          !isTruthy(input$to_datum_id)
       ) {
         shinyjs::js$backgroundCol(ns("elev"), "#fff")
         warnings$elev <- NULL
         return()
       }
-      if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
+      if (input$from_datum_id == input$to_datum_id && input$elev != 0) {
         shinyjs::js$backgroundCol(ns("elev"), "#fdd")
         warnings$elev <- "Warning: Elevation conversion is set to a non-zero value but the from/to datums are the same. Are you sure you want to do this?"
       } else {
@@ -2530,12 +2530,12 @@ addLocation <- function(id, inputs, language) {
           suppressWarnings(as.numeric(input$elev)),
           as.numeric(applied_estimate$details$elevation)
         )) &&
-        identical(as.character(input$datum_id_from), "10") &&
+        identical(as.character(input$from_datum_id), "10") &&
         if (is.na(applied_estimate$datum_id)) {
-          !isTruthy(input$datum_id_to)
+          !isTruthy(input$to_datum_id)
         } else {
           isTRUE(all.equal(
-            suppressWarnings(as.numeric(input$datum_id_to)),
+            suppressWarnings(as.numeric(input$to_datum_id)),
             as.numeric(applied_estimate$datum_id)
           ))
         }
@@ -2545,7 +2545,7 @@ addLocation <- function(id, inputs, language) {
       # Manual conversions and edits require complete datum information.
       if (
         !automatic_elevation &&
-          (!isTruthy(input$datum_id_from) || !isTruthy(input$datum_id_to))
+          (!isTruthy(input$from_datum_id) || !isTruthy(input$to_datum_id))
       ) {
         showModal(modalDialog(
           "Datum ID from and to are mandatory (use assumed datum for both if there is no conversion to apply)",
@@ -2571,7 +2571,7 @@ addLocation <- function(id, inputs, language) {
       # If datums are both the same make sure elevation is 0
       if (
         !automatic_elevation &&
-          input$datum_id_from == input$datum_id_to &&
+          input$from_datum_id == input$to_datum_id &&
           input$elev != 0
       ) {
         showModal(modalDialog(
@@ -2794,8 +2794,8 @@ addLocation <- function(id, inputs, language) {
             }
 
             # datum and elevation changes
-            datum_id_from <- as.numeric(input$datum_id_from)
-            datum_id_to <- as.numeric(input$datum_id_to)
+            from_datum_id <- as.numeric(input$from_datum_id)
+            to_datum_id <- as.numeric(input$to_datum_id)
             conversion_m <- as.numeric(input$elev)
             existing_datum <- moduleData$datum_conversions[
               moduleData$datum_conversions$location_id == selected_loc(),
@@ -2803,22 +2803,22 @@ addLocation <- function(id, inputs, language) {
             if (nrow(existing_datum) == 0) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "INSERT INTO public.datum_conversions (location_id, datum_id_from, datum_id_to, conversion_m, current) VALUES ($1, $2, $3, $4, TRUE);",
+                "INSERT INTO public.datum_conversions (location_id, from_datum_id, to_datum_id, conversion_m, current) VALUES ($1, $2, $3, $4, TRUE);",
                 params = list(
                   selected_loc(),
-                  datum_id_from,
-                  datum_id_to,
+                  from_datum_id,
+                  to_datum_id,
                   conversion_m
                 )
               )
             } else if (
               !identical(
-                datum_id_from,
-                as.numeric(existing_datum$datum_id_from[[1]])
+                from_datum_id,
+                as.numeric(existing_datum$from_datum_id[[1]])
               ) ||
                 !identical(
-                  datum_id_to,
-                  as.numeric(existing_datum$datum_id_to[[1]])
+                  to_datum_id,
+                  as.numeric(existing_datum$to_datum_id[[1]])
                 ) ||
                 !identical(
                   conversion_m,
@@ -2827,10 +2827,10 @@ addLocation <- function(id, inputs, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE public.datum_conversions SET datum_id_from = $1, datum_id_to = $2, conversion_m = $3 WHERE location_id = $4 AND current IS TRUE;",
+                "UPDATE public.datum_conversions SET from_datum_id = $1, to_datum_id = $2, conversion_m = $3 WHERE location_id = $4 AND current IS TRUE;",
                 params = list(
-                  datum_id_from,
-                  datum_id_to,
+                  from_datum_id,
+                  to_datum_id,
                   conversion_m,
                   selected_loc()
                 )
@@ -3196,15 +3196,15 @@ addLocation <- function(id, inputs, language) {
         location_type = as.numeric(input$loc_type),
         note = if (isTruthy(input$loc_note)) input$loc_note else NA,
         contact = if (isTruthy(input$loc_contact)) input$loc_contact else NA,
-        datum_id_from = if (automatic_elevation) {
+        from_datum_id = if (automatic_elevation) {
           NA_real_
         } else {
-          as.numeric(input$datum_id_from)
+          as.numeric(input$from_datum_id)
         },
-        datum_id_to = if (automatic_elevation) {
+        to_datum_id = if (automatic_elevation) {
           NA_real_
         } else {
-          as.numeric(input$datum_id_to)
+          as.numeric(input$to_datum_id)
         },
         conversion_m = if (automatic_elevation) NA_real_ else input$elev,
         current = TRUE,
@@ -3247,8 +3247,8 @@ addLocation <- function(id, inputs, language) {
       if (estimate_applied) {
         # Sending the estimate details in the data frame lets AquaCache create
         # an unmatched datum within its location transaction.
-        df$datum_id_from <- NA_real_
-        df$datum_id_to <- NA_real_
+        df$from_datum_id <- NA_real_
+        df$to_datum_id <- NA_real_
         df$conversion_m <- NA_real_
         df$elevation_details <- list(applied_estimate$details)
       }
@@ -3323,15 +3323,15 @@ addLocation <- function(id, inputs, language) {
           if ("elevation_details" %in% names(df)) {
             updateSelectizeInput(
               session,
-              "datum_id_to",
+              "to_datum_id",
               choices = stats::setNames(
-                c(moduleData$datums$datum_id, added_location$datum_id_to[[1]]),
+                c(moduleData$datums$datum_id, added_location$to_datum_id[[1]]),
                 c(
                   titleCase(moduleData$datums$datum_name_en, "en"),
                   titleCase(applied_estimate$details$vertical_datum, "en")
                 )
               ),
-              selected = added_location$datum_id_to[[1]]
+              selected = added_location$to_datum_id[[1]]
             )
           }
 
@@ -3350,10 +3350,10 @@ addLocation <- function(id, inputs, language) {
             selected = "public_reader"
           )
           updateTextInput(session, "loc_contact", value = character(0))
-          updateSelectizeInput(session, "datum_id_from", selected = 10)
+          updateSelectizeInput(session, "from_datum_id", selected = 10)
           updateSelectizeInput(
             session,
-            "datum_id_to",
+            "to_datum_id",
             selected = character(0)
           )
           updateNumericInput(session, "elev", value = NA)

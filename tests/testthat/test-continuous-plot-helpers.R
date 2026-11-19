@@ -238,8 +238,8 @@ test_that("adaptive multi-timeseries plots batch data and preserve axis units", 
   )
   expect_match(
     module_text,
-    "preprocessed_range_data = fast_ranges[[as.character(ts_id)]]",
-    fixed = TRUE
+    "preprocessed_range_data\\s*=\\s*fast_ranges\\[\\[as\\.character\\(\\s*ts_id\\s*\\)\\]\\]",
+    perl = TRUE
   )
   expect_match(module_text, 'output_alias = "units"', fixed = TRUE)
   expect_match(module_text, 'paste0(" (", meta_row$units, ")")', fixed = TRUE)

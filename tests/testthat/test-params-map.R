@@ -37,6 +37,7 @@ params_map_test_module <- function() {
     value = 5, max = 10, min = 0, doy_count = 20L, percent_historic_range = 50
   )
   module$queries <- character()
+  module$query_connections <- list()
   module$legends <- list()
   module$modal <- ""
   module$showModal <- function(ui, ...) module$modal <- as.character(ui)
@@ -56,6 +57,7 @@ params_map_test_module <- function() {
         ])))
       }
       module$queries <- c(module$queries, statement)
+      module$query_connections <- c(module$query_connections, list(conn))
       ids <- regmatches(
         statement,
         regexec("timeseries_id IN \\(([0-9,]+)\\)|ARRAY\\[([0-9,]+)\\]", statement)
@@ -90,7 +92,7 @@ params_map_test_module <- function() {
   module
 }
 
-test_that("parameter maps wait for client bounds and preserve bilingual selections", {
+test_that("parameter maps query through the session after client bounds are available", {
   module <- params_map_test_module()
   shiny::testServer(
     module$mapParams,
@@ -100,6 +102,11 @@ test_that("parameter maps wait for client bounds and preserve bilingual selectio
       session$setInputs(mapType = "range")
       expect_length(module$queries, 0L)
       session$setInputs(target = as.Date("2026-10-01"), map_bounds = list(north = 65))
+      expect_gt(length(module$queries), 0L)
+      expect_identical(
+        module$query_connections,
+        rep(list(session$userData$AquaCache), length(module$queries))
+      )
       expect_false(session$isClosed())
       expect_equal(map_params$param1, 41L)
       expect_equal(nrow(module$cached$parameters), 4L) # Older caches repeat IDs.

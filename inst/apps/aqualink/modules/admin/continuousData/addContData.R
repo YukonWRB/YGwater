@@ -101,8 +101,8 @@ add_cont_data_target_label <- function(target) {
 add_cont_data_prepare_notes <- function(ranges, no_source_update = TRUE) {
   empty <- data.frame(
     note = character(),
-    start_dt = as.POSIXct(character(), tz = "UTC"),
-    end_dt = as.POSIXct(character(), tz = "UTC"),
+    start_datetime = as.POSIXct(character(), tz = "UTC"),
+    end_datetime = as.POSIXct(character(), tz = "UTC"),
     no_source_update = logical(),
     stringsAsFactors = FALSE
   )
@@ -121,19 +121,19 @@ add_cont_data_prepare_notes <- function(ranges, no_source_update = TRUE) {
   }
 
   note <- trimws(as.character(ranges$note))
-  start_dt <- suppressWarnings(as.POSIXct(
+  start_datetime <- suppressWarnings(as.POSIXct(
     as.character(ranges$start_datetime),
     tz = "UTC"
   ))
-  end_dt <- suppressWarnings(as.POSIXct(
+  end_datetime <- suppressWarnings(as.POSIXct(
     as.character(ranges$end_datetime),
     tz = "UTC"
   ))
   invalid <- is.na(note) |
     !nzchar(note) |
-    is.na(start_dt) |
-    is.na(end_dt) |
-    start_dt > end_dt
+    is.na(start_datetime) |
+    is.na(end_datetime) |
+    start_datetime > end_datetime
   if (any(invalid)) {
     stop(
       "Invalid note text or start/end datetime in row(s): ",
@@ -144,8 +144,8 @@ add_cont_data_prepare_notes <- function(ranges, no_source_update = TRUE) {
 
   data.frame(
     note = note,
-    start_dt = start_dt,
-    end_dt = end_dt,
+    start_datetime = start_datetime,
+    end_datetime = end_datetime,
     no_source_update = rep(isTRUE(no_source_update), length(note)),
     stringsAsFactors = FALSE
   )

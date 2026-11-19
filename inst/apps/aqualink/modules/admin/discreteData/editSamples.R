@@ -38,20 +38,26 @@ edit_samples_link_changes <- function(existing_ids, selected_ids) {
 #' @keywords internal
 #' @noRd
 edit_samples_sync_document_links <- function(con, sample_id, document_ids) {
-  existing_ids <- DBI::dbGetQuery(con,
+  existing_ids <- DBI::dbGetQuery(
+    con,
     "SELECT document_id FROM discrete.sample_documents WHERE sample_id=$1",
-    params = list(as.integer(sample_id)))$document_id
+    params = list(as.integer(sample_id))
+  )$document_id
   changes <- edit_samples_link_changes(existing_ids, document_ids)
   for (document_id in changes$remove) {
-    DBI::dbExecute(con,
+    DBI::dbExecute(
+      con,
       "DELETE FROM discrete.sample_documents WHERE sample_id=$1 AND document_id=$2",
-      params = list(as.integer(sample_id), document_id))
+      params = list(as.integer(sample_id), document_id)
+    )
   }
   for (document_id in changes$add) {
-    DBI::dbExecute(con,
+    DBI::dbExecute(
+      con,
       "INSERT INTO discrete.sample_documents(sample_id,document_id,document_role)
        VALUES ($1,$2,'supporting') ON CONFLICT (sample_id,document_id) DO NOTHING",
-      params = list(as.integer(sample_id), document_id))
+      params = list(as.integer(sample_id), document_id)
+    )
   }
   invisible(NULL)
 }
@@ -133,11 +139,11 @@ editSamples <- function(id, language) {
     provenance_result_id <- reactiveVal(NA_integer_)
 
     multi_editable_fields <- list(
-      collection_method = list(
+      collection_method_id = list(
         label = "Collection method",
-        column = "collection_method"
+        column = "collection_method_id"
       ),
-      sample_type = list(label = "Sample type", column = "sample_type"),
+      sample_type_id = list(label = "Sample type", column = "sample_type_id"),
       sample_volume_ml = list(
         label = "Sample volume (mL)",
         column = "sample_volume_ml"
@@ -154,11 +160,11 @@ editSamples <- function(id, language) {
         label = "Flow rate (L/min)",
         column = "flow_rate_l_min"
       ),
-      wave_hgt_m = list(label = "Wave height (m)", column = "wave_hgt_m"),
-      sample_grade = list(label = "Sample grade", column = "sample_grade"),
-      sample_approval = list(
+      wave_height_m = list(label = "Wave height (m)", column = "wave_height_m"),
+      grade_type_id = list(label = "Sample grade", column = "grade_type_id"),
+      approval_type_id = list(
         label = "Sample approval",
-        column = "sample_approval"
+        column = "approval_type_id"
       ),
       sample_qualifier_ids = list(
         label = "Sample qualifiers",
@@ -170,13 +176,13 @@ editSamples <- function(id, language) {
       ),
       owner = list(label = "Owner", column = "owner"),
       contributor = list(label = "Contributor", column = "contributor"),
-      comissioning_org = list(
+      commissioning_org_id = list(
         label = "Commissioning organization",
-        column = "comissioning_org"
+        column = "commissioning_org_id"
       ),
-      sampling_org = list(
+      sampling_org_id = list(
         label = "Sampling organization",
-        column = "sampling_org"
+        column = "sampling_org_id"
       ),
       share_with = list(
         label = "Share with",
@@ -298,7 +304,9 @@ editSamples <- function(id, language) {
         paste0(
           "SELECT DISTINCT document_id
            FROM discrete.sample_documents
-           WHERE sample_id IN (", placeholders, ")"
+           WHERE sample_id IN (",
+          placeholders,
+          ")"
         ),
         params = as.list(sample_ids)
       )$document_id
@@ -576,7 +584,8 @@ editSamples <- function(id, language) {
 
           document_type <- input$new_document_type
           if (
-            !length(document_type) || is.na(document_type) ||
+            !length(document_type) ||
+              is.na(document_type) ||
               !nzchar(document_type)
           ) {
             stop("Select a document type before uploading documents.")
@@ -619,13 +628,13 @@ editSamples <- function(id, language) {
       } else {
         NA_integer_
       }
-      collection_method <- if (length(input$collection_method)) {
-        as.integer(input$collection_method[[1]])
+      collection_method_id <- if (length(input$collection_method_id)) {
+        as.integer(input$collection_method_id[[1]])
       } else {
         NA_integer_
       }
-      sample_type <- if (length(input$sample_type)) {
-        as.integer(input$sample_type[[1]])
+      sample_type_id <- if (length(input$sample_type_id)) {
+        as.integer(input$sample_type_id[[1]])
       } else {
         NA_integer_
       }
@@ -639,23 +648,23 @@ editSamples <- function(id, language) {
       } else {
         NA_integer_
       }
-      comissioning_org <- if (length(input$comissioning_org)) {
-        as.integer(input$comissioning_org[[1]])
+      commissioning_org_id <- if (length(input$commissioning_org_id)) {
+        as.integer(input$commissioning_org_id[[1]])
       } else {
         NA_integer_
       }
-      sampling_org <- if (length(input$sampling_org)) {
-        as.integer(input$sampling_org[[1]])
+      sampling_org_id <- if (length(input$sampling_org_id)) {
+        as.integer(input$sampling_org_id[[1]])
       } else {
         NA_integer_
       }
-      sample_grade <- if (length(input$sample_grade)) {
-        as.integer(input$sample_grade[[1]])
+      grade_type_id <- if (length(input$grade_type_id)) {
+        as.integer(input$grade_type_id[[1]])
       } else {
         NA_integer_
       }
-      sample_approval <- if (length(input$sample_approval)) {
-        as.integer(input$sample_approval[[1]])
+      approval_type_id <- if (length(input$approval_type_id)) {
+        as.integer(input$approval_type_id[[1]])
       } else {
         NA_integer_
       }
@@ -680,15 +689,15 @@ editSamples <- function(id, language) {
         location_id = location_id,
         sub_location_id = sub_location_id,
         media_id = media_id,
-        z = if (!length(input$z) || is.na(input$z)) {
+        depth_height_m = if (!length(input$depth_height_m) || is.na(input$depth_height_m)) {
           NA_real_
         } else {
-          as.numeric(input$z)
+          as.numeric(input$depth_height_m)
         },
         datetime = scalar_utc_datetime(input$datetime),
         target_datetime = scalar_utc_datetime(input$target_datetime),
-        collection_method = collection_method,
-        sample_type = sample_type,
+        collection_method_id = collection_method_id,
+        sample_type_id = sample_type_id,
         sample_volume_ml = if (
           !length(input$sample_volume_ml) || is.na(input$sample_volume_ml)
         ) {
@@ -717,19 +726,19 @@ editSamples <- function(id, language) {
         } else {
           as.numeric(input$flow_rate_l_min)
         },
-        wave_hgt_m = if (!length(input$wave_hgt_m) || is.na(input$wave_hgt_m)) {
+        wave_height_m = if (!length(input$wave_height_m) || is.na(input$wave_height_m)) {
           NA_real_
         } else {
-          as.numeric(input$wave_hgt_m)
+          as.numeric(input$wave_height_m)
         },
-        sample_grade = sample_grade,
-        sample_approval = sample_approval,
+        grade_type_id = grade_type_id,
+        approval_type_id = approval_type_id,
         sample_qualifier_ids = sample_qualifier_ids,
         sample_observer_ids = sample_observer_ids,
         owner = owner,
         contributor = contributor,
-        comissioning_org = comissioning_org,
-        sampling_org = sampling_org,
+        commissioning_org_id = commissioning_org_id,
+        sampling_org_id = sampling_org_id,
         document_ids = document_ids,
         sample_group_ids = sample_group_ids,
         share_with = share_with_to_array(input$share_with),
@@ -795,48 +804,53 @@ editSamples <- function(id, language) {
         result_entry_type <- "exact"
       }
       metadata <- collect_result_metadata_inputs()
-      c(list(
-        sample_id = sample_id,
-        result_entry_type = result_entry_type,
-        result_type = integer_input("result_type"),
-        parameter_id = integer_input("result_parameter"),
-        sample_fraction_id = integer_input("result_sample_fraction"),
-        result = if (identical(result_entry_type, "exact")) {
-          numeric_input("result_value")
-        } else {
-          NA_real_
-        },
-        result_condition = if (identical(result_entry_type, "conditional")) {
-          integer_input("result_condition")
-        } else {
-          NA_integer_
-        },
-        result_condition_value = if (
-          identical(result_entry_type, "conditional")
-        ) {
-          numeric_input("result_condition_value")
-        } else {
-          NA_real_
-        },
-        result_value_type = integer_input("result_value_type"),
-        reporting_basis_id = integer_input("reporting_basis"),
-        protocol_method = integer_input("result_protocol_method"),
-        laboratory = integer_input("result_laboratory"),
-        analysis_datetime = scalar_utc_datetime(input$result_analysis_datetime),
-        lab_report_no = metadata$lab_report_no,
-        lab_sample_no = metadata$lab_sample_no,
-        grade_type_id = metadata$grade_type_id,
-        approval_type_id = metadata$approval_type_id,
-        share_with = share_with_to_array(input$result_share_with),
-        no_source_update = isTRUE(input$result_no_source_update),
-        private_expiry = date_input("result_private_expiry"),
-        matrix_state_id = integer_input("result_matrix_state"),
-        note = if (isTruthy(input$result_note)) {
-          input$result_note
-        } else {
-          NA_character_
-        }
-      ), YGwater:::chemistry_metadata_values(input, "edit_chem_"))
+      c(
+        list(
+          sample_id = sample_id,
+          result_entry_type = result_entry_type,
+          result_type_id = integer_input("result_type_id"),
+          parameter_id = integer_input("result_parameter"),
+          sample_fraction_id = integer_input("result_sample_fraction"),
+          result = if (identical(result_entry_type, "exact")) {
+            numeric_input("result_value")
+          } else {
+            NA_real_
+          },
+          result_condition_id = if (identical(result_entry_type, "conditional")) {
+            integer_input("result_condition_id")
+          } else {
+            NA_integer_
+          },
+          result_condition_value = if (
+            identical(result_entry_type, "conditional")
+          ) {
+            numeric_input("result_condition_value")
+          } else {
+            NA_real_
+          },
+          result_value_type_id = integer_input("result_value_type_id"),
+          reporting_basis_id = integer_input("reporting_basis"),
+          protocol_method_id = integer_input("result_protocol_method"),
+          lab_id = integer_input("result_laboratory"),
+          analysis_datetime = scalar_utc_datetime(
+            input$result_analysis_datetime
+          ),
+          lab_report_no = metadata$lab_report_no,
+          lab_sample_no = metadata$lab_sample_no,
+          grade_type_id = metadata$grade_type_id,
+          approval_type_id = metadata$approval_type_id,
+          share_with = share_with_to_array(input$result_share_with),
+          no_source_update = isTRUE(input$result_no_source_update),
+          private_expiry = date_input("result_private_expiry"),
+          matrix_state_id = integer_input("result_matrix_state"),
+          note = if (isTruthy(input$result_note)) {
+            input$result_note
+          } else {
+            NA_character_
+          }
+        ),
+        chemistry_metadata_values(input, "edit_chem_")
+      )
     }
 
     result_lookup_choices <- function(data, id_col, label_col) {
@@ -1097,7 +1111,7 @@ editSamples <- function(id, language) {
         SELECT
           r.result_id,
           r.sample_id,
-          r.result_type,
+          r.result_type_id,
           rt.result_type AS result_type_name,
           r.parameter_id,
           p.param_name AS parameter,
@@ -1108,18 +1122,18 @@ editSamples <- function(id, language) {
           r.sample_fraction_id,
           sf.sample_fraction,
           r.result,
-          r.result_condition,
+          r.result_condition_id,
           rc.result_condition AS result_condition_name,
           r.result_condition_value,
-          r.result_value_type,
+          r.result_value_type_id,
           rvt.result_value_type AS result_value_type_name,
           r.reporting_basis_id, r.result_speciation_id, r.result_target_id, r.endpoint_mode, r.endpoint_ph, r.analysis_conditions,
           rs.reporting_basis,
           spec.result_speciation,
           target.result_target,
-          r.protocol_method,
+          r.protocol_method_id,
           pm.protocol_name,
-          r.laboratory,
+          r.lab_id AS laboratory,
           lab.lab_name AS laboratory_name,
           r.analysis_datetime,
           r.lab_report_no,
@@ -1148,13 +1162,13 @@ editSamples <- function(id, language) {
         JOIN public.parameters p
           ON r.parameter_id = p.parameter_id
         JOIN discrete.result_types rt
-          ON r.result_type = rt.result_type_id
+          ON r.result_type_id = rt.result_type_id
         LEFT JOIN discrete.sample_fractions sf
           ON r.sample_fraction_id = sf.sample_fraction_id
         LEFT JOIN discrete.result_conditions rc
-          ON r.result_condition = rc.result_condition_id
+          ON r.result_condition_id = rc.result_condition_id
         LEFT JOIN discrete.result_value_types rvt
-          ON r.result_value_type = rvt.result_value_type_id
+          ON r.result_value_type_id = rvt.result_value_type_id
         LEFT JOIN discrete.reporting_bases rs
           ON r.reporting_basis_id = rs.reporting_basis_id
         LEFT JOIN discrete.result_speciations spec
@@ -1162,9 +1176,9 @@ editSamples <- function(id, language) {
         LEFT JOIN discrete.result_targets target
           ON r.result_target_id = target.result_target_id
         LEFT JOIN discrete.protocols_methods pm
-          ON r.protocol_method = pm.protocol_id
+          ON r.protocol_method_id = pm.protocol_method_id
         LEFT JOIN discrete.laboratories lab
-          ON r.laboratory = lab.lab_id
+          ON r.lab_id = lab.lab_id
         LEFT JOIN public.grade_types result_grade
           ON r.grade_type_id = result_grade.grade_type_id
         LEFT JOIN public.approval_types result_approval
@@ -1338,7 +1352,7 @@ editSamples <- function(id, language) {
       parameter_choices <- result_parameter_choices()
       result_entry_type <- if (
         !is.null(row) &&
-          (!is.na(row$result_condition) ||
+          (!is.na(row$result_condition_id) ||
             !is.na(row$result_condition_value))
       ) {
         "conditional"
@@ -1369,7 +1383,7 @@ editSamples <- function(id, language) {
           column(
             3,
             selectizeInput(
-              ns("result_type"),
+              ns("result_type_id"),
               "Result type",
               choices = result_lookup_choices(
                 moduleData$result_types,
@@ -1377,7 +1391,7 @@ editSamples <- function(id, language) {
                 "result_type"
               ),
               selected = selected_value(
-                "result_type",
+                "result_type_id",
                 first_lookup_id(moduleData$result_types, "result_type_id")
               ),
               multiple = TRUE,
@@ -1454,14 +1468,14 @@ editSamples <- function(id, language) {
             column(
               4,
               selectizeInput(
-                ns("result_condition"),
+                ns("result_condition_id"),
                 "Result condition",
                 choices = result_lookup_choices(
                   moduleData$result_conditions,
                   "result_condition_id",
                   "result_condition"
                 ),
-                selected = selected_value("result_condition"),
+                selected = selected_value("result_condition_id"),
                 multiple = TRUE,
                 options = list(maxItems = 1, placeholder = "Select condition")
               )
@@ -1509,14 +1523,14 @@ editSamples <- function(id, language) {
           column(
             4,
             selectizeInput(
-              ns("result_value_type"),
+              ns("result_value_type_id"),
               "Value type",
               choices = result_lookup_choices(
                 moduleData$result_value_types,
                 "result_value_type_id",
                 "result_value_type"
               ),
-              selected = selected_value("result_value_type"),
+              selected = selected_value("result_value_type_id"),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional")
             )
@@ -1546,7 +1560,12 @@ editSamples <- function(id, language) {
             )
           )
         ),
-        YGwater:::chemistry_metadata_ui(ns, "edit_chem_", moduleData$chemistry_catalogues, if (is.null(row)) list() else row),
+        chemistry_metadata_ui(
+          ns,
+          "edit_chem_",
+          moduleData$chemistry_catalogues,
+          if (is.null(row)) list() else row
+        ),
         fluidRow(
           column(
             4,
@@ -1555,10 +1574,10 @@ editSamples <- function(id, language) {
               "Protocol/method",
               choices = result_lookup_choices(
                 moduleData$protocols_methods,
-                "protocol_id",
+                "protocol_method_id",
                 "protocol_name"
               ),
-              selected = selected_value("protocol_method"),
+              selected = selected_value("protocol_method_id"),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional")
             )
@@ -1573,7 +1592,7 @@ editSamples <- function(id, language) {
                 "lab_id",
                 "lab_name"
               ),
-              selected = selected_value("laboratory"),
+              selected = selected_value("lab_id"),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional")
             )
@@ -1695,7 +1714,7 @@ editSamples <- function(id, language) {
       updateSelectizeInput(session, "location", selected = character(0))
       updateSelectizeInput(session, "sub_location", selected = character(0))
       updateSelectizeInput(session, "media", selected = character(0))
-      updateNumericInput(session, "z", value = NA)
+      updateNumericInput(session, "depth_height_m", value = NA)
       shinyWidgets::updateAirDateInput(
         session,
         "datetime",
@@ -1708,17 +1727,17 @@ editSamples <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "collection_method",
+        "collection_method_id",
         selected = character(0)
       )
-      updateSelectizeInput(session, "sample_type", selected = character(0))
+      updateSelectizeInput(session, "sample_type_id", selected = character(0))
       updateNumericInput(session, "sample_volume_ml", value = NA)
       updateNumericInput(session, "purge_volume_l", value = NA)
       updateNumericInput(session, "purge_time_min", value = NA)
       updateNumericInput(session, "flow_rate_l_min", value = NA)
-      updateNumericInput(session, "wave_hgt_m", value = NA)
-      updateSelectizeInput(session, "sample_grade", selected = character(0))
-      updateSelectizeInput(session, "sample_approval", selected = character(0))
+      updateNumericInput(session, "wave_height_m", value = NA)
+      updateSelectizeInput(session, "grade_type_id", selected = character(0))
+      updateSelectizeInput(session, "approval_type_id", selected = character(0))
       updateSelectizeInput(
         session,
         "sample_qualifier_ids",
@@ -1731,8 +1750,8 @@ editSamples <- function(id, language) {
       )
       updateSelectizeInput(session, "owner", selected = character(0))
       updateSelectizeInput(session, "contributor", selected = character(0))
-      updateSelectizeInput(session, "comissioning_org", selected = character(0))
-      updateSelectizeInput(session, "sampling_org", selected = character(0))
+      updateSelectizeInput(session, "commissioning_org_id", selected = character(0))
+      updateSelectizeInput(session, "sampling_org_id", selected = character(0))
       updateSelectizeInput(session, "documents", selected = character(0))
       updateSelectizeInput(session, "sample_groups", selected = character(0))
       updateSelectizeInput(session, "share_with", selected = "public_reader")
@@ -1768,8 +1787,12 @@ editSamples <- function(id, language) {
         session,
         "sub_location",
         choices = named_choices(
-          moduleData$sub_locations$sub_location_id[moduleData$sub_locations$location_id %in% details$location_id],
-          moduleData$sub_locations$sub_location_name[moduleData$sub_locations$location_id %in% details$location_id]
+          moduleData$sub_locations$sub_location_id[
+            moduleData$sub_locations$location_id %in% details$location_id
+          ],
+          moduleData$sub_locations$sub_location_name[
+            moduleData$sub_locations$location_id %in% details$location_id
+          ]
         ),
         selected = if (is.na(details$sub_location_id)) {
           character(0)
@@ -1782,7 +1805,7 @@ editSamples <- function(id, language) {
         "media",
         selected = as.character(details$media_id)
       )
-      updateNumericInput(session, "z", value = details$z)
+      updateNumericInput(session, "depth_height_m", value = details$depth_height_m)
       shinyWidgets::updateAirDateInput(
         session,
         "datetime",
@@ -1805,13 +1828,13 @@ editSamples <- function(id, language) {
       }
       updateSelectizeInput(
         session,
-        "collection_method",
-        selected = as.character(details$collection_method)
+        "collection_method_id",
+        selected = as.character(details$collection_method_id)
       )
       updateSelectizeInput(
         session,
-        "sample_type",
-        selected = as.character(details$sample_type)
+        "sample_type_id",
+        selected = as.character(details$sample_type_id)
       )
       updateNumericInput(
         session,
@@ -1833,23 +1856,23 @@ editSamples <- function(id, language) {
         "flow_rate_l_min",
         value = details$flow_rate_l_min
       )
-      updateNumericInput(session, "wave_hgt_m", value = details$wave_hgt_m)
+      updateNumericInput(session, "wave_height_m", value = details$wave_height_m)
       updateSelectizeInput(
         session,
-        "sample_grade",
-        selected = if (is.na(details$sample_grade)) {
+        "grade_type_id",
+        selected = if (is.na(details$grade_type_id)) {
           character(0)
         } else {
-          as.character(details$sample_grade)
+          as.character(details$grade_type_id)
         }
       )
       updateSelectizeInput(
         session,
-        "sample_approval",
-        selected = if (is.na(details$sample_approval)) {
+        "approval_type_id",
+        selected = if (is.na(details$approval_type_id)) {
           character(0)
         } else {
-          as.character(details$sample_approval)
+          as.character(details$approval_type_id)
         }
       )
       updateSelectizeInput(
@@ -1878,20 +1901,20 @@ editSamples <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "comissioning_org",
-        selected = if (is.na(details$comissioning_org)) {
+        "commissioning_org_id",
+        selected = if (is.na(details$commissioning_org_id)) {
           character(0)
         } else {
-          as.character(details$comissioning_org)
+          as.character(details$commissioning_org_id)
         }
       )
       updateSelectizeInput(
         session,
-        "sampling_org",
-        selected = if (is.na(details$sampling_org)) {
+        "sampling_org_id",
+        selected = if (is.na(details$sampling_org_id)) {
           character(0)
         } else {
-          as.character(details$sampling_org)
+          as.character(details$sampling_org_id)
         }
       )
       updateSelectizeInput(
@@ -1912,7 +1935,11 @@ editSamples <- function(id, language) {
       updateTextInput(
         session,
         "source_adapter_function",
-        value = if (is.na(details$source_adapter_function)) "" else details$source_adapter_function
+        value = if (is.na(details$source_adapter_function)) {
+          ""
+        } else {
+          details$source_adapter_function
+        }
       )
       updateTextInput(
         session,
@@ -1939,11 +1966,11 @@ editSamples <- function(id, language) {
       con <- session$userData$AquaCache
       moduleData$samples <- DBI::dbGetQuery(
         con,
-        "SELECT sample_id, location_id, sub_location_id, media_id, z, datetime, target_datetime, collection_method, sample_type, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, sample_grade, sample_approval, owner, contributor, comissioning_org, sampling_org, share_with, source_adapter_function, no_source_update, note, external_sample_id, import_source_id FROM discrete.samples ORDER BY datetime DESC"
+        "SELECT sample_id, location_id, sub_location_id, media_id, depth_height_m, datetime, target_datetime, collection_method_id, sample_type_id, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_height_m, grade_type_id, approval_type_id, owner, contributor, commissioning_org_id, sampling_org_id, share_with, source_adapter_function, no_source_update, note, external_sample_id, import_source_id FROM discrete.samples ORDER BY datetime DESC"
       )
       moduleData$samples_display <- DBI::dbGetQuery(
         con,
-        "SELECT s.sample_id, COALESCE(l.name, '[No location]') AS location, COALESCE(sl.sub_location_name, '') AS sub_location, m.media_type, st.sample_type, cm.collection_method, s.datetime, s.target_datetime, o.name AS owner, c.name AS contributor, s.sample_volume_ml, s.purge_volume_l, s.share_with, COALESCE((SELECT string_agg(COALESCE(sg.group_code, sg.group_name), ', ' ORDER BY sg.sample_group_id) FROM discrete.sample_group_members sgm JOIN discrete.sample_groups sg ON sg.sample_group_id = sgm.sample_group_id WHERE sgm.sample_id = s.sample_id), '') AS sample_groups, COALESCE((SELECT string_agg(qt.qualifier_type_description, '; ' ORDER BY qt.qualifier_type_id) FROM discrete.sample_qualifiers sq JOIN public.qualifier_types qt USING (qualifier_type_id) WHERE sq.sample_id = s.sample_id), '') AS sample_qualifiers, COALESCE((SELECT string_agg(concat_ws(' ', observer.observer_first, observer.observer_last), '; ' ORDER BY observer.observer_last, observer.observer_first, observer.observer_id) FROM discrete.sample_observers so JOIN instruments.observers observer USING (observer_id) WHERE so.sample_id = s.sample_id AND so.observer_role = 'sampler'), '') AS sample_observers FROM discrete.samples s LEFT JOIN public.locations l ON s.location_id = l.location_id LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id JOIN public.media_types m ON s.media_id = m.media_id JOIN discrete.sample_types st ON s.sample_type = st.sample_type_id JOIN discrete.collection_methods cm ON s.collection_method = cm.collection_method_id LEFT JOIN public.organizations o ON s.owner = o.organization_id LEFT JOIN public.organizations c ON s.contributor = c.organization_id ORDER BY s.datetime DESC"
+        "SELECT s.sample_id, COALESCE(l.name, '[No location]') AS location, COALESCE(sl.sub_location_name, '') AS sub_location, m.media_type, st.sample_type, cm.collection_method, s.datetime, s.target_datetime, o.name AS owner, c.name AS contributor, s.sample_volume_ml, s.purge_volume_l, s.share_with, COALESCE((SELECT string_agg(COALESCE(sg.group_code, sg.group_name), ', ' ORDER BY sg.sample_group_id) FROM discrete.sample_group_members sgm JOIN discrete.sample_groups sg ON sg.sample_group_id = sgm.sample_group_id WHERE sgm.sample_id = s.sample_id), '') AS sample_groups, COALESCE((SELECT string_agg(qt.qualifier_type_description, '; ' ORDER BY qt.qualifier_type_id) FROM discrete.sample_qualifiers sq JOIN public.qualifier_types qt USING (qualifier_type_id) WHERE sq.sample_id = s.sample_id), '') AS sample_qualifiers, COALESCE((SELECT string_agg(concat_ws(' ', observer.observer_first, observer.observer_last), '; ' ORDER BY observer.observer_last, observer.observer_first, observer.observer_id) FROM discrete.sample_observers so JOIN instruments.observers observer USING (observer_id) WHERE so.sample_id = s.sample_id AND so.observer_role = 'sampler'), '') AS sample_observers FROM discrete.samples s LEFT JOIN public.locations l ON s.location_id = l.location_id LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id JOIN public.media_types m ON s.media_id = m.media_id JOIN discrete.sample_types st ON s.sample_type_id = st.sample_type_id JOIN discrete.collection_methods cm ON s.collection_method_id = cm.collection_method_id LEFT JOIN public.organizations o ON s.owner = o.organization_id LEFT JOIN public.organizations c ON s.contributor = c.organization_id ORDER BY s.datetime DESC"
       )
       moduleData$locations <- DBI::dbGetQuery(
         con,
@@ -2057,13 +2084,13 @@ editSamples <- function(id, language) {
           public.get_parameter_unit_name(p.parameter_id, NULL) AS unit_default
         FROM public.parameters p
         LEFT JOIN public.units ul
-          ON p.units_liquid = ul.unit_id
+          ON p.liquid_unit_id = ul.unit_id
         LEFT JOIN public.units us
-          ON p.units_solid = us.unit_id
+          ON p.solid_unit_id = us.unit_id
         LEFT JOIN public.units ug
-          ON p.units_gas = ug.unit_id
+          ON p.gas_unit_id = ug.unit_id
         LEFT JOIN public.units una
-          ON p.units_na = una.unit_id
+          ON p.not_applicable_unit_id = una.unit_id
         ORDER BY p.param_name ASC;
         "
       )
@@ -2087,10 +2114,12 @@ editSamples <- function(id, language) {
         con,
         "SELECT reporting_basis_id, reporting_basis FROM discrete.reporting_bases ORDER BY reporting_basis ASC"
       )
-      moduleData$chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(con)
+      moduleData$chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(
+        con
+      )
       moduleData$protocols_methods <- DBI::dbGetQuery(
         con,
-        "SELECT protocol_id, protocol_name FROM discrete.protocols_methods ORDER BY protocol_name ASC"
+        "SELECT protocol_method_id, protocol_name FROM discrete.protocols_methods ORDER BY protocol_name ASC"
       )
       moduleData$laboratories <- DBI::dbGetQuery(
         con,
@@ -2151,7 +2180,10 @@ editSamples <- function(id, language) {
               available$sub_location_id,
               available$sub_location_name
             ),
-            selected = intersect(input$sub_location, as.character(available$sub_location_id))
+            selected = intersect(
+              input$sub_location,
+              as.character(available$sub_location_id)
+            )
           )
         }
       },
@@ -2334,10 +2366,13 @@ editSamples <- function(id, language) {
                 column(
                   3,
                   numericInput(
-                    ns("z"),
-                    "Sample depth/elevation (m)",
+                    ns("depth_height_m"),
+                    "Sample depth/height (m)",
                     value = NA,
                     width = "100%"
+                  ),
+                  helpText(
+                    "Positive above the ground or water surface, negative below it."
                   )
                 )
               ),
@@ -2408,11 +2443,11 @@ editSamples <- function(id, language) {
             ),
             fluidRow(
               multi_field_ui(
-                "collection_method",
+                "collection_method_id",
                 column(
                   6,
                   selectizeInput(
-                    ns("collection_method"),
+                    ns("collection_method_id"),
                     "Collection method",
                     choices = named_choices(
                       moduleData$collection_methods$collection_method_id,
@@ -2428,11 +2463,11 @@ editSamples <- function(id, language) {
                 )
               ),
               multi_field_ui(
-                "sample_type",
+                "sample_type_id",
                 column(
                   6,
                   selectizeInput(
-                    ns("sample_type"),
+                    ns("sample_type_id"),
                     "Sample type",
                     choices = named_choices(
                       moduleData$sample_types$sample_type_id,
@@ -2601,11 +2636,11 @@ editSamples <- function(id, language) {
             ),
             fluidRow(
               multi_field_ui(
-                "wave_hgt_m",
+                "wave_height_m",
                 column(
                   4,
                   numericInput(
-                    ns("wave_hgt_m"),
+                    ns("wave_height_m"),
                     "Wave height (m)",
                     value = NA,
                     width = "100%"
@@ -2613,11 +2648,11 @@ editSamples <- function(id, language) {
                 )
               ),
               multi_field_ui(
-                "sample_grade",
+                "grade_type_id",
                 column(
                   4,
                   selectizeInput(
-                    ns("sample_grade"),
+                    ns("grade_type_id"),
                     "Sample grade",
                     choices = named_choices(
                       moduleData$grades$grade_type_id,
@@ -2630,11 +2665,11 @@ editSamples <- function(id, language) {
                 )
               ),
               multi_field_ui(
-                "sample_approval",
+                "approval_type_id",
                 column(
                   4,
                   selectizeInput(
-                    ns("sample_approval"),
+                    ns("approval_type_id"),
                     "Sample approval",
                     choices = named_choices(
                       moduleData$approvals$approval_type_id,
@@ -2731,11 +2766,11 @@ editSamples <- function(id, language) {
                 )
               ),
               multi_field_ui(
-                "comissioning_org",
+                "commissioning_org_id",
                 column(
                   6,
                   selectizeInput(
-                    ns("comissioning_org"),
+                    ns("commissioning_org_id"),
                     "Commissioning organization",
                     choices = named_choices(
                       moduleData$organizations$organization_id,
@@ -2750,11 +2785,11 @@ editSamples <- function(id, language) {
             ),
             fluidRow(
               multi_field_ui(
-                "sampling_org",
+                "sampling_org_id",
                 column(
                   6,
                   selectizeInput(
-                    ns("sampling_org"),
+                    ns("sampling_org_id"),
                     "Sampling organization",
                     choices = named_choices(
                       moduleData$organizations$organization_id,
@@ -2848,7 +2883,11 @@ editSamples <- function(id, language) {
                   )
                 )
               ),
-              actionButton(ns("view_result_provenance"), "Import provenance", icon = icon("file-lines")),
+              actionButton(
+                ns("view_result_provenance"),
+                "Import provenance",
+                icon = icon("file-lines")
+              ),
               DT::DTOutput(ns("results_table"))
             )
           )
@@ -2883,16 +2922,19 @@ editSamples <- function(id, language) {
       }
       display$share_with <- NULL
       if (!isTRUE(input$show_sample_details)) {
-        display <- display[, setdiff(
-          names(display),
-          c(
-            "contributor",
-            "sample_volume_ml",
-            "purge_volume_l",
-            "sample_qualifiers",
-            "sample_observers"
-          )
-        ), drop = FALSE]
+        display <- display[,
+          setdiff(
+            names(display),
+            c(
+              "contributor",
+              "sample_volume_ml",
+              "purge_volume_l",
+              "sample_qualifiers",
+              "sample_observers"
+            )
+          ),
+          drop = FALSE
+        ]
       }
       sample_column_labels <- c(
         sample_id = "Sample ID",
@@ -3019,8 +3061,11 @@ editSamples <- function(id, language) {
         analysis_conditions <- vapply(
           results$analysis_conditions,
           function(value) {
-            if (is.null(value) || is.na(value)) "{}" else
+            if (is.null(value) || is.na(value)) {
+              "{}"
+            } else {
               AquaCache::normalizeAnalysisConditions(value)
+            }
           },
           character(1)
         )
@@ -3081,83 +3126,182 @@ editSamples <- function(id, language) {
         showNotification("Select a result first.", type = "warning")
         return()
       }
-      info <- tryCatch(YGwater:::discrete_result_provenance(session$userData$AquaCache, id), error = function(e) e)
+      info <- tryCatch(
+        YGwater:::discrete_result_provenance(session$userData$AquaCache, id),
+        error = function(e) e
+      )
       if (inherits(info, "error") || !nrow(info)) {
-        showNotification("The selected result or its provenance is unavailable. Refresh the sample list and try again.", type = "error")
+        showNotification(
+          "The selected result or its provenance is unavailable. Refresh the sample list and try again.",
+          type = "error"
+        )
         return()
       }
       provenance_result_id(id)
       value <- function(x) {
-        if (!length(x) || is.na(x[[1]]) || !nzchar(as.character(x[[1]]))) "Not recorded" else as.character(x[[1]])
+        if (!length(x) || is.na(x[[1]]) || !nzchar(as.character(x[[1]]))) {
+          "Not recorded"
+        } else {
+          as.character(x[[1]])
+        }
       }
-      message <- switch(info$provenance_state[[1]],
+      message <- switch(
+        info$provenance_state[[1]],
         unrecorded = "No import run is recorded for this result. It may have been entered manually or imported before run provenance was captured. Existing sample source fields and the audit history may provide additional context.",
         restricted = "This result is visible, but its source workbook and import details are not shared with your database role.",
         recorded = "This is the import run that originally inserted this result. Later result edits are recorded in the audit history. The archived workbook contains the original file, including any results omitted from the upload."
       )
       fields <- if (info$provenance_state[[1]] == "recorded") {
-        list("Import run" = info$import_run_id, "Source" = info$source_name,
-          "Workbook format" = info$profile_name, "Uploaded by" = info$created_by,
-          "Completed at" = info$completed_at, "Source file" = info$document_name,
-          "Lab report number" = info$lab_report_no, "Lab sample number" = info$lab_sample_no)
+        list(
+          "Import run" = info$import_run_id,
+          "Source" = info$source_name,
+          "Workbook format" = info$profile_name,
+          "Uploaded by" = info$created_by,
+          "Completed at" = info$completed_at,
+          "Source file" = info$document_name,
+          "Lab report number" = info$lab_report_no,
+          "Lab sample number" = info$lab_sample_no
+        )
       } else {
-        list("Sample source adapter" = info$sample_source_adapter,
+        list(
+          "Sample source adapter" = info$sample_source_adapter,
           "Sample external identifier" = info$sample_external_id,
-          "Lab report number" = info$lab_report_no, "Lab sample number" = info$lab_sample_no)
+          "Lab report number" = info$lab_report_no,
+          "Lab sample number" = info$lab_sample_no
+        )
       }
       showModal(modalDialog(
-        title = paste("Import provenance for result", id), size = "l",
+        title = paste("Import provenance for result", id),
+        size = "l",
         tags$p(message),
-        tags$table(class = "table table-sm", tags$tbody(lapply(names(fields), function(label) {
-          tags$tr(tags$th(label), tags$td(value(fields[[label]])))
-        }))),
-        if (!is.na(info$document_id[[1]])) downloadButton(ns("download_import_source"), "Download original workbook"),
-        if (info$provenance_state[[1]] == "recorded" && !identical(info$configuration_snapshot[[1]], "{}")) {
-          downloadButton(ns("download_import_provenance"), "Download configuration and upload metadata (JSON)")
+        tags$table(
+          class = "table table-sm",
+          tags$tbody(lapply(names(fields), function(label) {
+            tags$tr(tags$th(label), tags$td(value(fields[[label]])))
+          }))
+        ),
+        if (!is.na(info$document_id[[1]])) {
+          downloadButton(
+            ns("download_import_source"),
+            "Download original workbook"
+          )
         },
-        if (info$provenance_state[[1]] == "recorded" && identical(info$configuration_snapshot[[1]], "{}")) {
+        if (
+          info$provenance_state[[1]] == "recorded" &&
+            !identical(info$configuration_snapshot[[1]], "{}")
+        ) {
+          downloadButton(
+            ns("download_import_provenance"),
+            "Download configuration and upload metadata (JSON)"
+          )
+        },
+        if (
+          info$provenance_state[[1]] == "recorded" &&
+            identical(info$configuration_snapshot[[1]], "{}")
+        ) {
           tags$p("Configuration was not captured for this older import run.")
         },
-        footer = modalButton("Close"), easyClose = TRUE
+        footer = modalButton("Close"),
+        easyClose = TRUE
       ))
     })
 
     output$download_import_source <- downloadHandler(
       filename = function() {
-        info <- YGwater:::discrete_result_provenance(session$userData$AquaCache, provenance_result_id())
-        if (!nrow(info) || is.na(info$document_id[[1]])) stop("The source workbook is unavailable.")
+        info <- YGwater:::discrete_result_provenance(
+          session$userData$AquaCache,
+          provenance_result_id()
+        )
+        if (!nrow(info) || is.na(info$document_id[[1]])) {
+          stop("The source workbook is unavailable.")
+        }
         name <- basename(info$document_name[[1]])
-        if (!nzchar(tools::file_ext(name))) name <- paste0(name, ".", info$document_format[[1]])
+        if (!nzchar(tools::file_ext(name))) {
+          name <- paste0(name, ".", info$document_format[[1]])
+        }
         name
       },
       content = function(file) {
-        info <- YGwater:::discrete_result_provenance(session$userData$AquaCache, provenance_result_id())
-        if (!nrow(info) || is.na(info$document_id[[1]])) stop("The source workbook is unavailable.")
-        document <- DBI::dbGetQuery(session$userData$AquaCache,
-          "SELECT document FROM files.documents WHERE document_id=$1", params = list(info$document_id[[1]]))
-        if (nrow(document) != 1L) stop("The source workbook is no longer available.")
+        info <- YGwater:::discrete_result_provenance(
+          session$userData$AquaCache,
+          provenance_result_id()
+        )
+        if (!nrow(info) || is.na(info$document_id[[1]])) {
+          stop("The source workbook is unavailable.")
+        }
+        document <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT document FROM files.documents WHERE document_id=$1",
+          params = list(info$document_id[[1]])
+        )
+        if (nrow(document) != 1L) {
+          stop("The source workbook is no longer available.")
+        }
         writeBin(document$document[[1]], file)
-      }, contentType = "application/octet-stream"
+      },
+      contentType = "application/octet-stream"
     )
 
     output$download_import_provenance <- downloadHandler(
-      filename = function() paste0("result-", provenance_result_id(), "-import-provenance.json"),
+      filename = function() {
+        paste0("result-", provenance_result_id(), "-import-provenance.json")
+      },
       content = function(file) {
-        info <- YGwater:::discrete_result_provenance(session$userData$AquaCache, provenance_result_id())
-        if (!nrow(info) || info$provenance_state[[1]] != "recorded") stop("Import provenance is no longer available.")
+        info <- YGwater:::discrete_result_provenance(
+          session$userData$AquaCache,
+          provenance_result_id()
+        )
+        if (!nrow(info) || info$provenance_state[[1]] != "recorded") {
+          stop("Import provenance is no longer available.")
+        }
         # Embed the stored JSON verbatim so empty objects/arrays and exact
         # mapping definitions keep their original JSON types.
-        document <- if (is.na(info$document_id[[1]])) "null" else jsonlite::toJSON(list(
-          document_id = info$document_id[[1]], name = info$document_name[[1]],
-          format = info$document_format[[1]], bytes = info$document_size[[1]], file_hash = info$file_hash[[1]]
-        ), auto_unbox = TRUE, na = "null")
-        run <- jsonlite::toJSON(as.list(info[1L, c("source_code", "profile_code", "created_by",
-          "started_at", "completed_at", "source_adapter_function", "adapter_version", "source_uri", "status")]),
-          auto_unbox = TRUE, na = "null", POSIXt = "ISO8601")
-        json <- sprintf('{"result_id":%d,"import_run_id":%d,"run":%s,"source_document":%s,"summary":%s,"configuration":%s}',
-          info$result_id[[1]], info$import_run_id[[1]], run, document, info$summary[[1]], info$configuration_snapshot[[1]])
+        document <- if (is.na(info$document_id[[1]])) {
+          "null"
+        } else {
+          jsonlite::toJSON(
+            list(
+              document_id = info$document_id[[1]],
+              name = info$document_name[[1]],
+              format = info$document_format[[1]],
+              bytes = info$document_size[[1]],
+              file_hash = info$file_hash[[1]]
+            ),
+            auto_unbox = TRUE,
+            na = "null"
+          )
+        }
+        run <- jsonlite::toJSON(
+          as.list(info[
+            1L,
+            c(
+              "source_code",
+              "profile_code",
+              "created_by",
+              "started_at",
+              "completed_at",
+              "source_adapter_function",
+              "adapter_version",
+              "source_uri",
+              "status"
+            )
+          ]),
+          auto_unbox = TRUE,
+          na = "null",
+          POSIXt = "ISO8601"
+        )
+        json <- sprintf(
+          '{"result_id":%d,"import_run_id":%d,"run":%s,"source_document":%s,"summary":%s,"configuration":%s}',
+          info$result_id[[1]],
+          info$import_run_id[[1]],
+          run,
+          document,
+          info$summary[[1]],
+          info$configuration_snapshot[[1]]
+        )
         writeLines(jsonlite::prettify(json), file, useBytes = TRUE)
-      }, contentType = "application/json"
+      },
+      contentType = "application/json"
     )
 
     observeEvent(input$edit_result, {
@@ -3246,13 +3390,19 @@ editSamples <- function(id, language) {
         }
       }
 
-      form <- tryCatch(collect_result_inputs(sample_ids[[1]]), error = function(e) e)
-      if (inherits(form, "error")) { showNotification(conditionMessage(form), type = "error"); return() }
+      form <- tryCatch(
+        collect_result_inputs(sample_ids[[1]]),
+        error = function(e) e
+      )
+      if (inherits(form, "error")) {
+        showNotification(conditionMessage(form), type = "error")
+        return()
+      }
       if (is.na(form$parameter_id)) {
         showNotification("Parameter is required.", type = "error")
         return()
       }
-      if (is.na(form$result_type)) {
+      if (is.na(form$result_type_id)) {
         showNotification("Result type is required.", type = "error")
         return()
       }
@@ -3282,7 +3432,7 @@ editSamples <- function(id, language) {
       }
       if (
         identical(form$result_entry_type, "conditional") &&
-          is.na(form$result_condition)
+          is.na(form$result_condition_id)
       ) {
         showNotification(
           "Result condition is required for a conditional result.",
@@ -3290,29 +3440,66 @@ editSamples <- function(id, language) {
         )
         return()
       }
-      chemistry_fields <- c("parameter_id", "matrix_state_id", "sample_fraction_id", "reporting_basis_id",
-        "result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions", "protocol_method")
-      existing <- moduleData$sample_results[moduleData$sample_results$result_id == selected_result_id(), , drop = FALSE]
-      unchanged <- identical(result_edit_mode(), "edit") && nrow(existing) == 1L && all(vapply(chemistry_fields, function(field) {
-        if (field == "analysis_conditions") return(identical(AquaCache::normalizeAnalysisConditions(existing[[field]][[1]]), form[[field]]))
-        identical(as.character(existing[[field]][[1]]), as.character(form[[field]]))
-      }, logical(1)))
+      chemistry_fields <- c(
+        "parameter_id",
+        "matrix_state_id",
+        "sample_fraction_id",
+        "reporting_basis_id",
+        "result_speciation_id",
+        "result_target_id",
+        "endpoint_mode",
+        "endpoint_ph",
+        "analysis_conditions",
+        "protocol_method_id"
+      )
+      existing <- moduleData$sample_results[
+        moduleData$sample_results$result_id == selected_result_id(),
+        ,
+        drop = FALSE
+      ]
+      unchanged <- identical(result_edit_mode(), "edit") &&
+        nrow(existing) == 1L &&
+        all(vapply(
+          chemistry_fields,
+          function(field) {
+            if (field == "analysis_conditions") {
+              return(identical(
+                AquaCache::normalizeAnalysisConditions(existing[[field]][[1]]),
+                form[[field]]
+              ))
+            }
+            identical(
+              as.character(existing[[field]][[1]]),
+              as.character(form[[field]])
+            )
+          },
+          logical(1)
+        ))
       if (!unchanged) {
-        messages <- AquaCache::validateResultChemistry(NULL, as.data.frame(form[chemistry_fields]), parameters = moduleData$parameters, error = FALSE, matrix_states = moduleData$matrix_states)
-        if (any(nzchar(messages))) { showNotification(paste(messages, collapse = "; "), type = "error"); return() }
+        messages <- AquaCache::validateResultChemistry(
+          NULL,
+          as.data.frame(form[chemistry_fields]),
+          parameters = moduleData$parameters,
+          error = FALSE,
+          matrix_states = moduleData$matrix_states
+        )
+        if (any(nzchar(messages))) {
+          showNotification(paste(messages, collapse = "; "), type = "error")
+          return()
+        }
       }
 
       params <- list(
-        form$result_type,
+        form$result_type_id,
         form$parameter_id,
         form$sample_fraction_id,
         form$result,
-        form$result_condition,
+        form$result_condition_id,
         form$result_condition_value,
-        form$result_value_type,
+        form$result_value_type_id,
         form$reporting_basis_id,
-        form$protocol_method,
-        form$laboratory,
+        form$protocol_method_id,
+        form$lab_id,
         form$analysis_datetime,
         form$lab_report_no,
         form$lab_sample_no,
@@ -3330,16 +3517,16 @@ editSamples <- function(id, language) {
         sql <- "
           INSERT INTO discrete.results (
             sample_id,
-            result_type,
+            result_type_id,
             parameter_id,
             sample_fraction_id,
             result,
-            result_condition,
+            result_condition_id,
             result_condition_value,
-            result_value_type,
+            result_value_type_id,
             reporting_basis_id,
-            protocol_method,
-            laboratory,
+            protocol_method_id,
+            lab_id,
             analysis_datetime,
             lab_report_no,
             lab_sample_no,
@@ -3374,7 +3561,17 @@ editSamples <- function(id, language) {
             $20, $22, $23, $24, $25, $26::jsonb
           ) RETURNING result_id;
         "
-        params <- c(params, list(form$sample_id), form[c("result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions")])
+        params <- c(
+          params,
+          list(form$sample_id),
+          form[c(
+            "result_speciation_id",
+            "result_target_id",
+            "endpoint_mode",
+            "endpoint_ph",
+            "analysis_conditions"
+          )]
+        )
       } else {
         result_id <- selected_result_id()
         if (is.na(result_id)) {
@@ -3384,16 +3581,16 @@ editSamples <- function(id, language) {
         sql <- "
           UPDATE discrete.results
           SET
-            result_type = $1,
+            result_type_id = $1,
             parameter_id = $2,
             sample_fraction_id = $3,
             result = $4,
-            result_condition = $5,
+            result_condition_id = $5,
             result_condition_value = $6,
-            result_value_type = $7,
+            result_value_type_id = $7,
             reporting_basis_id = $8,
-            protocol_method = $9,
-            laboratory = $10,
+            protocol_method_id = $9,
+            lab_id = $10,
             analysis_datetime = $11,
             lab_report_no = $12,
             lab_sample_no = $13,
@@ -3408,7 +3605,17 @@ editSamples <- function(id, language) {
           WHERE result_id = $21
             AND sample_id = $22;
         "
-        params <- c(params, list(result_id, form$sample_id), form[c("result_speciation_id", "result_target_id", "endpoint_mode", "endpoint_ph", "analysis_conditions")])
+        params <- c(
+          params,
+          list(result_id, form$sample_id),
+          form[c(
+            "result_speciation_id",
+            "result_target_id",
+            "endpoint_mode",
+            "endpoint_ph",
+            "analysis_conditions"
+          )]
+        )
       }
 
       tryCatch(
@@ -3562,7 +3769,10 @@ editSamples <- function(id, language) {
           }
 
           selected_ids <- unique(c(existing_ids, uploaded_ids))
-          YGwater:::lock_sample_documents(con, union(linked_document_ids(con, sample_id), selected_ids))
+          YGwater:::lock_sample_documents(
+            con,
+            union(linked_document_ids(con, sample_id), selected_ids)
+          )
           edit_samples_sync_document_links(con, sample_id, selected_ids)
           YGwater:::sync_sample_document_visibility(con, sample_ids = sample_id)
 
@@ -3621,7 +3831,10 @@ editSamples <- function(id, language) {
       }
       if (multi_mode) {
         if (is.null(selected_fields)) {
-          selected_fields <- intersect(input$multi_fields, names(multi_editable_fields))
+          selected_fields <- intersect(
+            input$multi_fields,
+            names(multi_editable_fields)
+          )
         }
         if (!length(selected_fields)) {
           showNotification(
@@ -3642,7 +3855,7 @@ editSamples <- function(id, language) {
           }
           if (
             field %in%
-              c("collection_method", "sample_type", "owner") &&
+              c("collection_method_id", "sample_type_id", "owner") &&
               is.na(value)
           ) {
             validation_errors <- c(
@@ -3696,7 +3909,11 @@ editSamples <- function(id, language) {
             DBI::dbWithTransaction(con, {
               # Capture links before changing visibility; the new sharing may
               # make a sample unreadable to this database role.
-              document_ids <- if (isTRUE(update_documents)) linked_document_ids(con, sample_ids) else integer()
+              document_ids <- if (isTRUE(update_documents)) {
+                linked_document_ids(con, sample_ids)
+              } else {
+                integer()
+              }
               YGwater:::lock_sample_documents(con, document_ids)
               for (id in sample_ids) {
                 tryCatch(
@@ -3707,7 +3924,12 @@ editSamples <- function(id, language) {
                         update_sql,
                         params = c(params, list(id))
                       )
-                      if (updated != 1L) stop("The selected sample is no longer available.", call. = FALSE)
+                      if (updated != 1L) {
+                        stop(
+                          "The selected sample is no longer available.",
+                          call. = FALSE
+                        )
+                      }
                     }
                     if ("sample_qualifier_ids" %in% association_fields) {
                       sync_sample_qualifier_links(
@@ -3733,7 +3955,10 @@ editSamples <- function(id, language) {
                 isTRUE(update_documents) &&
                   "share_with" %in% selected_fields
               ) {
-                YGwater:::sync_sample_document_visibility(con, document_ids = document_ids)
+                YGwater:::sync_sample_document_visibility(
+                  con,
+                  document_ids = document_ids
+                )
               }
             })
             NULL
@@ -3767,7 +3992,7 @@ editSamples <- function(id, language) {
         sample_id <- sample_ids[[1]]
         previous_documents <- current_sample_document_ids(sample_id)
         selected_type <- moduleData$sample_types[
-          moduleData$sample_types$sample_type_id == form$sample_type,
+          moduleData$sample_types$sample_type_id == form$sample_type_id,
           ,
           drop = FALSE
         ]
@@ -3813,11 +4038,11 @@ editSamples <- function(id, language) {
           showNotification("Media is required.", type = "error")
           return()
         }
-        if (is.na(form$collection_method)) {
+        if (is.na(form$collection_method_id)) {
           showNotification("Collection method is required.", type = "error")
           return()
         }
-        if (is.na(form$sample_type)) {
+        if (is.na(form$sample_type_id)) {
           showNotification("Sample type is required.", type = "error")
           return()
         }
@@ -3839,22 +4064,22 @@ editSamples <- function(id, language) {
           location_id = $1,
           sub_location_id = $2,
           media_id = $3,
-          z = $4,
+          depth_height_m = $4,
           datetime = $5,
           target_datetime = $6,
-          collection_method = $7,
-          sample_type = $8,
+          collection_method_id = $7,
+          sample_type_id = $8,
           sample_volume_ml = $9,
           purge_volume_l = $10,
           purge_time_min = $11,
           flow_rate_l_min = $12,
-          wave_hgt_m = $13,
-          sample_grade = $14,
-          sample_approval = $15,
+          wave_height_m = $13,
+          grade_type_id = $14,
+          approval_type_id = $15,
           owner = $16,
           contributor = $17,
-          comissioning_org = $18,
-          sampling_org = $19,
+          commissioning_org_id = $18,
+          sampling_org_id = $19,
           share_with = $20::text[],
           source_adapter_function = $21,
           no_source_update = $22,
@@ -3867,22 +4092,22 @@ editSamples <- function(id, language) {
           form$location_id,
           form$sub_location_id,
           form$media_id,
-          form$z,
+          form$depth_height_m,
           form$datetime,
           form$target_datetime,
-          form$collection_method,
-          form$sample_type,
+          form$collection_method_id,
+          form$sample_type_id,
           form$sample_volume_ml,
           form$purge_volume_l,
           form$purge_time_min,
           form$flow_rate_l_min,
-          form$wave_hgt_m,
-          form$sample_grade,
-          form$sample_approval,
+          form$wave_height_m,
+          form$grade_type_id,
+          form$approval_type_id,
           form$owner,
           form$contributor,
-          form$comissioning_org,
-          form$sampling_org,
+          form$commissioning_org_id,
+          form$sampling_org_id,
           form$share_with,
           form$source_adapter_function,
           form$no_source_update,
@@ -3896,15 +4121,27 @@ editSamples <- function(id, language) {
             con <- session$userData$AquaCache
             DBI::dbWithTransaction(con, {
               current_documents <- linked_document_ids(con, sample_id)
-              changed_documents <- edit_samples_link_changes(current_documents, form$document_ids)
-              YGwater:::lock_sample_documents(con, if (isTRUE(update_documents)) {
-                union(current_documents, form$document_ids)
-              } else c(changed_documents$remove, changed_documents$add))
+              changed_documents <- edit_samples_link_changes(
+                current_documents,
+                form$document_ids
+              )
+              YGwater:::lock_sample_documents(
+                con,
+                if (isTRUE(update_documents)) {
+                  union(current_documents, form$document_ids)
+                } else {
+                  c(changed_documents$remove, changed_documents$add)
+                }
+              )
               updated <- DBI::dbExecute(con, update_sql, params = params)
               if (updated != 1L) {
                 stop("The selected sample was not updated.", call. = FALSE)
               }
-              edit_samples_sync_document_links(con, sample_id, form$document_ids)
+              edit_samples_sync_document_links(
+                con,
+                sample_id,
+                form$document_ids
+              )
               sync_sample_group_links(con, sample_id, form$sample_group_ids)
               sync_sample_qualifier_links(
                 con,
@@ -3917,7 +4154,10 @@ editSamples <- function(id, language) {
                 form$sample_observer_ids
               )
               if (isTRUE(update_documents)) {
-                YGwater:::sync_sample_document_visibility(con, document_ids = form$document_ids)
+                YGwater:::sync_sample_document_visibility(
+                  con,
+                  document_ids = form$document_ids
+                )
               }
             })
             cleanup_messages <- cleanup_removed_documents(
@@ -3958,17 +4198,21 @@ editSamples <- function(id, language) {
             paste0(
               "SELECT sample_id, share_with
                FROM discrete.samples
-               WHERE sample_id IN (", placeholders, ")"
+               WHERE sample_id IN (",
+              placeholders,
+              ")"
             ),
             params = as.list(as.integer(sample_ids))
           )
           desired <- normalize_share_values(form$share_with)
           visibility_changed <- any(vapply(
             seq_len(nrow(current)),
-            function(i) !identical(
-              normalize_share_values(current$share_with[[i]]),
-              desired
-            ),
+            function(i) {
+              !identical(
+                normalize_share_values(current$share_with[[i]]),
+                desired
+              )
+            },
             logical(1)
           ))
           has_documents <- length(linked_document_ids(con, sample_ids)) > 0L
@@ -3980,10 +4224,11 @@ editSamples <- function(id, language) {
           "SELECT share_with FROM discrete.samples WHERE sample_id = $1",
           params = list(sample_id)
         )
-        visibility_changed <- nrow(current) > 0L && !identical(
-          normalize_share_values(current$share_with[[1]]),
-          normalize_share_values(form$share_with)
-        )
+        visibility_changed <- nrow(current) > 0L &&
+          !identical(
+            normalize_share_values(current$share_with[[1]]),
+            normalize_share_values(form$share_with)
+          )
         has_documents <- length(form$document_ids) > 0L ||
           length(current_sample_document_ids(sample_id)) > 0L
       }

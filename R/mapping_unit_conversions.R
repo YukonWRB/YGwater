@@ -23,7 +23,7 @@ ac_mapping_unit_conversions <- function(con) {
 #'
 #' @param source_unit Source unit name, as a character scalar.
 #' @param target_unit Target unit name, as a character scalar.
-#' @param conversions A catalogue from [ac_mapping_unit_conversions()].
+#' @param conversions A catalogue from `ac_mapping_unit_conversions()`.
 #' @return A list with numeric `scale_a` and `scale_b` for the transformation
 #'   `source_value * scale_a + scale_b`, or `NULL` when no unambiguous, finite
 #'   conversion is available. Identical normalized units return 1 and 0.

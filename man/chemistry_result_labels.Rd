@@ -36,8 +36,6 @@ Other analytical metadata helpers:
 \code{\link[=chemistry_accessor_keys]{chemistry_accessor_keys()}},
 \code{\link[=chemistry_identity_columns]{chemistry_identity_columns()}},
 \code{\link[=chemistry_metadata_catalogues]{chemistry_metadata_catalogues()}},
-\code{\link[=chemistry_metadata_ui]{chemistry_metadata_ui()}},
-\code{\link[=chemistry_metadata_values]{chemistry_metadata_values()}},
 \code{\link[=chemistry_sql_accessor_refs]{chemistry_sql_accessor_refs()}}
 }
 \concept{analytical metadata helpers}

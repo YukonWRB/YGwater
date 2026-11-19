@@ -14,22 +14,21 @@ addDiscData_empty_table <- function() {
     sub_location_id = integer(),
     datetime = as.POSIXct(character(), tz = "UTC"),
     target_datetime = as.POSIXct(character(), tz = "UTC"),
-    z = numeric(),
+    depth_height_m = numeric(),
     media_id = integer(),
-    collection_method = integer(),
-    sample_type = integer(),
+    collection_method_id = integer(),
+    sample_type_id = integer(),
     sample_group_id = integer(),
     sample_volume_ml = numeric(),
     purge_volume_l = numeric(),
     purge_time_min = numeric(),
     flow_rate_l_min = numeric(),
-    wave_hgt_m = numeric(),
-    sample_grade = integer(),
-    sample_approval = integer(),
+    wave_height_m = numeric(),
+    sample_grade_type_id = integer(),
+    sample_approval_type_id = integer(),
     sample_qualifier = integer(),
-    commissioning_org = integer(),
-    sampling_org = integer(),
-    linked_with = integer(),
+    commissioning_org_id = integer(),
+    sampling_org_id = integer(),
     sample_note = character(),
     owner = integer(),
     contributor = integer(),
@@ -42,12 +41,13 @@ addDiscData_empty_table <- function() {
     source_parameter_name = character(),
     source_unit = character(),
     source_matching_values = character(),
+    parameter_mapping_id = integer(),
     parameter_id = integer(),
-    result_type = integer(),
-    protocol_method = integer(),
+    result_type_id = integer(),
+    protocol_method_id = integer(),
     matrix_state_id = integer(),
     sample_fraction_id = integer(),
-    result_value_type = integer(),
+    result_value_type_id = integer(),
     reporting_basis_id = integer(),
     result_speciation_id = integer(),
     result_target_id = integer(),
@@ -63,12 +63,12 @@ addDiscData_empty_table <- function() {
     source_method_detection_limit = numeric(),
     source_reporting_detection_limit = numeric(),
     result = numeric(),
-    result_condition = integer(),
+    result_condition_id = integer(),
     result_condition_value = numeric(),
     result_flag_action = character(),
     conversion = numeric(),
     result_offset = numeric(),
-    laboratory = integer(),
+    lab_id = integer(),
     grade_type_id = integer(),
     approval_type_id = integer(),
     analysis_datetime = as.POSIXct(character(), tz = "UTC"),
@@ -126,21 +126,21 @@ addDiscData_use_existing_sample <- function(rows, sample_key, target) {
     "sub_location_id",
     "datetime",
     "target_datetime",
-    "z",
+    "depth_height_m",
     "media_id",
-    "collection_method",
-    "sample_type",
+    "collection_method_id",
+    "sample_type_id",
     "sample_volume_ml",
     "purge_volume_l",
     "purge_time_min",
     "flow_rate_l_min",
-    "wave_hgt_m",
-    "sample_grade",
-    "sample_approval",
+    "wave_height_m",
+    "sample_grade_type_id",
+    "sample_approval_type_id",
     "owner",
     "contributor",
-    "commissioning_org",
-    "sampling_org",
+    "commissioning_org_id",
+    "sampling_org_id",
     "sample_note",
     "sample_no_source_update"
   )
@@ -165,6 +165,7 @@ addDiscData_merge_preview_edits <- function(recalculated, current, previous) {
       "source_sample_id",
       "source_parameter_code",
       "source_unit",
+      "source_matching_values",
       "source_result_flag"
     ),
     names(recalculated)
@@ -217,22 +218,21 @@ addDiscData_merge_preview_edits <- function(recalculated, current, previous) {
       "location_mapping_status",
       "datetime",
       "target_datetime",
-      "z",
+      "depth_height_m",
       "media_id",
-      "collection_method",
-      "sample_type",
+      "collection_method_id",
+      "sample_type_id",
       "sample_group_id",
       "sample_volume_ml",
       "purge_volume_l",
       "purge_time_min",
       "flow_rate_l_min",
-      "wave_hgt_m",
-      "sample_grade",
-      "sample_approval",
+      "wave_height_m",
+      "sample_grade_type_id",
+      "sample_approval_type_id",
       "sample_qualifier",
-      "commissioning_org",
-      "sampling_org",
-      "linked_with",
+      "commissioning_org_id",
+      "sampling_org_id",
       "sample_note",
       "owner",
       "contributor",
@@ -240,11 +240,11 @@ addDiscData_merge_preview_edits <- function(recalculated, current, previous) {
       "result_no_source_update",
       "parameter_id",
       "mapping_status",
-      "result_type",
-      "protocol_method",
+      "result_type_id",
+      "protocol_method_id",
       "matrix_state_id",
       "sample_fraction_id",
-      "result_value_type",
+      "result_value_type_id",
       "reporting_basis_id",
       "result_speciation_id",
       "result_target_id",
@@ -252,9 +252,9 @@ addDiscData_merge_preview_edits <- function(recalculated, current, previous) {
       "endpoint_ph",
       "analysis_conditions",
       "result",
-      "result_condition",
+      "result_condition_id",
       "result_condition_value",
-      "laboratory",
+      "lab_id",
       "grade_type_id",
       "approval_type_id",
       "analysis_datetime",
@@ -350,26 +350,6 @@ addDiscData_observer_labels <- function(observers) {
 }
 
 addDiscData_read_profiles <- function(con) {
-  available <- DBI::dbGetQuery(
-    con,
-    "SELECT to_regclass('discrete.import_profiles') IS NOT NULL
-       AND to_regclass('discrete.import_parameter_mappings') IS NOT NULL
-       AND to_regclass('discrete.import_location_mappings') IS NOT NULL
-       AND to_regclass('discrete.import_result_flag_mappings') IS NOT NULL
-       AND EXISTS (
-         SELECT 1 FROM information_schema.columns
-         WHERE table_schema='discrete'
-           AND table_name='import_parameter_mappings'
-           AND column_name='import_source_id'
-       ) AS available;"
-  )$available[[1]]
-  if (!isTRUE(available)) {
-    stop(
-      "This database does not have the coherent import mapping schema. ",
-      "Apply AquaCache patch 69 before using file imports.",
-      call. = FALSE
-    )
-  }
   profiles <- AquaCache::getImportProfiles(
     con = con,
     active = TRUE,
@@ -868,58 +848,113 @@ addDiscData_datetime <- function(date, time = NA, tz = "America/Whitehorse") {
   parsed
 }
 
-addDiscData_negative_mdl_key <- function(parameter_code, unit) {
-  normalize <- function(value) {
-    value <- tolower(trimws(as.character(value)))
-    value[is.na(value)] <- ""
-    value
-  }
-  paste(normalize(parameter_code), normalize(unit), sep = "\r")
+addDiscData_negative_mdl_normalize <- function(value) {
+  value <- tolower(trimws(as.character(value)))
+  value[is.na(value)] <- ""
+  value
 }
 
-addDiscData_negative_mdl_auto_excluded <- function(
+addDiscData_negative_mdl_key <- function(parameter_code, unit) {
+  paste(
+    addDiscData_negative_mdl_normalize(parameter_code),
+    addDiscData_negative_mdl_normalize(unit),
+    sep = "\r"
+  )
+}
+
+addDiscData_negative_mdl_parameter_rules <- c(
+  "pH" = "rule:ph",
+  "Temperature (units other than Kelvin)" = "rule:temperature",
+  "ORP" = "rule:orp",
+  "Redox" = "rule:redox",
+  "Eh" = "rule:eh",
+  "pE" = "rule:p\\s*e",
+  "Oxidation-reduction" = "rule:oxidation[ -]?reduction",
+  "Potential" = "rule:potential",
+  "Voltage" = "rule:voltage",
+  "Depth" = "rule:depth",
+  "Head" = "rule:head",
+  "Water level" = "rule:water\\s*level",
+  "Stage" = "rule:stage",
+  "Gauge or gage" = "rule:gauge|gage",
+  "Pressure" = "rule:pressure",
+  "Velocity" = "rule:velocity",
+  "Delta" = "rule:delta",
+  "Isotope delta (δ or Δ)" = "rule:isotope_delta",
+  "Difference" = "rule:difference",
+  "Change" = "rule:change",
+  "Gradient" = "rule:gradient",
+  "Slope" = "rule:slope",
+  "Residual" = "rule:residual",
+  "Deviation" = "rule:deviation",
+  "Anomaly" = "rule:anomaly",
+  "Flux" = "rule:flux"
+)
+
+addDiscData_negative_mdl_unit_rules <- c(
+  "Millivolts (mV or millivolt)" = "rule:millivolt"
+)
+
+addDiscData_negative_mdl_defaults <- function() {
+  list(
+    parameters = sort(unname(addDiscData_negative_mdl_parameter_rules)),
+    units = unname(addDiscData_negative_mdl_unit_rules),
+    pairs = character()
+  )
+}
+
+addDiscData_negative_mdl_excluded <- function(
   parameter_code,
   parameter_name,
-  unit
+  unit,
+  exclusions = addDiscData_negative_mdl_defaults()
 ) {
-  code <- trimws(as.character(parameter_code))
-  name <- trimws(as.character(parameter_name))
-  unit_text <- trimws(as.character(unit))
-  code[is.na(code)] <- ""
-  name[is.na(name)] <- ""
-  unit_text[is.na(unit_text)] <- ""
+  code <- addDiscData_negative_mdl_normalize(parameter_code)
+  name <- addDiscData_negative_mdl_normalize(parameter_name)
+  unit_text <- addDiscData_negative_mdl_normalize(unit)
   label <- paste(code, name)
-  label_words <- gsub("[^A-Za-z0-9]+", " ", label, perl = TRUE)
-  temperature <- grepl(
-    "\\b(temp|temperature)\\b",
-    label_words,
-    ignore.case = TRUE
+  label_words <- gsub("[^a-z0-9]+", " ", label, perl = TRUE)
+  rules <- intersect(
+    exclusions$parameters,
+    addDiscData_negative_mdl_parameter_rules
   )
-  # Only the reported unit exempts temperature; a source label ending in K
-  # is not enough to establish that the value was measured in Kelvin.
-  kelvin <- grepl(
-    "\\b(?:k|kelvin)\\b",
-    unit_text,
-    ignore.case = TRUE,
-    perl = TRUE
+  word_rules <- setdiff(rules, c("rule:temperature", "rule:isotope_delta"))
+  parameters <- substring(
+    exclusions$parameters[startsWith(exclusions$parameters, "value:")],
+    7L
   )
-  signed <- grepl(
-    paste0(
-      "\\b(?:orp|redox|eh|p\\s*e|oxidation[ -]?reduction|",
-      "potential|voltage|elevation|depth|head|water\\s*level|",
-      "stage|gauge|gage|pressure|flow|discharge|velocity|",
-      "delta|difference|change|gradient|slope|residual|deviation|",
-      "anomaly|flux|ph)\\b"
-    ),
-    label_words,
-    ignore.case = TRUE
-  ) |
-    grepl(
-      "(*UTF)(^|[^[:alnum:]])[\\x{03B4}\\x{0394}]",
-      label,
-      perl = TRUE
+  units <- substring(
+    exclusions$units[startsWith(exclusions$units, "value:")],
+    7L
+  )
+  excluded <- code %in% parameters | name %in% parameters | unit_text %in% units
+  if (length(word_rules)) {
+    pattern <- paste0(
+      "\\b(?:",
+      paste(substring(word_rules, 6L), collapse = "|"),
+      ")\\b"
     )
-  temperature & !kelvin | signed
+    excluded <- excluded | grepl(pattern, label_words, perl = TRUE)
+  }
+  if ("rule:temperature" %in% rules) {
+    # The reported unit determines whether the temperature is in Kelvin.
+    excluded <- excluded |
+      (grepl("\\b(?:temp|temperature)\\b", label_words, perl = TRUE) &
+        !grepl("\\b(?:k|kelvin)\\b", unit_text, perl = TRUE))
+  }
+  if ("rule:isotope_delta" %in% rules) {
+    excluded <- excluded |
+      grepl("(*UTF)(^|[^[:alnum:]])[\\x{03B4}\\x{0394}]", label, perl = TRUE)
+  }
+  if ("rule:millivolt" %in% exclusions$units) {
+    excluded <- excluded |
+      grepl("\\b(?:mv|millivolt)\\b", unit_text, perl = TRUE)
+  }
+  if (length(exclusions$pairs)) {
+    excluded <- excluded |
+      paste(code, unit_text, sep = "\r") %in% exclusions$pairs
+  }
+  excluded
 }
 
 addDiscData_negative_mdl_choices <- function(rows) {
@@ -930,7 +965,6 @@ addDiscData_negative_mdl_choices <- function(rows) {
       parameter_code = character(),
       parameter_name = character(),
       unit = character(),
-      automatic = logical(),
       label = character(),
       stringsAsFactors = FALSE
     ))
@@ -954,11 +988,6 @@ addDiscData_negative_mdl_choices <- function(rows) {
     ,
     drop = FALSE
   ]
-  out$automatic <- addDiscData_negative_mdl_auto_excluded(
-    out$parameter_code,
-    out$parameter_name,
-    out$unit
-  )
   out$choice_id <- as.character(seq_len(nrow(out)))
   source_label <- ifelse(
     nzchar(out$parameter_name) & out$parameter_name != out$parameter_code,
@@ -967,8 +996,7 @@ addDiscData_negative_mdl_choices <- function(rows) {
   )
   out$label <- paste0(
     source_label,
-    ifelse(nzchar(out$unit), paste0(" [", out$unit, "]"), ""),
-    ifelse(out$automatic, " — automatically excluded", "")
+    ifelse(nzchar(out$unit), paste0(" [", out$unit, "]"), "")
   )
   out
 }
@@ -1010,7 +1038,7 @@ addDiscData_parse_result <- function(
 
   data.frame(
     result = result,
-    result_condition = condition,
+    result_condition_id = condition,
     result_condition_value = condition_value
   )
 }
@@ -1062,13 +1090,13 @@ addDiscData_defaults <- function(profile) {
   # explicitly completed during preview review. Never assume catalogue IDs.
   list(
     media_id = addDiscData_int(defaults$media_id),
-    collection_method = addDiscData_int(defaults$collection_method),
-    sample_type = addDiscData_int(defaults$sample_type),
+    collection_method_id = addDiscData_int(defaults$collection_method_id),
+    sample_type_id = addDiscData_int(defaults$sample_type_id),
     owner = addDiscData_int(defaults$owner),
     contributor = addDiscData_int(defaults$contributor),
-    result_type = addDiscData_int(defaults$result_type),
+    result_type_id = addDiscData_int(defaults$result_type_id),
     matrix_state_id = addDiscData_int(defaults$matrix_state_id),
-    result_value_type = addDiscData_int(defaults$result_value_type),
+    result_value_type_id = addDiscData_int(defaults$result_value_type_id),
     reporting_basis_id = addDiscData_int(defaults$reporting_basis_id),
     result_speciation_id = addDiscData_int(defaults$result_speciation_id),
     result_target_id = addDiscData_int(defaults$result_target_id),
@@ -1077,7 +1105,7 @@ addDiscData_defaults <- function(profile) {
     analysis_conditions = AquaCache::normalizeAnalysisConditions(
       defaults$analysis_conditions
     ),
-    laboratory = addDiscData_int(defaults$laboratory),
+    lab_id = addDiscData_int(defaults$lab_id),
     grade_type_id = addDiscData_int(defaults$grade_type_id),
     approval_type_id = addDiscData_int(defaults$approval_type_id),
     sample_no_source_update = isTRUE(defaults$sample_no_source_update),
@@ -1105,7 +1133,7 @@ addDiscData_common_rows <- function(
   analysis_datetime = NA,
   source_row_number = NA_integer_,
   negative_values_are_mdl = FALSE,
-  negative_mdl_exclusions = character()
+  negative_mdl_exclusions = addDiscData_negative_mdl_defaults()
 ) {
   source_location_name <- addDiscData_optional_text(source_location_name)
   source_sample_id <- addDiscData_optional_text(source_sample_id)
@@ -1132,17 +1160,18 @@ addDiscData_common_rows <- function(
   parsed_result <- if (isTRUE(attr(profile, "defer_result_text"))) {
     data.frame(
       result = rep(NA_real_, length(result_raw)),
-      result_condition = rep(NA_integer_, length(result_raw)),
+      result_condition_id = rep(NA_integer_, length(result_raw)),
       result_condition_value = rep(NA_real_, length(result_raw))
     )
   } else {
-    mdl_excluded <- addDiscData_negative_mdl_auto_excluded(
-      source_parameter_code,
-      source_parameter_name,
-      source_unit
-    ) |
-      addDiscData_negative_mdl_key(source_parameter_code, source_unit) %in%
+    mdl_excluded <- if (isTRUE(negative_values_are_mdl)) {
+      addDiscData_negative_mdl_excluded(
+        source_parameter_code,
+        source_parameter_name,
+        source_unit,
         negative_mdl_exclusions
+      )
+    }
     addDiscData_parse_result(
       addDiscData_map_result_text(result_raw, profile),
       negative_values_are_mdl = negative_values_are_mdl,
@@ -1166,22 +1195,21 @@ addDiscData_common_rows <- function(
     sub_location_id = NA_integer_,
     datetime = datetime,
     media_id = defaults$media_id,
-    collection_method = defaults$collection_method,
-    sample_type = defaults$sample_type,
+    collection_method_id = defaults$collection_method_id,
+    sample_type_id = defaults$sample_type_id,
     sample_group_id = NA_integer_,
     target_datetime = as.POSIXct(NA),
-    z = NA_real_,
+    depth_height_m = NA_real_,
     sample_volume_ml = NA_real_,
     purge_volume_l = NA_real_,
     purge_time_min = NA_real_,
     flow_rate_l_min = NA_real_,
-    wave_hgt_m = NA_real_,
-    sample_grade = NA_integer_,
-    sample_approval = NA_integer_,
+    wave_height_m = NA_real_,
+    sample_grade_type_id = NA_integer_,
+    sample_approval_type_id = NA_integer_,
     sample_qualifier = NA_integer_,
-    commissioning_org = NA_integer_,
-    sampling_org = NA_integer_,
-    linked_with = NA_integer_,
+    commissioning_org_id = NA_integer_,
+    sampling_org_id = NA_integer_,
     sample_note = NA_character_,
     owner = defaults$owner,
     contributor = defaults$contributor,
@@ -1194,11 +1222,11 @@ addDiscData_common_rows <- function(
     source_parameter_name = as.character(source_parameter_name),
     source_unit = as.character(source_unit),
     parameter_id = NA_integer_,
-    result_type = defaults$result_type,
-    protocol_method = addDiscData_int(defaults$protocol_method),
+    result_type_id = defaults$result_type_id,
+    protocol_method_id = addDiscData_int(defaults$protocol_method_id),
     matrix_state_id = defaults$matrix_state_id,
     sample_fraction_id = NA_integer_,
-    result_value_type = defaults$result_value_type,
+    result_value_type_id = defaults$result_value_type_id,
     reporting_basis_id = defaults$reporting_basis_id,
     result_speciation_id = defaults$result_speciation_id,
     result_target_id = defaults$result_target_id,
@@ -1207,19 +1235,19 @@ addDiscData_common_rows <- function(
     analysis_conditions = defaults$analysis_conditions,
     source_result_text = source_result_text,
     source_result = parsed_result$result,
-    source_result_condition = parsed_result$result_condition,
+    source_result_condition = parsed_result$result_condition_id,
     source_result_condition_value = parsed_result$result_condition_value,
     source_result_flag = as.character(result_flag),
     source_result_flag_column = as.character(result_flag_column),
     source_method_detection_limit = method_detection_limit,
     source_reporting_detection_limit = reporting_detection_limit,
     result = parsed_result$result,
-    result_condition = parsed_result$result_condition,
+    result_condition_id = parsed_result$result_condition_id,
     result_condition_value = parsed_result$result_condition_value,
     result_flag_action = NA_character_,
     conversion = 1,
     result_offset = 0,
-    laboratory = defaults$laboratory,
+    lab_id = defaults$lab_id,
     grade_type_id = defaults$grade_type_id,
     approval_type_id = defaults$approval_type_id,
     analysis_datetime = analysis_datetime,
@@ -1233,6 +1261,7 @@ addDiscData_common_rows <- function(
   out$existing_sample_version <- rep(NA_character_, nrow(out))
   out$source_row_number <- source_row_number
   out$source_matching_values <- rep("{}", nrow(out))
+  out$parameter_mapping_id <- rep(NA_integer_, nrow(out))
   out
 }
 
@@ -1277,6 +1306,27 @@ addDiscData_source_matching_values <- function(source, columns) {
   ]
   values[unique_values, on = columns, matching_json := i.matching_json]
   values$matching_json
+}
+
+addDiscData_source_conditions_label <- function(value) {
+  if (!length(value) || !addDiscData_present(value)) {
+    return("")
+  }
+  fields <- jsonlite::fromJSON(value, simplifyVector = FALSE)
+  if (!length(fields)) {
+    return("")
+  }
+  labels <- vapply(
+    fields,
+    function(field) {
+      if (addDiscData_present(field)) as.character(field) else "(blank)"
+    },
+    character(1)
+  )
+  paste(
+    paste0(sub("^source\\.", "", names(fields)), " = ", labels),
+    collapse = ", "
+  )
 }
 
 addDiscData_excel_sheet <- function(path, profile) {
@@ -1332,7 +1382,7 @@ addDiscData_parse_als_eqwin <- function(
   path,
   profile,
   negative_values_are_mdl = FALSE,
-  negative_mdl_exclusions = character()
+  negative_mdl_exclusions = addDiscData_negative_mdl_defaults()
 ) {
   cmap <- profile$column_map[[1]]
   sheet <- addDiscData_excel_sheet(path, profile)
@@ -1401,7 +1451,7 @@ addDiscData_parse_als_samples <- function(
   path,
   profile,
   negative_values_are_mdl = FALSE,
-  negative_mdl_exclusions = character()
+  negative_mdl_exclusions = addDiscData_negative_mdl_defaults()
 ) {
   cmap <- profile$column_map[[1]]
   sheet <- addDiscData_excel_sheet(path, profile)
@@ -1547,7 +1597,7 @@ addDiscData_parse_als_xlr <- function(
   path,
   profile,
   negative_values_are_mdl = FALSE,
-  negative_mdl_exclusions = character()
+  negative_mdl_exclusions = addDiscData_negative_mdl_defaults()
 ) {
   cmap <- profile$column_map[[1]]
   sheet <- addDiscData_excel_sheet(path, profile)
@@ -1883,7 +1933,7 @@ addDiscData_parse_wide <- function(
   path,
   profile,
   negative_values_are_mdl = FALSE,
-  negative_mdl_exclusions = character()
+  negative_mdl_exclusions = addDiscData_negative_mdl_defaults()
 ) {
   cmap <- profile$column_map[[1]]
   sheet <- addDiscData_excel_sheet(path, profile)
@@ -2086,7 +2136,7 @@ addDiscData_parse_upload <- function(
   path,
   profile,
   negative_values_are_mdl = FALSE,
-  negative_mdl_exclusions = character()
+  negative_mdl_exclusions = addDiscData_negative_mdl_defaults()
 ) {
   parser_family <- addDiscData_parser_family(profile)
   parser <- switch(
@@ -2119,16 +2169,14 @@ addDiscData_parse_upload <- function(
   found <- nrow(out)
   out <- out[!excluded, , drop = FALSE]
   if (nrow(out)) {
-    mdl_excluded <- addDiscData_negative_mdl_auto_excluded(
-      out$source_parameter_code,
-      out$source_parameter_name,
-      out$source_unit
-    ) |
-      addDiscData_negative_mdl_key(
+    mdl_excluded <- if (isTRUE(negative_values_are_mdl)) {
+      addDiscData_negative_mdl_excluded(
         out$source_parameter_code,
-        out$source_unit
-      ) %in%
+        out$source_parameter_name,
+        out$source_unit,
         negative_mdl_exclusions
+      )
+    }
     values <- addDiscData_parse_result(
       addDiscData_map_result_text(out$source_result_text, profile),
       negative_values_are_mdl,
@@ -2213,8 +2261,8 @@ addDiscData_apply_blank_sample_types <- function(rows, sample_types) {
   if (!nrow(rows)) {
     return(rows)
   }
-  if (!"sample_type" %in% names(rows)) {
-    rows$sample_type <- NA_integer_
+  if (!"sample_type_id" %in% names(rows)) {
+    rows$sample_type_id <- NA_integer_
   }
   kind <- addDiscData_blank_sample_kind(rows$source_location_name)
   for (blank_kind in c("field", "trip")) {
@@ -2235,7 +2283,7 @@ addDiscData_apply_blank_sample_types <- function(rows, sample_types) {
         call. = FALSE
       )
     }
-    rows$sample_type[selected] <- as.integer(
+    rows$sample_type_id[selected] <- as.integer(
       sample_types$sample_type_id[[sample_type_index]]
     )
     rows$location_id[selected] <- NA_integer_
@@ -2279,9 +2327,6 @@ addDiscData_location_match <- function(
   rows$location_mapping_status <- "unmapped"
   rows$location_mapping_candidates <- ""
   if (nrow(mappings)) {
-    if (!("profile_specific" %in% names(mappings))) {
-      mappings$profile_specific <- FALSE
-    }
     for (i in unique_sources) {
       if (blank_samples[[i]]) {
         next
@@ -2406,8 +2451,7 @@ addDiscData_fetch_mappings <- function(con, source_code, profile_code = NULL) {
     } else {
       NULL
     },
-    active = TRUE,
-    include_draft = TRUE
+    active = TRUE
   )
 }
 
@@ -2432,8 +2476,7 @@ addDiscData_fetch_result_flag_mappings <- function(
     } else {
       NULL
     },
-    active = TRUE,
-    include_draft = TRUE
+    active = TRUE
   )
 }
 
@@ -2463,9 +2506,9 @@ addDiscData_apply_result_flag_mapping <- function(rows, row, mapping) {
   }
 
   action <- as.character(mapping$result_action[[1]])
-  rows$result_condition[[row]] <- addDiscData_int(
+  rows$result_condition_id[[row]] <- addDiscData_int(
     mapping$result_condition_id[[1]],
-    rows$result_condition[[row]]
+    rows$result_condition_id[[row]]
   )
   rows$result_condition_value[[row]] <- threshold
   rows$result_flag_action[[row]] <- action
@@ -2623,9 +2666,10 @@ addDiscData_mapping_indices <- function(rows, mappings) {
     ][N > 1L]
     semantic_fields <- c(
       "parameter_id",
-      "result_type",
+      "protocol_method_id",
+      "result_type_id",
       "sample_fraction_id",
-      "result_value_type",
+      "result_value_type_id",
       "reporting_basis_id",
       "result_speciation_id",
       "result_target_id",
@@ -2679,6 +2723,7 @@ addDiscData_apply_mappings <- function(rows, con, profile_code = NULL) {
   file_rows <- addDiscData_present(rows$source_code) &
     addDiscData_present(rows$source_parameter_code)
   rows$mapping_status <- "manual"
+  rows$parameter_mapping_id <- rep(NA_integer_, nrow(rows))
   rows$mapping_status[file_rows] <- "unmapped"
   if ("source_result" %in% names(rows)) {
     rows$result[file_rows] <- rows$source_result[file_rows]
@@ -2688,7 +2733,7 @@ addDiscData_apply_mappings <- function(rows, con, profile_code = NULL) {
       rows$source_result_condition_value[file_rows]
   }
   if ("source_result_condition" %in% names(rows)) {
-    rows$result_condition[file_rows] <- rows$source_result_condition[file_rows]
+    rows$result_condition_id[file_rows] <- rows$source_result_condition[file_rows]
   }
   if ("source_note" %in% names(rows)) {
     rows$note[file_rows] <- rows$source_note[file_rows]
@@ -2714,17 +2759,22 @@ addDiscData_apply_mappings <- function(rows, con, profile_code = NULL) {
         next
       }
       hit <- mappings[index, , drop = FALSE]
+      rows$parameter_mapping_id[[i]] <- addDiscData_int(hit$import_mapping_id)
       rows$parameter_id[[i]] <- addDiscData_int(hit$parameter_id[[1]])
-      rows$result_type[[i]] <- addDiscData_int(
-        hit$result_type[[1]],
-        rows$result_type[[i]]
+      rows$protocol_method_id[[i]] <- addDiscData_int(
+        hit$protocol_method_id,
+        rows$protocol_method_id[[i]]
+      )
+      rows$result_type_id[[i]] <- addDiscData_int(
+        hit$result_type_id[[1]],
+        rows$result_type_id[[i]]
       )
       rows$sample_fraction_id[[i]] <- addDiscData_int(hit$sample_fraction_id[[
         1
       ]])
-      rows$result_value_type[[i]] <- addDiscData_int(
-        hit$result_value_type[[1]],
-        rows$result_value_type[[i]]
+      rows$result_value_type_id[[i]] <- addDiscData_int(
+        hit$result_value_type_id[[1]],
+        rows$result_value_type_id[[i]]
       )
       rows$reporting_basis_id[[
         i
@@ -2822,9 +2872,9 @@ addDiscData_upsert_mapping <- function(
   parameter_code,
   unit,
   parameter_id,
-  result_type,
+  result_type_id,
   sample_fraction_id,
-  result_value_type,
+  result_value_type_id,
   reporting_basis_id,
   matrix_state_id,
   conversion,
@@ -2832,23 +2882,65 @@ addDiscData_upsert_mapping <- function(
   note,
   profile_code = NULL,
   chemistry = list(),
-  source_matching_values = "{}"
+  source_matching_values = "{}",
+  protocol_method_id = NA_integer_,
+  applied_mapping = NULL
 ) {
+  extra <- jsonlite::fromJSON(
+    addDiscData_first(source_matching_values, "{}"),
+    simplifyVector = FALSE
+  )
+  if (length(extra) && any(!startsWith(names(extra), "source."))) {
+    stop("Invalid source matching fields.", call. = FALSE)
+  }
+  criteria <- c(list(parameter_code = parameter_code, unit = unit), extra)
+  priority <- 50L
+  if (
+    !is.null(applied_mapping) &&
+      identical(
+        isTRUE(applied_mapping$profile_specific),
+        !is.null(profile_code)
+      )
+  ) {
+    priority <- addDiscData_int(applied_mapping$priority, 50L)
+    saved_key <- jsonlite::fromJSON(
+      applied_mapping$source_match,
+      simplifyVector = FALSE
+    )
+    aliases <- c(
+      ParamCode = "parameter_code",
+      input_param = "parameter_code",
+      input_unit = "unit"
+    )
+    fields <- names(saved_key)
+    aliased <- fields %in% names(aliases)
+    fields[aliased] <- aliases[fields[aliased]]
+    if (
+      length(fields) == length(criteria) && setequal(fields, names(criteria))
+    ) {
+      # The saved JSON is the upsert key, including its original aliases and case.
+      criteria <- saved_key
+      note <- addDiscData_first(applied_mapping$note, NA_character_)
+    }
+    # When the winner is broader, inherit its priority so that the new, more
+    # specific rule takes precedence for this source tuple at the same scope.
+  }
   mappings <- data.frame(
-    parameter_code = as.character(parameter_code),
-    unit = as.character(unit),
+    as.data.frame(criteria, stringsAsFactors = FALSE, check.names = FALSE),
     parameter_id = as.integer(parameter_id),
-    result_type = as.integer(result_type),
+    protocol_method_id = as.integer(protocol_method_id),
+    result_type_id = as.integer(result_type_id),
     sample_fraction_id = as.integer(sample_fraction_id),
-    result_value_type = as.integer(result_value_type),
+    result_value_type_id = as.integer(result_value_type_id),
     reporting_basis_id = as.integer(reporting_basis_id),
     matrix_state_id = as.integer(matrix_state_id),
     conversion = as.numeric(conversion),
     result_offset = as.numeric(result_offset),
-    priority = 50L,
+    priority = priority,
     active = TRUE,
     note = as.character(note),
-    stringsAsFactors = FALSE
+    stringsAsFactors = FALSE,
+    check.names = FALSE
   )
   defaults <- list(
     result_speciation_id = NA_integer_,
@@ -2867,19 +2959,6 @@ addDiscData_upsert_mapping <- function(
       stringsAsFactors = FALSE
     )
   )
-  criteria <- jsonlite::fromJSON(
-    addDiscData_first(source_matching_values, "{}"),
-    simplifyVector = FALSE
-  )
-  if (length(criteria)) {
-    if (any(!startsWith(names(criteria), "source."))) {
-      stop("Invalid source matching fields.", call. = FALSE)
-    }
-    mappings <- cbind(
-      mappings,
-      as.data.frame(criteria, stringsAsFactors = FALSE, check.names = FALSE)
-    )
-  }
   AquaCache::upsertImportParameterMappings(
     con = con,
     source_code = source_code,
@@ -2887,8 +2966,7 @@ addDiscData_upsert_mapping <- function(
     source_description = "Created from YGwater add discrete data.",
     profile_code = profile_code,
     mappings = mappings,
-    match_columns = c("parameter_code", "unit", names(criteria)),
-    publish = TRUE
+    match_columns = names(criteria)
   )
 }
 
@@ -2919,13 +2997,15 @@ addDiscData_run_mapping_save <- function(request) {
             parameter_code = request$row$source_parameter_code[[1]],
             unit = request$row$source_unit[[1]],
             parameter_id = request$parameter_id,
-            result_type = request$result_type,
+            result_type_id = request$result_type_id,
             sample_fraction_id = request$sample_fraction_id,
-            result_value_type = request$result_value_type,
+            result_value_type_id = request$result_value_type_id,
             reporting_basis_id = request$reporting_basis_id,
             matrix_state_id = request$matrix_state_id,
             conversion = request$conversion,
             result_offset = request$result_offset,
+            protocol_method_id = request$protocol_method_id,
+            applied_mapping = request$applied_mapping,
             note = "Saved from YGwater add discrete data mapping editor.",
             profile_code = if (identical(request$mapping_scope, "source")) {
               NULL
@@ -2954,8 +3034,7 @@ addDiscData_run_mapping_save <- function(request) {
               priority = 50L,
               active = TRUE,
               note = "Saved from YGwater add discrete data location mapping editor."
-            ),
-            publish = TRUE
+            )
           )
         }
       })
@@ -2986,8 +3065,7 @@ addDiscData_run_mapping_save <- function(request) {
           con = con,
           source_code = profile$source_code[[1]],
           profile_code = profile$profile_code[[1]],
-          active = TRUE,
-          include_draft = TRUE
+          active = TRUE
         )
         parsed <- addDiscData_location_match(
           parsed,
@@ -3082,8 +3160,8 @@ addDiscData_run_location_create <- function(request) {
   )
   elevation_fallback <- !elevation_available
   location_rows$conversion_m <- ifelse(elevation_fallback, 0, NA_real_)
-  location_rows$datum_id_from <- NA_integer_
-  location_rows$datum_id_to <- NA_integer_
+  location_rows$from_datum_id <- NA_integer_
+  location_rows$to_datum_id <- NA_integer_
   location_rows$elevation_details <- I(elevation_details)
 
   active <- FALSE
@@ -3136,8 +3214,7 @@ addDiscData_run_location_create <- function(request) {
               con = con,
               source_code = request$profile$source_code[[1]],
               profile_code = request$profile$profile_code[[1]],
-              mappings = mapping_rows[create_mapping, , drop = FALSE],
-              publish = TRUE
+              mappings = mapping_rows[create_mapping, , drop = FALSE]
             )
           }
           if (active) {
@@ -3442,21 +3519,20 @@ addDiscData_run_upload <- function(request) {
         "sub_location_id",
         "datetime",
         "target_datetime",
-        "z",
+        "depth_height_m",
         "media_id",
-        "collection_method",
-        "sample_type",
+        "collection_method_id",
+        "sample_type_id",
         "sample_group_id",
-        "linked_with",
         "sample_volume_ml",
         "purge_volume_l",
         "purge_time_min",
         "flow_rate_l_min",
-        "wave_hgt_m",
-        "sample_grade",
-        "sample_approval",
-        "commissioning_org",
-        "sampling_org",
+        "wave_height_m",
+        "sample_grade_type_id",
+        "sample_approval_type_id",
+        "commissioning_org_id",
+        "sampling_org_id",
         "sample_note",
         "owner",
         "contributor",
@@ -3503,72 +3579,17 @@ addDiscData_run_upload <- function(request) {
       df$field_visit_id <- samples$field_visit_id[
         match(df$sample_key, samples$sample_key)
       ]
-      sample_table_fields <- DBI::dbListFields(
-        con,
-        DBI::Id(schema = "discrete", table = "samples")
-      )
-      sample_has_linked_with <- "linked_with" %in% sample_table_fields
-      sample_has_field_visit_id <- "field_visit_id" %in% sample_table_fields
-      sample_has_share_with <- "share_with" %in% sample_table_fields
-      if (!sample_has_share_with) {
-        stop(
-          "The discrete.samples table does not support sharing. Apply the current AquaCache schema before uploading samples.",
-          call. = FALSE
-        )
-      }
-      if (!is.na(field_visit_id) && !sample_has_field_visit_id) {
-        stop(
-          "The discrete.samples table does not support field visit links. Apply the AquaCache field visit schema patch before linking samples.",
-          call. = FALSE
-        )
-      }
-      sample_insert_fields <- c(
-        "location_id",
-        "sub_location_id",
-        "media_id",
-        "z",
-        "datetime",
-        "target_datetime",
-        "collection_method",
-        "sample_type",
-        if (sample_has_linked_with) "linked_with",
-        "sample_volume_ml",
-        "purge_volume_l",
-        "purge_time_min",
-        "flow_rate_l_min",
-        "wave_hgt_m",
-        "sample_grade",
-        "sample_approval",
-        "owner",
-        "contributor",
-        "comissioning_org",
-        "sampling_org",
-        "source_adapter_function",
-        "external_sample_id",
-        "import_source_id",
-        "no_source_update",
-        "note",
-        if (sample_has_share_with) "share_with",
-        if (sample_has_field_visit_id) "field_visit_id"
-      )
-      sample_insert_values <- sprintf(
-        "$%d",
-        seq_along(sample_insert_fields)
-      )
-      share_with_index <- match("share_with", sample_insert_fields)
-      if (!is.na(share_with_index)) {
-        sample_insert_values[[share_with_index]] <- paste0(
-          sample_insert_values[[share_with_index]],
-          "::text[]"
-        )
-      }
-      sample_insert_sql <- paste0(
-        "INSERT INTO discrete.samples (",
-        paste(sample_insert_fields, collapse = ", "),
-        ") VALUES (",
-        paste(sample_insert_values, collapse = ", "),
-        ") RETURNING sample_id"
-      )
+      sample_insert_sql <- "INSERT INTO discrete.samples (
+        location_id, sub_location_id, media_id, depth_height_m, datetime,
+        target_datetime, collection_method_id, sample_type_id, sample_volume_ml,
+        purge_volume_l, purge_time_min, flow_rate_l_min, wave_height_m, grade_type_id,
+        approval_type_id, owner, contributor, commissioning_org_id, sampling_org_id,
+        source_adapter_function, external_sample_id, import_source_id,
+        no_source_update, note, share_with, field_visit_id
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::text[], $26
+      ) RETURNING sample_id"
       import_sources <- DBI::dbGetQuery(
         con,
         "SELECT import_source_id, source_code
@@ -3665,63 +3686,52 @@ addDiscData_run_upload <- function(request) {
           link_sample_documents(existing_sample_id, doc_ids)
           next
         }
+        share_with <- request$sample_share_with[[
+          as.character(samples$sample_key[[i]])
+        ]]
+        if (is.null(share_with) || !length(share_with)) {
+          share_with <- "public_reader"
+        }
         sid <- DBI::dbGetQuery(
           con,
           sample_insert_sql,
-          params = c(
-            list(
-              as.integer(samples$location_id[[i]]),
-              addDiscData_int(samples$sub_location_id[[i]]),
-              as.integer(samples$media_id[[i]]),
-              addDiscData_num(samples$z[[i]]),
-              as.POSIXct(samples$datetime[[i]], tz = "UTC"),
-              as.POSIXct(samples$target_datetime[[i]], tz = "UTC"),
-              as.integer(samples$collection_method[[i]]),
-              as.integer(samples$sample_type[[i]])
-            ),
-            if (sample_has_linked_with) {
-              list(addDiscData_int(samples$linked_with[[i]]))
+          params = list(
+            as.integer(samples$location_id[[i]]),
+            addDiscData_int(samples$sub_location_id[[i]]),
+            as.integer(samples$media_id[[i]]),
+            addDiscData_num(samples$depth_height_m[[i]]),
+            as.POSIXct(samples$datetime[[i]], tz = "UTC"),
+            as.POSIXct(samples$target_datetime[[i]], tz = "UTC"),
+            as.integer(samples$collection_method_id[[i]]),
+            as.integer(samples$sample_type_id[[i]]),
+            addDiscData_num(samples$sample_volume_ml[[i]]),
+            addDiscData_num(samples$purge_volume_l[[i]]),
+            addDiscData_num(samples$purge_time_min[[i]]),
+            addDiscData_num(samples$flow_rate_l_min[[i]]),
+            addDiscData_num(samples$wave_height_m[[i]]),
+            addDiscData_int(samples$sample_grade_type_id[[i]]),
+            addDiscData_int(samples$sample_approval_type_id[[i]]),
+            as.integer(samples$owner[[i]]),
+            addDiscData_int(samples$contributor[[i]]),
+            addDiscData_int(samples$commissioning_org_id[[i]]),
+            addDiscData_int(samples$sampling_org_id[[i]]),
+            if (file_sample[[i]]) "addDiscData" else NA_character_,
+            if (file_sample[[i]]) {
+              samples$source_sample_id[[i]]
+            } else {
+              NA_character_
             },
-            list(
-              addDiscData_num(samples$sample_volume_ml[[i]]),
-              addDiscData_num(samples$purge_volume_l[[i]]),
-              addDiscData_num(samples$purge_time_min[[i]]),
-              addDiscData_num(samples$flow_rate_l_min[[i]]),
-              addDiscData_num(samples$wave_hgt_m[[i]]),
-              addDiscData_int(samples$sample_grade[[i]]),
-              addDiscData_int(samples$sample_approval[[i]]),
-              as.integer(samples$owner[[i]]),
-              addDiscData_int(samples$contributor[[i]]),
-              addDiscData_int(samples$commissioning_org[[i]]),
-              addDiscData_int(samples$sampling_org[[i]]),
-              if (file_sample[[i]]) "addDiscData" else NA_character_,
-              if (file_sample[[i]]) {
-                samples$source_sample_id[[i]]
-              } else {
-                NA_character_
-              },
-              addDiscData_int(samples$import_source_id[[i]]),
-              isTRUE(samples$sample_no_source_update[[i]]),
-              if (addDiscData_present(samples$sample_note[[i]])) {
-                samples$sample_note[[i]]
-              } else if (file_sample[[i]]) {
-                paste("Imported source sample:", samples$source_sample_id[[i]])
-              } else {
-                NA_character_
-              }
-            ),
-            if (sample_has_share_with) {
-              share_with <- request$sample_share_with[[
-                as.character(samples$sample_key[[i]])
-              ]]
-              if (is.null(share_with) || !length(share_with)) {
-                share_with <- "public_reader"
-              }
-              list(share_with_to_array(share_with))
+            addDiscData_int(samples$import_source_id[[i]]),
+            isTRUE(samples$sample_no_source_update[[i]]),
+            if (addDiscData_present(samples$sample_note[[i]])) {
+              samples$sample_note[[i]]
+            } else if (file_sample[[i]]) {
+              paste("Imported source sample:", samples$source_sample_id[[i]])
+            } else {
+              NA_character_
             },
-            if (sample_has_field_visit_id) {
-              list(addDiscData_int(samples$field_visit_id[[i]]))
-            }
+            share_with_to_array(share_with),
+            addDiscData_int(samples$field_visit_id[[i]])
           )
         )$sample_id[[1]]
         link_sample_documents(sid, doc_ids)
@@ -3819,16 +3829,16 @@ addDiscData_run_upload <- function(request) {
           con,
           "INSERT INTO discrete.results (
              sample_id,
-             result_type,
+             result_type_id,
              parameter_id,
-             protocol_method,
+             protocol_method_id,
              sample_fraction_id,
              result,
-             result_condition,
+             result_condition_id,
              result_condition_value,
-             result_value_type,
+             result_value_type_id,
              reporting_basis_id,
-             laboratory,
+             lab_id,
              analysis_datetime,
              lab_report_no,
              lab_sample_no,
@@ -3844,16 +3854,16 @@ addDiscData_run_upload <- function(request) {
            ) RETURNING result_id",
           params = list(
             sid,
-            as.integer(df$result_type[[j]]),
+            as.integer(df$result_type_id[[j]]),
             as.integer(df$parameter_id[[j]]),
-            addDiscData_int(df$protocol_method[[j]]),
+            addDiscData_int(df$protocol_method_id[[j]]),
             addDiscData_int(df$sample_fraction_id[[j]]),
             addDiscData_num(df$result[[j]]),
-            addDiscData_int(df$result_condition[[j]]),
+            addDiscData_int(df$result_condition_id[[j]]),
             addDiscData_num(df$result_condition_value[[j]]),
-            addDiscData_int(df$result_value_type[[j]]),
+            addDiscData_int(df$result_value_type_id[[j]]),
             addDiscData_int(df$reporting_basis_id[[j]]),
-            addDiscData_int(df$laboratory[[j]]),
+            addDiscData_int(df$lab_id[[j]]),
             if (is.na(df$analysis_datetime[[j]])) {
               as.POSIXct(NA)
             } else {
@@ -4096,7 +4106,7 @@ addDiscData_result_display <- function(
   condition_prefix <- c("1" = "<", "2" = ">")
   rebuild <- missing_source_result & !is.na(rows$source_result_condition_value)
   if (any(rebuild)) {
-    prefix <- unname(condition_prefix[as.character(rows$result_condition[
+    prefix <- unname(condition_prefix[as.character(rows$result_condition_id[
       rebuild
     ])])
     prefix[is.na(prefix)] <- ""
@@ -4152,7 +4162,7 @@ addDiscData_result_display <- function(
     Parameter = parameter_name,
     `Result value` = rows$result,
     `Result condition` = addDiscData_lookup_label(
-      rows$result_condition,
+      rows$result_condition_id,
       result_conditions,
       "result_condition_id",
       "result_condition"
@@ -4171,13 +4181,13 @@ addDiscData_result_display <- function(
       "sample_fraction"
     ),
     `Result type` = addDiscData_lookup_label(
-      rows$result_type,
+      rows$result_type_id,
       result_types,
       "result_type_id",
       "result_type"
     ),
     `Value type` = addDiscData_lookup_label(
-      rows$result_value_type,
+      rows$result_value_type_id,
       result_value_types,
       "result_value_type_id",
       "result_value_type"
@@ -4210,15 +4220,15 @@ addDiscData_result_display <- function(
       "matrix_state_name"
     ),
     Laboratory = addDiscData_lookup_label(
-      rows$laboratory,
+      rows$lab_id,
       laboratories,
       "lab_id",
       "lab_name"
     ),
     Protocol = addDiscData_lookup_label(
-      rows$protocol_method,
+      rows$protocol_method_id,
       protocols_methods,
-      "protocol_id",
+      "protocol_method_id",
       "protocol_name"
     ),
     Grade = addDiscData_lookup_label(
@@ -4259,11 +4269,11 @@ addDiscData_result_display <- function(
 addDiscData_result_edit_columns <- function() {
   c(
     "Result value" = "result",
-    "Result condition" = "result_condition",
+    "Result condition" = "result_condition_id",
     "Condition value" = "result_condition_value",
-    "Result type" = "result_type",
+    "Result type" = "result_type_id",
     "Sample fraction" = "sample_fraction_id",
-    "Value type" = "result_value_type",
+    "Value type" = "result_value_type_id",
     "Reporting basis" = "reporting_basis_id",
     "Chemical form / species scope" = "result_speciation_id",
     "Analytical target / material" = "result_target_id",
@@ -4271,8 +4281,8 @@ addDiscData_result_edit_columns <- function() {
     "Endpoint pH" = "endpoint_ph",
     "Additional analysis conditions (JSON)" = "analysis_conditions",
     "Matrix" = "matrix_state_id",
-    "Protocol" = "protocol_method",
-    "Laboratory" = "laboratory",
+    "Protocol" = "protocol_method_id",
+    "Laboratory" = "lab_id",
     "Grade" = "grade_type_id",
     "Approval" = "approval_type_id",
     "Note" = "note"
@@ -4447,26 +4457,36 @@ addDiscDataUI <- function(id) {
                 fluidRow(
                   column(
                     6,
-                    checkboxInput(
-                      ns("negative_values_are_mdl"),
-                      "Treat negative numeric results as MDLs for this parse",
-                      value = FALSE,
-                      width = "100%"
+                    tags$div(
+                      class = "d-flex align-items-baseline gap-2",
+                      checkboxInput(
+                        ns("negative_values_are_mdl"),
+                        "Treat negative numeric results as MDLs for this parse",
+                        value = FALSE,
+                        width = "auto"
+                      ),
+                      bslib::tooltip(
+                        trigger = tags$button(
+                          type = "button",
+                          class = "btn btn-link p-0",
+                          "aria-label" = "How negative results are treated",
+                          bsicons::bs_icon("info-circle-fill")
+                        ),
+                        "Enable this for workbooks that use negative numbers for results below the method detection limit (MDL). The positive magnitude becomes the MDL. Use the exclusions to keep selected results signed."
+                      )
                     )
                   ),
                   column(
-                    4,
-                    tags$div(
-                      style = "padding-top: 25px;",
+                    6,
+                    conditionalPanel(
+                      condition = "input.negative_values_are_mdl === true",
+                      ns = ns,
                       actionButton(
                         ns("configure_negative_mdl_exclusions"),
-                        "Exclude additional parameters..."
+                        "See excluded parameters and units"
                       )
                     )
                   )
-                ),
-                helpText(
-                  "Enable only when the workbook or lab documentation says negative values encode the MDL. Each eligible negative then becomes a below-MDL result with its positive magnitude as the MDL. This setting applies only to this upload. Temperature is excluded unless its reported unit is Kelvin. ORP/redox/potential, pH, and other signed quantities such as water level, depth, pressure, flow, velocity, elevation, stage, change, gradient, residual, anomaly, and flux are also excluded automatically. After previewing, use the button to add source parameters whose negative values should remain signed."
                 ),
                 uiOutput(ns("negative_mdl_exclusion_status")),
                 bslib::input_task_button(
@@ -4719,8 +4739,9 @@ addDiscData <- function(id, language) {
       preview_profile_key = NULL,
       preview_is_stale = FALSE,
       negative_mdl_choices = data.frame(),
-      negative_mdl_exclusions = character(),
-      negative_mdl_profile_key = NULL
+      negative_mdl_exclusions = addDiscData_negative_mdl_defaults(),
+      negative_mdl_profile_key = NULL,
+      negative_mdl_modal = NULL
     )
     sample_qualifier_map <- reactiveVal(list())
     sample_observer_map <- reactiveVal(list())
@@ -4936,10 +4957,10 @@ addDiscData <- function(id, language) {
                 ug.unit_name AS unit_gas,
                 una.unit_name AS unit_na
            FROM public.parameters p
-           LEFT JOIN public.units ul ON ul.unit_id = p.units_liquid
-           LEFT JOIN public.units us ON us.unit_id = p.units_solid
-           LEFT JOIN public.units ug ON ug.unit_id = p.units_gas
-           LEFT JOIN public.units una ON una.unit_id = p.units_na
+           LEFT JOIN public.units ul ON ul.unit_id = p.liquid_unit_id
+           LEFT JOIN public.units us ON us.unit_id = p.solid_unit_id
+           LEFT JOIN public.units ug ON ug.unit_id = p.gas_unit_id
+           LEFT JOIN public.units una ON una.unit_id = p.not_applicable_unit_id
           ORDER BY p.param_name"
       )
     })
@@ -5000,11 +5021,38 @@ addDiscData <- function(id, language) {
          FROM public.qualifier_types
         ORDER BY qualifier_type_description"
     )
-    protocols_methods <- DBI::dbGetQuery(
+    protocols_methods <- discrete_protocol_server(
+      input,
+      session,
       con,
-      "SELECT protocol_id, protocol_name
-         FROM discrete.protocols_methods
-        ORDER BY protocol_name"
+      contexts = list(
+        mapping_protocol = function() {
+          row <- selected_mapping_row()
+          if (is.null(row)) {
+            return(NULL)
+          }
+          list(
+            data$raw_file_path,
+            row[c(
+              "source_code",
+              "source_parameter_code",
+              "source_unit",
+              "source_matching_values",
+              "parameter_mapping_id"
+            )]
+          )
+        },
+        manual_protocol = function() {
+          if (is.null(selected_sample_row())) {
+            return(NULL)
+          }
+          list(
+            selected_sample_key(),
+            selected_result_index(),
+            result_form_revision()
+          )
+        }
+      )
     )
     grade_types <- DBI::dbGetQuery(
       con,
@@ -5539,26 +5587,10 @@ addDiscData <- function(id, language) {
     })
 
     output$negative_mdl_exclusion_status <- renderUI({
-      choices <- data$negative_mdl_choices
-      selected <- choices$label[choices$key %in% data$negative_mdl_exclusions]
       if (isTRUE(data$preview_is_stale)) {
-        return(tags$small(
+        tags$small(
           class = "text-warning",
           "The workbook or MDL settings changed. Parse the workbook again to update the preview."
-        ))
-      }
-      if (length(selected)) {
-        tags$small(
-          class = "text-muted",
-          paste(
-            "Additional negative-value exclusions:",
-            paste(selected, collapse = "; ")
-          )
-        )
-      } else {
-        tags$small(
-          class = "text-muted",
-          "No additional negative-value exclusions selected."
         )
       }
     })
@@ -5715,8 +5747,7 @@ addDiscData <- function(id, language) {
         con = con,
         source_code = profile$source_code[[1]],
         profile_code = profile$profile_code[[1]],
-        active = TRUE,
-        include_draft = TRUE
+        active = TRUE
       )
       mapped_location_ids <- if (
         nrow(location_mappings) && "location_id" %in% names(location_mappings)
@@ -6019,7 +6050,7 @@ addDiscData <- function(id, language) {
           input$file$datapath
         }
         if (!identical(selected_path, data$selected_file_path)) {
-          data$negative_mdl_exclusions <- character()
+          data$negative_mdl_exclusions <- addDiscData_negative_mdl_defaults()
           data$negative_mdl_choices <- data.frame()
           data$negative_mdl_profile_key <- NULL
           updateCheckboxInput(session, "negative_values_are_mdl", value = FALSE)
@@ -6046,34 +6077,77 @@ addDiscData <- function(id, language) {
     observeEvent(
       input$configure_negative_mdl_exclusions,
       {
-        if (!nrow(data$negative_mdl_choices)) {
-          showNotification(
-            "Preview the workbook first to load its source parameters.",
-            type = "warning"
+        req(isTRUE(input$negative_values_are_mdl))
+        exclusions <- data$negative_mdl_exclusions
+        pairs <- data$negative_mdl_choices
+        data$negative_mdl_modal <- list(
+          path = data$selected_file_path,
+          profile = input$import_profile,
+          pairs = pairs
+        )
+
+        source_choices <- function(rules, values, selected) {
+          normalized <- addDiscData_negative_mdl_normalize(values)
+          keep <- nzchar(normalized) & !duplicated(normalized)
+          keys <- paste0("value:", normalized[keep], recycle0 = TRUE)
+          custom <- setdiff(selected[startsWith(selected, "value:")], keys)
+          c(
+            stats::setNames(unname(rules), paste(names(rules), "(default)")),
+            stats::setNames(keys, values[keep]),
+            stats::setNames(custom, substring(custom, 7L))
           )
-          return()
         }
-        choices <- data$negative_mdl_choices
-        selected <- choices$choice_id[
-          choices$key %in% data$negative_mdl_exclusions
-        ]
+        selectize_options <- list(
+          plugins = list("remove_button"),
+          create = I(
+            "function(input) {
+            const label = input.trim();
+            if (!label) return false;
+            return { value: 'value:' + label.toLowerCase(), text: label };
+          }"
+          )
+        )
         showModal(modalDialog(
-          title = "Exclude parameters from negative-as-MDL conversion",
+          title = "Excluded parameters and units",
           tags$p(
-            "Selected parameters keep negative values as signed results. This selection applies to the current upload only."
-          ),
-          tags$p(
-            "Temperature is excluded unless its reported unit is Kelvin. ORP/redox/potential, pH, and parameters named for elevation, depth, head, water level, stage, pressure, flow, discharge, velocity, change, difference, gradient, slope, residual, deviation, anomaly, or flux are also excluded automatically."
+            "Negative results stay signed when they match any selected exclusion. Add or remove entries for this upload, including the defaults. You can type a source parameter name, code, or unit."
           ),
           selectizeInput(
-            ns("negative_mdl_exclusion_ids"),
-            "Additional source parameters to exclude",
-            choices = stats::setNames(choices$choice_id, choices$label),
-            selected = selected,
+            ns("negative_mdl_parameter_exclusions"),
+            "Parameters",
+            choices = source_choices(
+              addDiscData_negative_mdl_parameter_rules,
+              c(pairs$parameter_code, pairs$parameter_name),
+              exclusions$parameters
+            ),
+            selected = exclusions$parameters,
             multiple = TRUE,
-            options = list(plugins = list("remove_button"))
+            options = selectize_options
           ),
+          selectizeInput(
+            ns("negative_mdl_unit_exclusions"),
+            "Units",
+            choices = source_choices(
+              addDiscData_negative_mdl_unit_rules,
+              pairs$unit,
+              exclusions$units
+            ),
+            selected = exclusions$units,
+            multiple = TRUE,
+            options = selectize_options
+          ),
+          if (nrow(pairs)) {
+            selectizeInput(
+              ns("negative_mdl_exclusion_ids"),
+              "Specific parameter and unit combinations",
+              choices = stats::setNames(pairs$choice_id, pairs$label),
+              selected = pairs$choice_id[pairs$key %in% exclusions$pairs],
+              multiple = TRUE,
+              options = list(plugins = list("remove_button"))
+            )
+          },
           easyClose = TRUE,
+          size = "l",
           footer = tagList(
             modalButton("Cancel"),
             actionButton(
@@ -6088,15 +6162,34 @@ addDiscData <- function(id, language) {
     observeEvent(
       input$apply_negative_mdl_exclusions,
       {
-        choices <- data$negative_mdl_choices
-        selected <- as.character(input$negative_mdl_exclusion_ids)
-        data$negative_mdl_exclusions <- unique(
-          choices$key[choices$choice_id %in% selected]
-        )
-        if (!is.null(data$preview_profile_key)) {
-          data$preview_is_stale <- TRUE
-        }
+        context <- data$negative_mdl_modal
+        data$negative_mdl_modal <- NULL
         removeModal()
+        req(
+          !is.null(context),
+          isTRUE(input$negative_values_are_mdl),
+          identical(context$path, data$selected_file_path),
+          identical(context$profile, input$import_profile)
+        )
+        pairs <- context$pairs
+        exclusions <- list(
+          parameters = sort(unique(as.character(
+            input$negative_mdl_parameter_exclusions
+          ))),
+          units = sort(unique(as.character(
+            input$negative_mdl_unit_exclusions
+          ))),
+          pairs = sort(unique(as.character(
+            pairs$key[pairs$choice_id %in% input$negative_mdl_exclusion_ids]
+          )))
+        )
+        if (!identical(exclusions, data$negative_mdl_exclusions)) {
+          data$negative_mdl_exclusions <- exclusions
+          data$negative_mdl_profile_key <- input$import_profile
+          if (!is.null(data$preview_profile_key)) {
+            data$preview_is_stale <- TRUE
+          }
+        }
       },
       ignoreInit = TRUE
     )
@@ -6107,7 +6200,7 @@ addDiscData <- function(id, language) {
           !is.null(data$negative_mdl_profile_key) &&
             !identical(input$import_profile, data$negative_mdl_profile_key)
         ) {
-          data$negative_mdl_exclusions <- character()
+          data$negative_mdl_exclusions <- addDiscData_negative_mdl_defaults()
           data$negative_mdl_choices <- data.frame()
           data$negative_mdl_profile_key <- NULL
           updateCheckboxInput(session, "negative_values_are_mdl", value = FALSE)
@@ -6235,8 +6328,8 @@ addDiscData <- function(id, language) {
             isTRUE(request$negative_values_are_mdl)
           ) ||
           !identical(
-            sort(data$negative_mdl_exclusions),
-            sort(request$negative_mdl_exclusions)
+            data$negative_mdl_exclusions,
+            request$negative_mdl_exclusions
           )
       ) {
         showNotification(
@@ -6631,7 +6724,7 @@ addDiscData <- function(id, language) {
                 result_types$result_type_id,
                 result_types$result_type
               ),
-              selected = value("result_type", character()),
+              selected = value("result_type_id", character()),
               multiple = TRUE,
               options = list(
                 maxItems = 1,
@@ -6662,7 +6755,7 @@ addDiscData <- function(id, language) {
                 result_value_types$result_value_type_id,
                 result_value_types$result_value_type
               ),
-              selected = value("result_value_type", character()),
+              selected = value("result_value_type_id", character()),
               multiple = TRUE,
               options = list(
                 maxItems = 1,
@@ -6680,7 +6773,7 @@ addDiscData <- function(id, language) {
                 result_conditions$result_condition_id,
                 result_conditions$result_condition
               ),
-              selected = value("result_condition", character()),
+              selected = value("result_condition_id", character()),
               multiple = TRUE,
               options = list(
                 maxItems = 1,
@@ -6701,7 +6794,7 @@ addDiscData <- function(id, language) {
         ),
         tags$details(
           tags$summary("Chemical form, target and analysis conditions"),
-          YGwater:::chemistry_metadata_ui(
+          chemistry_metadata_ui(
             ns,
             "manual_chem_",
             chemistry_catalogues,
@@ -6712,20 +6805,10 @@ addDiscData <- function(id, language) {
         fluidRow(
           column(
             3,
-            selectizeInput(
+            discrete_protocol_input(
               ns("manual_protocol"),
-              "Protocol/method",
-              choices = stats::setNames(
-                protocols_methods$protocol_id,
-                protocols_methods$protocol_name
-              ),
-              selected = value("protocol_method", character()),
-              multiple = TRUE,
-              options = list(
-                maxItems = 1,
-                placeholder = "Enter if applicable"
-              ),
-              width = "100%"
+              isolate(protocols_methods()),
+              selected = value("protocol_method_id", character())
             )
           ),
           column(9, uiOutput(ns("manual_lab_metadata")))
@@ -6853,10 +6936,10 @@ addDiscData <- function(id, language) {
               laboratories$lab_id,
               laboratories$lab_name
             ),
-            selected = if (is.null(row) || is.na(row$laboratory[[1]])) {
+            selected = if (is.null(row) || is.na(row$lab_id[[1]])) {
               character()
             } else {
-              row$laboratory[[1]]
+              row$lab_id[[1]]
             },
             multiple = TRUE,
             options = list(
@@ -7153,8 +7236,9 @@ addDiscData <- function(id, language) {
       }
       candidates <- DBI::dbGetQuery(
         con,
-        "SELECT s.sample_id, s.datetime, s.external_sample_id, s.z, st.sample_type
-         FROM discrete.samples s JOIN discrete.sample_types st ON st.sample_type_id=s.sample_type
+        "SELECT s.sample_id, s.datetime, s.external_sample_id,
+                s.depth_height_m, st.sample_type
+         FROM discrete.samples s JOIN discrete.sample_types st ON st.sample_type_id=s.sample_type_id
          WHERE s.location_id IS NOT DISTINCT FROM $1::integer AND s.media_id=$2
          ORDER BY abs(extract(epoch FROM s.datetime-$3::timestamptz)), s.sample_id DESC LIMIT 200",
         params = list(
@@ -7249,7 +7333,10 @@ addDiscData <- function(id, language) {
       }
       target <- DBI::dbGetQuery(
         con,
-        "SELECT s.*, s.comissioning_org AS commissioning_org, s.note AS sample_note,
+        "SELECT s.*,
+                s.grade_type_id AS sample_grade_type_id,
+                s.approval_type_id AS sample_approval_type_id,
+                s.note AS sample_note,
                 s.no_source_update AS sample_no_source_update,
                 COALESCE(s.modified,s.created)::text AS sample_version,
                 array_to_json(s.share_with)::text AS share_json
@@ -7361,15 +7448,15 @@ addDiscData <- function(id, language) {
         sub_location_id = sub_location_id,
         datetime = sample_datetime,
         media_id = addDiscData_int(input$edit_sample_media),
-        collection_method = addDiscData_int(input$edit_sample_method),
-        sample_type = sample_type_id,
+        collection_method_id = addDiscData_int(input$edit_sample_method),
+        sample_type_id = sample_type_id,
         sample_group_id = addDiscData_int(input$edit_sample_group),
         owner = addDiscData_int(input$edit_sample_owner),
         contributor = addDiscData_int(input$edit_sample_contributor),
-        commissioning_org = addDiscData_int(
+        commissioning_org_id = addDiscData_int(
           input$edit_sample_commissioning_org
         ),
-        sampling_org = addDiscData_int(input$edit_sample_sampling_org),
+        sampling_org_id = addDiscData_int(input$edit_sample_sampling_org),
         target_datetime = as.POSIXct(
           addDiscData_first(
             input$edit_sample_target_datetime,
@@ -7377,14 +7464,14 @@ addDiscData <- function(id, language) {
           ),
           tz = "UTC"
         ),
-        z = addDiscData_num(input$edit_sample_z),
+        depth_height_m = addDiscData_num(input$edit_sample_z),
         sample_volume_ml = addDiscData_num(input$edit_sample_volume),
         purge_volume_l = addDiscData_num(input$edit_sample_purge_volume),
         purge_time_min = addDiscData_num(input$edit_sample_purge_time),
         flow_rate_l_min = addDiscData_num(input$edit_sample_flow_rate),
-        wave_hgt_m = addDiscData_num(input$edit_sample_wave_height),
-        sample_grade = addDiscData_int(input$edit_sample_grade),
-        sample_approval = addDiscData_int(input$edit_sample_approval),
+        wave_height_m = addDiscData_num(input$edit_sample_wave_height),
+        sample_grade_type_id = addDiscData_int(input$edit_sample_grade),
+        sample_approval_type_id = addDiscData_int(input$edit_sample_approval),
         sample_note = addDiscData_optional_text(
           addDiscData_first(input$edit_sample_note, "")
         )
@@ -7413,8 +7500,8 @@ addDiscData <- function(id, language) {
         row$result_no_source_update <- FALSE
         row$source_code <- "YGwater-manual"
         row$mapping_status <- "manual"
-        row$result_type <- addDiscData_int(input$manual_result_type, 2L)
-        row$result_value_type <- addDiscData_int(
+        row$result_type_id <- addDiscData_int(input$manual_result_type, 2L)
+        row$result_value_type_id <- addDiscData_int(
           input$manual_result_value_type,
           1L
         )
@@ -7580,22 +7667,21 @@ addDiscData <- function(id, language) {
           "sub_location_id",
           "datetime",
           "target_datetime",
-          "z",
+          "depth_height_m",
           "media_id",
-          "collection_method",
-          "sample_type",
+          "collection_method_id",
+          "sample_type_id",
           "sample_group_id",
           "sample_volume_ml",
           "purge_volume_l",
           "purge_time_min",
           "flow_rate_l_min",
-          "wave_hgt_m",
-          "sample_grade",
-          "sample_approval",
+          "wave_height_m",
+          "sample_grade_type_id",
+          "sample_approval_type_id",
           "sample_qualifier",
-          "commissioning_org",
-          "sampling_org",
-          "linked_with",
+          "commissioning_org_id",
+          "sampling_org_id",
           "sample_note",
           "owner",
           "contributor",
@@ -7609,16 +7695,16 @@ addDiscData <- function(id, language) {
         row$source_unit <- ""
       }
       row$parameter_id <- addDiscData_int(input$manual_parameter)
-      row$result_type <- addDiscData_int(input$manual_result_type, 2L)
+      row$result_type_id <- addDiscData_int(input$manual_result_type, 2L)
       row$matrix_state_id <- addDiscData_int(input$manual_matrix_state, 1L)
       row$sample_fraction_id <- addDiscData_int(input$manual_sample_fraction)
-      row$result_value_type <- addDiscData_int(
+      row$result_value_type_id <- addDiscData_int(
         input$manual_result_value_type,
         1L
       )
       row$reporting_basis_id <- addDiscData_int(input$manual_descriptor)
       chemistry <- tryCatch(
-        YGwater:::chemistry_metadata_values(input, "manual_chem_"),
+        chemistry_metadata_values(input, "manual_chem_"),
         error = function(e) e
       )
       if (inherits(chemistry, "error")) {
@@ -7637,8 +7723,8 @@ addDiscData <- function(id, language) {
         showNotification(paste(messages, collapse = "; "), type = "error")
         return()
       }
-      row$protocol_method <- addDiscData_int(input$manual_protocol)
-      row$laboratory <- if (is_field_result_type(row$result_type)) {
+      row$protocol_method_id <- addDiscData_int(input$manual_protocol)
+      row$lab_id <- if (is_field_result_type(row$result_type_id)) {
         NA_integer_
       } else {
         addDiscData_int(input$manual_laboratory)
@@ -7646,9 +7732,9 @@ addDiscData <- function(id, language) {
       row$grade_type_id <- addDiscData_int(input$manual_grade)
       row$approval_type_id <- addDiscData_int(input$manual_approval)
       row$result <- result_value
-      row$result_condition <- condition_id
+      row$result_condition_id <- condition_id
       row$result_condition_value <- condition_value
-      if (is_field_result_type(row$result_type)) {
+      if (is_field_result_type(row$result_type_id)) {
         row$lab_report_no <- NA_character_
         row$lab_sample_no <- NA_character_
       } else {
@@ -7771,13 +7857,13 @@ addDiscData <- function(id, language) {
           ],
           `Sampler(s)` = observer_summary,
           `Collection method` = addDiscData_lookup_label(
-            df$collection_method,
+            df$collection_method_id,
             collection_methods,
             "collection_method_id",
             "collection_method"
           ),
           `Sample type` = addDiscData_lookup_label(
-            df$sample_type,
+            df$sample_type_id,
             sample_types,
             "sample_type_id",
             "sample_type"
@@ -8036,10 +8122,10 @@ addDiscData <- function(id, language) {
                   collection_methods$collection_method
                 )
               ),
-              selected = if (is.na(row$collection_method[[1]])) {
+              selected = if (is.na(row$collection_method_id[[1]])) {
                 ""
               } else {
-                row$collection_method[[1]]
+                row$collection_method_id[[1]]
               }
             )
           ),
@@ -8055,10 +8141,10 @@ addDiscData <- function(id, language) {
                   sample_types$sample_type
                 )
               ),
-              selected = if (is.na(row$sample_type[[1]])) {
+              selected = if (is.na(row$sample_type_id[[1]])) {
                 ""
               } else {
-                row$sample_type[[1]]
+                row$sample_type_id[[1]]
               }
             )
           ),
@@ -8137,9 +8223,9 @@ addDiscData <- function(id, language) {
                 )
               ),
               selected = ifelse(
-                is.na(row$commissioning_org[[1]]),
+                is.na(row$commissioning_org_id[[1]]),
                 "",
-                as.character(row$commissioning_org[[1]])
+                as.character(row$commissioning_org_id[[1]])
               )
             )
           ),
@@ -8156,9 +8242,9 @@ addDiscData <- function(id, language) {
                 )
               ),
               selected = ifelse(
-                is.na(row$sampling_org[[1]]),
+                is.na(row$sampling_org_id[[1]]),
                 "",
-                as.character(row$sampling_org[[1]])
+                as.character(row$sampling_org_id[[1]])
               )
             )
           )
@@ -8179,8 +8265,11 @@ addDiscData <- function(id, language) {
             2,
             numericInput(
               ns("edit_sample_z"),
-              "Elevation/depth (m) from ground or reference",
-              value = row$z[[1]]
+              "Depth/height (m)",
+              value = row$depth_height_m[[1]]
+            ),
+            helpText(
+              "Positive above the ground or water surface, negative below it."
             )
           ),
           column(
@@ -8222,7 +8311,7 @@ addDiscData <- function(id, language) {
             numericInput(
               ns("edit_sample_wave_height"),
               "Wave height (m)",
-              value = row$wave_hgt_m[[1]]
+              value = row$wave_height_m[[1]]
             )
           ),
           column(
@@ -8237,10 +8326,10 @@ addDiscData <- function(id, language) {
                   grade_types$grade_type_description
                 )
               ),
-              selected = if (is.na(row$sample_grade[[1]])) {
+              selected = if (is.na(row$sample_grade_type_id[[1]])) {
                 ""
               } else {
-                row$sample_grade[[1]]
+                row$sample_grade_type_id[[1]]
               }
             )
           ),
@@ -8256,10 +8345,10 @@ addDiscData <- function(id, language) {
                   approval_types$approval_type_description
                 )
               ),
-              selected = if (is.na(row$sample_approval[[1]])) {
+              selected = if (is.na(row$sample_approval_type_id[[1]])) {
                 ""
               } else {
-                row$sample_approval[[1]]
+                row$sample_approval_type_id[[1]]
               }
             )
           )
@@ -8523,9 +8612,9 @@ addDiscData <- function(id, language) {
           df$sample_fraction_id,
           sample_fractions$sample_fraction_id
         )
-        result_type_index <- match(df$result_type, result_types$result_type_id)
+        result_type_index <- match(df$result_type_id, result_types$result_type_id)
         value_type_index <- match(
-          df$result_value_type,
+          df$result_value_type_id,
           result_value_types$result_value_type_id
         )
         descriptor_index <- match(
@@ -8551,23 +8640,7 @@ addDiscData <- function(id, language) {
           `Source unit` = df$source_unit,
           `Additional source conditions` = vapply(
             df$source_matching_values,
-            function(value) {
-              if (is.na(value) || !nzchar(value)) {
-                return("")
-              }
-              fields <- jsonlite::fromJSON(value, simplifyVector = FALSE)
-              if (!length(fields)) {
-                return("")
-              }
-              paste(
-                paste0(
-                  sub("^source\\.", "", names(fields)),
-                  " = ",
-                  unlist(fields, use.names = FALSE)
-                ),
-                collapse = "; "
-              )
-            },
+            addDiscData_source_conditions_label,
             character(1)
           ),
           `AquaCache parameter` = params()$param_name[parameter_index],
@@ -8594,6 +8667,12 @@ addDiscData <- function(id, language) {
           `Endpoint mode` = df$endpoint_mode,
           `Endpoint pH` = df$endpoint_ph,
           `Analysis conditions` = df$analysis_conditions,
+          `Protocol/method` = addDiscData_lookup_label(
+            df$protocol_method_id,
+            isolate(protocols_methods()),
+            "protocol_method_id",
+            "protocol_name"
+          ),
           Matrix = matrix_states$matrix_state_name[matrix_index],
           Status = df$mapping_status,
           check.names = FALSE
@@ -8634,6 +8713,7 @@ addDiscData <- function(id, language) {
             "Endpoint mode",
             "Endpoint pH",
             "Analysis conditions",
+            "Protocol/method",
             "Matrix"
           )
         )
@@ -8644,10 +8724,34 @@ addDiscData <- function(id, language) {
     selected_mapping_row <- reactive({
       rows <- mapping_rows()
       selected <- input$mapping_summary_rows_selected
-      if (!nrow(rows) || length(selected) != 1L || selected > nrow(rows)) {
+      if (
+        !nrow(rows) ||
+          length(selected) != 1L ||
+          selected < 1L ||
+          selected > nrow(rows)
+      ) {
         return(NULL)
       }
       rows[selected, , drop = FALSE]
+    })
+
+    selected_parameter_mapping <- reactive({
+      id <- selected_mapping_row()$parameter_mapping_id
+      if (!length(id) || !addDiscData_present(id)) {
+        return(NULL)
+      }
+      mappings <- data$preview_mapping_snapshot$mappings$parameters
+      index <- match(
+        id,
+        vapply(
+          mappings,
+          function(x) {
+            as.integer(x$import_mapping_id)
+          },
+          integer(1)
+        )
+      )
+      if (!is.na(index)) mappings[[index]] else NULL
     })
 
     mapping_unit_conversions <- YGwater:::ac_mapping_unit_conversions(con)
@@ -8660,6 +8764,7 @@ addDiscData <- function(id, language) {
           "Select a mapping-summary row to edit."
         ))
       }
+      applied_mapping <- selected_parameter_mapping()
       selected_value <- function(value, default = "") {
         value <- addDiscData_first(value, default)
         if (!addDiscData_present(value)) default else as.character(value)
@@ -8685,9 +8790,13 @@ addDiscData <- function(id, language) {
           ""
         }
       )
+      conditions <- addDiscData_source_conditions_label(
+        row$source_matching_values
+      )
 
       wellPanel(
         tags$h5(label),
+        if (nzchar(conditions)) tags$p(conditions),
         YGwater:::shiny_ui_ready(ns("mapping_editor_ready")),
         selectInput(
           ns("mapping_scope"),
@@ -8696,10 +8805,14 @@ addDiscData <- function(id, language) {
             "Source-wide / package downloads" = "source",
             "This workbook format" = "profile"
           ),
-          selected = "source"
+          selected = if (isTRUE(applied_mapping$profile_specific)) {
+            "profile"
+          } else {
+            "source"
+          }
         ),
         helpText(
-          "Source-wide mappings are shared by workbook formats and package downloads. Existing format-specific mappings take precedence; use Import setup to review or remove those overrides."
+          "Format-specific mappings take precedence over source-wide mappings. When the current mapping covers more source values, saving creates a more specific mapping for the selected row."
         ),
         fluidRow(
           column(
@@ -8747,7 +8860,7 @@ addDiscData <- function(id, language) {
                 result_types$result_type_id,
                 result_types$result_type
               ),
-              selected = selected_value(row$result_type[[1]], "2")
+              selected = selected_value(row$result_type_id[[1]], "2")
             )
           ),
           column(
@@ -8759,7 +8872,7 @@ addDiscData <- function(id, language) {
                 result_value_types$result_value_type_id,
                 result_value_types$result_value_type
               ),
-              selected = selected_value(row$result_value_type[[1]], "1")
+              selected = selected_value(row$result_value_type_id[[1]], "1")
             )
           ),
           column(
@@ -8775,11 +8888,16 @@ addDiscData <- function(id, language) {
             )
           )
         ),
-        YGwater:::chemistry_metadata_ui(
+        chemistry_metadata_ui(
           ns,
           "mapping_chem_",
           chemistry_catalogues,
           row
+        ),
+        discrete_protocol_input(
+          ns("mapping_protocol"),
+          isolate(protocols_methods()),
+          selected = applied_mapping$protocol_method_id
         ),
         helpText(
           "Each analytical dimension is independently required by the selected parameter."
@@ -8913,7 +9031,7 @@ addDiscData <- function(id, language) {
           reporting_basis_id <- addDiscData_int(
             input$mapping_reporting_basis
           )
-          chemistry <- YGwater:::chemistry_metadata_values(
+          chemistry <- chemistry_metadata_values(
             input,
             "mapping_chem_"
           )
@@ -8939,13 +9057,15 @@ addDiscData <- function(id, language) {
             profile = selected_profile(),
             config = session$userData$config,
             parameter_id = parameter_id,
-            result_type = addDiscData_int(input$mapping_result_type, 2L),
+            result_type_id = addDiscData_int(input$mapping_result_type, 2L),
             sample_fraction_id = sample_fraction_id,
-            result_value_type = addDiscData_int(
+            result_value_type_id = addDiscData_int(
               input$mapping_result_value_type,
               1L
             ),
             reporting_basis_id = reporting_basis_id,
+            protocol_method_id = addDiscData_int(input$mapping_protocol),
+            applied_mapping = selected_parameter_mapping(),
             chemistry = chemistry,
             matrix_state_id = addDiscData_int(input$mapping_matrix_state, 1L),
             conversion = conversion,
@@ -10321,8 +10441,7 @@ addDiscData <- function(id, language) {
               priority = 50L,
               active = TRUE,
               note = "Saved from YGwater add discrete data result-flag mapping editor."
-            ),
-            publish = TRUE
+            )
           )
           mapping_revision(mapping_revision() + 1L)
           preview_error <- tryCatch(
@@ -10427,7 +10546,7 @@ addDiscData <- function(id, language) {
         chemistry_catalogues = chemistry_catalogues,
         matrix_states = matrix_states,
         laboratories = laboratories,
-        protocols_methods = protocols_methods,
+        protocols_methods = protocols_methods(),
         grade_types = grade_types,
         approval_types = approval_types
       )
@@ -10569,7 +10688,7 @@ addDiscData <- function(id, language) {
       target_rows <- selected_result_rows()
       target_row <- target_rows[[info$row]]
       value <- trimws(as.character(info$value))
-      if (identical(source_column, "result_condition")) {
+      if (identical(source_column, "result_condition_id")) {
         if (!nzchar(value)) {
           new_value <- NA_integer_
         } else {
@@ -10638,58 +10757,58 @@ addDiscData <- function(id, language) {
       } else if (
         source_column %in%
           c(
-            "result_type",
+            "result_type_id",
             "sample_fraction_id",
-            "result_value_type",
+            "result_value_type_id",
             "reporting_basis_id",
             "result_speciation_id",
             "result_target_id",
             "matrix_state_id",
-            "protocol_method",
-            "laboratory",
+            "protocol_method_id",
+            "lab_id",
             "grade_type_id",
             "approval_type_id"
           )
       ) {
         lookup <- switch(
           source_column,
-          result_type = result_types,
+          result_type_id = result_types,
           sample_fraction_id = sample_fractions,
-          result_value_type = result_value_types,
+          result_value_type_id = result_value_types,
           reporting_basis_id = reporting_bases,
           result_speciation_id = chemistry_catalogues$result_speciations,
           result_target_id = chemistry_catalogues$result_targets,
           matrix_state_id = matrix_states,
-          protocol_method = protocols_methods,
-          laboratory = laboratories,
+          protocol_method_id = protocols_methods(),
+          lab_id = laboratories,
           grade_type_id = grade_types,
           approval_type_id = approval_types
         )
         id_col <- switch(
           source_column,
-          result_type = "result_type_id",
+          result_type_id = "result_type_id",
           sample_fraction_id = "sample_fraction_id",
-          result_value_type = "result_value_type_id",
+          result_value_type_id = "result_value_type_id",
           reporting_basis_id = "reporting_basis_id",
           result_speciation_id = "result_speciation_id",
           result_target_id = "result_target_id",
           matrix_state_id = "matrix_state_id",
-          protocol_method = "protocol_id",
-          laboratory = "lab_id",
+          protocol_method_id = "protocol_method_id",
+          lab_id = "lab_id",
           grade_type_id = "grade_type_id",
           approval_type_id = "approval_type_id"
         )
         label_col <- switch(
           source_column,
-          result_type = "result_type",
+          result_type_id = "result_type_id",
           sample_fraction_id = "sample_fraction",
-          result_value_type = "result_value_type",
+          result_value_type_id = "result_value_type_id",
           reporting_basis_id = "reporting_basis",
           result_speciation_id = "result_speciation",
           result_target_id = "result_target",
           matrix_state_id = "matrix_state_name",
-          protocol_method = "protocol_name",
-          laboratory = "lab_name",
+          protocol_method_id = "protocol_name",
+          lab_id = "lab_name",
           grade_type_id = "grade_type_description",
           approval_type_id = "approval_type_description"
         )
@@ -10758,11 +10877,11 @@ addDiscData <- function(id, language) {
       required <- list(
         datetime = "sample datetime",
         media_id = "media",
-        collection_method = "collection method",
-        sample_type = "sample type",
+        collection_method_id = "collection method",
+        sample_type_id = "sample type",
         owner = "owner",
         parameter_id = "parameter",
-        result_type = "result type",
+        result_type_id = "result type",
         matrix_state_id = "matrix state"
       )
       for (nm in names(required)) {
@@ -10782,7 +10901,7 @@ addDiscData <- function(id, language) {
           )
         }
       }
-      type_index <- match(df$sample_type, sample_types$sample_type_id)
+      type_index <- match(df$sample_type_id, sample_types$sample_type_id)
       if (anyNA(type_index)) {
         stop(
           "Unknown sample type in row(s): ",
@@ -10845,7 +10964,7 @@ addDiscData <- function(id, language) {
           call. = FALSE
         )
       }
-      no_result <- is.na(df$result) & is.na(df$result_condition)
+      no_result <- is.na(df$result) & is.na(df$result_condition_id)
       if (any(no_result)) {
         stop(
           "Missing result or result condition in row(s): ",

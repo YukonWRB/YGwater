@@ -1,3 +1,12 @@
+aqualink_chemistry_form <- new.env(parent = asNamespace("YGwater"))
+sys.source(
+  system.file(
+    "apps/aqualink/modules/admin/discreteData/chemistry_form.R",
+    package = "YGwater"
+  ),
+  aqualink_chemistry_form
+)
+
 test_that("SQL input references include forms, endpoints, and numeric context", {
   rows <- data.frame(
     parameter_id = 1L,
@@ -44,7 +53,7 @@ test_that("common conditions are collected through scientific controls", {
     test_reference_pressure_kpa = NA_real_,
     test_analysis_conditions = '{"isotope_reference_standard":"VSMOW"}'
   )
-  result <- chemistry_metadata_values(input, "test_")
+  result <- aqualink_chemistry_form$chemistry_metadata_values(input, "test_")
   conditions <- jsonlite::fromJSON(result$analysis_conditions)
   expect_identical(conditions$mass_basis, "dry")
   expect_identical(conditions$isotope_reference_standard, "VSMOW")
@@ -52,11 +61,14 @@ test_that("common conditions are collected through scientific controls", {
   expect_null(conditions$gas_basis)
   expect_null(conditions$reference_pressure_kpa)
   input$test_reference_temperature_kelvin <- -1
-  expect_error(chemistry_metadata_values(input, "test_"), "positive")
+  expect_error(
+    aqualink_chemistry_form$chemistry_metadata_values(input, "test_"),
+    "positive"
+  )
 })
 
 test_that("an explicitly unknown endpoint is available and retained", {
-  ui <- htmltools::renderTags(chemistry_metadata_ui(
+  ui <- htmltools::renderTags(aqualink_chemistry_form$chemistry_metadata_ui(
     shiny::NS("test"),
     "test_",
     value = list(endpoint_mode = "unknown")
@@ -64,7 +76,7 @@ test_that("an explicitly unknown endpoint is available and retained", {
   expect_match(ui, 'value="unknown"')
   expect_match(ui, "Unknown / not reported")
 
-  values <- chemistry_metadata_values(
+  values <- aqualink_chemistry_form$chemistry_metadata_values(
     list(
       test_endpoint_mode = "unknown",
       test_endpoint_ph = NA_real_,

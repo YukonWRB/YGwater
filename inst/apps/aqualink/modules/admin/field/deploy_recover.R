@@ -1200,11 +1200,11 @@ deploy_recover <- function(id, language) {
           i.date_retired
         FROM instruments.instruments AS i
         LEFT JOIN instruments.instrument_makes AS mk
-          ON i.make = mk.make_id
+          ON i.instrument_make_id = mk.make_id
         LEFT JOIN instruments.instrument_models AS mdl
-          ON i.model = mdl.model_id
+          ON i.instrument_model_id = mdl.model_id
         LEFT JOIN instruments.instrument_types AS it
-          ON i.type = it.type_id
+          ON i.instrument_type_id = it.type_id
         ORDER BY i.serial_no ASC, i.instrument_id ASC
         "
       )
@@ -1418,11 +1418,11 @@ deploy_recover <- function(id, language) {
         LEFT JOIN instruments.instruments AS i
           ON lmi.instrument_id = i.instrument_id
         LEFT JOIN instruments.instrument_makes AS mk
-          ON i.make = mk.make_id
+          ON i.instrument_make_id = mk.make_id
         LEFT JOIN instruments.instrument_models AS mdl
-          ON i.model = mdl.model_id
+          ON i.instrument_model_id = mdl.model_id
         LEFT JOIN instruments.instrument_types AS it
-          ON i.type = it.type_id
+          ON i.instrument_type_id = it.type_id
         ORDER BY lmi.start_datetime DESC, lmi.metadata_id DESC
         "
       )
@@ -1884,7 +1884,9 @@ deploy_recover <- function(id, language) {
     replace_deployment_timeseries <- function(metadata_id, timeseries_ids) {
       metadata_id <- as_nullable_integer(metadata_id)
       if (is.na(metadata_id)) {
-        stop("A deployment metadata_id is required to update continuous.timeseries links.")
+        stop(
+          "A deployment metadata_id is required to update continuous.timeseries links."
+        )
       }
 
       timeseries_ids <- normalize_integer_vector(timeseries_ids)

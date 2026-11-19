@@ -137,7 +137,7 @@ SWE_station <- function(
            INNER JOIN public.locations as l ON samp.location_id = l.location_id
            INNER JOIN public.parameters as p ON res.parameter_id = p.parameter_id
            INNER JOIN public.datum_conversions as dc ON l.location_id = dc.location_id
-           INNER JOIN discrete.result_value_types as rvt ON res.result_value_type = rvt.result_value_type_id
+           INNER JOIN discrete.result_value_types as rvt ON res.result_value_type_id = rvt.result_value_type_id
            WHERE p.param_name IN ('snow water equivalent', 'snow depth') AND l.location_code IN ('",
         paste0(stations, collapse = "', '"),
         "')"

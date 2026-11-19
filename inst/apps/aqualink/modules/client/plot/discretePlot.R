@@ -96,7 +96,7 @@ disc_result_components <- function(con, result_ids, lang = "en") {
          rc.observation_number,
          rc.observation_datetime,
          rc.result,
-         rc.result_condition,
+         rc.result_condition_id AS result_condition,
          condition.result_condition AS result_condition_name,
          rc.result_condition_value,
          rc.included_in_aggregate,
@@ -113,7 +113,7 @@ disc_result_components <- function(con, result_ids, lang = "en") {
        LEFT JOIN public.approval_types result_approval
          ON r.approval_type_id = result_approval.approval_type_id
        LEFT JOIN discrete.result_conditions condition
-         ON rc.result_condition = condition.result_condition_id
+         ON rc.result_condition_id = condition.result_condition_id
        WHERE rc.result_id IN (",
       paste(result_ids, collapse = ","),
       ")
@@ -165,7 +165,12 @@ disc_sample_metadata <- function(con, sample_ids, lang = "en") {
 #'
 #' @keywords internal
 #' @noRd
-disc_result_metadata <- function(con, sample_ids, lang = "en", parameter_ids = NULL) {
+disc_result_metadata <- function(
+  con,
+  sample_ids,
+  lang = "en",
+  parameter_ids = NULL
+) {
   sample_ids <- sort(unique(suppressWarnings(as.integer(sample_ids))))
   sample_ids <- sample_ids[!is.na(sample_ids)]
   if (!length(sample_ids)) {
@@ -177,7 +182,11 @@ disc_result_metadata <- function(con, sample_ids, lang = "en", parameter_ids = N
     parameter_ids <- sort(unique(suppressWarnings(as.integer(parameter_ids))))
     parameter_ids <- parameter_ids[!is.na(parameter_ids) & parameter_ids > 0L]
     parameter_clause <- if (length(parameter_ids)) {
-      paste0(" AND parameter_id IN (", paste(parameter_ids, collapse = ","), ")")
+      paste0(
+        " AND parameter_id IN (",
+        paste(parameter_ids, collapse = ","),
+        ")"
+      )
     } else {
       " AND FALSE"
     }
@@ -189,7 +198,8 @@ disc_result_metadata <- function(con, sample_ids, lang = "en", parameter_ids = N
       suffix,
       " WHERE sample_id IN (",
       paste(sample_ids, collapse = ","),
-      ")", parameter_clause,
+      ")",
+      parameter_clause,
       # These identity columns have the same names in both language views.
       " ORDER BY datetime, sample_id, parameter_id, result_id"
     )
@@ -222,7 +232,7 @@ disc_sample_documents <- function(con, sample_ids) {
          sd.note AS relationship_note,
          d.document_id,
          d.name AS document_name,
-         d.type AS document_type_id,
+         d.document_type_id AS document_type_id,
          d.authors,
          d.url,
          d.publish_date,
@@ -560,16 +570,28 @@ disc_plot_download_tables <- function(
       missing_labels <- is.na(labels)
       if (any(missing_labels)) {
         labels[missing_labels] <- tools::toTitleCase(gsub(
-          "_", " ", source_names[missing_labels], fixed = TRUE
+          "_",
+          " ",
+          source_names[missing_labels],
+          fixed = TRUE
         ))
         labels[missing_labels] <- gsub(
-          "\\bId\\b", "ID", labels[missing_labels], perl = TRUE
+          "\\bId\\b",
+          "ID",
+          labels[missing_labels],
+          perl = TRUE
         )
         labels[missing_labels] <- gsub(
-          "\\bUtc\\b", "UTC", labels[missing_labels], perl = TRUE
+          "\\bUtc\\b",
+          "UTC",
+          labels[missing_labels],
+          perl = TRUE
         )
         labels[missing_labels] <- gsub(
-          "\\bPh\\b", "pH", labels[missing_labels], perl = TRUE
+          "\\bPh\\b",
+          "pH",
+          labels[missing_labels],
+          perl = TRUE
         )
         labels[missing_labels] <- gsub(
           "\\bQaqc\\b",
@@ -603,7 +625,10 @@ disc_plot_download_tables <- function(
     }
     labels <- unname(sheet_labels[names(tables)])
     labels[is.na(labels)] <- tools::toTitleCase(gsub(
-      "_", " ", names(tables)[is.na(labels)], fixed = TRUE
+      "_",
+      " ",
+      names(tables)[is.na(labels)],
+      fixed = TRUE
     ))
     names(tables) <- make.unique(labels, sep = " ")
   }
@@ -658,7 +683,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       AC_sample_fractions = cached$sample_fractions,
       AC_result_value_types = cached$result_value_types,
       AC_reporting_bases = cached$reporting_bases,
-      AC_result_speciations = cached$result_speciations, AC_result_targets = cached$result_targets
+      AC_result_speciations = cached$result_speciations,
+      AC_result_targets = cached$result_targets
     )
 
     browse_selected_sample_ids <- reactiveVal(numeric(0))
@@ -814,7 +840,11 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "sub_locations_AC",
         "sample_types_AC",
         "collection_methods_AC",
-        "reporting_bases_AC", "result_speciations_AC", "result_targets_AC", "endpoint_modes_AC", "endpoint_ph_AC",
+        "reporting_bases_AC",
+        "result_speciations_AC",
+        "result_targets_AC",
+        "endpoint_modes_AC",
+        "endpoint_ph_AC",
         "sample_fractions_AC",
         "result_value_types_AC",
         "result_types_AC",
@@ -966,8 +996,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       }
       sql <- paste(
         "SELECT DISTINCT",
-        "s.sub_location_id, s.media_id, s.sample_type, s.collection_method,",
-        "r.result_type, r.sample_fraction_id, r.result_value_type,",
+        "s.sub_location_id, s.media_id, s.sample_type_id AS sample_type, s.collection_method_id AS collection_method,",
+        "r.result_type_id AS result_type, r.sample_fraction_id, r.result_value_type_id AS result_value_type,",
         "r.reporting_basis_id, r.result_speciation_id, r.result_target_id, r.endpoint_mode, r.endpoint_ph, r.analysis_conditions::text",
         "FROM discrete.samples AS s",
         "INNER JOIN discrete.results AS r ON s.sample_id = r.sample_id",
@@ -1040,15 +1070,15 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "l.location_code, sl.sub_location_name AS sub_location,",
         "s.datetime::date AS sample_date, s.datetime,",
         "s.media_id, mt.media_type AS media,",
-        "s.sample_type AS sample_type_id, st.sample_type,",
-        "s.collection_method AS collection_method_id, cm.collection_method",
+        "s.sample_type_id AS sample_type_id, st.sample_type,",
+        "s.collection_method_id AS collection_method_id, cm.collection_method",
         "FROM discrete.samples AS s",
         "INNER JOIN public.locations AS l ON s.location_id = l.location_id",
         "LEFT JOIN public.sub_locations AS sl ON s.sub_location_id = sl.sub_location_id",
         "LEFT JOIN public.media_types AS mt ON s.media_id = mt.media_id",
-        "LEFT JOIN discrete.sample_types AS st ON s.sample_type = st.sample_type_id",
+        "LEFT JOIN discrete.sample_types AS st ON s.sample_type_id = st.sample_type_id",
         "LEFT JOIN discrete.collection_methods AS cm ON",
-        "s.collection_method = cm.collection_method_id",
+        "s.collection_method_id = cm.collection_method_id",
         ac_browse_where(include_parameter_filter = TRUE),
         "ORDER BY s.datetime DESC",
         ")",
@@ -1762,10 +1792,26 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         reporting_bases$reporting_basis
       )
 
-      speciations <- ac_option_rows(scope, moduleData$AC_result_speciations, "result_speciation_id", "result_speciation_id")
-      targets <- ac_option_rows(scope, moduleData$AC_result_targets, "result_target_id", "result_target_id")
-      speciation_choices <- stats::setNames(speciations$result_speciation_id, speciations$result_speciation)
-      target_choices <- stats::setNames(targets$result_target_id, targets$result_target)
+      speciations <- ac_option_rows(
+        scope,
+        moduleData$AC_result_speciations,
+        "result_speciation_id",
+        "result_speciation_id"
+      )
+      targets <- ac_option_rows(
+        scope,
+        moduleData$AC_result_targets,
+        "result_target_id",
+        "result_target_id"
+      )
+      speciation_choices <- stats::setNames(
+        speciations$result_speciation_id,
+        speciations$result_speciation
+      )
+      target_choices <- stats::setNames(
+        targets$result_target_id,
+        targets$result_target
+      )
       modes <- unique(scope$endpoint_mode[!is.na(scope$endpoint_mode)])
       ph <- unique(scope$endpoint_ph[!is.na(scope$endpoint_ph)])
       contexts <- unique(scope$analysis_conditions)
@@ -1809,14 +1855,63 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             reporting_basis_choices,
             input$reporting_bases_AC
           ),
-          ac_selectize("result_speciations_AC", if (plot_lang == "fr") "Formes chimiques" else "Chemical forms / species scopes", speciation_choices, input$result_speciations_AC),
-          ac_selectize("result_targets_AC", if (plot_lang == "fr") "Cibles analytiques" else "Analytical targets / materials", target_choices, input$result_targets_AC),
-          ac_selectize("endpoint_modes_AC", if (plot_lang == "fr") "Points finaux" else "Endpoint determinations", stats::setNames(modes, modes), input$endpoint_modes_AC),
-          ac_selectize("endpoint_ph_AC", "Endpoint pH", stats::setNames(ph, ph), input$endpoint_ph_AC),
-          if (length(contexts) > 1L || any(contexts != "{}")) selectInput(ns("analysis_conditions_AC"),
-            if (plot_lang == "fr") "Conditions analytiques" else "Analysis conditions",
-            choices = c("All" = "all", stats::setNames(contexts, contexts)),
-            selected = if (length(input$analysis_conditions_AC) && input$analysis_conditions_AC %in% contexts) input$analysis_conditions_AC else "all") else NULL
+          ac_selectize(
+            "result_speciations_AC",
+            if (plot_lang == "fr") {
+              "Formes chimiques"
+            } else {
+              "Chemical forms / species scopes"
+            },
+            speciation_choices,
+            input$result_speciations_AC
+          ),
+          ac_selectize(
+            "result_targets_AC",
+            if (plot_lang == "fr") {
+              "Cibles analytiques"
+            } else {
+              "Analytical targets / materials"
+            },
+            target_choices,
+            input$result_targets_AC
+          ),
+          ac_selectize(
+            "endpoint_modes_AC",
+            if (plot_lang == "fr") {
+              "Points finaux"
+            } else {
+              "Endpoint determinations"
+            },
+            stats::setNames(modes, modes),
+            input$endpoint_modes_AC
+          ),
+          ac_selectize(
+            "endpoint_ph_AC",
+            "Endpoint pH",
+            stats::setNames(ph, ph),
+            input$endpoint_ph_AC
+          ),
+          if (length(contexts) > 1L || any(contexts != "{}")) {
+            selectInput(
+              ns("analysis_conditions_AC"),
+              if (plot_lang == "fr") {
+                "Conditions analytiques"
+              } else {
+                "Analysis conditions"
+              },
+              choices = c("All" = "all", stats::setNames(contexts, contexts)),
+              selected = if (
+                length(input$analysis_conditions_AC) &&
+                  input$analysis_conditions_AC %in% contexts
+              ) {
+                input$analysis_conditions_AC
+              } else {
+                "all"
+              }
+            )
+          } else {
+            NULL
+          }
         )
       )
       primary_inputs <- Filter(
@@ -2485,63 +2580,68 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
     # Data loading and UI binding can finish in either order. Reapply cached
     # choices after a sidebar language redraw without reopening the database.
     observe({
-        req(input$sidebar_ready, identical(input$data_source, "EQ"))
-        req(moduleData$EQ_params, moduleData$EQ_param_grps, moduleData$EQ_locs,
-            moduleData$EQ_loc_grps, moduleData$EQ_stds)
-        updateSelectizeInput(
-          session,
-          "parameters_EQ",
-          choices = stats::setNames(
+      req(input$sidebar_ready, identical(input$data_source, "EQ"))
+      req(
+        moduleData$EQ_params,
+        moduleData$EQ_param_grps,
+        moduleData$EQ_locs,
+        moduleData$EQ_loc_grps,
+        moduleData$EQ_stds
+      )
+      updateSelectizeInput(
+        session,
+        "parameters_EQ",
+        choices = stats::setNames(
+          moduleData$EQ_params$ParamCode,
+          paste0(
             moduleData$EQ_params$ParamCode,
-            paste0(
-              moduleData$EQ_params$ParamCode,
-              " (",
-              moduleData$EQ_params$ParamDesc,
-              ")"
-            )
-          ),
-          server = TRUE,
-          selected = character(0)
-        )
-        updateSelectizeInput(
-          session,
-          "parameter_groups",
-          choices = moduleData$EQ_param_grps$groupname,
-          server = TRUE,
-          selected = character(0)
-        )
-        updateSelectizeInput(
-          session,
-          "locations_EQ",
-          choices = stats::setNames(
+            " (",
+            moduleData$EQ_params$ParamDesc,
+            ")"
+          )
+        ),
+        server = TRUE,
+        selected = character(0)
+      )
+      updateSelectizeInput(
+        session,
+        "parameter_groups",
+        choices = moduleData$EQ_param_grps$groupname,
+        server = TRUE,
+        selected = character(0)
+      )
+      updateSelectizeInput(
+        session,
+        "locations_EQ",
+        choices = stats::setNames(
+          moduleData$EQ_locs$StnCode,
+          paste0(
             moduleData$EQ_locs$StnCode,
-            paste0(
-              moduleData$EQ_locs$StnCode,
-              " (",
-              moduleData$EQ_locs$StnDesc,
-              ")"
-            )
-          ),
-          server = TRUE,
-          selected = character(0)
-        )
-        updateSelectizeInput(
-          session,
-          "location_groups",
-          choices = moduleData$EQ_loc_grps$groupname,
-          server = TRUE,
-          selected = character(0)
-        )
-        updateSelectizeInput(
-          session,
-          "standard",
-          choices = stats::setNames(
-            moduleData$EQ_stds$StdCode,
-            moduleData$EQ_stds$StdName
-          ),
-          server = TRUE,
-          selected = character(0)
-        )
+            " (",
+            moduleData$EQ_locs$StnDesc,
+            ")"
+          )
+        ),
+        server = TRUE,
+        selected = character(0)
+      )
+      updateSelectizeInput(
+        session,
+        "location_groups",
+        choices = moduleData$EQ_loc_grps$groupname,
+        server = TRUE,
+        selected = character(0)
+      )
+      updateSelectizeInput(
+        session,
+        "standard",
+        choices = stats::setNames(
+          moduleData$EQ_stds$StdCode,
+          moduleData$EQ_stds$StdName
+        ),
+        server = TRUE,
+        selected = character(0)
+      )
     })
 
     # Helper function to update the list of available parameters based on selected locations
@@ -2604,7 +2704,11 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "sub_locations_AC",
         "sample_types_AC",
         "collection_methods_AC",
-        "reporting_bases_AC", "result_speciations_AC", "result_targets_AC", "endpoint_modes_AC", "endpoint_ph_AC",
+        "reporting_bases_AC",
+        "result_speciations_AC",
+        "result_targets_AC",
+        "endpoint_modes_AC",
+        "endpoint_ph_AC",
         "sample_fractions_AC",
         "result_value_types_AC",
         "result_types_AC",
@@ -2897,77 +3001,84 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         dbSource,
         dbPath,
         config,
-        result_speciations = NULL, result_targets = NULL, endpoint_modes = NULL, endpoint_ph = NULL, analysis_conditions = NULL
+        result_speciations = NULL,
+        result_targets = NULL,
+        endpoint_modes = NULL,
+        endpoint_ph = NULL,
+        analysis_conditions = NULL
       ) {
         mirai::mirai(
           {
-          tryCatch(
-            {
-              if (is.null(dbPath)) {
-                con <- YGwater::AquaConnect(
-                  name = config$dbName,
-                  host = config$dbHost,
-                  port = config$dbPort,
-                  username = config$dbUser,
-                  password = config$dbPass,
-                  silent = TRUE
-                )
-                on.exit(DBI::dbDisconnect(con))
-              } else {
-                con <- NULL
-              }
+            tryCatch(
+              {
+                if (is.null(dbPath)) {
+                  con <- YGwater::AquaConnect(
+                    name = config$dbName,
+                    host = config$dbHost,
+                    port = config$dbPort,
+                    username = config$dbUser,
+                    password = config$dbPass,
+                    silent = TRUE
+                  )
+                  on.exit(DBI::dbDisconnect(con))
+                } else {
+                  con <- NULL
+                }
 
-              plot <- YGwater::plotDiscrete(
-                start = start,
-                end = end,
-                locations = locations,
-                locGrp = locGrp,
-                parameters = parameters,
-                paramGrp = paramGrp,
-                standard = standard,
-                guidelines = guidelines,
-                log = log,
-                facet_on = facet_on,
-                loc_code = loc_code,
-                shareX = shareX,
-                shareY = shareY,
-                rows = rows,
-                target_datetime = target_datetime,
-                colorblind = colorblind,
-                lang = lang,
-                point_scale = point_scale,
-                guideline_scale = guideline_scale,
-                axis_scale = axis_scale,
-                legend_scale = legend_scale,
-                legend_position = legend_position,
-                gridx = gridx,
-                gridy = gridy,
-                sub_location_ids = sub_location_ids,
-                media = media,
-                sample_types = sample_types,
-                collection_methods = collection_methods,
-                result_types = result_types,
-                sample_fractions = sample_fractions,
-                result_value_types = result_value_types,
-                reporting_bases = reporting_bases,
-                result_speciations = result_speciations, result_targets = result_targets,
-                endpoint_modes = endpoint_modes, endpoint_ph = endpoint_ph, analysis_conditions = analysis_conditions,
-                include_blanks = include_blanks,
-                duplicate_action = duplicate_action,
-                sample_ids = sample_ids,
-                season_ranges = season_ranges,
-                season_highlight_ranges = season_highlight_ranges,
-                dbSource = dbSource,
-                dbPath = dbPath,
-                dbCon = con,
-                data = TRUE
-              )
-              plot
-            },
-            error = function(e) {
-              return(e$message)
-            }
-          )
+                plot <- YGwater::plotDiscrete(
+                  start = start,
+                  end = end,
+                  locations = locations,
+                  locGrp = locGrp,
+                  parameters = parameters,
+                  paramGrp = paramGrp,
+                  standard = standard,
+                  guidelines = guidelines,
+                  log = log,
+                  facet_on = facet_on,
+                  loc_code = loc_code,
+                  shareX = shareX,
+                  shareY = shareY,
+                  rows = rows,
+                  target_datetime = target_datetime,
+                  colorblind = colorblind,
+                  lang = lang,
+                  point_scale = point_scale,
+                  guideline_scale = guideline_scale,
+                  axis_scale = axis_scale,
+                  legend_scale = legend_scale,
+                  legend_position = legend_position,
+                  gridx = gridx,
+                  gridy = gridy,
+                  sub_location_ids = sub_location_ids,
+                  media = media,
+                  sample_types = sample_types,
+                  collection_methods = collection_methods,
+                  result_types = result_types,
+                  sample_fractions = sample_fractions,
+                  result_value_types = result_value_types,
+                  reporting_bases = reporting_bases,
+                  result_speciations = result_speciations,
+                  result_targets = result_targets,
+                  endpoint_modes = endpoint_modes,
+                  endpoint_ph = endpoint_ph,
+                  analysis_conditions = analysis_conditions,
+                  include_blanks = include_blanks,
+                  duplicate_action = duplicate_action,
+                  sample_ids = sample_ids,
+                  season_ranges = season_ranges,
+                  season_highlight_ranges = season_highlight_ranges,
+                  dbSource = dbSource,
+                  dbPath = dbPath,
+                  dbCon = con,
+                  data = TRUE
+                )
+                plot
+              },
+              error = function(e) {
+                return(e$message)
+              }
+            )
           },
           start = start,
           end = end,
@@ -3470,11 +3581,53 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             } else {
               NULL
             },
-            result_speciations = if (use_guided_filters) keep_ac_ids(input$result_speciations_AC, moduleData$AC_result_speciations, "result_speciation_id", "result_speciation_id") else NULL,
-            result_targets = if (use_guided_filters) keep_ac_ids(input$result_targets_AC, moduleData$AC_result_targets, "result_target_id", "result_target_id") else NULL,
-            endpoint_modes = if (use_guided_filters && length(input$endpoint_modes_AC) && !"all" %in% input$endpoint_modes_AC) input$endpoint_modes_AC else NULL,
-            endpoint_ph = if (use_guided_filters && length(input$endpoint_ph_AC) && !"all" %in% input$endpoint_ph_AC) input$endpoint_ph_AC else NULL,
-            analysis_conditions = if (use_guided_filters && length(input$analysis_conditions_AC) && !"all" %in% input$analysis_conditions_AC) input$analysis_conditions_AC else NULL,
+            result_speciations = if (use_guided_filters) {
+              keep_ac_ids(
+                input$result_speciations_AC,
+                moduleData$AC_result_speciations,
+                "result_speciation_id",
+                "result_speciation_id"
+              )
+            } else {
+              NULL
+            },
+            result_targets = if (use_guided_filters) {
+              keep_ac_ids(
+                input$result_targets_AC,
+                moduleData$AC_result_targets,
+                "result_target_id",
+                "result_target_id"
+              )
+            } else {
+              NULL
+            },
+            endpoint_modes = if (
+              use_guided_filters &&
+                length(input$endpoint_modes_AC) &&
+                !"all" %in% input$endpoint_modes_AC
+            ) {
+              input$endpoint_modes_AC
+            } else {
+              NULL
+            },
+            endpoint_ph = if (
+              use_guided_filters &&
+                length(input$endpoint_ph_AC) &&
+                !"all" %in% input$endpoint_ph_AC
+            ) {
+              input$endpoint_ph_AC
+            } else {
+              NULL
+            },
+            analysis_conditions = if (
+              use_guided_filters &&
+                length(input$analysis_conditions_AC) &&
+                !"all" %in% input$analysis_conditions_AC
+            ) {
+              input$analysis_conditions_AC
+            } else {
+              NULL
+            },
             include_blanks = if (
               !use_guided_filters || is.null(input$include_blanks)
             ) {
@@ -3843,7 +3996,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
               plottedResultIds(),
               lang = language$abbrev
             ),
-            header_style = if (identical(input$export_header_style, "machine")) {
+            header_style = if (
+              identical(input$export_header_style, "machine")
+            ) {
               "machine"
             } else {
               "human"

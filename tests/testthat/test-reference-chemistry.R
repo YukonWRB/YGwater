@@ -88,7 +88,7 @@ test_that("reference tabs wait for their schema and render loaded empty catalogu
       )
     }
     expect_match(
-      messages[["field_units_liquid"]]$options,
+      messages[["field_liquid_unit_id"]]$options,
       "Fixture unit",
       fixed = TRUE
     )

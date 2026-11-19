@@ -135,9 +135,9 @@ reference_deployment_choices_query <- function(
     "FROM public.locations_metadata_instruments AS lmi",
     "LEFT JOIN public.locations AS l ON lmi.location_id = l.location_id",
     "LEFT JOIN instruments.instruments AS i ON lmi.instrument_id = i.instrument_id",
-    "LEFT JOIN instruments.instrument_makes AS mk ON i.make = mk.make_id",
-    "LEFT JOIN instruments.instrument_models AS mdl ON i.model = mdl.model_id",
-    "LEFT JOIN instruments.instrument_types AS it ON i.type = it.type_id",
+    "LEFT JOIN instruments.instrument_makes AS mk ON i.instrument_make_id = mk.make_id",
+    "LEFT JOIN instruments.instrument_models AS mdl ON i.instrument_model_id = mdl.model_id",
+    "LEFT JOIN instruments.instrument_types AS it ON i.instrument_type_id = it.type_id",
     where_sql,
     "ORDER BY l.location_code, i.serial_no, lmi.start_datetime DESC, lmi.metadata_id DESC"
   )
@@ -620,7 +620,7 @@ reference_table_configs <- function() {
         reference_textarea_field("description", "Description"),
         reference_textarea_field("description_fr", "Description (French)"),
         reference_select_field(
-          "units_liquid",
+          "liquid_unit_id",
           "Liquid unit",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -629,7 +629,7 @@ reference_table_configs <- function() {
           )
         ),
         reference_select_field(
-          "units_solid",
+          "solid_unit_id",
           "Solid unit",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -638,7 +638,7 @@ reference_table_configs <- function() {
           )
         ),
         reference_select_field(
-          "units_gas",
+          "gas_unit_id",
           "Gas unit",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -647,7 +647,7 @@ reference_table_configs <- function() {
           )
         ),
         reference_select_field(
-          "units_na",
+          "not_applicable_unit_id",
           "Not applicable unit",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -942,7 +942,7 @@ reference_table_configs <- function() {
           choices_query = reference_timeseries_choices_query()
         ),
         reference_select_field(
-          "signal_units",
+          "signal_unit_id",
           "Signal units",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -2323,7 +2323,12 @@ fetch_parameter_relationship_choices <- function(con) {
 
 parameter_unit_fields <- function() {
   data.frame(
-    unit_column = c("units_liquid", "units_solid", "units_gas", "units_na"),
+    unit_column = c(
+      "liquid_unit_id",
+      "solid_unit_id",
+      "gas_unit_id",
+      "not_applicable_unit_id"
+    ),
     unit_label = c(
       "Liquid unit",
       "Solid unit",
@@ -2347,7 +2352,7 @@ fetch_parameter_unit_values <- function(con, parameter_id) {
   DBI::dbGetQuery(
     con,
     paste(
-      "SELECT units_liquid, units_solid, units_gas, units_na",
+      "SELECT liquid_unit_id, solid_unit_id, gas_unit_id, not_applicable_unit_id",
       "FROM public.parameters",
       "WHERE parameter_id = $1"
     ),
@@ -5300,18 +5305,23 @@ manageParameters <- function(id, language) {
           errors <- c(errors, paste(field$label, "is required."))
         }
       }
-      unit_fields <- c("units_liquid", "units_solid", "units_gas", "units_na")
+      unit_fields <- c(
+        "liquid_unit_id",
+        "solid_unit_id",
+        "gas_unit_id",
+        "not_applicable_unit_id"
+      )
       assigned_units <- !vapply(
         values[unit_fields],
         reference_is_missing_value,
         logical(1)
       )
       has_regular_units <- any(assigned_units[c(
-        "units_liquid",
-        "units_solid",
-        "units_gas"
+        "liquid_unit_id",
+        "solid_unit_id",
+        "gas_unit_id"
       )])
-      has_not_applicable_unit <- assigned_units[["units_na"]]
+      has_not_applicable_unit <- assigned_units[["not_applicable_unit_id"]]
       if (!any(assigned_units)) {
         errors <- c(
           errors,

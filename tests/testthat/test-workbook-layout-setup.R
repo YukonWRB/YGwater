@@ -73,12 +73,12 @@ test_that("multi-column criteria preserve and match independent source dimension
   source <- data.frame(param_name = rep("Nitrogen", 4), unit = rep("mg/L", 4),
     sample_fraction = c("dissolved", "total", "dissolved", "dissolved"),
     result_speciation = c("nitrate", "nitrate", "nitrite", "nitrate"),
-    result_type = c("lab", "lab", "lab", "field"))
+    result_type_id = c("lab", "lab", "lab", "field"))
   fields <- names(source)
   preserved <- env$addDiscData_source_matching_values(source, fields)
   criteria <- env$importSetup_column_criteria(fields, unname(as.character(source[1, ])))
   expect_named(criteria, paste0("source.", fields))
-  expect_identical(criteria$source.result_type, "lab")
+  expect_identical(criteria$source.result_type_id, "lab")
   rows <- env$addDiscData_empty_table()[rep(NA_integer_, 4), ]
   rows$source_parameter_code <- "Nitrogen"
   rows$source_unit <- "mg/L"
@@ -145,9 +145,10 @@ test_that("case-only duplicate mappings are accepted only when targets agree", {
     priority = c(100L, 100L),
     profile_specific = c(TRUE, TRUE),
     parameter_id = c(90L, 90L),
-    result_type = c(2L, 2L),
+    protocol_method_id = NA_integer_,
+    result_type_id = c(2L, 2L),
     sample_fraction_id = c(5L, 5L),
-    result_value_type = c(1L, 1L),
+    result_value_type_id = c(1L, 1L),
     reporting_basis_id = c(NA_integer_, NA_integer_),
     result_speciation_id = c(NA_integer_, NA_integer_),
     result_target_id = c(NA_integer_, NA_integer_),

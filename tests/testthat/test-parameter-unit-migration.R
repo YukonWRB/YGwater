@@ -13,16 +13,16 @@ parameter_unit_migration_test_environment <- function() {
 test_that("parameter unit changes report additions, replacements, and removals", {
   editor <- parameter_unit_migration_test_environment()
   old_units <- data.frame(
-    units_liquid = 1L,
-    units_solid = NA_integer_,
-    units_gas = 3L,
-    units_na = NA_integer_
+    liquid_unit_id = 1L,
+    solid_unit_id = NA_integer_,
+    gas_unit_id = 3L,
+    not_applicable_unit_id = NA_integer_
   )
   new_units <- data.frame(
-    units_liquid = 2L,
-    units_solid = 4L,
-    units_gas = NA_integer_,
-    units_na = NA_integer_
+    liquid_unit_id = 2L,
+    solid_unit_id = 4L,
+    gas_unit_id = NA_integer_,
+    not_applicable_unit_id = NA_integer_
   )
 
   changed <- editor$parameter_changed_assigned_unit_fields(old_units, new_units)
@@ -129,7 +129,7 @@ test_that("dev migration preserves extrema timezone and converts continuous reco
     con,
     "INSERT INTO public.parameters
        (parameter_id, param_name, sample_fraction,
-        plot_default_y_orientation, units_liquid, reporting_basis,
+        plot_default_y_orientation, liquid_unit_id, reporting_basis,
         result_speciation, result_target, endpoint)
      SELECT $1, $2, sample_fraction, plot_default_y_orientation, $3,
        FALSE, FALSE, FALSE, FALSE
@@ -210,7 +210,7 @@ test_that("dev migration preserves extrema timezone and converts continuous reco
   invisible(DBI::dbExecute(
     con,
     "INSERT INTO continuous.corrections
-       (correction_id, timeseries_id, start_dt, end_dt,
+       (correction_id, timeseries_id, start_datetime, end_datetime,
         correction_type, value1, created_by)
      VALUES ($1, $2, '2025-01-01', '2025-02-01', $3, 3, CURRENT_USER)",
     params = list(correction_id, timeseries_id, correction_type_id)
@@ -261,13 +261,13 @@ test_that("dev migration preserves extrema timezone and converts continuous reco
   expect_true(all(vapply(metadata_before, nrow, integer(1)) > 0L))
 
   old_units <- list(
-    units_liquid = as.integer(units$unit_id[[1]]),
-    units_solid = NA_integer_, units_gas = NA_integer_, units_na = NA_integer_
+    liquid_unit_id = as.integer(units$unit_id[[1]]),
+    solid_unit_id = NA_integer_, gas_unit_id = NA_integer_, not_applicable_unit_id = NA_integer_
   )
   new_units <- list(
-    units_liquid = NA_integer_,
-    units_solid = as.integer(units$unit_id[[2]]),
-    units_gas = NA_integer_, units_na = NA_integer_
+    liquid_unit_id = NA_integer_,
+    solid_unit_id = as.integer(units$unit_id[[2]]),
+    gas_unit_id = NA_integer_, not_applicable_unit_id = NA_integer_
   )
   changed_units <- editor$parameter_changed_assigned_unit_fields(
     as.data.frame(old_units), as.data.frame(new_units)
@@ -492,16 +492,16 @@ test_that("dev discrete migration converts limits and publishes a new mapping re
   solid_id <- states$matrix_state_id[match("solid", states$matrix_state_code)]
   DBI::dbExecute(con,
     "INSERT INTO public.parameters
-       (parameter_id, param_name, sample_fraction, plot_default_y_orientation, units_liquid)
+       (parameter_id, param_name, sample_fraction, plot_default_y_orientation, liquid_unit_id)
      VALUES ($1, $2, FALSE, 'normal', $3)",
     params = list(parameter_id, paste0("__codex_discrete_unit_test_", Sys.getpid()), units[[1]]))
-  old_units <- data.frame(units_liquid = units[[1]], units_solid = NA_integer_,
-    units_gas = NA_integer_, units_na = NA_integer_)
-  new_units <- data.frame(units_liquid = NA_integer_, units_solid = units[[2]],
-    units_gas = NA_integer_, units_na = NA_integer_)
+  old_units <- data.frame(liquid_unit_id = units[[1]], solid_unit_id = NA_integer_,
+    gas_unit_id = NA_integer_, not_applicable_unit_id = NA_integer_)
+  new_units <- data.frame(liquid_unit_id = NA_integer_, solid_unit_id = units[[2]],
+    gas_unit_id = NA_integer_, not_applicable_unit_id = NA_integer_)
   changed <- editor$parameter_changed_assigned_unit_fields(old_units, new_units)
   result_id <- DBI::dbGetQuery(con,
-    "INSERT INTO discrete.results (sample_id, parameter_id, matrix_state_id, result_type, result)
+    "INSERT INTO discrete.results (sample_id, parameter_id, matrix_state_id, result_type_id, result)
      SELECT min(sample_id), $1, $2, 2, 7 FROM discrete.samples RETURNING result_id",
     params = list(parameter_id, liquid_id))$result_id[[1]]
   guideline_id <- DBI::dbGetQuery(con,
@@ -522,7 +522,7 @@ test_that("dev discrete migration converts limits and publishes a new mapping re
   set_id <- prepare(con, source_id)
   DBI::dbExecute(con,
     "INSERT INTO discrete.import_parameter_mappings
-       (import_mapping_set_id, source_match, parameter_id, result_type, matrix_state_id, conversion, result_offset)
+       (import_mapping_set_id, source_match, parameter_id, result_type_id, matrix_state_id, conversion, result_offset)
      VALUES ($1, '{\"parameter\":\"test\"}', $2, 2, $3, 3, 4)",
     params = list(set_id, parameter_id, liquid_id))
   publish(con, set_id)
@@ -532,7 +532,7 @@ test_that("dev discrete migration converts limits and publishes a new mapping re
        note = 'Unfinished target edit' WHERE import_mapping_set_id = $1", params = list(open_draft))
   DBI::dbExecute(con,
     "INSERT INTO discrete.import_parameter_mappings
-       (import_mapping_set_id, source_match, result_type, active, note)
+       (import_mapping_set_id, source_match, result_type_id, active, note)
      VALUES ($1, '{\"parameter\":\"unfinished\"}', 2, FALSE, 'Keep unpublished')", params = list(open_draft))
   DBI::dbExecute(con,
     "INSERT INTO discrete.import_location_mappings (import_mapping_set_id, source_location_code, location_id)
@@ -544,7 +544,7 @@ test_that("dev discrete migration converts limits and publishes a new mapping re
   draft_only <- prepare(con, draft_source)
   DBI::dbExecute(con,
     "INSERT INTO discrete.import_parameter_mappings
-       (import_mapping_set_id, source_match, parameter_id, result_type, matrix_state_id, conversion, result_offset)
+       (import_mapping_set_id, source_match, parameter_id, result_type_id, matrix_state_id, conversion, result_offset)
      VALUES ($1, '{\"parameter\":\"draft-only\"}', $2, 2, $3, 5, 6)",
     params = list(draft_only, parameter_id, liquid_id))
   usage <- editor$fetch_parameter_unit_usage(con, parameter_id, changed, new_units)
@@ -567,7 +567,7 @@ test_that("dev discrete migration converts limits and publishes a new mapping re
     "SELECT public.begin_parameter_unit_change($1, $2::jsonb, $3::jsonb, '{}')",
     params = list(parameter_id, json(old_units), json(new_units)))
   DBI::dbExecute(con,
-    "UPDATE public.parameters SET units_liquid = NULL, units_solid = $2 WHERE parameter_id = $1",
+    "UPDATE public.parameters SET liquid_unit_id = NULL, solid_unit_id = $2 WHERE parameter_id = $1",
     params = list(parameter_id, units[[2]]))
   plan <- data.frame(matrix_state_id = liquid_id, destination_id = solid_id,
     discrete_a = 2, discrete_b = 1, continuous_a = 1, continuous_b = 0,
@@ -613,13 +613,13 @@ test_that("dev discrete migration converts limits and publishes a new mapping re
   # Relabel an already-used unit without a numeric conversion. The UI's keep
   # action generates identity conversions for every stored and future path.
   kept_units <- new_units
-  kept_units$units_solid <- units[[1]]
+  kept_units$solid_unit_id <- units[[1]]
   usage <- editor$fetch_parameter_unit_usage(con, parameter_id,
     editor$parameter_changed_assigned_unit_fields(new_units, kept_units), kept_units)
   DBI::dbGetQuery(con,
     "SELECT public.begin_parameter_unit_change($1, $2::jsonb, $3::jsonb, '{}')",
     params = list(parameter_id, json(new_units), json(kept_units)))
-  DBI::dbExecute(con, "UPDATE public.parameters SET units_solid = $2 WHERE parameter_id = $1",
+  DBI::dbExecute(con, "UPDATE public.parameters SET solid_unit_id = $2 WHERE parameter_id = $1",
     params = list(parameter_id, units[[1]]))
   keep_plan <- data.frame(matrix_state_id = solid_id, destination_id = solid_id,
     conversion_action = "keep", discrete_a = 1, discrete_b = 0,
@@ -665,8 +665,8 @@ test_that("the modal clears stale conversions and accepts an explicit keep-numbe
       session$setInputs(ui_ready = "parameter-editor-bound")
       states <- data.frame(matrix_state_id = 1:2, matrix_state_code = c("liquid", "solid"),
         matrix_state_name = c("Liquid", "Solid"))
-      values <- list(units_liquid = 2L, units_solid = 3L, units_gas = NA_integer_, units_na = NA_integer_)
-      changed <- data.frame(unit_column = "units_liquid", unit_label = "Liquid unit",
+      values <- list(liquid_unit_id = 2L, solid_unit_id = 3L, gas_unit_id = NA_integer_, not_applicable_unit_id = NA_integer_)
+      changed <- data.frame(unit_column = "liquid_unit_id", unit_label = "Liquid unit",
         matrix_state_code = "liquid", matrix_state_id = 1L, old_unit_id = 1L, new_unit_id = 2L)
       defaults <- editor$parameter_unit_change_defaults(con, changed, values, states)
       unknown <- editor$parameter_unit_change_defaults(con, changed, values, states[2, , drop = FALSE])

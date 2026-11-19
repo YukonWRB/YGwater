@@ -250,6 +250,14 @@ YGwater_globals <- function(
 
     # discrete data sub-modules
     source(system.file(
+      "apps/aqualink/modules/admin/discreteData/chemistry_form.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/aqualink/modules/admin/discreteData/discrete_protocols.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/aqualink/modules/admin/discreteData/addDiscData.R",
       package = "YGwater"
     ))

@@ -12,3 +12,23 @@ test_that("Connection can be made", {
     1L
   )
 })
+
+test_that("AquaConnect compares patch numbers numerically", {
+  version <- "9"
+  local_mocked_bindings(
+    dbConnect = function(...) list(),
+    dbExecute = function(...) 0L,
+    dbGetQuery = function(con, statement, ...) {
+      if (identical(statement, "SELECT 1")) data.frame(x = 1L) else data.frame(version)
+    },
+    .package = "DBI"
+  )
+
+  expect_warning(AquaConnect(silent = TRUE), "This database is at Patch 9")
+  version <- "71"
+  expect_warning(AquaConnect(silent = TRUE), "This database is at Patch 71")
+  version <- "72"
+  expect_no_warning(AquaConnect(silent = TRUE))
+  version <- "100"
+  expect_no_warning(AquaConnect(silent = TRUE))
+})

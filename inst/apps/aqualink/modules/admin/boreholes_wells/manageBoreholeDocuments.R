@@ -136,11 +136,11 @@ manageBoreholeDocuments <- function(id, language) {
                 d.authors,
                 d.url,
                 d.format,
-                d.type,
+                d.document_type_id AS type,
                 dt.document_type_en,
                 octet_length(d.document) AS document_size_bytes
          FROM files.documents d
-         LEFT JOIN files.document_types dt ON dt.document_type_id = d.type
+         LEFT JOIN files.document_types dt ON dt.document_type_id = d.document_type_id
          ORDER BY d.publish_date DESC NULLS LAST, d.name ASC;"
       )
       moduleData$document_types <- DBI::dbGetQuery(
@@ -172,7 +172,7 @@ manageBoreholeDocuments <- function(id, language) {
                 d.authors
          FROM boreholes.boreholes_documents bd
          JOIN files.documents d ON d.document_id = bd.document_id
-         LEFT JOIN files.document_types dt ON dt.document_type_id = d.type
+         LEFT JOIN files.document_types dt ON dt.document_type_id = d.document_type_id
          WHERE bd.borehole_id = $1
          ORDER BY d.name ASC;",
         params = list(as.integer(input$borehole_id))

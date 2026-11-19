@@ -40,7 +40,7 @@ discrete_preview_fixture <- function() {
     ),
     upload_options = list(
       negative_values_are_mdl = FALSE,
-      negative_mdl_exclusions = character(),
+      negative_mdl_exclusions = env$addDiscData_negative_mdl_defaults(),
       location_project_id = NULL
     )
   )
@@ -77,7 +77,7 @@ discrete_preview_server_state <- function(env, path) {
   state <- new.env(parent = env)
   state$data <- new.env()
   state$data$raw_file_path <- path
-  state$data$negative_mdl_exclusions <- character()
+  state$data$negative_mdl_exclusions <- env$addDiscData_negative_mdl_defaults()
   state$data$df <- env$addDiscData_empty_table()
   state$data$preview_base <- env$addDiscData_empty_table()
   state$data$preview_profile_key <- env$addDiscData_profile_key(
@@ -366,7 +366,7 @@ test_that("mapping-save refreshes carry the snapshot used by the worker", {
     refresh_preview = TRUE,
     path = "fixture",
     negative_values_are_mdl = FALSE,
-    negative_mdl_exclusions = character(),
+    negative_mdl_exclusions = env$addDiscData_negative_mdl_defaults(),
     locations = data.frame(),
     sample_types = data.frame()
   )

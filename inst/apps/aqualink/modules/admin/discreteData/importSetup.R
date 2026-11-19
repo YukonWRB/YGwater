@@ -33,11 +33,11 @@ importSetup_match_values <- function(text) {
     "parameter_id",
     "parameter",
     "param_name",
-    "result_type",
+    "result_type_id",
     "result_type_id",
     "sample_fraction_id",
     "sample_fraction",
-    "result_value_type",
+    "result_value_type_id",
     "result_value_type_id",
     "reporting_basis_id",
     "reporting_basis",
@@ -107,7 +107,7 @@ importSetup_match_fields <- function(criteria) {
 }
 
 # Workbook column names are namespaced in criteria, so a source column called
-# result_type or sample_fraction is never interpreted as an AquaCache target.
+# result_type_id or sample_fraction is never interpreted as an AquaCache target.
 importSetup_column_criteria <- function(fields, values) {
   fields <- trimws(as.character(fields))
   if (
@@ -1253,10 +1253,10 @@ importSetup <- function(id, language) {
                 ug.unit_name AS unit_gas,
                 una.unit_name AS unit_na
            FROM public.parameters p
-           LEFT JOIN public.units ul ON ul.unit_id = p.units_liquid
-           LEFT JOIN public.units us ON us.unit_id = p.units_solid
-           LEFT JOIN public.units ug ON ug.unit_id = p.units_gas
-           LEFT JOIN public.units una ON una.unit_id = p.units_na
+           LEFT JOIN public.units ul ON ul.unit_id = p.liquid_unit_id
+           LEFT JOIN public.units us ON us.unit_id = p.solid_unit_id
+           LEFT JOIN public.units ug ON ug.unit_id = p.gas_unit_id
+           LEFT JOIN public.units una ON una.unit_id = p.not_applicable_unit_id
           ORDER BY p.param_name"
       )
     })
@@ -1298,7 +1298,7 @@ importSetup <- function(id, language) {
     )
     chemistry_catalogues <- YGwater:::chemistry_metadata_catalogues(con)
     output$manage_chemistry <- renderUI({
-      YGwater:::chemistry_metadata_ui(ns, "manage_chem_", chemistry_catalogues)
+      chemistry_metadata_ui(ns, "manage_chem_", chemistry_catalogues)
     })
     laboratories <- DBI::dbGetQuery(
       con,
@@ -1349,15 +1349,15 @@ importSetup <- function(id, language) {
         "freshwater (surface)",
         tolower(trimws(media$media_type))
       )],
-      collection_method = collection_methods$collection_method_id[match(
+      collection_method_id = collection_methods$collection_method_id[match(
         "water bottle (direct fill)",
         tolower(trimws(collection_methods$collection_method))
       )],
-      sample_type = sample_types$sample_type_id[match(
+      sample_type_id = sample_types$sample_type_id[match(
         "sample-routine",
         tolower(trimws(sample_types$sample_type))
       )],
-      result_type = result_types$result_type_id[match(
+      result_type_id = result_types$result_type_id[match(
         "lab",
         tolower(trimws(result_types$result_type))
       )],
@@ -1365,12 +1365,12 @@ importSetup <- function(id, language) {
         "liquid",
         tolower(trimws(matrix_states$matrix_state_code))
       )],
-      result_value_type = result_value_types$result_value_type_id[match(
+      result_value_type_id = result_value_types$result_value_type_id[match(
         "actual",
         tolower(trimws(result_value_types$result_value_type))
       )],
       owner = NA_integer_,
-      laboratory = NA_integer_
+      lab_id = NA_integer_
     )
 
     update_manage_formats <- function(selected = NULL) {
@@ -2182,10 +2182,10 @@ importSetup <- function(id, language) {
                   collection_methods$collection_method
                 )
               ),
-              selected = if (is.na(defaults$collection_method)) {
+              selected = if (is.na(defaults$collection_method_id)) {
                 ""
               } else {
-                defaults$collection_method
+                defaults$collection_method_id
               }
             )
           ),
@@ -2201,10 +2201,10 @@ importSetup <- function(id, language) {
                   sample_types$sample_type
                 )
               ),
-              selected = if (is.na(defaults$sample_type)) {
+              selected = if (is.na(defaults$sample_type_id)) {
                 ""
               } else {
-                defaults$sample_type
+                defaults$sample_type_id
               }
             )
           )
@@ -2237,10 +2237,10 @@ importSetup <- function(id, language) {
                   laboratories$lab_name
                 )
               ),
-              selected = if (is.na(defaults$laboratory)) {
+              selected = if (is.na(defaults$lab_id)) {
                 ""
               } else {
-                defaults$laboratory
+                defaults$lab_id
               }
             )
           ),
@@ -2256,10 +2256,10 @@ importSetup <- function(id, language) {
                   result_types$result_type
                 )
               ),
-              selected = if (is.na(defaults$result_type)) {
+              selected = if (is.na(defaults$result_type_id)) {
                 ""
               } else {
-                defaults$result_type
+                defaults$result_type_id
               }
             )
           )
@@ -2296,10 +2296,10 @@ importSetup <- function(id, language) {
                   result_value_types$result_value_type
                 )
               ),
-              selected = if (is.na(defaults$result_value_type)) {
+              selected = if (is.na(defaults$result_value_type_id)) {
                 ""
               } else {
-                defaults$result_value_type
+                defaults$result_value_type_id
               }
             )
           )
@@ -2682,25 +2682,25 @@ importSetup <- function(id, language) {
             media_id = addDiscData_int(
               input$new_profile_default_media
             ),
-            collection_method = addDiscData_int(
+            collection_method_id = addDiscData_int(
               input$new_profile_default_method
             ),
-            sample_type = addDiscData_int(
+            sample_type_id = addDiscData_int(
               input$new_profile_default_sample_type
             ),
             owner = addDiscData_int(
               input$new_profile_default_owner
             ),
-            result_type = addDiscData_int(
+            result_type_id = addDiscData_int(
               input$new_profile_default_result_type
             ),
             matrix_state_id = addDiscData_int(
               input$new_profile_default_matrix
             ),
-            result_value_type = addDiscData_int(
+            result_value_type_id = addDiscData_int(
               input$new_profile_default_value_type
             ),
-            laboratory = addDiscData_int(
+            lab_id = addDiscData_int(
               input$new_profile_default_lab
             )
           )
@@ -2807,24 +2807,24 @@ importSetup <- function(id, language) {
                   "location_id",
                   "sub_location_id",
                   "media_id",
-                  "z",
+                  "depth_height_m",
                   "datetime",
-                  "sample_type",
-                  "collection_method"
+                  "sample_type_id",
+                  "collection_method_id"
                 )
               ),
               result_identity = addDiscData_profile_value(
                 profile,
                 "result_identity",
                 c(
-                  "result_type",
+                  "result_type_id",
                   "parameter_id",
                   "matrix_state_id",
                   "sample_fraction_id",
-                  "result_value_type",
+                  "result_value_type_id",
                   "reporting_basis_id",
-                  "protocol_method",
-                  "laboratory",
+                  "protocol_method_id",
+                  "lab_id",
                   "analysis_datetime"
                 )
               ),
@@ -3105,7 +3105,7 @@ importSetup <- function(id, language) {
           as.character(result_types$result_type_id),
           result_types$result_type
         ),
-        selected = as.character(default_metadata$result_type)
+        selected = as.character(default_metadata$result_type_id)
       )
       updateSelectizeInput(
         session,
@@ -3135,7 +3135,7 @@ importSetup <- function(id, language) {
           as.character(result_value_types$result_value_type_id),
           result_value_types$result_value_type
         ),
-        selected = as.character(default_metadata$result_value_type)
+        selected = as.character(default_metadata$result_value_type_id)
       )
       updateSelectizeInput(
         session,
@@ -3574,7 +3574,7 @@ importSetup <- function(id, language) {
         updateSelectizeInput(
           session,
           "manage_result_type",
-          selected = as.character(row$result_type[[1]])
+          selected = as.character(row$result_type_id[[1]])
         )
         updateSelectizeInput(
           session,
@@ -3593,7 +3593,7 @@ importSetup <- function(id, language) {
         updateSelectizeInput(
           session,
           "manage_value_type",
-          selected = as.character(row$result_value_type[[1]])
+          selected = as.character(row$result_value_type_id[[1]])
         )
         updateSelectizeInput(
           session,
@@ -3605,7 +3605,7 @@ importSetup <- function(id, language) {
           }
         )
         output$manage_chemistry <- renderUI({
-          YGwater:::chemistry_metadata_ui(
+          chemistry_metadata_ui(
             ns,
             "manage_chem_",
             chemistry_catalogues,
@@ -3769,7 +3769,7 @@ importSetup <- function(id, language) {
       updateSelectizeInput(
         session,
         "manage_result_type",
-        selected = as.character(default_metadata$result_type)
+        selected = as.character(default_metadata$result_type_id)
       )
       updateSelectizeInput(
         session,
@@ -3780,11 +3780,11 @@ importSetup <- function(id, language) {
       updateSelectizeInput(
         session,
         "manage_value_type",
-        selected = as.character(default_metadata$result_value_type)
+        selected = as.character(default_metadata$result_value_type_id)
       )
       updateSelectizeInput(session, "manage_descriptor", selected = "")
       output$manage_chemistry <- renderUI({
-        YGwater:::chemistry_metadata_ui(
+        chemistry_metadata_ui(
           ns,
           "manage_chem_",
           chemistry_catalogues
@@ -4046,7 +4046,7 @@ importSetup <- function(id, language) {
           parameter_id <- addDiscData_int(input$manage_parameter_id)
           sample_fraction_id <- addDiscData_int(input$manage_sample_fraction)
           reporting_basis_id <- addDiscData_int(input$manage_descriptor)
-          chemistry <- YGwater:::chemistry_metadata_values(
+          chemistry <- chemistry_metadata_values(
             input,
             "manage_chem_"
           )
@@ -4068,14 +4068,14 @@ importSetup <- function(id, language) {
                 check.names = FALSE
               ),
               parameter_id = parameter_id,
-              result_type = addDiscData_int(
+              result_type_id = addDiscData_int(
                 input$manage_result_type,
-                default_metadata$result_type
+                default_metadata$result_type_id
               ),
               sample_fraction_id = sample_fraction_id,
-              result_value_type = addDiscData_int(
+              result_value_type_id = addDiscData_int(
                 input$manage_value_type,
-                default_metadata$result_value_type
+                default_metadata$result_value_type_id
               ),
               reporting_basis_id = reporting_basis_id,
               matrix_state_id = addDiscData_int(
@@ -4093,8 +4093,7 @@ importSetup <- function(id, language) {
               stringsAsFactors = FALSE,
               check.names = FALSE
             ),
-            match_columns = names(criteria),
-            publish = TRUE
+            match_columns = names(criteria)
           )
         } else if (identical(kind, "location")) {
           location_code <- trimws(addDiscData_first(
@@ -4179,8 +4178,7 @@ importSetup <- function(id, language) {
                 NA_character_
               ),
               stringsAsFactors = FALSE
-            ),
-            publish = TRUE
+            )
           )
         } else {
           flag_value <- trimws(addDiscData_first(input$manage_flag_value, ""))
@@ -4261,8 +4259,7 @@ importSetup <- function(id, language) {
               active = isTRUE(input$manage_flag_active),
               note = addDiscData_first(input$manage_flag_note, NA_character_),
               stringsAsFactors = FALSE
-            ),
-            publish = TRUE
+            )
           )
         }
       })
@@ -4546,11 +4543,11 @@ importSetup <- function(id, language) {
           matrix_states$matrix_state_name,
           matrix_states$matrix_state_id
         ),
-        result_type = stats::setNames(
+        result_type_id = stats::setNames(
           result_types$result_type,
           result_types$result_type_id
         ),
-        result_value_type = stats::setNames(
+        result_value_type_id = stats::setNames(
           result_value_types$result_value_type,
           result_value_types$result_value_type_id
         ),
