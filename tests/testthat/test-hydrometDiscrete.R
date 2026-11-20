@@ -76,7 +76,7 @@ test_that("linedbox plot is as expected when discrete data is given", {
     location = "Upper Yukon",
     parameter = "snow water equivalent",
     startDay = 1,
-    tzone = "MST",
+    tzone = "Etc/GMT+7",
     years = 2022,
     title = TRUE,
     custom_title = "Upper Yukon Basin Monthly Snow Course Data",
@@ -116,7 +116,7 @@ test_that("linedbox plot that starts and ends in different years is as expected 
   plot <- hydrometDiscrete(
     location = NULL,
     parameter = "Total precipitation",
-    tzone = "MST",
+    tzone = "Etc/GMT+7",
     years = 2022,
     startDay = "2022-10-01", # 275
     endDay = "2023-05-31", # 120

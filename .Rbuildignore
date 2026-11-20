@@ -7,6 +7,7 @@
 ^Meta$
 ^dev$
 ^data-raw$
+^tmp$
 ^\.Rprof\.out$
 ^\.RData$
 ^\.Rhistory$

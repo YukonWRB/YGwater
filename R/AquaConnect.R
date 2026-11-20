@@ -48,14 +48,16 @@ AquaConnect <- function(
       # Check if the database is at a minimum version. Within a try block in case the user can't see the information schema or the table.
       try(
         {
-          version <- DBI::dbGetQuery(
+          version <- as.integer(DBI::dbGetQuery(
             con,
             "SELECT version FROM information.version_info WHERE item = 'Last patch number'"
-          )[1, 1]
+          )$version)
 
-          if (version < 20) {
+          if (length(version) == 1L && !is.na(version) && version < 72L) {
             warning(
-              "This database schema is of a version older than what the YGwater package is expecting. Be aware that some features may not work as expected. Contact the database administrator to update the database schema or revert to an earlier version of the YGwater package for best performance.."
+              "YGwater requires AquaCache Patch 72 or later. This database is at Patch ",
+              version, ".",
+              call. = FALSE
             )
           }
         },

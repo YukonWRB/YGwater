@@ -38,7 +38,11 @@ tr <- function(key, lang, translations = data$translations) {
   return(translations[[lang]][[key]]) # list 'lang', item 'key'
 }
 
-## Ask for something and save the result
+#' Request a yes-or-no answer at the console
+#'
+#' @param ... Prompt text passed to `cli::cat_bullet()`.
+#' @return `TRUE` if Yes was selected, otherwise `FALSE`.
+#' @keywords internal
 #' @noRd
 ask <- function(...) {
   choices <- c("Yes", "No")
@@ -51,6 +55,8 @@ ask <- function(...) {
 #' @param x Numeric vector to round.
 #' @param accuracy Number to round to.
 #' @param f Rounding function such as floor, ceiling, or round.
+#' @return `x` rounded to multiples of `accuracy` using `f`.
+#' @keywords internal
 #' @noRd
 round_any <- function(x, accuracy, f = round) {
   f(x / accuracy) * accuracy
@@ -178,71 +184,6 @@ ac_db_table_exists <- function(con, schema, table) {
   )
 }
 
-#' Get column information for a database table
-#' Retrieves column information (column names and data types) for a specified table in the database by querying the information_schema.columns view. This function is used to determine the structure of a table and is particularly useful for checking the presence and data types of specific columns when constructing dynamic SQL queries.
-#' @param con A DBI connection to the database.
-#' @param schema A string representing the schema name where the table is located.
-#' @param table A string representing the table name for which to retrieve column information.
-#' @return A data.frame containing the column names and data types for the specified table, with columns 'column_name' and 'data_type'.
-#' @noRd
-
-ac_db_column_info <- function(con, schema, table) {
-  DBI::dbGetQuery(
-    con,
-    "SELECT column_name, data_type
-     FROM information_schema.columns
-     WHERE table_schema = $1
-       AND table_name = $2;",
-    params = list(schema, table)
-  )
-}
-
-#' Check if a database function exists
-#' @param con A DBI connection to the database.
-#' @param schema A string representing the schema name that owns the function.
-#' @param function_name A string representing the function name.
-#' @param arg_count An optional integer representing the number of arguments.
-#' @return A logical value indicating whether the specified function exists.
-#' @noRd
-
-ac_db_function_exists <- function(
-  con,
-  schema,
-  function_name,
-  arg_count = NULL
-) {
-  query <- paste(
-    "SELECT EXISTS (",
-    "  SELECT 1",
-    "  FROM pg_catalog.pg_proc p",
-    "  JOIN pg_catalog.pg_namespace n",
-    "    ON n.oid = p.pronamespace",
-    "  WHERE n.nspname = $1",
-    "    AND p.proname = $2",
-    if (is.null(arg_count)) {
-      ""
-    } else {
-      "    AND p.pronargs = $3"
-    },
-    ") AS present;"
-  )
-
-  params <- if (is.null(arg_count)) {
-    list(schema, function_name)
-  } else {
-    list(schema, function_name, as.integer(arg_count))
-  }
-
-  tryCatch(
-    {
-      DBI::dbGetQuery(con, query, params = params)$present[[1]]
-    },
-    error = function(...) {
-      FALSE
-    }
-  )
-}
-
 #' Generate a SQL column reference with optional table alias
 #' Constructs a SQL column reference string, optionally prefixed with a table alias. If a table alias is provided and is not empty, the column reference will be in the format "alias.column_name". If no alias is provided, the column reference will simply be "column_name".
 #' @param table_alias An optional string representing the table alias to prefix the column name with. If NULL or an empty string is provided, the column name will be returned without a prefix.
@@ -257,78 +198,17 @@ ac_sql_column_ref <- function(table_alias = NULL, column_name) {
   paste0(table_alias, ".", column_name)
 }
 
-#' Get the parameter unit schema from the database
-#' Retrieves the schema information for parameter units from the database
-#' @param con A DBI connection to the database.
-#' @return A list containing the column name, data type, and storage type for the default and solid parameter units, based on the columns present in the 'parameters' table and the existence of the 'units' table.
-#' @noRd
-ac_parameter_unit_schema <- function(con) {
-  column_info <- ac_db_column_info(con, "public", "parameters")
-  units_table_exists <- ac_db_table_exists(con, "public", "units")
-
-  resolve_column <- function(candidates) {
-    matches <- column_info[
-      column_info$column_name %in% candidates,
-      ,
-      drop = FALSE
-    ]
-
-    if (nrow(matches) == 0) {
-      return(
-        list(
-          column = NULL,
-          data_type = NULL,
-          storage = NULL
-        )
-      )
-    }
-
-    matches$order <- match(matches$column_name, candidates)
-    matches <- matches[order(matches$order), , drop = FALSE]
-
-    data_type <- matches$data_type[1]
-    storage <- if (data_type %in% c("text", "character varying", "character")) {
-      "text"
-    } else if (units_table_exists) {
-      "unit_id"
-    } else {
-      NULL
-    }
-
-    list(
-      column = matches$column_name[1],
-      data_type = data_type,
-      storage = storage
-    )
-  }
-
-  list(
-    liquid = resolve_column(c(
-      "units_liquid",
-      "unit_default",
-      "default_unit_id",
-      "unit_default_id"
-    )),
-    solid = resolve_column(c(
-      "units_solid",
-      "unit_solid",
-      "solid_unit_id",
-      "unit_solid_id"
-    )),
-    gas = resolve_column(c("units_gas"))
-  )
-}
-
-#' Generate SQL expression to select parameter unit with fallback
-#' Generates a SQL expression to select the unit for a parameter, with fallback logic based on the available columns in the database. The function checks for the presence of unit columns in the 'parameters' table and constructs a SQL expression that retrieves the unit name, either directly from text columns or by joining with the 'units' table if normalized unit ID columns are present. The preference for which unit to return can be specified through the 'prefer' argument.
-#' @param con A DBI connection to the database containing parameter and unit information.
-#' @param parameter_alias An optional string representing the table alias for the parameters table in the SQL query. If provided, column references will be prefixed with this alias.
-#' @param output_alias A string representing the desired alias for the output column in the SQL query. Defaults to "unit_default".
-#' @param prefer A string indicating the preference for which unit to return if multiple are available. Options are "default_or_solid" (default), "default", "solid", and "solid_or_default".
-#' @param ... Additional arguments for specifying aliases and column names for matrix state and media, which may be used in certain database schemas to resolve the appropriate unit based on the context of the parameter.
-#' @return A string containing the SQL expression to select the parameter unit with appropriate fallback logic based on the database schema.
+#' Build SQL to select a parameter unit
+#'
+#' With matrix or media context, resolve the unit for that context. Otherwise
+#' use the preferred unit from the parameter's matrix-specific unit IDs.
+#' @param con A DBI connection for the query that will use the expression.
+#' @param parameter_alias Optional alias for the parameters table.
+#' @param output_alias Column name for the selected unit.
+#' @param prefer Which unit to prefer when no matrix context is supplied.
+#' @param ... Optional matrix state and media aliases and column names.
+#' @return A SQL selection expression for the unit name.
 #' @export
-
 ac_parameter_unit_select_sql <- function(
   con,
   parameter_alias = NULL,
@@ -336,163 +216,39 @@ ac_parameter_unit_select_sql <- function(
   prefer = c("default_or_solid", "default", "solid", "solid_or_default"),
   ...
 ) {
+  prefer <- match.arg(prefer)
   dots <- list(...)
-  matrix_state_alias <- if (is.null(dots$matrix_state_alias)) {
-    NULL
-  } else {
-    dots$matrix_state_alias
-  }
-  matrix_state_column <- if (is.null(dots$matrix_state_column)) {
-    "matrix_state_id"
-  } else {
-    dots$matrix_state_column
-  }
-  media_alias <- if (is.null(dots$media_alias)) {
-    NULL
-  } else {
-    dots$media_alias
-  }
-  media_column <- if (is.null(dots$media_column)) {
-    "media_id"
-  } else {
-    dots$media_column
-  }
-
-  ac_parameter_unit_expr <- function(
-    con,
-    parameter_alias = NULL,
-    prefer = c("default_or_solid", "default", "solid", "solid_or_default"),
-    matrix_state_alias = NULL,
-    matrix_state_column = "matrix_state_id",
-    media_alias = NULL,
-    media_column = "media_id"
-  ) {
-    prefer <- match.arg(prefer)
-    unit_schema <- ac_parameter_unit_schema(con)
-
-    parameter_id_ref <- ac_sql_column_ref(parameter_alias, "parameter_id")
-    matrix_state_ref <- if (
-      is.null(matrix_state_alias) ||
-        !nzchar(
-          matrix_state_alias
-        )
-    ) {
-      NULL
-    } else {
-      ac_sql_column_ref(matrix_state_alias, matrix_state_column)
-    }
-    media_ref <- if (is.null(media_alias) || !nzchar(media_alias)) {
-      NULL
-    } else {
-      ac_sql_column_ref(media_alias, media_column)
-    }
-
-    if (
-      ac_db_function_exists(con, "public", "get_parameter_unit_name", 2) &&
-        (!is.null(matrix_state_ref) || !is.null(media_ref))
-    ) {
-      resolved_matrix_state_expr <- if (
-        !is.null(media_ref) &&
-          ac_db_function_exists(con, "public", "resolve_matrix_state_id", 3)
-      ) {
-        paste0(
-          "public.resolve_matrix_state_id(",
-          media_ref,
-          ", ",
-          parameter_id_ref,
-          ", ",
-          if (is.null(matrix_state_ref)) {
-            "NULL"
-          } else {
-            matrix_state_ref
-          },
-          ")"
-        )
-      } else {
-        matrix_state_ref
-      }
-
-      if (!is.null(resolved_matrix_state_expr)) {
-        return(
-          paste0(
-            "public.get_parameter_unit_name(",
-            parameter_id_ref,
-            ", ",
-            resolved_matrix_state_expr,
-            ")"
-          )
-        )
-      }
-    }
-
-    column_expr <- function(definition) {
-      if (is.null(definition$column) || is.null(definition$storage)) {
-        return(NULL)
-      }
-
-      column_ref <- ac_sql_column_ref(parameter_alias, definition$column)
-
-      if (identical(definition$storage, "text")) {
-        return(paste0("NULLIF(BTRIM(", column_ref, "), '')"))
-      }
-
-      if (identical(definition$storage, "unit_id")) {
-        return(
-          paste0(
-            "(SELECT u.unit_name FROM public.units u WHERE u.unit_id = ",
-            column_ref,
-            ")"
-          )
-        )
-      }
-
-      NULL
-    }
-
-    order <- switch(
-      prefer,
-      default = c("liquid", "solid", "gas"),
-      solid = c("solid", "liquid", "gas"),
-      default_or_solid = c("liquid", "solid", "gas"),
-      solid_or_default = c("solid", "liquid", "gas")
+  parameter_id <- ac_sql_column_ref(parameter_alias, "parameter_id")
+  matrix_state <- "NULL"
+  if (length(dots$matrix_state_alias) && nzchar(dots$matrix_state_alias)) {
+    column <- if (is.null(dots$matrix_state_column)) "matrix_state_id" else dots$matrix_state_column
+    matrix_state <- ac_sql_column_ref(
+      dots$matrix_state_alias, column
     )
-
-    exprs <- vapply(
-      order,
-      function(name) {
-        expr <- column_expr(unit_schema[[name]])
-        if (is.null(expr)) {
-          ""
-        } else {
-          expr
-        }
-      },
-      character(1)
+  }
+  if (length(dots$media_alias) && nzchar(dots$media_alias)) {
+    column <- if (is.null(dots$media_column)) "media_id" else dots$media_column
+    media <- ac_sql_column_ref(dots$media_alias, column)
+    matrix_state <- sprintf(
+      "public.resolve_matrix_state_id(%s, %s, %s)", media, parameter_id, matrix_state
     )
-    exprs <- exprs[nzchar(exprs)]
-
-    if (length(exprs) == 0) {
-      return("NULL")
-    }
-
-    if (length(exprs) == 1) {
-      return(exprs[[1]])
-    }
-
-    paste0("COALESCE(", paste(exprs, collapse = ", "), ")")
+  }
+  if (matrix_state != "NULL") {
+    return(sprintf(
+      "public.get_parameter_unit_name(%s, %s) AS %s",
+      parameter_id, matrix_state, output_alias
+    ))
   }
 
-  expr <- ac_parameter_unit_expr(
-    con = con,
-    parameter_alias = parameter_alias,
-    prefer = prefer,
-    matrix_state_alias = matrix_state_alias,
-    matrix_state_column = matrix_state_column,
-    media_alias = media_alias,
-    media_column = media_column
-  )
-
-  paste0(expr, " AS ", output_alias)
+  columns <- c("liquid_unit_id", "solid_unit_id", "gas_unit_id", "not_applicable_unit_id")
+  if (prefer %in% c("solid", "solid_or_default")) {
+    columns <- columns[c(2L, 1L, 3L, 4L)]
+  }
+  references <- vapply(columns, function(column) {
+    ac_sql_column_ref(parameter_alias, column)
+  }, character(1))
+  units <- sprintf("(SELECT u.unit_name FROM public.units u WHERE u.unit_id = %s)", references)
+  sprintf("COALESCE(%s) AS %s", paste(units, collapse = ", "), output_alias)
 }
 
 #' Get the unit for a parameter from the database
@@ -872,30 +628,55 @@ lengthenLanguage <- function(language) {
 }
 
 
+#' Get the default EQWin database path
+#'
+#' @return The network path to the WRB EQWin Access database.
+#' @keywords internal
+#' @noRd
 eqwin_db_path <- function() {
   "//carver/infosys/EQWin/WaterResources.mdb"
 }
 
+#' Get the default YOWN master workbook path
+#'
+#' @return The network path to the YOWN master workbook.
+#' @keywords internal
 #' @noRd
 yown_master_path <- function() {
   "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
 }
 
+#' Get the default YOWN logger tracking workbook path
+#'
+#' @return The network path to the YOWN logger tracking workbook.
+#' @keywords internal
 #' @noRd
 yown_tracking_path <- function() {
   "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
 }
 
+#' Get the default YOWN logger dropbox path
+#'
+#' @return The network directory for incoming logger files.
+#' @keywords internal
 #' @noRd
 yown_dropbox_path <- function() {
   "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
 }
 
+#' Get the default active YOWN wells directory
+#'
+#' @return The network directory for active well files.
+#' @keywords internal
 #' @noRd
 yown_active_path <- function() {
   "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
 }
 
+#' Get the default YOWN Water Data Catalogue directory
+#'
+#' @return The network directory for YOWN catalogue data.
+#' @keywords internal
 #' @noRd
 yown_wdc_path <- function() {
   "\\\\envgeoserver\\share\\WaterResources\\Groundwater\\YOWN_DATA\\"

@@ -1,6 +1,6 @@
 add_cont_data_notes_module <- function() {
   path <- system.file(
-    "apps/YGwater/modules/admin/continuousData/addContData.R",
+    "apps/aqualink/modules/admin/continuousData/addContData.R",
     package = "YGwater"
   )
   env <- new.env(parent = globalenv())
@@ -23,8 +23,8 @@ test_that("upload note ranges preserve free-hand text and allow overlap", {
 
   expect_equal(nrow(notes), 2L)
   expect_equal(notes$note, c("Ice affected", "Logger serviced"))
-  expect_s3_class(notes$start_dt, "POSIXct")
-  expect_s3_class(notes$end_dt, "POSIXct")
+  expect_s3_class(notes$start_datetime, "POSIXct")
+  expect_s3_class(notes$end_datetime, "POSIXct")
   expect_true(all(notes$no_source_update))
 })
 

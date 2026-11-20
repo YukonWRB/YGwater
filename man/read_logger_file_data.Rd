@@ -17,7 +17,10 @@ explicit UTC offset. Use either a single R time zone name from
 \code{OlsonNames()} (for example, \code{"America/Whitehorse"} or \code{"UTC"}) or a fixed
 UTC offset in hours (for example, \code{-7} for UTC-07:00). Fixed offsets may
 also be supplied as strings like \code{"UTC-07:00"}, \code{"-07:00"}, or \code{"GMT-07:00"}.
-Defaults to UTC.}
+Run \code{OlsonNames()} for names available to R. The IANA
+\href{https://data.iana.org/time-zones/tzdb/zone1970.tab}{zone1970.tab} lists
+geographic zone names. Prefer these over abbreviations such as \code{"MST"} for
+consistent behavior across operating systems. Defaults to UTC.}
 }
 \value{
 A data frame with \code{datetime} in UTC and one column per logger

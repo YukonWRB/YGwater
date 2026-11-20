@@ -214,7 +214,7 @@ snowInfo <- function(
       FROM discrete.results AS r 
       JOIN discrete.samples AS s ON s.sample_id = r.sample_id
       JOIN public.parameters AS p ON p.parameter_id = r.parameter_id 
-      JOIN discrete.result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type
+      JOIN discrete.result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type_id
       WHERE r.sample_id IN ('",
       paste(samples$sample_id, collapse = "', '"),
       "') AND p.parameter_id IN (21, 1220) ",
@@ -727,13 +727,13 @@ snowInfo <- function(
       density_swe <- plot_results_dt[
         plot_results_dt$param_name == "snow water equivalent",
         .(
-          "sample_id",
-          "datetime",
-          "target_datetime",
-          "year",
-          "month",
-          "location",
-          "name",
+          sample_id,
+          datetime,
+          target_datetime,
+          year,
+          month,
+          location,
+          name,
           "SWE" = result
         )
       ]
@@ -1143,7 +1143,7 @@ snowInfo <- function(
         "Description: Metadata about Yukon snow survey locations. Information is fetched in real-time and reflects the location metadata at query time.",
         paste0(
           "Generated at : ",
-          substr(format(Sys.time(), tz = "MST"), 1, 16),
+          substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
           " MST"
         ),
         "Report Title: Snow survey location metadata",
@@ -1174,7 +1174,7 @@ snowInfo <- function(
       },
       paste0(
         "Generated at : ",
-        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
         " MST"
       ),
       "",
@@ -1199,7 +1199,7 @@ snowInfo <- function(
       },
       paste0(
         "Generated at : ",
-        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
         " MST"
       ),
       "",
@@ -1224,7 +1224,7 @@ snowInfo <- function(
       },
       paste0(
         "Generated at : ",
-        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
         " MST"
       ),
       "",
@@ -1251,7 +1251,7 @@ snowInfo <- function(
       "Description: Snow survey measurements for Yukon snow survey locations. Measurements are fetched in real-time and reflect the data at query time.",
       paste0(
         "Generated at : ",
-        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        substr(format(Sys.time(), tz = "Etc/GMT+7"), 1, 16),
         " MST"
       ),
       "",

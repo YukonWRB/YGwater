@@ -112,7 +112,7 @@ test_that("continuous Shiny modules expose notes in alerts and downloads", {
   plot_module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        "apps/aqualink/modules/client/plot/continuousPlotAdaptive.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -122,7 +122,7 @@ test_that("continuous Shiny modules expose notes in alerts and downloads", {
   data_module <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/data/continuousData.R",
+        "apps/aqualink/modules/client/data/continuousData.R",
         package = "YGwater"
       ),
       warn = FALSE

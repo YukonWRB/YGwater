@@ -231,7 +231,7 @@ html_processing <- function(
     stringsAsFactors = FALSE
   ) %>%
     dplyr::mutate(
-      V1 = lubridate::as_datetime(.data$V1, tz = "MST") %>%
+      V1 = lubridate::as_datetime(.data$V1, tz = "Etc/GMT+7") %>%
         lubridate::round_date(unit = "second"),
       dplyr::across(-"V1", as.numeric)
     ) %>%
@@ -372,7 +372,7 @@ html_processing <- function(
     ],
     NA,
     instrument_properties$Value[instrument_properties$Property == "Device SN"],
-    as.character(min(as.POSIXct(final_data$Date, tz = "MST"))),
+    as.character(min(as.POSIXct(final_data$Date, tz = "Etc/GMT+7"))),
     as.character(max(final_data$Date))
   )
 

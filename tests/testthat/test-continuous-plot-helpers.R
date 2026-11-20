@@ -147,17 +147,36 @@ test_that("statistics-period labels use the translation catalogue", {
   translations <- list(
     Test = c(
       stats_period_last_30_years = "Recent baseline",
-      stats_period_entire_record = "Complete baseline"
+      stats_period_1991_2020 = "1991 baseline",
+      stats_period_1981_2010 = "1981 baseline",
+      plot_all_record = "Complete baseline"
     )
   )
 
   expect_identical(
     format_stats_period_label(
-      c("30yr", "full", "custom"),
+      c("30yr", "1991_2020", "1981_2010", "full", "custom"),
       "Test",
       translations = translations
     ),
-    c("Recent baseline", "Complete baseline", "custom")
+    c(
+      "Recent baseline",
+      "1991 baseline",
+      "1981 baseline",
+      "Complete baseline",
+      "custom"
+    )
+  )
+})
+
+test_that("fixed statistics periods have the requested boundaries", {
+  expect_identical(
+    daily_stats_period_bounds("1991_2020"),
+    c(start = "1991-01-01", end = "2021-01-01")
+  )
+  expect_identical(
+    daily_stats_period_bounds("1981_2010"),
+    c(start = "1981-01-01", end = "2011-01-01")
   )
 })
 
@@ -165,7 +184,7 @@ test_that("adaptive continuous plot displays sensor priority in both metadata vi
   module_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        "apps/aqualink/modules/client/plot/continuousPlotAdaptive.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -187,7 +206,7 @@ test_that("adaptive continuous plot displays sensor priority in both metadata vi
   cache_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/cache_functions.R",
+        "apps/aqualink/modules/cache_functions.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -201,7 +220,7 @@ test_that("adaptive multi-timeseries plots batch data and preserve axis units", 
   module_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        "apps/aqualink/modules/client/plot/continuousPlotAdaptive.R",
         package = "YGwater"
       ),
       warn = FALSE
@@ -219,12 +238,16 @@ test_that("adaptive multi-timeseries plots batch data and preserve axis units", 
   )
   expect_match(
     module_text,
-    "preprocessed_range_data = fast_ranges[[as.character(ts_id)]]",
-    fixed = TRUE
+    "preprocessed_range_data\\s*=\\s*fast_ranges\\[\\[as\\.character\\(\\s*ts_id\\s*\\)\\]\\]",
+    perl = TRUE
   )
   expect_match(module_text, 'output_alias = "units"', fixed = TRUE)
   expect_match(module_text, 'paste0(" (", meta_row$units, ")")', fixed = TRUE)
-  expect_match(module_text, "meta_row[, units := item$meta$units]", fixed = TRUE)
+  expect_match(
+    module_text,
+    "meta_row[, units := item$meta$units]",
+    fixed = TRUE
+  )
   expect_match(module_text, 'ns("metadata_timeseries_select")', fixed = TRUE)
   expect_match(
     module_text,
@@ -243,28 +266,17 @@ test_that("adaptive multi-timeseries plots batch data and preserve axis units", 
   )
 })
 
-test_that("public statistics-period controls use translated labels", {
+test_that("the adaptive plot statistics-period control uses translated labels", {
   adaptive_text <- paste(
     readLines(
       system.file(
-        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        "apps/aqualink/modules/client/plot/continuousPlotAdaptive.R",
         package = "YGwater"
       ),
       warn = FALSE
     ),
     collapse = "\n"
   )
-  params_map_text <- paste(
-    readLines(
-      system.file(
-        "apps/YGwater/modules/client/map/paramsMap.R",
-        package = "YGwater"
-      ),
-      warn = FALSE
-    ),
-    collapse = "\n"
-  )
-
   expect_match(
     adaptive_text,
     'label = tr("stats_period", language$language)',
@@ -272,16 +284,6 @@ test_that("public statistics-period controls use translated labels", {
   )
   expect_match(
     adaptive_text,
-    "YGwater:::format_stats_period_label",
-    fixed = TRUE
-  )
-  expect_match(
-    params_map_text,
-    'label = tr("stats_period", language$language)',
-    fixed = TRUE
-  )
-  expect_match(
-    params_map_text,
     "YGwater:::format_stats_period_label",
     fixed = TRUE
   )

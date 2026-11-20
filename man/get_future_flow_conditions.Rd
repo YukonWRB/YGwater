@@ -13,6 +13,11 @@ get_future_flow_conditions(hydrometric, swe, language = "English")
 
 \item{language}{Character string indicating the language for labels and legends (default "English")}
 }
+\value{
+A list of the outlook value, display colour, description, and
+translation key for the comparison.
+}
 \description{
 Get flow conditions for stations based on current water level and flow compared to thresholds
 }
+\keyword{internal}

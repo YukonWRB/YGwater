@@ -161,15 +161,25 @@ upsert_parameter_mappings <- function(con, source_id, key) {
   key[, ignore_bool := as_key_logical(ignore)]
   key[is.na(ignore_bool), ignore_bool := FALSE]
   key <- key[ignore_bool == FALSE]
-  key <- key[is_present(input_param) & !is.na(suppressWarnings(as.integer(parameter_id)))]
+  key <- key[
+    is_present(input_param) & !is.na(suppressWarnings(as.integer(parameter_id)))
+  ]
 
+  # Resolve stable catalogue codes and source-key aliases with the same
+  # resolver used by normal imports, including species and operational targets.
+  key <- AquaCache:::import_mapping_resolve_targets(con, key)
   optional_defaults <- list(
-    result_type = 2L,
+    result_type_id = 2L,
     matrix_state = 1L,
     sample_fraction = NA_integer_,
     sample_fraction_AC = NA_integer_,
-    result_value_type = 1L,
+    result_value_type_id = 1L,
+    reporting_basis_id = NA_integer_,
     result_speciation_id = NA_integer_,
+    result_target_id = NA_integer_,
+    endpoint_mode = NA_character_,
+    endpoint_ph = NA_real_,
+    analysis_conditions = "{}",
     conversion = 1,
     result_offset = 0,
     FLAG_notes_combined = NA_character_
@@ -183,6 +193,10 @@ upsert_parameter_mappings <- function(con, source_id, key) {
   valid_parameters <- DBI::dbGetQuery(
     con,
     "SELECT parameter_id FROM public.parameters;"
+  )$parameter_id
+  endpoint_parameters <- DBI::dbGetQuery(
+    con,
+    "SELECT parameter_id FROM public.parameters WHERE endpoint;"
   )$parameter_id
   key[, parameter_id_int := suppressWarnings(as.integer(parameter_id))]
   missing_parameter <- !(key$parameter_id_int %in% valid_parameters)
@@ -203,10 +217,10 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     con,
     "SELECT result_value_type_id FROM discrete.result_value_types;"
   )$result_value_type_id
-  valid_result_speciations <- DBI::dbGetQuery(
+  valid_reporting_bases <- DBI::dbGetQuery(
     con,
-    "SELECT result_speciation_id FROM discrete.result_speciations;"
-  )$result_speciation_id
+    "SELECT reporting_basis_id FROM discrete.reporting_bases;"
+  )$reporting_basis_id
 
   resolved <- vector("list", nrow(key))
   for (i in seq_len(nrow(key))) {
@@ -221,36 +235,125 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     if (is.na(sample_fraction_id) && "sample_fraction" %in% names(key)) {
       sample_fraction_id <- scalar_int(key$sample_fraction[[i]])
     }
-    if (!is.na(sample_fraction_id) && !(sample_fraction_id %in% valid_sample_fractions)) {
+    if (
+      !is.na(sample_fraction_id) &&
+        !(sample_fraction_id %in% valid_sample_fractions)
+    ) {
       sample_fraction_id <- NA_integer_
     }
-    result_value_type <- scalar_int(key$result_value_type[[i]], 1L)
-    if (!(result_value_type %in% valid_result_value_types)) {
-      result_value_type <- 1L
+    result_value_type_id <- scalar_int(key$result_value_type_id[[i]], 1L)
+    if (!(result_value_type_id %in% valid_result_value_types)) {
+      result_value_type_id <- 1L
     }
-    result_speciation_id <- scalar_int(key$result_speciation_id[[i]])
-    if (!is.na(result_speciation_id) && !(result_speciation_id %in% valid_result_speciations)) {
-      result_speciation_id <- NA_integer_
+    reporting_basis_id <- scalar_int(key$reporting_basis_id[[i]])
+    if (
+      !is.na(reporting_basis_id) &&
+        !(reporting_basis_id %in% valid_reporting_bases)
+    ) {
+      stop(
+        "Unknown reporting basis in source-key row ",
+        i,
+        ". Migrate legacy descriptors explicitly."
+      )
+    }
+
+    endpoint_mode <- as.character(key$endpoint_mode[[i]])
+    mapping_note <- as.character(key$FLAG_notes_combined[[i]])
+    if (
+      key$parameter_id_int[[i]] %in%
+        endpoint_parameters &&
+        (is.na(endpoint_mode) || !nzchar(trimws(endpoint_mode)))
+    ) {
+      # The legacy EQWin key identifies alkalinity but carries no titration
+      # endpoint metadata. Preserve that omission explicitly instead of
+      # creating an invalid active mapping or guessing a fixed endpoint.
+      endpoint_mode <- "unknown"
+      if (is.na(mapping_note) || !nzchar(trimws(mapping_note))) {
+        mapping_note <- "The source key omits titration endpoint details; endpoint is unknown."
+      }
     }
 
     resolved[[i]] <- data.frame(
       parameter_code = as.character(key$input_param[[i]]),
       unit = as.character(key$input_unit[[i]]),
       parameter_id = key$parameter_id_int[[i]],
-      result_type = scalar_int(key$result_type[[i]], 2L),
+      result_type_id = scalar_int(key$result_type_id[[i]], 2L),
       sample_fraction_id = sample_fraction_id,
-      result_value_type = result_value_type,
-      result_speciation_id = result_speciation_id,
-      matrix_state_id = scalar_int(key$matrix_state[[i]], 1L),
+      result_value_type_id = result_value_type_id,
+      reporting_basis_id = reporting_basis_id,
+      result_speciation_id = scalar_int(key$result_speciation_id[[i]]),
+      result_target_id = scalar_int(key$result_target_id[[i]]),
+      endpoint_mode = endpoint_mode,
+      endpoint_ph = scalar_num(key$endpoint_ph[[i]]),
+      analysis_conditions = AquaCache::normalizeAnalysisConditions(key$analysis_conditions[[
+        i
+      ]]),
+      matrix_state_id = scalar_int(key$matrix_state_id[[i]]),
       conversion = scalar_num(key$conversion[[i]], 1),
       result_offset = scalar_num(key$result_offset[[i]], 0),
       priority = 100L,
       active = TRUE,
-      note = as.character(key$FLAG_notes_combined[[i]]),
+      note = mapping_note,
       stringsAsFactors = FALSE
     )
   }
   resolved <- data.table::rbindlist(resolved, fill = TRUE)
+
+  # Keep malformed source-key rows out of the active mapping table. The
+  # database exposes the same requirement check used by its write guard, so
+  # this seed operation can report incomplete targets without rolling back
+  # otherwise valid mappings.
+  nullable_value <- function(value) {
+    if (length(value) == 0L || is.na(value[[1]])) NULL else value[[1]]
+  }
+  mapping_candidates <- lapply(seq_len(nrow(resolved)), function(i) {
+    list(
+      parameter_id = resolved$parameter_id[[i]],
+      sample_fraction_id = nullable_value(resolved$sample_fraction_id[[i]]),
+      reporting_basis_id = nullable_value(resolved$reporting_basis_id[[i]]),
+      result_speciation_id = nullable_value(resolved$result_speciation_id[[i]]),
+      result_target_id = nullable_value(resolved$result_target_id[[i]]),
+      endpoint_mode = nullable_value(resolved$endpoint_mode[[i]]),
+      matrix_state_id = nullable_value(resolved$matrix_state_id[[i]]),
+      analysis_conditions = jsonlite::fromJSON(
+        resolved$analysis_conditions[[i]],
+        simplifyVector = FALSE
+      )
+    )
+  })
+  mapping_json <- jsonlite::toJSON(
+    mapping_candidates,
+    auto_unbox = TRUE,
+    null = "null",
+    na = "null"
+  )
+  invalid <- DBI::dbGetQuery(
+    con,
+    "WITH candidates AS (
+       SELECT ord::INTEGER AS source_row,
+              jsonb_populate_record(
+                NULL::discrete.import_parameter_mappings,
+                candidate
+              ) AS mapping
+       FROM jsonb_array_elements($1::JSONB) WITH ORDINALITY AS rows(candidate, ord)
+     )
+     SELECT source_row,
+            discrete.import_parameter_mapping_error(mapping) AS missing_dimension
+     FROM candidates
+     WHERE discrete.import_parameter_mapping_error(mapping) IS NOT NULL",
+    params = list(mapping_json)
+  )
+  if (nrow(invalid)) {
+    message(
+      "Skipping ",
+      nrow(invalid),
+      " incomplete source-key mapping row(s): ",
+      paste(sort(unique(invalid$missing_dimension)), collapse = ", "),
+      "."
+    )
+    resolved <- resolved[!seq_len(nrow(resolved)) %in% invalid$source_row]
+  }
+
   source <- DBI::dbGetQuery(
     con,
     "SELECT source_code, source_name
@@ -277,9 +380,9 @@ upsert_parameter_mappings <- function(con, source_id, key) {
             solid.unit_name AS unit_solid,
             gas.unit_name AS unit_gas
      FROM public.parameters p
-     LEFT JOIN public.units liquid ON liquid.unit_id = p.units_liquid
-     LEFT JOIN public.units solid ON solid.unit_id = p.units_solid
-     LEFT JOIN public.units gas ON gas.unit_id = p.units_gas"
+     LEFT JOIN public.units liquid ON liquid.unit_id = p.liquid_unit_id
+     LEFT JOIN public.units solid ON solid.unit_id = p.solid_unit_id
+     LEFT JOIN public.units gas ON gas.unit_id = p.gas_unit_id"
   )
   xlr <- merge(
     data.table::copy(resolved),
@@ -292,42 +395,51 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     " ",
     xlr$parameter_code
   )))
-  xlr[, parameter_code := vapply(
-    source_labels,
-    function(label) {
-      if (grepl("^HARDNESS DISSOLVED", label)) {
-        return("Hardness (as CaCO3), dissolved")
-      }
-      if (
-        grepl("^TOTAL DISSOLVED SOLIDS", label) ||
-          identical(label, "RESIDUE FILTERABLE")
-      ) {
-        return("Solids, total dissolved [TDS]")
-      }
-      if (grepl(" DISSOLVED$", label)) {
-        analyte <- sub(" DISSOLVED$", "", label)
-        return(paste0(tools::toTitleCase(tolower(analyte)), ", dissolved"))
-      }
-      NA_character_
-    },
-    character(1)
-  )]
-  xlr[, unit := data.table::fcase(
-    matrix_state_id == 1L, unit_liquid,
-    matrix_state_id == 2L, unit_solid,
-    matrix_state_id == 3L, unit_gas,
-    default = NA_character_
-  )]
+  xlr[,
+    parameter_code := vapply(
+      source_labels,
+      function(label) {
+        if (grepl("^HARDNESS DISSOLVED", label)) {
+          return("Hardness (as CaCO3), dissolved")
+        }
+        if (
+          grepl("^TOTAL DISSOLVED SOLIDS", label) ||
+            identical(label, "RESIDUE FILTERABLE")
+        ) {
+          return("Solids, total dissolved [TDS]")
+        }
+        if (grepl(" DISSOLVED$", label)) {
+          analyte <- sub(" DISSOLVED$", "", label)
+          return(paste0(tools::toTitleCase(tolower(analyte)), ", dissolved"))
+        }
+        NA_character_
+      },
+      character(1)
+    )
+  ]
+  xlr[,
+    unit := data.table::fcase(
+      matrix_state_id == 1L , unit_liquid ,
+      matrix_state_id == 2L , unit_solid  ,
+      matrix_state_id == 3L , unit_gas    ,
+      default = NA_character_
+    )
+  ]
   xlr <- xlr[
     is_present(parameter_code) & is_present(unit),
     .(
       parameter_code,
       unit,
       parameter_id,
-      result_type,
+      result_type_id,
       sample_fraction_id,
-      result_value_type,
+      result_value_type_id,
+      reporting_basis_id,
       result_speciation_id,
+      result_target_id,
+      endpoint_mode,
+      endpoint_ph,
+      analysis_conditions,
       matrix_state_id,
       conversion = 1,
       result_offset = 0,
@@ -338,18 +450,22 @@ upsert_parameter_mappings <- function(con, source_id, key) {
   ]
   xlr_mg_l <- data.table::copy(xlr)
   target_unit_key <- tolower(gsub("[µμ]", "u", xlr_mg_l$unit))
-  xlr_mg_l[, conversion := data.table::fcase(
-    target_unit_key == "mg/l", 1,
-    target_unit_key == "ug/l", 1000,
-    target_unit_key == "ng/l", 1000000,
-    target_unit_key == "g/l", 0.001,
-    default = NA_real_
-  )]
+  xlr_mg_l[,
+    conversion := data.table::fcase(
+      target_unit_key == "mg/l" ,       1     ,
+      target_unit_key == "ug/l" ,    1000     ,
+      target_unit_key == "ng/l" , 1000000     ,
+      target_unit_key == "g/l"  ,       0.001 ,
+      default = NA_real_
+    )
+  ]
   xlr_mg_l[, unit := "mg/L"]
-  xlr_mg_l[, note := paste(
-    "ALS XLR Detailed Report mg/L source-unit conversion to the",
-    "parameter target unit."
-  )]
+  xlr_mg_l[,
+    note := paste(
+      "ALS XLR Detailed Report mg/L source-unit conversion to the",
+      "parameter target unit."
+    )
+  ]
   xlr <- data.table::rbindlist(
     list(xlr, xlr_mg_l[is.finite(conversion)]),
     fill = TRUE
@@ -358,7 +474,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     con,
     "SELECT p.parameter_id, u.unit_name
      FROM public.parameters p
-     JOIN public.units u ON u.unit_id = p.units_liquid
+     JOIN public.units u ON u.unit_id = p.liquid_unit_id
      WHERE lower(p.param_name) = 'total suspended solids'"
   )
   if (nrow(suspended_solids) == 1L) {
@@ -374,28 +490,31 @@ upsert_parameter_mappings <- function(con, source_id, key) {
          LIMIT 1"
       )$sample_fraction_id
     }
-    xlr <- data.table::rbindlist(list(
-      xlr,
-      data.table::data.table(
-        parameter_code = "Solids, total suspended [TSS]",
-        unit = suspended_solids$unit_name[[1]],
-        parameter_id = suspended_solids$parameter_id[[1]],
-        result_type = 2L,
-        sample_fraction_id = if (length(total_fraction) == 1L) {
-          total_fraction[[1]]
-        } else {
-          NA_integer_
-        },
-        result_value_type = 1L,
-        result_speciation_id = NA_integer_,
-        matrix_state_id = 1L,
-        conversion = 1,
-        result_offset = 0,
-        priority = 100L,
-        active = TRUE,
-        note = "ALS XLR Detailed Report label and target-unit mapping."
-      )
-    ), fill = TRUE)
+    xlr <- data.table::rbindlist(
+      list(
+        xlr,
+        data.table::data.table(
+          parameter_code = "Solids, total suspended [TSS]",
+          unit = suspended_solids$unit_name[[1]],
+          parameter_id = suspended_solids$parameter_id[[1]],
+          result_type_id = 2L,
+          sample_fraction_id = if (length(total_fraction) == 1L) {
+            total_fraction[[1]]
+          } else {
+            NA_integer_
+          },
+          result_value_type_id = 1L,
+          reporting_basis_id = NA_integer_,
+          matrix_state_id = 1L,
+          conversion = 1,
+          result_offset = 0,
+          priority = 100L,
+          active = TRUE,
+          note = "ALS XLR Detailed Report label and target-unit mapping."
+        )
+      ),
+      fill = TRUE
+    )
   }
 
   # A few XLR labels have no exact counterpart in the legacy EQWin key (or
@@ -431,7 +550,7 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     "SELECT p.parameter_id, lower(p.param_name) AS param_name,
             u.unit_name AS unit
      FROM public.parameters p
-     JOIN public.units u ON u.unit_id = p.units_liquid"
+     JOIN public.units u ON u.unit_id = p.liquid_unit_id"
   ))
   explicit_targets <- explicit_targets[
     param_name %chin% explicit_xlr_aliases$param_name
@@ -452,13 +571,16 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     )
   }
   if (length(dissolved_fraction) != 1L) {
-    stop("Could not uniquely resolve the dissolved sample fraction.", call. = FALSE)
+    stop(
+      "Could not uniquely resolve the dissolved sample fraction.",
+      call. = FALSE
+    )
   }
   explicit_xlr_aliases[, `:=`(
-    result_type = 2L,
+    result_type_id = 2L,
     sample_fraction_id = dissolved_fraction[[1]],
-    result_value_type = 1L,
-    result_speciation_id = NA_integer_,
+    result_value_type_id = 1L,
+    reporting_basis_id = NA_integer_,
     matrix_state_id = 1L,
     conversion = 1,
     result_offset = 0,
@@ -466,11 +588,62 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     active = TRUE,
     note = "ALS XLR Detailed Report dissolved-analyte alias."
   )]
-  xlr <- data.table::rbindlist(list(
-    xlr,
-    explicit_xlr_aliases[, setdiff(names(explicit_xlr_aliases), "param_name"), with = FALSE]
-  ), fill = TRUE)
-  xlr <- unique(xlr, by = c("parameter_code", "unit"))
+  xlr <- data.table::rbindlist(
+    list(
+      xlr,
+      explicit_xlr_aliases[,
+        setdiff(names(explicit_xlr_aliases), "param_name"),
+        with = FALSE
+      ]
+    ),
+    fill = TRUE
+  )
+  xlr[,
+    source_key := paste(
+      tolower(trimws(parameter_code)),
+      tolower(trimws(unit)),
+      sep = "\r"
+    )
+  ]
+  semantic_fields <- c(
+    "parameter_id",
+    "result_type_id",
+    "sample_fraction_id",
+    "result_value_type_id",
+    "reporting_basis_id",
+    "result_speciation_id",
+    "result_target_id",
+    "endpoint_mode",
+    "endpoint_ph",
+    "matrix_state_id",
+    "analysis_conditions",
+    "conversion",
+    "result_offset",
+    "active"
+  )
+  conflicting <- xlr[,
+    .(target_count = data.table::uniqueN(.SD)),
+    by = "source_key",
+    .SDcols = semantic_fields
+  ][target_count > 1L]
+  if (nrow(conflicting)) {
+    message(
+      "Skipping ",
+      nrow(conflicting),
+      " ALS XLR source key(s) that resolve to different targets."
+    )
+  }
+  xlr <- xlr[!source_key %in% conflicting$source_key]
+  duplicate_count <- sum(duplicated(xlr$source_key))
+  if (duplicate_count) {
+    message(
+      "Consolidating ",
+      duplicate_count,
+      " case-insensitive duplicate ALS XLR source key(s)."
+    )
+  }
+  xlr <- xlr[!duplicated(source_key)]
+  xlr[, source_key := NULL]
   AquaCache::upsertImportParameterMappings(
     con = con,
     source_code = source$source_code[[1]],
@@ -480,7 +653,10 @@ upsert_parameter_mappings <- function(con, source_id, key) {
     match_columns = c("parameter_code", "unit")
   )
   message(
-    "Processed ", nrow(resolved), " source-wide and ", nrow(xlr),
+    "Processed ",
+    nrow(resolved),
+    " source-wide and ",
+    nrow(xlr),
     " ALS XLR profile-specific parameter mappings."
   )
   nrow(resolved) + nrow(xlr)
@@ -493,20 +669,25 @@ profile_definitions <- function() {
     "sub_location_id",
     "media_id",
     "datetime",
-    "sample_type",
-    "collection_method",
+    "sample_type_id",
+    "collection_method_id",
     "source_sample_id"
   )
   result_identity <- c(
     "source_parameter_code",
     "source_unit",
     "parameter_id",
-    "result_type",
+    "result_type_id",
     "matrix_state_id",
     "sample_fraction_id",
-    "result_value_type",
+    "result_value_type_id",
+    "reporting_basis_id",
     "result_speciation_id",
-    "laboratory",
+    "result_target_id",
+    "endpoint_mode",
+    "endpoint_ph",
+    "analysis_conditions",
+    "lab_id",
     "analysis_datetime"
   )
 
@@ -551,13 +732,13 @@ profile_definitions <- function() {
       wide_config = list(),
       defaults = list(
         media_id = 1L,
-        collection_method = 27L,
-        sample_type = 34L,
+        collection_method_id = 27L,
+        sample_type_id = 34L,
         owner = 1L,
-        result_type = 2L,
+        result_type_id = 2L,
         matrix_state_id = 1L,
-        result_value_type = 1L,
-        laboratory = 2L
+        result_value_type_id = 1L,
+        lab_id = 2L
       ),
       sample_identity = sample_identity,
       result_identity = result_identity,
@@ -601,13 +782,13 @@ profile_definitions <- function() {
       wide_config = list(),
       defaults = list(
         media_id = 1L,
-        collection_method = 27L,
-        sample_type = 34L,
+        collection_method_id = 27L,
+        sample_type_id = 34L,
         owner = 1L,
-        result_type = 2L,
+        result_type_id = 2L,
         matrix_state_id = 1L,
-        result_value_type = 1L,
-        laboratory = 2L
+        result_value_type_id = 1L,
+        lab_id = 2L
       ),
       sample_identity = sample_identity,
       result_identity = result_identity,
@@ -649,13 +830,13 @@ profile_definitions <- function() {
       wide_config = list(),
       defaults = list(
         media_id = 1L,
-        collection_method = 27L,
-        sample_type = 34L,
+        collection_method_id = 27L,
+        sample_type_id = 34L,
         owner = 1L,
-        result_type = 2L,
+        result_type_id = 2L,
         matrix_state_id = 1L,
-        result_value_type = 1L,
-        laboratory = 2L
+        result_value_type_id = 1L,
+        lab_id = 2L
       ),
       sample_identity = sample_identity,
       result_identity = result_identity,
@@ -673,7 +854,14 @@ if (file.exists("C:/Users/gtdelapl/Documents/.Renviron")) {
 repo_root <- normalizePath(".", winslash = "/", mustWork = TRUE)
 mapping_key <- first_existing_path(c(
   arg_value("--mapping-key", NA_character_),
-  file.path(repo_root, "..", "AquaCache", "inst", "import_keys", "downloadECCCeq1.csv"),
+  file.path(
+    repo_root,
+    "..",
+    "AquaCache",
+    "inst",
+    "import_keys",
+    "downloadECCCeq1.csv"
+  ),
   "C:/Users/gtdelapl/Documents/AquaCache/inst/import_keys/downloadECCCeq1.csv",
   file.path(repo_root, "inst", "import_keys", "EQWin.csv"),
   "C:/Users/gtdelapl/Documents/AquaCache/inst/import_keys/EQWin.csv"
@@ -682,8 +870,14 @@ mapping_key <- first_existing_path(c(
 target_db <- arg_value("--db", Sys.getenv("aquacacheName", "aquacache"))
 target_host <- arg_value("--host", Sys.getenv("aquacacheHost", "10.250.12.154"))
 target_port <- arg_value("--port", Sys.getenv("aquacachePort", "5432"))
-target_user <- arg_value("--user", Sys.getenv("aquacacheAdminUser", Sys.getenv("aquacacheUser")))
-target_pass <- arg_value("--password", Sys.getenv("aquacacheAdminPass", Sys.getenv("aquacachePass")))
+target_user <- arg_value(
+  "--user",
+  Sys.getenv("aquacacheAdminUser", Sys.getenv("aquacacheUser"))
+)
+target_pass <- arg_value(
+  "--password",
+  Sys.getenv("aquacacheAdminPass", Sys.getenv("aquacachePass"))
+)
 apply_changes <- arg_flag("--apply")
 allow_dev <- arg_flag("--allow-dev")
 allow_prod <- arg_flag("--allow-prod")
@@ -730,17 +924,21 @@ required <- DBI::dbGetQuery(
      to_regclass('discrete.import_parameter_mappings') IS NOT NULL AS has_parameter_mappings,
      to_regclass('discrete.import_result_flag_mappings') IS NOT NULL AS has_result_flag_mappings,
      to_regclass('discrete.import_location_mappings') IS NOT NULL AS has_location_mappings,
+     to_regclass('discrete.reporting_bases') IS NOT NULL AS has_reporting_bases,
+     to_regclass('discrete.result_targets') IS NOT NULL AS has_result_targets,
      EXISTS (
        SELECT 1
        FROM information_schema.columns
        WHERE table_schema = 'discrete'
          AND table_name = 'import_parameter_mappings'
-         AND column_name = 'import_mapping_set_id'
-     ) AS has_versioned_parameter_mappings;"
+         AND column_name IN ('import_source_id', 'import_profile_id')
+       GROUP BY table_schema, table_name
+       HAVING count(DISTINCT column_name) = 2
+     ) AS has_direct_parameter_mappings;"
 )
 if (!all(unlist(required))) {
   stop(
-    "The Patch 61 import mapping schema is missing. Apply AquaCache patch 61 before running this script."
+    "The current chemistry/import mapping schema is missing. Apply AquaCache patch 69 before running this script."
   )
 }
 
@@ -749,7 +947,9 @@ message("Profiles to upsert: ", length(profiles))
 if (is_present(mapping_key)) {
   message("Parameter mapping key: ", mapping_key)
 } else {
-  message("No EQWin/ALS parameter mapping key found. Profiles can still be seeded.")
+  message(
+    "No EQWin/ALS parameter mapping key found. Profiles can still be seeded."
+  )
 }
 
 DBI::dbExecute(con, "BEGIN")

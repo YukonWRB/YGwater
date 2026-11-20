@@ -11,6 +11,7 @@
 #' @param min_bins Integer minimum number of bins to return, ensuring a baseline level of detail even for narrow viewports
 #' @param max_bins Integer maximum number of bins to return, preventing excessive points for very wide viewports
 #' @param fallback Integer fallback number of bins to return if `width_px` is invalid or not provided, ensuring a reasonable default for resampling
+#' @return The target bin count as an integer.
 #' @keywords internal
 #' @noRd
 
@@ -32,6 +33,12 @@ viewport_ribbon_target_bins <- function(
 }
 
 #' Convert various x-axis inputs to POSIXct for viewport calculations
+#' @param x Date-time input or numeric Unix timestamps in seconds or milliseconds.
+#' @param tz Timezone to use for parsing character inputs; defaults to UTC.
+#'   Available R names can be checked with `OlsonNames()`. See the IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab) for
+#'   geographic names.
+#' @return A `POSIXct` vector.
 #' @keywords internal
 #' @noRd
 viewport_ribbon_as_posixct <- function(x, tz = "UTC") {
@@ -48,6 +55,12 @@ viewport_ribbon_as_posixct <- function(x, tz = "UTC") {
 }
 
 #' Extract x-axis limits from plotly relayout data for viewport resampling
+#' @param relayout Named list of Plotly relayout event values.
+#' @param tz Timezone to use for parsing character inputs; defaults to UTC.
+#'   Available R names can be checked with `OlsonNames()`. See the IANA
+#'   [zone1970.tab](https://data.iana.org/time-zones/tzdb/zone1970.tab) for
+#'   geographic names.
+#' @return Two date-time bounds, or `NULL` for autorange or an unavailable range.
 #' @keywords internal
 #' @noRd
 viewport_ribbon_relayout_xlim <- function(relayout, tz = "UTC") {
@@ -111,7 +124,12 @@ viewport_ribbon_relayout_xlim <- function(relayout, tz = "UTC") {
   sort(out)
 }
 
-#' Infer typical cadence in seconds from a vector of x-axis values, used for identifying gaps in time series data for viewport resampling
+#' Infer the sampling cadence along a time series
+#' @param x Ordered date-times or numeric timestamps in seconds.
+#' @param min_run_length Minimum run length for treating a cadence as stable.
+#' @param max_cadence_seconds Longest gap eligible for use as a cadence.
+#' @return The inferred cadence in seconds at each input position, with `NA`
+#'   where it could not be inferred.
 #' @keywords internal
 #' @noRd
 viewport_infer_cadence_seconds <- function(
@@ -174,7 +192,12 @@ viewport_infer_cadence_seconds <- function(
   cadence[cadence_idx[fill_idx]]
 }
 
-#' Add inferred gap markers to a data table based on x-axis values and inferred cadence, used for splitting line segments in viewport resampling when gaps are detected
+#' Break plotted lines at gaps in the inferred sampling cadence
+#' @param dt Ordered data.table of time series observations.
+#' @param x_col Name of the timestamp column.
+#' @param line_col Name of the plotted value column.
+#' @param row_id_col Optional row-order column to use when inserting markers.
+#' @return The table with missing-value rows inserted at the gaps.
 #' @keywords internal
 #' @noRd
 viewport_add_inferred_gap_markers <- function(
@@ -244,6 +267,18 @@ viewport_add_inferred_gap_markers <- function(
 
 
 #' Resample line and band data for a given x-axis viewport
+#' @param data Table containing the line or band observations.
+#' @param x_col Name of the x-axis column.
+#' @param line_col Name of the line value column, or `NULL` to omit the line.
+#' @param bands Named list of lower and upper column names for each ribbon.
+#' @param line_hover_x_col Optional timestamp column for line hover labels.
+#' @param band_hover_x_col Optional timestamp column for ribbon hover labels.
+#' @param xlim Two visible x-axis bounds, or `NULL` for the full range.
+#' @param n_bins Target number of bins.
+#' @param pad_fraction Fraction of the displayed range to include beyond each end.
+#' @param gap_multiplier Multiple of the median step used to detect gaps
+#'   when no sampling cadence can be inferred.
+#' @return A list with the resampled `line`, `bands`, and viewport metadata.
 #' @keywords internal
 #' @noRd
 viewport_ribbon_resample <- function(
@@ -569,6 +604,17 @@ viewport_ribbon_resample <- function(
 }
 
 #' Generate plotly trace bundle for line and band data from viewport resampling
+#' @param summary A resampled result from `viewport_ribbon_resample()`.
+#' @param line_name Display name of the line trace.
+#' @param line_color Colour of the line trace.
+#' @param line_width Width of the line in pixels.
+#' @param band_styles Optional named list of Plotly ribbon styles.
+#' @param hover Whether to include hover labels.
+#' @param line_showlegend Whether the line appears in the legend.
+#' @param line_legendgroup Plotly legend group for the line.
+#' @param band_showlegend Logical flag or named flags for the ribbon legend entries.
+#' @param band_legendgroups Optional named mapping from ribbons to legend groups.
+#' @return A list of trace definitions, number of traces, and client point count.
 #' @keywords internal
 #' @noRd
 viewport_ribbon_trace_bundle <- function(
@@ -748,8 +794,13 @@ viewport_ribbon_trace_bundle <- function(
   )
 }
 
-#' Generate plotly trace bundle for line and band data from viewport resampling
-#' and create a plotly plot with appropriate layout and configuration for viewport-aware ribbon plots
+#' Build a Plotly ribbon plot from resampled data
+#' @inheritParams viewport_ribbon_trace_bundle
+#' @param title Optional plot title.
+#' @param source Plotly source ID used to match events to the widget.
+#' @param yaxis_title Optional vertical axis title.
+#' @param xaxis_title Optional horizontal axis title.
+#' @return A list with the Plotly widget and its trace definitions and counts.
 #' @keywords internal
 #' @noRd
 viewport_ribbon_plot <- function(
@@ -808,7 +859,16 @@ viewport_ribbon_plot <- function(
   )
 }
 
-#' Generate plotly trace bundle for line and band data from viewport resampling and create a plotly plot with appropriate layout and configuration for viewport-aware ribbon plots, using raw input data and resampling within the function, with additional helper functions for axis naming and event registration
+#' Resample one time series and its historical ranges for Plotly
+#' @param trace_data Table of observations with `datetime` and `value` columns.
+#' @param range_data Optional table of historical ranges with `datetime`,
+#'   `min`, `max`, `q25`, and `q75` columns.
+#' @param meta List of display metadata such as titles, trace styles, and hover options.
+#' @param source Plotly source ID used to match events to the widget.
+#' @param xlim Two visible x-axis bounds, or `NULL` for the full range.
+#' @param n_bins Target number of resampling bins.
+#' @param legend_orientation Optional Plotly legend orientation.
+#' @return A list with the Plotly widget, trace bundle, and resampled tables.
 #' @keywords internal
 #' @noRd
 viewport_timeseries_plot <- function(
@@ -958,7 +1018,10 @@ viewport_timeseries_plot <- function(
   )
 }
 
-#' Safe helper for generating plotly axis references based on index, returning base prefix for index 1 or NULL/NA, and appending index for higher values, used for dynamic axis assignment in viewport-aware ribbon plots
+#' Format a Plotly trace axis reference
+#' @param prefix Axis letter, such as `"x"` or `"y"`.
+#' @param index Axis number. Missing values and values at most one use the first axis.
+#' @return A Plotly trace axis reference, such as `"x"` or `"x2"`.
 #' @keywords internal
 #' @noRd
 viewport_axis_ref <- function(prefix, index) {
@@ -969,7 +1032,10 @@ viewport_axis_ref <- function(prefix, index) {
   paste0(prefix, as.integer(index))
 }
 
-#' Safe helper for generating plotly axis names based on index, returning base prefix for index 1 or NULL/NA, and appending index for higher values, used for dynamic axis assignment in viewport-aware ribbon plots
+#' Format a Plotly layout axis name
+#' @param prefix Axis letter, such as `"x"` or `"y"`.
+#' @param index Axis number. Missing values and values at most one use the first axis.
+#' @return A Plotly layout key, such as `"xaxis"` or `"xaxis2"`.
 #' @keywords internal
 #' @noRd
 viewport_layout_axis_name <- function(prefix, index) {
@@ -980,7 +1046,11 @@ viewport_layout_axis_name <- function(prefix, index) {
   paste0(prefix, "axis", as.integer(index))
 }
 
-#' Helper for applying x-axis and y-axis references to plotly trace definitions, used for dynamic axis assignment in viewport-aware ribbon plots
+#' Assign axes to a Plotly trace
+#' @param trace Plotly trace definition as a list.
+#' @param xaxis Optional horizontal trace axis reference.
+#' @param yaxis Optional vertical trace axis reference.
+#' @return The trace list with the supplied axis references applied.
 #' @keywords internal
 #' @noRd
 viewport_trace_apply_axes <- function(trace, xaxis = NULL, yaxis = NULL) {
@@ -993,7 +1063,10 @@ viewport_trace_apply_axes <- function(trace, xaxis = NULL, yaxis = NULL) {
   trace
 }
 
-#' Helper for registering plotly events on a plot, used for enabling viewport-aware resampling in Shiny + plotly integrations
+#' Register Plotly events used by the viewport
+#' @param plot Plotly widget.
+#' @param events Character vector of Plotly event names.
+#' @return The widget with the supplied events registered.
 #' @keywords internal
 #' @noRd
 viewport_event_register <- function(plot, events = "plotly_relayout") {
@@ -1003,7 +1076,11 @@ viewport_event_register <- function(plot, events = "plotly_relayout") {
   plot
 }
 
-#' Generate plotly trace bundle for status bands based on input data, with optional x-axis limits for filtering and clipping, used for adding status bands to viewport-aware ribbon plots
+#' Build Plotly traces for status bands
+#' @param status_bands A status-band specification with `polygons`, or a list
+#'   of specifications for several panels.
+#' @param xlim Optional x-axis bounds or named list of bounds by layout axis.
+#' @return A list of trace definitions, number of traces, and client point count.
 #' @keywords internal
 #' @noRd
 viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
@@ -1137,7 +1214,14 @@ viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
   )
 }
 
-#' Add status band traces and corresponding layout adjustments to a plotly layout, based on input status band definitions and optional axis naming, used for integrating status bands into viewport-aware ribbon plots
+#' Reserve Plotly axis space for status bands
+#' @param layout Plotly layout list, or `NULL` to start a layout.
+#' @param status_bands Status-band specification, or `NULL` to keep the layout.
+#' @param main_xaxis_name Layout key for the main horizontal axis.
+#' @param main_yaxis_name Layout key for the main vertical axis.
+#' @param status_xaxis_name Optional layout key for a separate status-band x-axis.
+#' @param status_yaxis_name Layout key for the status-band y-axis.
+#' @return The layout with axes and domains configured for the status bands.
 #' @keywords internal
 #' @noRd
 viewport_layout_add_status_bands <- function(
@@ -1281,7 +1365,11 @@ viewport_layout_add_status_bands <- function(
   layout
 }
 
-#' Apply x-axis limits to plotly layout for specified axis names, used for ensuring consistent axis ranges in viewport-aware ribbon plots when x-axis limits are updated
+#' Apply viewport bounds to Plotly layout axes
+#' @param layout Plotly layout list.
+#' @param xlim Two bounds shared by the axes, or a named list of bounds by axis.
+#' @param xaxis_names Layout keys of the axes to update. Defaults to `"xaxis"`.
+#' @return The layout with each supplied range applied.
 #' @keywords internal
 #' @noRd
 viewport_layout_apply_xlim <- function(
@@ -1318,7 +1406,16 @@ viewport_layout_apply_xlim <- function(
   layout
 }
 
-#' Generate plotly trace bundle for line and band data from viewport resampling and create a plotly plot with appropriate layout and configuration for viewport-aware ribbon plots, using raw input data and resampling within the function, with additional helper functions for axis naming and event registration, and support for multiple series with individual metadata and trace definitions, used for creating complex viewport-aware ribbon plots with multiple series and status bands in Shiny + plotly integrations
+#' Resample multiple series and build an adaptive Plotly plot
+#' @param payload List with series data and metadata, plus optional layout,
+#'   configuration, and status bands.
+#' @param source Plotly source ID used to match events to the widget.
+#' @param xlim Two visible bounds or a named list of bounds by layout axis.
+#' @param n_bins Target number of resampling bins per series.
+#' @param legend_orientation Optional Plotly legend orientation.
+#' @param build_plot Whether to construct a Plotly widget.
+#' @return A list of trace definitions and counts, per-series summaries, and
+#'   the widget or `NULL` when only traces and summaries were requested.
 #' @keywords internal
 #' @noRd
 viewport_adaptive_plot <- function(

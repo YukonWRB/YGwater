@@ -112,6 +112,9 @@ app_server <- function(input, output, session) {
     session$doBookmark()
   })
 
+  params <- reactiveValues()
+  available_years <- reactiveVal(as.character(format(Sys.Date(), "%Y")))
+
   output$visible_buttons <- renderUI({
     fluidRow(
       class = "button-row",
@@ -125,8 +128,15 @@ app_server <- function(input, output, session) {
       selectizeInput(
         "yrs",
         label = NULL,
-        choices = as.character(format(Sys.Date(), "%Y")),
-        selected = as.character(format(Sys.Date(), "%Y")),
+        # Populate within the server renderer, together with the translated
+        # controls. A separate one-time update can be lost before binding or
+        # overwritten when applying a URL's language recreates these controls.
+        choices = available_years(),
+        selected = isolate(if (is.null(params$yrs)) {
+          as.character(format(Sys.Date(), "%Y"))
+        } else {
+          as.character(params$yrs)
+        }),
         multiple = TRUE,
         options = list(maxItems = 10)
       ),
@@ -148,8 +158,6 @@ app_server <- function(input, output, session) {
   onBookmarked(updateQueryString)
 
   # Parse URL query parameters on app load from URL and trigger plot creation
-  params <- reactiveValues()
-
   # try to JSON-decode; if not JSON, return as-is
   unj <- function(x) {
     tryCatch(jsonlite::fromJSON(x), error = function(e) x)
@@ -196,12 +204,7 @@ app_server <- function(input, output, session) {
           "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 ORDER BY year DESC;",
           params = list(tsid)
         )
-        updateSelectizeInput(
-          session,
-          "yrs",
-          choices = yrs$year,
-          selected = params$yrs
-        )
+        available_years(as.character(yrs$year))
       }
 
       # language
@@ -283,71 +286,72 @@ app_server <- function(input, output, session) {
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
     function(loc, param, yrs, lang, webgl, config) {
-      promises::future_promise({
-        con <- AquaConnect(
-          name = config$dbName,
-          host = config$dbHost,
-          port = config$dbPort,
-          username = config$dbUser,
-          password = config$dbPass,
-          silent = TRUE
-        )
-
-        loc_name <- DBI::dbGetQuery(
-          con,
-          paste0(
-            "SELECT ",
-            if (lang == "en") "name" else "name_fr",
-            " FROM public.locations WHERE location_code = $1;"
-          ),
-          params = list(
-            loc
+      mirai::mirai(
+        {
+          con <- YGwater::AquaConnect(
+            name = config$dbName,
+            host = config$dbHost,
+            port = config$dbPort,
+            username = config$dbUser,
+            password = config$dbPass,
+            silent = TRUE
           )
-        )[1, 1]
-        if (nchar(loc_name) > 30) {
-          loc_name <- paste0(substr(loc_name, 1, 25), "...")
-        }
+          on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-        # If parameter is SWE or snow depth, startDay should be Aug 1 (day 213)
-        if (param %in% c(21, 1220)) {
-          start_day <- 213
-          end_day <- 212
-        } else {
-          start_day <- 1
-          end_day <- 365
-        }
+          loc_name <- DBI::dbGetQuery(
+            con,
+            paste0(
+              "SELECT ",
+              if (lang == "en") "name" else "name_fr",
+              " FROM public.locations WHERE location_code = $1;"
+            ),
+            params = list(
+              loc
+            )
+          )[1, 1]
+          if (nchar(loc_name) > 30) {
+            loc_name <- paste0(substr(loc_name, 1, 25), "...")
+          }
 
-        p <- plotOverlap(
-          location = loc,
-          sub_location = NULL,
-          parameter = param,
-          startDay = start_day,
-          endDay = end_day,
-          years = yrs,
-          resolution = "day",
-          datum = TRUE,
-          # filter = 20,
-          lang = lang,
-          line_scale = 1,
-          axis_scale = 1,
-          legend_scale = 1,
-          title = TRUE,
-          custom_title = loc_name,
-          gridx = FALSE,
-          gridy = FALSE,
-          slider = FALSE,
-          webgl = webgl,
-          hover = FALSE,
-          tzone = "MST",
-          con = con
-        )
-        DBI::dbDisconnect(con)
+          # If parameter is SWE or snow depth, startDay should be Aug 1 (day 213)
+          if (param %in% c(21, 1220)) {
+            start_day <- 213
+            end_day <- 212
+          } else {
+            start_day <- 1
+            end_day <- 365
+          }
 
-        # Remove the plotly logo and other buttons from the top right of the plot
-        p <- plotly::config(p, displayModeBar = FALSE)
-
-        return(p) # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (which use to be DBI::dbDisconnect(con))
-      })
+          p <- YGwater::plotOverlap(
+            location = loc,
+            sub_location = NULL,
+            parameter = param,
+            startDay = start_day,
+            endDay = end_day,
+            years = yrs,
+            resolution = "day",
+            datum = TRUE,
+            # filter = 20,
+            lang = lang,
+            line_scale = 1,
+            axis_scale = 1,
+            legend_scale = 1,
+            title = TRUE,
+            custom_title = loc_name,
+            gridx = FALSE,
+            gridy = FALSE,
+            slider = FALSE,
+            webgl = webgl,
+            hover = FALSE,
+            tzone = config$timezone,
+            con = con
+          )
+          # Remove the plotly logo and other buttons from the top right of the plot
+          plotly::config(p, displayModeBar = FALSE)
+        },
+        environment(),
+        .compute = "YGwater_floodAtlas_overlap"
+      )
     }
   ) |>
     bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running

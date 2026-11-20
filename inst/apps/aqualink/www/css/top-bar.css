@@ -1,0 +1,251 @@
+/* Custom styling for positioning and z-index of top bar containers */
+.top-bar-container {
+  min-height: 64px;
+  margin-bottom: 3px; /* Adjust spacing above navbar */
+  position: relative;
+  z-index: 3;
+  display: block;
+  padding: 4px 10px;
+  background-color: white; /* Ensures it's not transparent */
+  width: 100%;
+}
+
+.top-bar-container .row {
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+}
+
+/* Styling for the logo container */
+.logo-container {
+  display: flex;
+  align-items: center;
+  flex: 0 0 160px;
+  max-width: 160px;
+}
+.logo-container img {
+  height: 50px;
+  width: auto; /* Maintain aspect ratio */
+  margin-left: 10px; /* Ensure spacing */
+}
+
+/* Container for the aurora image and login button */
+.aurora-login-container {
+  display: flex;
+  flex: 1 1 auto;
+  max-width: none;
+  justify-content: flex-end;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  position: relative;
+  z-index: 2; /* Ensures it's above the logo */
+  height: 100%;
+}
+
+.app-title-container {
+  position: absolute;
+  left: 25px;
+  right: 200px;
+  top: calc(50% + 15px);
+  transform: translateY(-50%);
+  z-index: 3;
+  overflow: hidden;
+}
+
+.app-title-container--public {
+  top: calc(50% + 31px);
+}
+
+.app-title-text {
+  color: #ffffff;
+  display: block;
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+}
+
+.app-navbar-header {
+  align-items: center;
+  display: none !important;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.app-navbar-brand {
+  align-items: center;
+  display: none;
+  flex: 1 1 auto;
+  gap: 10px;
+  max-width: calc(100vw - 168px);
+  min-width: 0;
+  padding: 0;
+  text-decoration: none;
+}
+
+.app-navbar-brand img {
+  display: block;
+  flex: 0 0 auto;
+  height: 40px;
+  width: auto;
+}
+
+.app-navbar-title {
+  color: #ffffff;
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.15;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.navbar-collapsed-view .top-bar-container {
+  display: none;
+}
+
+body.navbar-collapsed-view .app-navbar-brand {
+  display: flex !important;
+}
+
+body.navbar-collapsed-view .app-navbar-header {
+  display: flex !important;
+}
+
+body.navbar-expanded-view .app-navbar-brand {
+  display: none !important;
+}
+
+body.navbar-expanded-view .app-navbar-header {
+  display: none !important;
+}
+
+.mobile-auth-container {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+button.mobile-auth-button {
+  align-items: center;
+  background-color: #F2A900 !important;
+  border: 0 !important;
+  border-radius: 6px;
+  color: #244C5A !important;
+  display: inline-flex;
+  font-size: 1rem;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 68px;
+  padding: 0.4rem 0.8rem;
+  white-space: nowrap;
+}
+
+button.mobile-auth-button:hover,
+button.mobile-auth-button:focus-visible {
+  background-color: #E09B00 !important;
+  color: #173741 !important;
+}
+
+button.mobile-auth-button:focus-visible {
+  box-shadow: 0 0 0 0.2rem rgba(242, 169, 0, 0.35);
+}
+
+/* Styling for the aurora image */
+.aurora img {
+  height: 50px;
+  width: auto;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+
+/* Adjust the login button position */
+.login-container {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 10px;
+  margin-left: 10px;
+  z-index: 3; /* Ensures it’s above the background */
+}
+
+/* Space out login buttons properly */
+.login-btn-container {
+  display: flex;
+  gap: 10px;
+  border: none !important;
+  background-color: #F2A900 !important;
+  color: rgba(255,255,255,0.55) !important;
+  margin: 0 !important;
+  border-radius: 4px; 
+}
+/* hover effect for login buttons */
+.login-btn-container .btn:hover {
+  color: #ffffff !important;
+  background-color: #F2A900 !important; /* Ensures hover color matches the button */
+}
+
+/* Ensure buttons look clean */
+.login-btn-container .btn {
+  font-size: 16px;
+  padding: 5px 10px;
+}
+
+/* styling for the language button !! remove/comment out if returning to use drop-down menu instead */
+.language-button {
+  border: none !important;
+  background-color: transparent !important;
+  color: rgba(255,255,255,0.55) !important; 
+  padding: var(--bs-nav-link-padding-y) var(--bs-nav-link-padding-x) !important;
+  margin: 0 !important;
+}
+.language-button:hover {
+  color: #ffffff !important;
+  background-color: transparent !important;
+}
+
+@media (max-width: 1199px) {
+  .app-title-container {
+    right: 150px;
+  }
+}
+
+@media (max-width: 991px) {
+  .app-title-container {
+    top: calc(50% + 25px);
+  }
+
+  .app-title-container--public {
+    top: calc(50% + 40px);
+  }
+}
+
+@media (max-width: 767px) {
+  .app-title-container {
+    top: calc(50% + 25px);
+  }
+
+  .app-title-container--public {
+    top: calc(50% + 40px);
+  }
+
+  .app-navbar-brand {
+    gap: 8px;
+    max-width: calc(100vw - 168px);
+  }
+
+  .app-navbar-brand img {
+    height: 34px;
+  }
+
+  .app-navbar-title {
+    font-size: 0.97rem;
+  }
+}

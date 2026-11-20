@@ -7,8 +7,8 @@
 #' @details
 #' Connection to EQWin is made using function [AccessConnect()].
 #'
-#' @param start The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'.
-#' @param end The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Default is the current date.
+#' @param start The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with fixed UTC-7 timezone 'Etc/GMT+7'.
+#' @param end The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with fixed UTC-7 timezone 'Etc/GMT+7'. Default is the current date.
 #' @param stations A vector of station names as listed in the EQWiN eqstns table, column StnCode. Leave NULL to use stnGrp instead.
 #' @param stnGrp A station group as listed in the EWQin eqgroups table, column groupname. Leave NULL to use stations instead.
 #' @param parameters A vector of parameter names as listed in the EQWin eqparams table, column ParamCode. Leave NULL to use paramGrp instead.
@@ -95,13 +95,13 @@ EQWinData <- function(
     start <- as.Date(start)
   }
   if (inherits(start, "Date")) {
-    start <- as.POSIXct(start, tz = "MST")
+    start <- as.POSIXct(start, tz = "Etc/GMT+7")
   }
   if (inherits(end, "character")) {
     end <- as.Date(end)
   }
   if (inherits(end, "Date")) {
-    end <- as.POSIXct(end, tz = "MST")
+    end <- as.POSIXct(end, tz = "Etc/GMT+7")
   }
 
   # Connect to EQWin

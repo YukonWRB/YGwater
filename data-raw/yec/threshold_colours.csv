@@ -1,0 +1,19 @@
+station,threshold,parameter,colour,type,value
+all,FSL,level,green,gt,0.1
+all,LSL,level,green,gt,0.1
+09DC007,Min flow,flow,green,gt,0.5
+09AB001,Min flow,flow,green,gt,3
+08AA010,Min flow,flow,green,gt,0.1
+08AA009,Min flow,flow,green,gt,0.1
+all,FSL,level,yellow,lt,0.1
+all,LSL,level,yellow,lt,0.1
+09DC007,Min flow,flow,yellow,lt,0.5
+09AB001,Min flow,flow,yellow,lt,3
+08AA010,Min flow,flow,yellow,lt,0.1
+08AA009,Min flow,flow,yellow,lt,0.1
+all,LSL,level,red,lt,0
+09DC007,Min flow,flow,red,lt,0
+09AB001,Min flow,flow,red,lt,0
+08AA010,Min flow,flow,red,lt,0
+08AA009,Min flow,flow,red,lt,0
+all,FSL,level,orange,lt,0

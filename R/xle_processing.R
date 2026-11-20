@@ -343,7 +343,10 @@ xle_processing <- function(
   if (LTC) {
     final_data <- data %>%
       dplyr::mutate(
-        Time = as.POSIXct(paste0(.data$Date, " ", .data$Time), tz = "MST"),
+        Time = as.POSIXct(
+          paste0(.data$Date, " ", .data$Time),
+          tz = "Etc/GMT+7"
+        ),
         ch1 = as.numeric(.data$ch1),
         ch2 = as.numeric(.data$ch2),
         ch3 = as.numeric(.data$ch3)
@@ -359,7 +362,10 @@ xle_processing <- function(
   } else {
     final_data <- data %>%
       dplyr::mutate(
-        Time = as.POSIXct(paste0(.data$Date, " ", .data$Time), tz = "MST"),
+        Time = as.POSIXct(
+          paste0(.data$Date, " ", .data$Time),
+          tz = "Etc/GMT+7"
+        ),
         ch1 = as.numeric(.data$ch1),
         ch2 = as.numeric(.data$ch2)
       ) %>%

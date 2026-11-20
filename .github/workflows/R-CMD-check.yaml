@@ -39,42 +39,38 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: |
-            any::rcmdcheck
-            any::R.utils
+          extra-packages: any::rcmdcheck
           needs: check
           cache-version: 1
 
       - name: Set up PostgreSQL 18
-        uses: ikalnytskyi/action-setup-postgres@v8
+        uses: ikalnytskyi/action-setup-postgres@v9
         with:
           postgres-version: '18'
-          username: runner
-          password: runner
-          database: testdb
+          username: postgres
+          password: postgres
 
-      - name: Install PostGIS (incl. raster extension)
+      - name: Install PostGIS and the HEIC decoder
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgis postgresql-18-postgis-3 postgresql-18-postgis-3-scripts
+          sudo apt-get install -y postgis postgresql-18-postgis-3 postgresql-18-postgis-3-scripts libheif-plugin-libde265
 
-      - name: Enable PostGIS extensions in testdb
+      - name: Verify HEIC decoding in R
+        run: Rscript -e 'invisible(magick::image_read("tests/testthat/fixtures/upload-sample.heic"))'
+
+      - name: Bootstrap CI roles
         env:
-          PGPASSWORD: runner
+          PGSERVICE: postgres
         run: |
-          psql -h 127.0.0.1 -U runner -d testdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS postgis;"
-          psql -h 127.0.0.1 -U runner -d testdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS postgis_raster;"
-          
-      - name: Decompress CI seed database (Uses R for cross-platform functionality)
-        run: |
-          Rscript -e "R.utils::gunzip('tests/testthat/fixtures/test_db.sql.gz')"
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE admin NOLOGIN SUPERUSER;
+          CREATE ROLE runner LOGIN SUPERUSER PASSWORD 'runner';
+          GRANT admin TO runner;
+          SQL
 
-      - name: Load test database
-        # env:
-          # PGPASSWORD: runner
+      - name: Restore and upgrade test database if necessary
         run: |
-          # psql -h 127.0.0.1 -U runner -d testdb -f tests/testthat/fixtures/test_db.sql
-          Rscript -e "AquaCache::restore_seed_db('tests/testthat/fixtures/test_db.sql', 'testdb', 'localhost', '5432', 'runner', 'runner', nhn = FALSE, replace = TRUE)"
+          Rscript -e 'AquaCache::restore_seed_db("tests/testthat/fixtures/test_db.sql.gz", "testdb", "127.0.0.1", 5432, "postgres", "postgres", nhn = FALSE)'
 
       - uses: r-lib/actions/check-r-package@v2
         with:
