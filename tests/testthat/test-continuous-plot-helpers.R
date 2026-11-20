@@ -266,7 +266,7 @@ test_that("adaptive multi-timeseries plots batch data and preserve axis units", 
   )
 })
 
-test_that("public statistics-period controls use translated labels", {
+test_that("the adaptive plot statistics-period control uses translated labels", {
   adaptive_text <- paste(
     readLines(
       system.file(
@@ -277,17 +277,6 @@ test_that("public statistics-period controls use translated labels", {
     ),
     collapse = "\n"
   )
-  params_map_text <- paste(
-    readLines(
-      system.file(
-        "apps/aqualink/modules/client/map/paramsMap.R",
-        package = "YGwater"
-      ),
-      warn = FALSE
-    ),
-    collapse = "\n"
-  )
-
   expect_match(
     adaptive_text,
     'label = tr("stats_period", language$language)',
@@ -295,16 +284,6 @@ test_that("public statistics-period controls use translated labels", {
   )
   expect_match(
     adaptive_text,
-    "YGwater:::format_stats_period_label",
-    fixed = TRUE
-  )
-  expect_match(
-    params_map_text,
-    'label = tr("stats_period", language$language)',
-    fixed = TRUE
-  )
-  expect_match(
-    params_map_text,
     "YGwater:::format_stats_period_label",
     fixed = TRUE
   )

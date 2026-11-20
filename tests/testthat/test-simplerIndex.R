@@ -145,11 +145,6 @@ test_that("simplerIndex stages supported documents before background processing"
   expect_match(module, 'pattern = "simplerIndex_upload_"', fixed = TRUE)
   expect_match(
     module,
-    'accept = c(".pdf", ".jpg", ".jpeg", ".png")',
-    fixed = TRUE
-  )
-  expect_match(
-    module,
     'supported_extensions <- c("pdf", "jpg", "jpeg", "png")',
     fixed = TRUE
   )
@@ -169,6 +164,36 @@ test_that("simplerIndex stages supported documents before background processing"
   expect_match(module, "pdf_processing(TRUE)", fixed = TRUE)
   expect_match(module, "pdf_processing(FALSE)", fixed = TRUE)
   expect_false(grepl("file.rename(from_path, orig_path)", module, fixed = TRUE))
+})
+
+test_that("simplerIndex offers HEIF uploads when conversion is available", {
+  env <- new.env(parent = asNamespace("shiny"))
+  env$accordion <- bslib::accordion
+  env$accordion_panel <- bslib::accordion_panel
+  env$tooltip <- bslib::tooltip
+  sys.source(
+    system.file(
+      "apps/aqualink/modules/admin/boreholes_wells/simplerIndex.R",
+      package = "YGwater"
+    ),
+    env
+  )
+  local_mocked_bindings(
+    heif_jpeg_conversion_available = function() heif_available,
+    .package = "YGwater"
+  )
+  for (heif_available in c(FALSE, TRUE)) {
+    ui <- htmltools::tagQuery(env$simplerIndexUI("index"))
+    input <- ui$find("#index-pdf_file")$selectedTags()[[1L]]
+    expected <- c(".pdf", ".jpg", ".jpeg", ".png")
+    if (heif_available) {
+      expected <- c(expected, ".heic", ".heif")
+    }
+    expect_identical(
+      strsplit(input$attribs$accept, ",", fixed = TRUE)[[1L]],
+      expected
+    )
+  }
 })
 
 test_that("simplerIndex normalizes JPEG and PNG uploads", {

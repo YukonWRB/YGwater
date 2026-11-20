@@ -62,14 +62,17 @@ test_that("both mapping editors suggest conversions and preserve saved overrides
         input$mapping_matrix_state
       ))
     }
-    handler <- Filter(
+    handlers <- Filter(
       function(x) {
         is.call(x) &&
           identical(x[[1]], quote(observeEvent)) &&
-          identical(x[[2]], wanted)
+          identical(x[[2]], wanted) &&
+          "updateNumericInput" %in% all.names(x[[3]])
       },
       statements
-    )[[1]]
+    )
+    expect_length(handlers, 1L)
+    handler <- handlers[[1L]]
     server <- function(input, output, session) {
       row <- data.frame(
         parameter_id = 1L,

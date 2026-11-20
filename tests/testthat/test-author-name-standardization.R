@@ -56,6 +56,9 @@ test_that("reruns refresh existing comment author metadata", {
     captured <- new.env(parent = emptyenv())
     local_mocked_bindings(
         dbGetQuery = function(conn, statement, params = NULL, ...) {
+            if (startsWith(statement, "SELECT")) {
+                captured$match_sql <- statement
+            }
             captured$sql <- statement
             captured$params <- params
             data.frame(id = 42L)
@@ -83,10 +86,12 @@ test_that("reruns refresh existing comment author metadata", {
     expect_true(result$updated)
     expect_match(captured$sql, "UPDATE commentary\\.comments")
     expect_match(captured$sql, "WHERE id = \\$6")
-    expect_false(grepl("author_id = \\$", captured$sql))
-    expect_equal(captured$params[[1]], "AB")
-    expect_equal(captured$params[[2]], 1L)
-    expect_equal(captured$params[[6]], 42L)
+    expect_match(captured$sql, "author_id = $2", fixed = TRUE)
+    expect_false(grepl("author_id|raw_author", captured$match_sql))
+    expect_identical(
+        captured$params,
+        list("AB", 1L, NA_integer_, NA_integer_, NA_integer_, 42L)
+    )
 })
 
 test_that("author refresh skips ambiguous duplicate comment identities", {
