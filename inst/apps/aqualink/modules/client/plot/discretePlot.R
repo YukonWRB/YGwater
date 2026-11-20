@@ -418,7 +418,7 @@ disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
        INNER JOIN discrete.samples AS qs
          ON qs.sample_id = qm.sample_id
        INNER JOIN discrete.sample_types AS qst
-         ON qst.sample_type_id = qs.sample_type
+         ON qst.sample_type_id = qs.sample_type_id
        INNER JOIN discrete.sample_groups AS sg
          ON sg.sample_group_id = pm.sample_group_id
        INNER JOIN discrete.sample_group_types AS sgt

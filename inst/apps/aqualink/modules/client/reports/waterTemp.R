@@ -1263,7 +1263,7 @@ waterTempMod <- function(id, language, inputs) {
       ownership_tbl <- DBI::dbGetQuery(
         session$userData$AquaCache,
         paste0(
-          "SELECT o.start_dt, o.end_dt, ",
+          "SELECT o.start_datetime AS start_dt, o.end_datetime AS end_dt, ",
           if (language$abbrev == "fr") {
             "COALESCE(org.name_fr, org.name) AS owner"
           } else {
@@ -1274,7 +1274,7 @@ waterTempMod <- function(id, language, inputs) {
           "ON o.organization_id = org.organization_id ",
           "WHERE o.timeseries_id = ",
           ts_id,
-          " ORDER BY o.start_dt;"
+          " ORDER BY o.start_datetime;"
         )
       )
       if (nrow(ownership_tbl) == 0) {

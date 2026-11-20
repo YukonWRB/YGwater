@@ -101,10 +101,15 @@ discrete_result_editor_fixture <- function(
   rows$source_unit <- "ug/L"
   rows$source_result_text <- c("1200", "<20", "", "5")
   rows$source_result <- c(1200, NA, NA, 5)
-  rows$source_result_condition <- c(NA_integer_, 1L, NA_integer_, NA_integer_)
+  rows$source_result_condition_id <- c(
+    NA_integer_,
+    1L,
+    NA_integer_,
+    NA_integer_
+  )
   rows$source_result_condition_value <- c(NA, 20, NA, NA)
   rows$result <- c(1.2, NA, NA, 5)
-  rows$result_condition_id <- rows$source_result_condition
+  rows$result_condition_id <- rows$source_result_condition_id
   rows$result_condition_value <- c(NA, 0.02, NA, NA)
   rows$result_type_id <- 2L
   rows$matrix_state_id <- 1L
@@ -669,28 +674,38 @@ test_that("the sample location follows the selected row through catalogue refres
     data$df$location_id <- c(1L, 1L, NA_integer_, 1L)
     session$setInputs(sample_location_summary_rows_selected = 1L)
     expect_match(
-      output$sample_editor$html, '<option value="1" selected>Station A | Code: A',
+      output$sample_editor$html,
+      '<option value="1" selected>Station A | Code: A',
       fixed = TRUE
     )
 
     session$setInputs(sample_location_summary_rows_selected = 2L)
     expect_match(
-      output$sample_editor$html, '<option value="" selected>Select a location',
+      output$sample_editor$html,
+      '<option value="" selected>Select a location',
       fixed = TRUE
     )
-    locations(rbind(locations(), data.frame(
-      location_id = 2L, name = "Station B", location_code = "B", alias = ""
-    )))
+    locations(rbind(
+      locations(),
+      data.frame(
+        location_id = 2L,
+        name = "Station B",
+        location_code = "B",
+        alias = ""
+      )
+    ))
     data$df$location_id[3L] <- 2L
     session$flushReact()
     expect_match(
-      output$sample_editor$html, '<option value="2" selected>Station B | Code: B',
+      output$sample_editor$html,
+      '<option value="2" selected>Station B | Code: B',
       fixed = TRUE
     )
 
     session$setInputs(sample_location_summary_rows_selected = 1L)
     expect_match(
-      output$sample_editor$html, '<option value="1" selected>Station A | Code: A',
+      output$sample_editor$html,
+      '<option value="1" selected>Station A | Code: A',
       fixed = TRUE
     )
   })

@@ -160,7 +160,8 @@ test_that("all workbook metadata defaults can remain unset", {
     "result_type_id",
     "matrix_state_id",
     "result_value_type_id",
-    "lab_id"
+    "lab_id",
+    "protocol_method_id"
   )
   profile <- data.frame(profile_code = "optional_defaults")
   for (value in list(
@@ -228,6 +229,10 @@ test_that("workbook default selectors preserve blank and existing values", {
     result_value_type_id = 18L,
     result_value_type = "Actual"
   )
+  state$protocol_methods <- data.frame(
+    protocol_method_id = 19L,
+    protocol_name = "EPA method"
+  )
   environment(render) <- state
   html <- as.character(render())
   expect_equal(
@@ -236,14 +241,42 @@ test_that("workbook default selectors preserve blank and existing values", {
       html,
       fixed = TRUE
     )[[1]]),
-    8L
+    9L
   )
   profile <- data.frame(profile_code = "existing")
-  profile$defaults <- I(list(list(media_id = 11L, owner = 14L)))
+  profile$defaults <- I(list(list(
+    media_id = 11L,
+    owner = 14L,
+    protocol_method_id = 19L
+  )))
   state$new_profile_template <- function() profile
   html <- as.character(render())
   expect_match(html, '<option value="11" selected>Water</option>', fixed = TRUE)
   expect_match(html, '<option value="14" selected>Owner</option>', fixed = TRUE)
+  expect_match(
+    html,
+    '<option value="19" selected>EPA method</option>',
+    fixed = TRUE
+  )
+
+  collect_defaults <- Filter(
+    function(x) {
+      is.call(x) &&
+        identical(x[[1L]], quote(`<-`)) &&
+        identical(x[[2L]], quote(profile_defaults))
+    },
+    statements
+  )[[1L]]
+  eval(collect_defaults, state)
+  profile$defaults[[1L]]$grade_type_id <- 3L
+  state$input <- list(new_profile_default_protocol = "20")
+  expect_identical(state$profile_defaults(profile)$protocol_method_id, 20L)
+  expect_identical(state$profile_defaults(profile)$grade_type_id, 3L)
+  state$input$new_profile_default_protocol <- ""
+  expect_identical(
+    state$profile_defaults(profile)$protocol_method_id,
+    NA_integer_
+  )
 })
 
 test_that("required record metadata is checked before upload", {

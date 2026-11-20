@@ -287,6 +287,72 @@ test_that("source-specific result-flag mappings use typed detection limits", {
   expect_identical(mapped_again$note, mapped$note)
 })
 
+test_that("workbook upload preserves qualifiers and the profile protocol", {
+  env <- add_disc_data_mapping_environment()
+  profile <- add_disc_data_test_profile("long")
+  profile$defaults[[1L]]$protocol_method_id <- 77L
+  profile$column_map[[1L]]$result_flag <- "Qual"
+  path <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(path))
+  openxlsx::write.xlsx(
+    data.frame(
+      Station_Code = "Site",
+      Smpl_CollectDate = "2026-09-01",
+      Smpl_CollectTime = "10:00",
+      Lab_Param_Code = c("A", "A", "B", "B"),
+      `Parameter Description` = "Aluminum",
+      Result = c("<0.01", ">100", "-0.2", "3.5"),
+      Units = "ug/L",
+      `Lab_Smpl_#` = "S1",
+      Qual = c("NOTE", "", "", ""),
+      check.names = FALSE
+    ),
+    path
+  )
+  env$addDiscData_fetch_mappings <- function(...) {
+    data.frame(
+      import_mapping_id = c(1L, 2L),
+      source_match = c('{"parameter_code":"A"}', '{"parameter_code":"B"}'),
+      parameter_id = c(100L, 101L),
+      protocol_method_id = c(NA_integer_, 88L),
+      result_type_id = 2L,
+      sample_fraction_id = NA_integer_,
+      result_value_type_id = 1L,
+      reporting_basis_id = NA_integer_,
+      matrix_state_id = 1L,
+      conversion = 1,
+      result_offset = 0
+    )
+  }
+  env$addDiscData_fetch_result_flag_mappings <- function(...) {
+    data.frame(
+      import_result_flag_mapping_id = 1L,
+      source_flag_column = "Qual",
+      source_flag_value = "NOTE",
+      result_condition_id = NA_integer_,
+      result_condition_value_source = "none",
+      result_condition_value_literal = NA_real_,
+      result_action = "note_only",
+      note_template = "Lab note",
+      priority = 10L,
+      profile_specific = TRUE
+    )
+  }
+
+  parsed <- env$addDiscData_parse_upload(
+    path,
+    profile,
+    negative_values_are_mdl = TRUE
+  )
+  mapped <- env$addDiscData_apply_mappings(parsed, con = NULL)
+  rows <- env$addDiscData_upload_plan(mapped)$df
+  expect_identical(rows$result_condition_id, c(1L, 2L, 1L, NA_integer_))
+  expect_equal(rows$result_condition_value, c(0.01, 100, 0.2, NA_real_))
+  expect_equal(rows$result, c(NA_real_, NA_real_, NA_real_, 3.5))
+  expect_identical(rows$protocol_method_id, c(77L, 77L, 88L, 88L))
+  expect_identical(rows$note[[1L]], "Lab note")
+})
+
 test_that("unit-specific mappings do not become ambiguous code-only fallbacks", {
   env <- add_disc_data_mapping_environment()
 
@@ -1047,11 +1113,17 @@ test_that("negative MDL conversion uses the edited parameter and unit exclusions
   profile <- add_disc_data_test_profile("long")
   exclusions <- env$addDiscData_negative_mdl_defaults()
   exclusions$parameters <- c(
-    setdiff(exclusions$parameters, "rule:ph"), "value:water balance"
+    setdiff(exclusions$parameters, "rule:ph"),
+    "value:water balance"
   )
   exclusions$units <- "value:percent"
   exclusions$pairs <- env$addDiscData_negative_mdl_key("pair", "A")
-  parse_rows <- function(path, profile, negative_values_are_mdl, negative_mdl_exclusions) {
+  parse_rows <- function(
+    path,
+    profile,
+    negative_values_are_mdl,
+    negative_mdl_exclusions
+  ) {
     env$addDiscData_common_rows(
       source_code = "FIXTURE",
       profile = profile,
@@ -1059,8 +1131,24 @@ test_that("negative MDL conversion uses the edited parameter and unit exclusions
       sample_date = "2026-11-01",
       sample_time = NA,
       source_sample_id = "S1",
-      source_parameter_code = c("pH", "ORP", "reading", "reading", "WB", "pair", "pair"),
-      source_parameter_name = c("pH", "ORP", "reading", "reading", "Water balance", "pair", "pair"),
+      source_parameter_code = c(
+        "pH",
+        "ORP",
+        "reading",
+        "reading",
+        "WB",
+        "pair",
+        "pair"
+      ),
+      source_parameter_name = c(
+        "pH",
+        "ORP",
+        "reading",
+        "reading",
+        "Water balance",
+        "pair",
+        "pair"
+      ),
       source_unit = c("pH", "mV", "mV", " Percent ", "L", "A", "B"),
       result_raw = rep("-0.2", 7L),
       negative_values_are_mdl = negative_values_are_mdl,
@@ -1071,8 +1159,14 @@ test_that("negative MDL conversion uses the edited parameter and unit exclusions
   direct <- parse_rows("unused", profile, TRUE, exclusions)
   upload <- env$addDiscData_parse_upload("unused", profile, TRUE, exclusions)
   for (rows in list(direct, upload)) {
-    expect_identical(rows$result, c(NA_real_, -0.2, NA_real_, -0.2, -0.2, -0.2, NA_real_))
-    expect_identical(rows$result_condition_id, c(1L, NA_integer_, 1L, NA_integer_, NA_integer_, NA_integer_, 1L))
+    expect_identical(
+      rows$result,
+      c(NA_real_, -0.2, NA_real_, -0.2, -0.2, -0.2, NA_real_)
+    )
+    expect_identical(
+      rows$result_condition_id,
+      c(1L, NA_integer_, 1L, NA_integer_, NA_integer_, NA_integer_, 1L)
+    )
   }
 })
 

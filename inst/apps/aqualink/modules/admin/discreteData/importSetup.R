@@ -1290,6 +1290,11 @@ importSetup <- function(id, language) {
          FROM discrete.result_value_types
         ORDER BY result_value_type"
     )
+    protocol_methods <- DBI::dbGetQuery(
+      con,
+      "SELECT protocol_method_id, protocol_name
+       FROM discrete.protocols_methods ORDER BY protocol_name"
+    )
     reporting_bases <- DBI::dbGetQuery(
       con,
       "SELECT reporting_basis_id, reporting_basis
@@ -1869,6 +1874,27 @@ importSetup <- function(id, language) {
         }
       )
     })
+    profile_defaults <- function(profile) {
+      defaults <- addDiscData_profile_value(profile, "defaults", list())
+      fields <- c(
+        media_id = "media",
+        collection_method_id = "method",
+        sample_type_id = "sample_type",
+        owner = "owner",
+        result_type_id = "result_type",
+        matrix_state_id = "matrix",
+        result_value_type_id = "value_type",
+        lab_id = "lab",
+        protocol_method_id = "protocol"
+      )
+      for (field in names(fields)) {
+        selection <- input[[paste0("new_profile_default_", fields[[field]])]]
+        if (!is.null(selection)) {
+          defaults[[field]] <- addDiscData_int(selection)
+        }
+      }
+      defaults
+    }
     profile_layout_example <- function() {
       profile <- new_profile_template()
       if (is.null(profile)) {
@@ -1912,6 +1938,7 @@ importSetup <- function(id, language) {
           input$new_profile_result_text_values
         )
       profile$validation_rules <- I(list(validation_rules))
+      profile$defaults <- I(list(profile_defaults(profile)))
       profile
     }
     observeEvent(input$test_profile_layout, {
@@ -2302,7 +2329,7 @@ importSetup <- function(id, language) {
         ),
         fluidRow(
           column(
-            6,
+            4,
             selectizeInput(
               ns("new_profile_default_matrix"),
               "Default matrix state",
@@ -2321,7 +2348,7 @@ importSetup <- function(id, language) {
             )
           ),
           column(
-            6,
+            4,
             selectizeInput(
               ns("new_profile_default_value_type"),
               "Default result value type",
@@ -2336,6 +2363,25 @@ importSetup <- function(id, language) {
                 ""
               } else {
                 defaults$result_value_type_id
+              }
+            )
+          ),
+          column(
+            4,
+            selectizeInput(
+              ns("new_profile_default_protocol"),
+              "Default protocol/method",
+              choices = c(
+                "None" = "",
+                stats::setNames(
+                  protocol_methods$protocol_method_id,
+                  protocol_methods$protocol_name
+                )
+              ),
+              selected = if (is.na(defaults$protocol_method_id)) {
+                ""
+              } else {
+                defaults$protocol_method_id
               }
             )
           )
@@ -2714,32 +2760,7 @@ importSetup <- function(id, language) {
               "."
             )
           }
-          defaults <- list(
-            media_id = addDiscData_int(
-              input$new_profile_default_media
-            ),
-            collection_method_id = addDiscData_int(
-              input$new_profile_default_method
-            ),
-            sample_type_id = addDiscData_int(
-              input$new_profile_default_sample_type
-            ),
-            owner = addDiscData_int(
-              input$new_profile_default_owner
-            ),
-            result_type_id = addDiscData_int(
-              input$new_profile_default_result_type
-            ),
-            matrix_state_id = addDiscData_int(
-              input$new_profile_default_matrix
-            ),
-            result_value_type_id = addDiscData_int(
-              input$new_profile_default_value_type
-            ),
-            lab_id = addDiscData_int(
-              input$new_profile_default_lab
-            )
-          )
+          defaults <- profile_defaults(profile)
           validation_rules <- addDiscData_profile_value(
             profile,
             "validation_rules",

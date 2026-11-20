@@ -56,7 +56,7 @@ addDiscData_empty_table <- function() {
     analysis_conditions = character(),
     source_result_text = character(),
     source_result = numeric(),
-    source_result_condition = integer(),
+    source_result_condition_id = integer(),
     source_result_condition_value = numeric(),
     source_result_flag = character(),
     source_result_flag_column = character(),
@@ -1095,6 +1095,7 @@ addDiscData_defaults <- function(profile) {
     owner = addDiscData_int(defaults$owner),
     contributor = addDiscData_int(defaults$contributor),
     result_type_id = addDiscData_int(defaults$result_type_id),
+    protocol_method_id = addDiscData_int(defaults$protocol_method_id),
     matrix_state_id = addDiscData_int(defaults$matrix_state_id),
     result_value_type_id = addDiscData_int(defaults$result_value_type_id),
     reporting_basis_id = addDiscData_int(defaults$reporting_basis_id),
@@ -1223,7 +1224,7 @@ addDiscData_common_rows <- function(
     source_unit = as.character(source_unit),
     parameter_id = NA_integer_,
     result_type_id = defaults$result_type_id,
-    protocol_method_id = addDiscData_int(defaults$protocol_method_id),
+    protocol_method_id = defaults$protocol_method_id,
     matrix_state_id = defaults$matrix_state_id,
     sample_fraction_id = NA_integer_,
     result_value_type_id = defaults$result_value_type_id,
@@ -1235,7 +1236,7 @@ addDiscData_common_rows <- function(
     analysis_conditions = defaults$analysis_conditions,
     source_result_text = source_result_text,
     source_result = parsed_result$result,
-    source_result_condition = parsed_result$result_condition_id,
+    source_result_condition_id = parsed_result$result_condition_id,
     source_result_condition_value = parsed_result$result_condition_value,
     source_result_flag = as.character(result_flag),
     source_result_flag_column = as.character(result_flag_column),
@@ -2481,39 +2482,48 @@ addDiscData_fetch_result_flag_mappings <- function(
 }
 
 addDiscData_apply_result_flag_mapping <- function(rows, row, mapping) {
-  threshold_source <- as.character(mapping$result_condition_value_source[[1]])
-  threshold <- switch(
-    threshold_source,
-    result = if (!is.na(rows$result[[row]])) {
-      rows$result[[row]]
-    } else {
-      rows$result_condition_value[[row]]
-    },
-    method_detection_limit = rows$source_method_detection_limit[[row]] *
-      rows$conversion[[row]] +
-      rows$result_offset[[row]],
-    reporting_detection_limit = rows$source_reporting_detection_limit[[row]] *
-      rows$conversion[[row]] +
-      rows$result_offset[[row]],
-    literal = suppressWarnings(as.numeric(
-      mapping$result_condition_value_literal[[1]]
-    )),
-    none = NA_real_,
-    NA_real_
-  )
-  if (!length(threshold) || !is.finite(threshold)) {
-    threshold <- NA_real_
-  }
-
   action <- as.character(mapping$result_action[[1]])
-  rows$result_condition_id[[row]] <- addDiscData_int(
-    mapping$result_condition_id[[1]],
-    rows$result_condition_id[[row]]
-  )
-  rows$result_condition_value[[row]] <- threshold
   rows$result_flag_action[[row]] <- action
-  if (action %in% c("set_result_null", "skip_result")) {
-    rows$result[[row]] <- NA_real_
+  if (action != "note_only") {
+    old_condition <- rows$result_condition_id[[row]]
+    condition <- addDiscData_int(
+      mapping$result_condition_id[[1]],
+      old_condition
+    )
+    threshold <- switch(
+      as.character(mapping$result_condition_value_source[[1]]),
+      result = if (!is.na(rows$result[[row]])) {
+        rows$result[[row]]
+      } else {
+        rows$result_condition_value[[row]]
+      },
+      method_detection_limit = rows$source_method_detection_limit[[row]] *
+        rows$conversion[[row]] +
+        rows$result_offset[[row]],
+      reporting_detection_limit = rows$source_reporting_detection_limit[[row]] *
+        rows$conversion[[row]] +
+        rows$result_offset[[row]],
+      literal = suppressWarnings(as.numeric(mapping$result_condition_value_literal[[
+        1
+      ]])),
+      none = if (identical(condition, old_condition)) {
+        rows$result_condition_value[[row]]
+      } else {
+        NA_real_
+      },
+      NA_real_
+    )
+    rows$result_condition_id[[row]] <- condition
+    rows$result_condition_value[[row]] <- if (
+      length(threshold) && is.finite(threshold)
+    ) {
+      threshold
+    } else {
+      NA_real_
+    }
+    if (action %in% c("set_result_null", "skip_result")) {
+      rows$result[[row]] <- NA_real_
+    }
   }
   note_template <- trimws(as.character(mapping$note_template[[1]]))
   if (addDiscData_present(note_template)) {
@@ -2732,8 +2742,8 @@ addDiscData_apply_mappings <- function(rows, con, profile_code = NULL) {
     rows$result_condition_value[file_rows] <-
       rows$source_result_condition_value[file_rows]
   }
-  if ("source_result_condition" %in% names(rows)) {
-    rows$result_condition_id[file_rows] <- rows$source_result_condition[
+  if ("source_result_condition_id" %in% names(rows)) {
+    rows$result_condition_id[file_rows] <- rows$source_result_condition_id[
       file_rows
     ]
   }
@@ -4108,7 +4118,7 @@ addDiscData_result_display <- function(
   condition_prefix <- c("1" = "<", "2" = ">")
   rebuild <- missing_source_result & !is.na(rows$source_result_condition_value)
   if (any(rebuild)) {
-    prefix <- unname(condition_prefix[as.character(rows$result_condition_id[
+    prefix <- unname(condition_prefix[as.character(rows$source_result_condition_id[
       rebuild
     ])])
     prefix[is.na(prefix)] <- ""
@@ -7769,7 +7779,7 @@ addDiscData <- function(id, language) {
           as.character(result_value)
         }
         row$source_result <- result_value
-        row$source_result_condition <- condition_id
+        row$source_result_condition_id <- condition_id
         row$source_result_condition_value <- condition_value
         row$source_code <- "YGwater-manual"
         row$mapping_status <- "manual"
