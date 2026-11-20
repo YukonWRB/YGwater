@@ -50,10 +50,13 @@ jobs:
           username: postgres
           password: postgres
 
-      - name: Install PostGIS (incl. raster extension)
+      - name: Install PostGIS and the HEIC decoder
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgis postgresql-18-postgis-3 postgresql-18-postgis-3-scripts
+          sudo apt-get install -y postgis postgresql-18-postgis-3 postgresql-18-postgis-3-scripts libheif-plugin-libde265
+
+      - name: Verify HEIC decoding in R
+        run: Rscript -e 'invisible(magick::image_read("tests/testthat/fixtures/upload-sample.heic"))'
 
       - name: Bootstrap CI roles
         env:
