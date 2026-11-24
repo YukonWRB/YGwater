@@ -1493,18 +1493,15 @@ addTimeseries <- function(id, language) {
           "AS signal_timeseries_ids,"
         ),
         paste(
-          "CASE",
-          "  WHEN COALESCE(sig.signal_row_count, 0) > 0",
-          "    THEN COALESCE(sig.signal_timeseries_ids, ARRAY[]::integer[])",
-          "  ELSE COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])",
-          "END AS associated_timeseries_ids,"
+          "ARRAY(SELECT unnest(lmit.timeseries_ids)",
+          "UNION SELECT unnest(sig.signal_timeseries_ids)) AS associated_timeseries_ids,"
         ),
         paste(
           "CASE",
-          "  WHEN COALESCE(sig.signal_row_count, 0) > 0 AND",
+          "  WHEN COALESCE(lmit.timeseries_count, 0) = 0 AND",
           "    COALESCE(sig.distinct_signal_timeseries_count, 0) = 1",
           "    THEN sig.signal_timeseries_id",
-          "  WHEN COALESCE(sig.signal_row_count, 0) = 0 AND",
+          "  WHEN COALESCE(sig.distinct_signal_timeseries_count, 0) = 0 AND",
           "    COALESCE(lmit.timeseries_count, 0) = 1",
           "    THEN lmit.single_timeseries_id",
           "END AS associated_timeseries_id,"
@@ -1704,23 +1701,6 @@ addTimeseries <- function(id, language) {
         ]
       }
 
-      if (nrow(available) > 0) {
-        rows <- vapply(
-          seq_len(nrow(available)),
-          function(i) {
-            row <- available[i, , drop = FALSE]
-            !deployment_has_signal_rows(row) ||
-              row_has_timeseries(
-                row,
-                current_tsid,
-                "signal_timeseries_ids"
-              )
-          },
-          logical(1)
-        )
-        available <- available[rows, , drop = FALSE]
-      }
-
       if (nrow(available) == 0) {
         return(available)
       }
@@ -1778,14 +1758,6 @@ addTimeseries <- function(id, language) {
       if (any(current_idx, na.rm = TRUE)) {
         labels[current_idx] <- paste0(
           labels[current_idx],
-          ifelse(signal_idx[current_idx], " [currently associated]", "")
-        )
-      }
-
-      legacy_current_idx <- current_idx & !signal_idx
-      if (any(legacy_current_idx, na.rm = TRUE)) {
-        labels[legacy_current_idx] <- paste0(
-          labels[legacy_current_idx],
           " [currently associated]"
         )
       }
@@ -1869,24 +1841,14 @@ addTimeseries <- function(id, language) {
         )
       }
 
-      if (deployment_has_signal_rows(selected_deployment)) {
-        if (
-          row_has_timeseries(
-            selected_deployment,
-            timeseries_id,
-            "signal_timeseries_ids"
-          )
-        ) {
-          return(invisible(NULL))
-        }
-
-        stop(
-          paste(
-            "The selected deployment already uses signal-level connection",
-            "metadata. Manage timeseries links under",
-            "Acquisition / telemetry -> Connection signals."
-          )
+      if (
+        row_has_timeseries(
+          selected_deployment,
+          timeseries_id,
+          "signal_timeseries_ids"
         )
+      ) {
+        return(invisible(NULL))
       }
 
       other_signal_assoc <- if (nrow(active_deployments) == 0) {
@@ -2133,16 +2095,13 @@ addTimeseries <- function(id, language) {
             AS direct_timeseries_ids,
           COALESCE(sig.signal_timeseries_ids, ARRAY[]::integer[])
             AS signal_timeseries_ids,
+          ARRAY(SELECT unnest(lmit.timeseries_ids)
+                UNION SELECT unnest(sig.signal_timeseries_ids)) AS associated_timeseries_ids,
           CASE
-            WHEN COALESCE(sig.signal_row_count, 0) > 0
-              THEN COALESCE(sig.signal_timeseries_ids, ARRAY[]::integer[])
-            ELSE COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])
-          END AS associated_timeseries_ids,
-          CASE
-            WHEN COALESCE(sig.signal_row_count, 0) > 0 AND
+            WHEN COALESCE(lmit.timeseries_count, 0) = 0 AND
               COALESCE(sig.distinct_signal_timeseries_count, 0) = 1
               THEN sig.signal_timeseries_id
-            WHEN COALESCE(sig.signal_row_count, 0) = 0 AND
+            WHEN COALESCE(sig.distinct_signal_timeseries_count, 0) = 0 AND
               COALESCE(lmit.timeseries_count, 0) = 1
               THEN lmit.single_timeseries_id
           END AS associated_timeseries_id,
@@ -5313,7 +5272,13 @@ addTimeseries <- function(id, language) {
             ),
             tags$br(),
             paste("Deployment metadata_id:", current_assoc$metadata_id[[1]]),
-            if (deployment_has_signal_rows(current_assoc)) {
+            if (
+              row_has_timeseries(
+                current_assoc,
+                current_tsid,
+                "signal_timeseries_ids"
+              )
+            ) {
               tagList(
                 tags$br(),
                 tags$em(

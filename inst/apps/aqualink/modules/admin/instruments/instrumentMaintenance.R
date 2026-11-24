@@ -80,6 +80,12 @@ instrumentMaintenanceUI <- function(id) {
           width = "100%",
           height = "120px"
         ),
+        uiOutput(ns("maintenance_visit_ui")),
+        textInput(ns("maintenance_firmware_version"), "New firmware version"),
+        textInput(
+          ns("maintenance_program_revision"),
+          "New logger program revision"
+        ),
         selectizeInput(
           ns("completed_due_ids"),
           "Due items completed",
@@ -131,14 +137,27 @@ instrumentMaintenanceUI <- function(id) {
           min = 1,
           step = 1
         ),
-        br(),
-        actionButton(ns("register_sensor"), "Register new sensor"),
-        selectizeInput(
-          ns("sensor_id"),
-          "Sensor",
-          choices = NULL,
-          multiple = TRUE,
-          options = list(maxItems = 1, placeholder = "Optional")
+        selectInput(
+          ns("slot_state"),
+          "Slot state",
+          choices = c(
+            "Installed" = "installed",
+            "Empty" = "empty",
+            "Unknown" = "unknown"
+          ),
+          selectize = FALSE
+        ),
+        conditionalPanel(
+          ns = ns,
+          condition = "input.slot_state == 'installed'",
+          actionButton(ns("register_sensor"), "Register new sensor"),
+          selectizeInput(
+            ns("sensor_id"),
+            "Installed sensor",
+            choices = NULL,
+            multiple = TRUE,
+            options = list(maxItems = 1, placeholder = "Required")
+          )
         ),
         textAreaInput(
           ns("slot_note"),
@@ -218,7 +237,7 @@ instrumentMaintenance <- function(id, language) {
       observers = NULL,
       sensors = NULL,
       sensor_types = NULL,
-      sensor_makes = NULL,
+      manufacturers = NULL,
       sensor_models = NULL,
       owners = NULL,
       suppliers = NULL,
@@ -297,6 +316,55 @@ instrumentMaintenance <- function(id, language) {
       }
       suppressWarnings(as.integer(value[[length(value)]]))
     }
+
+    output$maintenance_visit_ui <- renderUI({
+      instrument_id <- selected_instrument_id()
+      req(!is.na(instrument_id))
+      events <- maintenance_data$maintenance
+      selected_visit <- events$field_visit_id[match(
+        maintenance_data$selected_event_id,
+        events$event_id
+      )]
+      visits <- DBI::dbGetQuery(
+        con,
+        "SELECT v.field_visit_id,
+                concat_ws(' | ', l.location_code,
+                   to_char(v.start_datetime AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') ||
+                   ' UTC', NULLIF(v.purpose, '')) AS label
+         FROM field.field_visits v JOIN public.locations l USING (location_id)
+         WHERE v.field_visit_id = $2 OR EXISTS (
+           SELECT 1 FROM field.field_visit_instruments vi
+           WHERE vi.field_visit_id = v.field_visit_id AND vi.instrument_id = $1
+         ) OR EXISTS (
+           SELECT 1 FROM public.locations_metadata_instruments d
+           WHERE d.instrument_id = $1 AND d.location_id = v.location_id
+             AND d.start_datetime <= COALESCE(v.end_datetime, v.start_datetime)
+             AND (d.end_datetime IS NULL OR d.end_datetime >= v.start_datetime)
+         )
+         ORDER BY v.start_datetime DESC, v.field_visit_id DESC",
+        params = list(instrument_id, as.integer(selected_visit)[1L])
+      )
+      choices <- c(
+        "None" = "",
+        stats::setNames(visits$field_visit_id, visits$label)
+      )
+      if (
+        length(selected_visit) &&
+          !is.na(selected_visit) &&
+          !selected_visit %in% choices
+      ) {
+        choices <- c(
+          choices,
+          stats::setNames(selected_visit, paste("Field visit", selected_visit))
+        )
+      }
+      selectInput(
+        ns("maintenance_visit_id"),
+        "Field visit",
+        choices = choices,
+        selected = as.character(selected_visit)
+      )
+    })
 
     selected_observer_id <- function() {
       value <- int_or_na(input$observer)
@@ -447,13 +515,6 @@ instrumentMaintenance <- function(id, language) {
       stats::setNames(as.character(df$make_id), df$make)
     }
 
-    build_sensor_model_choices <- function(df) {
-      if (is.null(df) || nrow(df) == 0) {
-        return(character())
-      }
-      stats::setNames(as.character(df$model_id), df$model)
-    }
-
     build_owner_choices <- function(df) {
       if (is.null(df) || nrow(df) == 0) {
         return(character())
@@ -490,7 +551,9 @@ instrumentMaintenance <- function(id, language) {
       stats::setNames(as.character(dt$sensor_id), labels)
     }
 
-    update_instrument_selector <- function(selected = isolate(input$instrument_id)) {
+    update_instrument_selector <- function(
+      selected = isolate(input$instrument_id)
+    ) {
       updateSelectizeInput(
         session,
         "instrument_id",
@@ -541,19 +604,6 @@ instrumentMaintenance <- function(id, language) {
       )
     }
 
-    is_blank_sensor <- function(sensor_id) {
-      sid <- suppressWarnings(as.integer(sensor_id))
-      sensors <- maintenance_data$sensors
-      if (is.na(sid) || is.null(sensors) || nrow(sensors) == 0) {
-        return(FALSE)
-      }
-      sensor <- data.table::as.data.table(sensors)[sensor_id == sid]
-      if (nrow(sensor) == 0) {
-        return(FALSE)
-      }
-      identical(toupper(trimws(sensor$sensor_serial[[1]])), "BLANK")
-    }
-
     current_sensor_conflicts <- function(
       sensor_id,
       instrument_id,
@@ -562,8 +612,7 @@ instrumentMaintenance <- function(id, language) {
       if (
         is.na(sensor_id) ||
           is.na(instrument_id) ||
-          is.na(slot_number) ||
-          is_blank_sensor(sensor_id)
+          is.na(slot_number)
       ) {
         return(data.table::data.table())
       }
@@ -895,18 +944,14 @@ instrumentMaintenance <- function(id, language) {
          ORDER BY sensor_type"
       ))
 
-      maintenance_data$sensor_makes <- data.table::as.data.table(DBI::dbGetQuery(
-        con,
-        "SELECT make_id,
-                make,
-                description
-         FROM instruments.sensor_makes
-         ORDER BY make"
+      maintenance_data$manufacturers <- data.table::as.data.table(read_equipment_manufacturers(
+        con
       ))
 
       maintenance_data$sensor_models <- data.table::as.data.table(DBI::dbGetQuery(
         con,
         "SELECT model_id,
+                make_id,
                 model,
                 description
          FROM instruments.sensor_models
@@ -933,7 +978,7 @@ instrumentMaintenance <- function(id, language) {
                 s.sensor_type,
                 st.sensor_type AS sensor_type_label,
                 s.sensor_serial,
-                s.sensor_make AS sensor_make_id,
+                smdl.make_id AS sensor_make_id,
                 sm.make AS sensor_make,
                 s.sensor_model AS sensor_model_id,
                 smdl.model AS sensor_model,
@@ -945,8 +990,8 @@ instrumentMaintenance <- function(id, language) {
                 s.date_retired
          FROM instruments.sensors AS s
          LEFT JOIN instruments.sensor_types AS st ON s.sensor_type = st.sensor_type_id
-         LEFT JOIN instruments.sensor_makes AS sm ON s.sensor_make = sm.make_id
          LEFT JOIN instruments.sensor_models AS smdl ON s.sensor_model = smdl.model_id
+         LEFT JOIN instruments.instrument_makes AS sm ON smdl.make_id = sm.make_id
          LEFT JOIN public.organizations AS org ON s.owner = org.organization_id
          LEFT JOIN instruments.suppliers AS sup ON s.supplier_id = sup.supplier_id
          ORDER BY s.date_retired NULLS FIRST, st.sensor_type, s.sensor_serial, s.sensor_id"
@@ -987,6 +1032,9 @@ instrumentMaintenance <- function(id, language) {
                 CONCAT(o.observer_first, ' ', o.observer_last, ' (', o.organization, ')') AS observer_name,
                 im.obs_datetime,
                 im.note,
+                im.field_visit_id,
+                im.firmware_version,
+                im.logger_program_revision,
                 completed_due.completed_due,
                 im.created_by,
                 im.modified_by,
@@ -1041,6 +1089,7 @@ instrumentMaintenance <- function(id, language) {
         con,
         "SELECT cur.slot_number,
                 cur.sensor_id,
+                cur.slot_state,
                 COALESCE(s.sensor_serial, cur.sensor_serial) AS sensor_serial,
                 st.sensor_type AS sensor_type,
                 cur.note,
@@ -1067,6 +1116,7 @@ instrumentMaintenance <- function(id, language) {
                 e.event_note,
                 slots.slot_number,
                 slots.sensor_id,
+                slots.slot_state,
                 s.sensor_serial,
                 st.sensor_type,
                 slots.note AS slot_note
@@ -1100,6 +1150,8 @@ instrumentMaintenance <- function(id, language) {
     clear_maintenance_form <- function() {
       maintenance_data$selected_event_id <- NA_integer_
       updateTextAreaInput(session, "maintenance_note", value = "")
+      updateTextInput(session, "maintenance_firmware_version", value = "")
+      updateTextInput(session, "maintenance_program_revision", value = "")
       update_due_choices(character())
       updateActionButton(session, "save_maintenance", label = "Save event")
       proxy <- DT::dataTableProxy("maintenance_table", session = session)
@@ -1304,6 +1356,9 @@ instrumentMaintenance <- function(id, language) {
         `Date/time UTC` = obs_datetime,
         `Recorded by` = observer_name,
         Note = note,
+        `Field visit ID` = field_visit_id,
+        `Firmware installed` = firmware_version,
+        `Logger program installed` = logger_program_revision,
         `Completed task` = completed_due
       )]
       DT::datatable(
@@ -1322,6 +1377,11 @@ instrumentMaintenance <- function(id, language) {
       }
       display <- data.table::copy(df)[, list(
         Slot = slot_number,
+        State = c(
+          installed = "Installed",
+          empty = "Empty",
+          unknown = "Unknown"
+        )[slot_state],
         `Sensor serial` = sensor_serial,
         `Sensor type` = sensor_type,
         Note = note,
@@ -1349,6 +1409,11 @@ instrumentMaintenance <- function(id, language) {
         `Date/time UTC` = obs_datetime,
         `Recorded by` = observer_name,
         Slot = slot_number,
+        State = c(
+          installed = "Installed",
+          empty = "Empty",
+          unknown = "Unknown"
+        )[slot_state],
         `Sensor serial` = sensor_serial,
         `Sensor type` = sensor_type,
         `Slot note` = slot_note,
@@ -1384,15 +1449,20 @@ instrumentMaintenance <- function(id, language) {
       content = write_upcoming_maintenance_workbook
     )
 
-    observeEvent(input$ui_ready, {
-      refresh_lookups()
-      shinyWidgets::updateAirDateInput(
-        session,
-        "obs_datetime",
-        value = scalar_utc_datetime(Sys.time()),
-        tz = air_datetime_widget_timezone(default_input_timezone())
-      )
-    }, once = TRUE, ignoreInit = TRUE)
+    observeEvent(
+      input$ui_ready,
+      {
+        refresh_lookups()
+        shinyWidgets::updateAirDateInput(
+          session,
+          "obs_datetime",
+          value = scalar_utc_datetime(Sys.time()),
+          tz = air_datetime_widget_timezone(default_input_timezone())
+        )
+      },
+      once = TRUE,
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$timezone,
@@ -1533,6 +1603,16 @@ instrumentMaintenance <- function(id, language) {
           "maintenance_note",
           value = safe_text(record$note[[1]])
         )
+        updateTextInput(
+          session,
+          "maintenance_firmware_version",
+          value = safe_text(record$firmware_version[[1L]])
+        )
+        updateTextInput(
+          session,
+          "maintenance_program_revision",
+          value = safe_text(record$logger_program_revision[[1L]])
+        )
         update_observer_selector(as.character(record$observer[[1]]))
         shinyWidgets::updateAirDateInput(
           session,
@@ -1619,6 +1699,11 @@ instrumentMaintenance <- function(id, language) {
           value = record$slot_number[[1]]
         )
         update_sensor_selector(record$sensor_id[[1]])
+        updateSelectInput(
+          session,
+          "slot_state",
+          selected = record$slot_state[[1L]]
+        )
         updateTextAreaInput(
           session,
           "slot_note",
@@ -1699,6 +1784,11 @@ instrumentMaintenance <- function(id, language) {
         observer_id <- selected_observer_id()
         obs_datetime <- scalar_utc_datetime(input$obs_datetime)
         note <- blank_to_na(input$maintenance_note)
+        field_visit_id <- suppressWarnings(as.integer(
+          input$maintenance_visit_id
+        ))[1L]
+        firmware_version <- blank_to_na(input$maintenance_firmware_version)
+        program_revision <- blank_to_na(input$maintenance_program_revision)
 
         missing_fields <- c()
         if (is.na(instrument_id)) {
@@ -1756,14 +1846,18 @@ instrumentMaintenance <- function(id, language) {
                   event_id <- DBI::dbGetQuery(
                     con,
                     "INSERT INTO instruments.instrument_maintenance
-                 (instrument_id, observer, obs_datetime, note)
-                 VALUES ($1, $2, $3, $4)
+                 (instrument_id, observer, obs_datetime, note, field_visit_id,
+                  firmware_version, logger_program_revision)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                  RETURNING event_id",
                     params = list(
                       instrument_id,
                       observer_id,
                       obs_datetime,
-                      note
+                      note,
+                      field_visit_id,
+                      firmware_version,
+                      program_revision
                     )
                   )$event_id[[1]]
                 } else {
@@ -1774,13 +1868,19 @@ instrumentMaintenance <- function(id, language) {
                  SET instrument_id = $1,
                      observer = $2,
                      obs_datetime = $3,
-                     note = $4
-                 WHERE event_id = $5",
+                     note = $4,
+                     field_visit_id = $5,
+                     firmware_version = $6,
+                     logger_program_revision = $7
+                 WHERE event_id = $8",
                     params = list(
                       instrument_id,
                       observer_id,
                       obs_datetime,
                       note,
+                      field_visit_id,
+                      firmware_version,
+                      program_revision,
                       event_id
                     )
                   )
@@ -1959,6 +2059,7 @@ instrumentMaintenance <- function(id, language) {
       obs_datetime,
       slot_number,
       sensor_id,
+      slot_state,
       slot_note,
       event_note,
       move_conflicts = data.table::data.table(),
@@ -1998,8 +2099,8 @@ instrumentMaintenance <- function(id, language) {
                 DBI::dbExecute(
                   con,
                   "INSERT INTO instruments.instrument_sensor_event_slots
-                   (event_id, slot_number, sensor_id, note)
-                   VALUES ($1, $2, NULL, $3)",
+                   (event_id, slot_number, sensor_id, slot_state, note)
+                   VALUES ($1, $2, NULL, 'empty', $3)",
                   params = list(
                     event_id,
                     old_slots$slot_number[[i]],
@@ -2027,9 +2128,15 @@ instrumentMaintenance <- function(id, language) {
           DBI::dbExecute(
             con,
             "INSERT INTO instruments.instrument_sensor_event_slots
-             (event_id, slot_number, sensor_id, note)
-             VALUES ($1, $2, $3, $4)",
-            params = list(event_id, slot_number, sensor_id, slot_note)
+             (event_id, slot_number, sensor_id, slot_state, note)
+             VALUES ($1, $2, $3, $4, $5)",
+            params = list(
+              event_id,
+              slot_number,
+              sensor_id,
+              slot_state,
+              slot_note
+            )
           )
           retire_sensor_id <- suppressWarnings(as.integer(retire_sensor_id))
           if (!is.na(retire_sensor_id)) {
@@ -2128,7 +2235,12 @@ instrumentMaintenance <- function(id, language) {
         observer_id <- selected_observer_id()
         obs_datetime <- scalar_utc_datetime(input$obs_datetime)
         slot_number <- int_or_na(input$slot_number)
-        sensor_id <- int_or_na(input$sensor_id)
+        slot_state <- blank_to_na(input$slot_state)
+        sensor_id <- if (identical(slot_state, "installed")) {
+          int_or_na(input$sensor_id)
+        } else {
+          NA_integer_
+        }
         slot_note <- blank_to_na(input$slot_note)
         event_note <- blank_to_na(input$sensor_event_note)
 
@@ -2145,8 +2257,14 @@ instrumentMaintenance <- function(id, language) {
         if (is.na(slot_number) || slot_number < 1L) {
           missing_fields <- c(missing_fields, "Slot number")
         }
-        if (is.na(sensor_id) && is.na(slot_note)) {
-          missing_fields <- c(missing_fields, "Sensor or slot note")
+        if (!slot_state %in% c("installed", "empty", "unknown")) {
+          missing_fields <- c(missing_fields, "Slot state")
+        }
+        if (
+          identical(slot_state, "installed") &&
+            !sensor_id %in% maintenance_data$sensors$sensor_id
+        ) {
+          missing_fields <- c(missing_fields, "Installed sensor")
         }
         if (length(missing_fields) > 0) {
           showNotification(
@@ -2157,12 +2275,9 @@ instrumentMaintenance <- function(id, language) {
           return()
         }
 
-        if (is.na(sensor_id)) {
+        if (identical(slot_state, "empty")) {
           current_sensor <- current_slot_sensor(slot_number)
-          if (
-            !is.null(current_sensor) &&
-              !is_blank_sensor(current_sensor$sensor_id[[1]])
-          ) {
+          if (!is.null(current_sensor)) {
             observer_match <- maintenance_data$observers[
               maintenance_data$observers$observer_id == observer_id
             ]
@@ -2178,6 +2293,7 @@ instrumentMaintenance <- function(id, language) {
               obs_datetime = obs_datetime,
               slot_number = slot_number,
               sensor_id = sensor_id,
+              slot_state = slot_state,
               slot_note = slot_note,
               event_note = event_note,
               current_sensor_id = current_sensor$sensor_id[[1]]
@@ -2203,6 +2319,7 @@ instrumentMaintenance <- function(id, language) {
             obs_datetime = obs_datetime,
             slot_number = slot_number,
             sensor_id = sensor_id,
+            slot_state = slot_state,
             slot_note = slot_note,
             event_note = event_note,
             conflicts = conflicts
@@ -2221,6 +2338,7 @@ instrumentMaintenance <- function(id, language) {
             obs_datetime,
             slot_number,
             sensor_id,
+            slot_state,
             slot_note,
             event_note
           ),
@@ -2266,6 +2384,7 @@ instrumentMaintenance <- function(id, language) {
             pending$obs_datetime,
             pending$slot_number,
             pending$sensor_id,
+            pending$slot_state,
             pending$slot_note,
             pending$event_note,
             move_conflicts = conflicts
@@ -2298,6 +2417,7 @@ instrumentMaintenance <- function(id, language) {
           pending$obs_datetime,
           pending$slot_number,
           pending$sensor_id,
+          pending$slot_state,
           pending$slot_note,
           pending$event_note,
           retire_sensor_id = if (isTRUE(retire)) {
@@ -2376,7 +2496,7 @@ instrumentMaintenance <- function(id, language) {
       if (
         !is_new_lookup_value(
           input$new_sensor_make,
-          maintenance_data$sensor_makes,
+          maintenance_data$manufacturers,
           "make_id"
         )
       ) {
@@ -2409,6 +2529,36 @@ instrumentMaintenance <- function(id, language) {
     })
 
     observeEvent(
+      input$new_sensor_make,
+      {
+        make <- normalize_select_value(input$new_sensor_make)
+        make_id <- equipment_catalogue_id(
+          make,
+          maintenance_data$manufacturers,
+          "make_id",
+          "make"
+        )
+        choices <- equipment_model_choices(equipment_models_for_make(
+          maintenance_data$sensor_models,
+          make_id
+        ))
+        updateSelectizeInput(
+          session,
+          "new_sensor_model",
+          choices = choices,
+          selected = intersect(
+            normalize_select_value(input$new_sensor_model),
+            unname(choices)
+          ),
+          server = TRUE
+        )
+        shinyjs::toggleState("new_sensor_model", condition = length(make) == 1L)
+      },
+      ignoreNULL = FALSE,
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
       input$register_sensor,
       {
         showModal(modalDialog(
@@ -2433,7 +2583,7 @@ instrumentMaintenance <- function(id, language) {
           selectizeInput(
             ns("new_sensor_make"),
             "Make (type to add new)",
-            choices = build_sensor_make_choices(maintenance_data$sensor_makes),
+            choices = build_sensor_make_choices(maintenance_data$manufacturers),
             multiple = TRUE,
             options = list(
               maxItems = 1,
@@ -2442,19 +2592,17 @@ instrumentMaintenance <- function(id, language) {
             )
           ),
           uiOutput(ns("new_sensor_make_details")),
-          selectizeInput(
+          shinyjs::disabled(selectizeInput(
             ns("new_sensor_model"),
             "Model (type to add new)",
-            choices = build_sensor_model_choices(
-              maintenance_data$sensor_models
-            ),
+            choices = NULL,
             multiple = TRUE,
             options = list(
               maxItems = 1,
               placeholder = "Required",
               create = TRUE
             )
-          ),
+          )),
           uiOutput(ns("new_sensor_model_details")),
           selectizeInput(
             ns("new_sensor_owner"),
@@ -2477,15 +2625,13 @@ instrumentMaintenance <- function(id, language) {
           ),
           bslib::layout_columns(
             col_widths = c(6, 6),
-            dateInput(
+            equipment_date_input(
               ns("new_sensor_date_purchased"),
-              "Date purchased",
-              value = NULL
+              "Date purchased"
             ),
-            dateInput(
+            equipment_date_input(
               ns("new_sensor_date_in_service"),
-              "Date in service",
-              value = NULL
+              "Date in service"
             )
           ),
           textAreaInput(ns("new_sensor_notes"), "Notes", width = "100%"),
@@ -2527,62 +2673,6 @@ instrumentMaintenance <- function(id, language) {
       )$sensor_type_id[[1]]
     }
 
-    resolve_sensor_make_id <- function(value) {
-      id <- int_or_na(value)
-      if (!is.na(id) && id %in% maintenance_data$sensor_makes$make_id) {
-        return(id)
-      }
-      make <- safe_text(value)
-      existing_id <- lookup_id_from_text(
-        make,
-        maintenance_data$sensor_makes,
-        "make_id",
-        "make"
-      )
-      if (!is.na(existing_id)) {
-        return(existing_id)
-      }
-      DBI::dbGetQuery(
-        con,
-        "INSERT INTO instruments.sensor_makes
-         (make, description)
-         VALUES ($1, $2)
-         RETURNING make_id",
-        params = list(
-          make,
-          blank_to_na(input$new_sensor_make_description)
-        )
-      )$make_id[[1]]
-    }
-
-    resolve_sensor_model_id <- function(value) {
-      id <- int_or_na(value)
-      if (!is.na(id) && id %in% maintenance_data$sensor_models$model_id) {
-        return(id)
-      }
-      model <- safe_text(value)
-      existing_id <- lookup_id_from_text(
-        model,
-        maintenance_data$sensor_models,
-        "model_id",
-        "model"
-      )
-      if (!is.na(existing_id)) {
-        return(existing_id)
-      }
-      DBI::dbGetQuery(
-        con,
-        "INSERT INTO instruments.sensor_models
-         (model, description)
-         VALUES ($1, $2)
-         RETURNING model_id",
-        params = list(
-          model,
-          blank_to_na(input$new_sensor_model_description)
-        )
-      )$model_id[[1]]
-    }
-
     observeEvent(
       input$add_sensor,
       {
@@ -2617,16 +2707,25 @@ instrumentMaintenance <- function(id, language) {
             tryCatch(
               {
                 sensor_type_id <- resolve_sensor_type_id(input$new_sensor_type)
-                sensor_make_id <- resolve_sensor_make_id(input$new_sensor_make)
-                sensor_model_id <- resolve_sensor_model_id(
-                  input$new_sensor_model
+                make_id <- resolve_equipment_sensor_make(
+                  con,
+                  input$new_sensor_make,
+                  blank_to_na(input$new_sensor_make_description),
+                  maintenance_data$manufacturers
+                )
+                sensor_model_id <- resolve_equipment_sensor_model(
+                  con,
+                  input$new_sensor_model,
+                  blank_to_na(input$new_sensor_model_description),
+                  make_id,
+                  maintenance_data$sensor_models
                 )
                 owner_id <- int_or_na(input$new_sensor_owner)
                 supplier_id <- int_or_na(input$new_sensor_supplier_id)
                 sensor_id <- DBI::dbGetQuery(
                   con,
                   "INSERT INTO instruments.sensors
-               (sensor_type, sensor_serial, sensor_make, sensor_model,
+               (sensor_type, sensor_serial, make_id, sensor_model,
                 owner, supplier_id, sensor_asset_tag, date_purchased,
                 date_in_service, sensor_notes)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -2634,7 +2733,7 @@ instrumentMaintenance <- function(id, language) {
                   params = list(
                     sensor_type_id,
                     safe_text(input$new_sensor_serial),
-                    sensor_make_id,
+                    make_id,
                     sensor_model_id,
                     owner_id,
                     supplier_id,

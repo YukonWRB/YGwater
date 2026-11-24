@@ -86,18 +86,20 @@ test_that("source adapter lookup works with data.table registries", {
 test_that("catalogued route fields are filtered and merged into route JSON", {
   env <- timeseries_transmission_test_environment()
   capability <- data.frame(source_fx = "downloadNESDIS")
-  capability$ui_config <- I(list(list(route_config_fields = list(
-    list(
-      name = "timestamp_floor_seconds",
-      path = list("parser_config", "timestamp_floor_seconds"),
-      label = "Observation-time alignment interval, seconds (optional)",
-      help = "Use only when the payload has no observation timestamp.",
-      value_type = "integer",
-      control = "numeric",
-      minimum = 1,
-      message_formats = list("BLM")
+  capability$ui_config <- I(list(list(
+    route_config_fields = list(
+      list(
+        name = "timestamp_floor_seconds",
+        path = list("parser_config", "timestamp_floor_seconds"),
+        label = "Observation-time alignment interval, seconds (optional)",
+        help = "Use only when the payload has no observation timestamp.",
+        value_type = "integer",
+        control = "numeric",
+        minimum = 1,
+        message_formats = list("BLM")
+      )
     )
-  ))))
+  )))
 
   expect_length(
     env$timeseries_route_config_fields(capability, "BLM"),
@@ -159,12 +161,21 @@ test_that("transmission routes are stored with their source assignments", {
   )
 })
 
-test_that("timeseries mapping synchronization retains distinct routes", {
+test_that("timeseries mapping synchronization edits successor versions only", {
   env <- timeseries_transmission_test_environment()
   statements <- character()
   parameters <- list()
 
   local_mocked_bindings(
+    dbGetQuery = function(con, statement, params = NULL, ...) {
+      if (grepl("AS unchanged", statement, fixed = TRUE)) {
+        return(data.frame(unchanged = FALSE))
+      }
+      if (grepl("revise_transmission_route", statement, fixed = TRUE)) {
+        return(data.frame(id = params[[1L]] + 20L))
+      }
+      data.frame(transmission_route_id = c(7L, 8L))
+    },
     dbExecute = function(con, statement, params = NULL, ...) {
       statements <<- c(statements, statement)
       parameters[[length(parameters) + 1L]] <<- params
@@ -188,11 +199,16 @@ test_that("timeseries mapping synchronization retains distinct routes", {
     mapping = list(primary_mapping, secondary_mapping)
   )
 
-  expect_length(statements, 3L)
-  expect_match(statements[[1]], "WHERE timeseries_id = $1", fixed = TRUE)
-  expect_equal(parameters[[1]], list(101L))
-  expect_equal(parameters[[2]][1:3], list(7L, "Stage", 101L))
-  expect_equal(parameters[[3]][1:3], list(8L, "StageBackup", 101L))
+  expect_length(statements, 4L)
+  expect_match(
+    statements[[1]],
+    "WHERE transmission_route_id = $1 AND timeseries_id = $2",
+    fixed = TRUE
+  )
+  expect_equal(parameters[[1]], list(27L, 101L))
+  expect_equal(parameters[[2]][1:3], list(27L, "Stage", 101L))
+  expect_equal(parameters[[3]], list(28L, 101L))
+  expect_equal(parameters[[4]][1:3], list(28L, "StageBackup", 101L))
 
   expect_error(
     env$timeseries_sync_transmission_mapping(
@@ -326,9 +342,14 @@ test_that("route editing updates only a route at the selected location", {
     },
     dbRollback = function(con, ...) invisible(TRUE),
     dbGetQuery = function(con, sql, params = NULL, ...) {
+      if (grepl("revise_transmission_route", sql, fixed = TRUE)) {
+        expect_match(sql, "s.location_id = $2", fixed = TRUE)
+        expect_equal(params[1:3], list(44L, 3L, "Hourly BLM"))
+        return(data.frame(id = 45L))
+      }
       statement <<- sql
       parameters <<- params
-      data.frame(transmission_route_id = 44L)
+      data.frame(transmission_route_id = 45L)
     },
     .package = "DBI"
   )
@@ -354,11 +375,15 @@ test_that("route editing updates only a route at the selected location", {
     route_id = 44
   )
 
-  expect_equal(route_id, 44L)
+  expect_equal(route_id, 45L)
   expect_true(committed)
-  expect_match(statement, "UPDATE public.locations_metadata_transmission_routes", fixed = TRUE)
+  expect_match(
+    statement,
+    "UPDATE public.locations_metadata_transmission_routes",
+    fixed = TRUE
+  )
   expect_match(statement, "s.location_id = $2", fixed = TRUE)
-  expect_equal(parameters[1:3], list(44L, 3L, "Hourly BLM"))
+  expect_equal(parameters[1:3], list(45L, 3L, "Hourly BLM"))
   expect_equal(
     jsonlite::fromJSON(parameters[[10]])$parser_config$timestamp_floor_seconds,
     3600L

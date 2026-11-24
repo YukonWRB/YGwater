@@ -43,13 +43,13 @@ manageSensorsUI <- function(id) {
           multiple = TRUE,
           options = list(maxItems = 1, placeholder = "Required", create = TRUE)
         ),
-        selectizeInput(
+        shinyjs::disabled(selectizeInput(
           ns("sensor_model"),
           "Model (type to add new)",
           choices = NULL,
           multiple = TRUE,
           options = list(maxItems = 1, placeholder = "Required", create = TRUE)
-        ),
+        )),
         textInput(ns("sensor_asset_tag"), "Asset tag")
       ),
       uiOutput(ns("new_sensor_type_details")),
@@ -78,15 +78,11 @@ manageSensorsUI <- function(id) {
       tags$h5("Lifecycle"),
       bslib::layout_columns(
         col_widths = c(6, 6),
-        dateInput(ns("date_in_service"), "Date in service", value = NULL),
-        dateInput(ns("date_purchased"), "Date purchased", value = NULL),
+        equipment_date_input(ns("date_in_service"), "Date in service"),
+        equipment_date_input(ns("date_purchased"), "Date purchased"),
         textInput(ns("retired_by"), "Retired by"),
-        dateInput(ns("date_retired"), "Date retired", value = NULL),
-        dateInput(
-          ns("date_maintenance_due"),
-          "Maintenance due",
-          value = NULL
-        )
+        equipment_date_input(ns("date_retired"), "Date retired"),
+        equipment_date_input(ns("date_maintenance_due"), "Maintenance due")
       ),
       textAreaInput(ns("sensor_notes"), "Notes", width = "100%"),
       actionButton(
@@ -252,6 +248,46 @@ manageSensors <- function(id, language) {
       )
     }
 
+    model_selector_make <- reactiveVal(character())
+    update_model_selector <- function(make, model = character()) {
+      make <- normalize_select_value(make)
+      model_selector_make(make)
+      make_id <- equipment_catalogue_id(
+        make,
+        sensor_data$makes,
+        "make_id",
+        "make"
+      )
+      choices <- equipment_model_choices(equipment_models_for_make(
+        sensor_data$models,
+        make_id
+      ))
+      updateSelectizeInput(
+        session,
+        "sensor_model",
+        choices = choices,
+        selected = intersect(normalize_select_value(model), unname(choices)),
+        server = TRUE
+      )
+      shinyjs::toggleState("sensor_model", condition = length(make) == 1L)
+    }
+
+    observeEvent(
+      input$sensor_make,
+      {
+        if (
+          !identical(
+            normalize_select_value(input$sensor_make),
+            model_selector_make()
+          )
+        ) {
+          update_model_selector(input$sensor_make, input$sensor_model)
+        }
+      },
+      ignoreNULL = FALSE,
+      ignoreInit = TRUE
+    )
+
     update_lookup_selectors <- function(selected = current_lookup_selection()) {
       updateSelectizeInput(
         session,
@@ -271,13 +307,7 @@ manageSensors <- function(id, language) {
         selected = normalize_select_value(selected$sensor_make),
         server = TRUE
       )
-      updateSelectizeInput(
-        session,
-        "sensor_model",
-        choices = build_choices(sensor_data$models, "model_id", "model"),
-        selected = normalize_select_value(selected$sensor_model),
-        server = TRUE
-      )
+      update_model_selector(selected$sensor_make, selected$sensor_model)
       updateSelectizeInput(
         session,
         "owner",
@@ -305,15 +335,12 @@ manageSensors <- function(id, language) {
          FROM instruments.sensor_types
          ORDER BY sensor_type"
       ))
-      sensor_data$makes <- data.table::as.data.table(DBI::dbGetQuery(
-        con,
-        "SELECT make_id, make, description
-         FROM instruments.sensor_makes
-         ORDER BY make"
+      sensor_data$makes <- data.table::as.data.table(read_equipment_manufacturers(
+        con
       ))
       sensor_data$models <- data.table::as.data.table(DBI::dbGetQuery(
         con,
-        "SELECT model_id, model, description
+        "SELECT model_id, make_id, model, description
          FROM instruments.sensor_models
          ORDER BY model"
       ))
@@ -356,7 +383,7 @@ manageSensors <- function(id, language) {
                 s.sensor_type,
                 st.sensor_type AS sensor_type_label,
                 s.sensor_serial,
-                s.sensor_make AS sensor_make_id,
+                smdl.make_id AS sensor_make_id,
                 sm.make AS sensor_make,
                 s.sensor_model AS sensor_model_id,
                 smdl.model AS sensor_model,
@@ -377,8 +404,8 @@ manageSensors <- function(id, language) {
                 s.modified
          FROM instruments.sensors AS s
          LEFT JOIN instruments.sensor_types AS st ON s.sensor_type = st.sensor_type_id
-         LEFT JOIN instruments.sensor_makes AS sm ON s.sensor_make = sm.make_id
          LEFT JOIN instruments.sensor_models AS smdl ON s.sensor_model = smdl.model_id
+         LEFT JOIN instruments.instrument_makes AS sm ON smdl.make_id = sm.make_id
          LEFT JOIN public.organizations AS org ON s.owner = org.organization_id
          LEFT JOIN instruments.suppliers AS sup ON s.supplier_id = sup.supplier_id
          ORDER BY s.date_retired NULLS FIRST, st.sensor_type, s.sensor_serial, s.sensor_id"
@@ -425,15 +452,15 @@ manageSensors <- function(id, language) {
       updateTextInput(session, "sensor_serial", value = "")
       updateSelectizeInput(session, "sensor_type", selected = character(0))
       updateSelectizeInput(session, "sensor_make", selected = character(0))
-      updateSelectizeInput(session, "sensor_model", selected = character(0))
+      update_model_selector(character())
       updateSelectizeInput(session, "owner", selected = character(0))
       updateSelectizeInput(session, "supplier_id", selected = character(0))
       updateTextInput(session, "sensor_asset_tag", value = "")
-      updateDateInput(session, "date_in_service", value = NULL)
-      updateDateInput(session, "date_purchased", value = NULL)
+      update_equipment_date_input(session, "date_in_service")
+      update_equipment_date_input(session, "date_purchased")
       updateTextInput(session, "retired_by", value = "")
-      updateDateInput(session, "date_retired", value = NULL)
-      updateDateInput(session, "date_maintenance_due", value = NULL)
+      update_equipment_date_input(session, "date_retired")
+      update_equipment_date_input(session, "date_maintenance_due")
       updateTextAreaInput(session, "sensor_notes", value = "")
     }
 
@@ -460,22 +487,26 @@ manageSensors <- function(id, language) {
         "sensor_asset_tag",
         value = safe_text(record$sensor_asset_tag)
       )
-      updateDateInput(
+      update_equipment_date_input(
         session,
         "date_in_service",
-        value = record$date_in_service
+        record$date_in_service
       )
-      updateDateInput(session, "date_purchased", value = record$date_purchased)
+      update_equipment_date_input(
+        session,
+        "date_purchased",
+        record$date_purchased
+      )
       updateTextInput(
         session,
         "retired_by",
         value = safe_text(record$retired_by)
       )
-      updateDateInput(session, "date_retired", value = record$date_retired)
-      updateDateInput(
+      update_equipment_date_input(session, "date_retired", record$date_retired)
+      update_equipment_date_input(
         session,
         "date_maintenance_due",
-        value = record$date_maintenance_due
+        record$date_maintenance_due
       )
       updateTextAreaInput(
         session,
@@ -527,56 +558,6 @@ manageSensors <- function(id, language) {
           blank_to_na(input$new_sensor_type_description)
         )
       )$sensor_type_id[[1]]
-    }
-
-    resolve_sensor_make_id <- function(value) {
-      id <- int_or_na(value)
-      if (!is.na(id) && id %in% sensor_data$makes$make_id) {
-        return(id)
-      }
-      make <- safe_text(value)
-      existing_id <- lookup_id_from_text(
-        make,
-        sensor_data$makes,
-        "make_id",
-        "make"
-      )
-      if (!is.na(existing_id)) {
-        return(existing_id)
-      }
-      DBI::dbGetQuery(
-        con,
-        "INSERT INTO instruments.sensor_makes
-         (make, description)
-         VALUES ($1, $2)
-         RETURNING make_id",
-        params = list(make, blank_to_na(input$new_sensor_make_description))
-      )$make_id[[1]]
-    }
-
-    resolve_sensor_model_id <- function(value) {
-      id <- int_or_na(value)
-      if (!is.na(id) && id %in% sensor_data$models$model_id) {
-        return(id)
-      }
-      model <- safe_text(value)
-      existing_id <- lookup_id_from_text(
-        model,
-        sensor_data$models,
-        "model_id",
-        "model"
-      )
-      if (!is.na(existing_id)) {
-        return(existing_id)
-      }
-      DBI::dbGetQuery(
-        con,
-        "INSERT INTO instruments.sensor_models
-         (model, description)
-         VALUES ($1, $2)
-         RETURNING model_id",
-        params = list(model, blank_to_na(input$new_sensor_model_description))
-      )$model_id[[1]]
     }
 
     output$new_sensor_type_details <- renderUI({
@@ -655,10 +636,15 @@ manageSensors <- function(id, language) {
       )
     })
 
-    observeEvent(input$ui_ready, {
-      refresh_all(record_selected = character(0))
-      clear_form(reset_record = FALSE, clear_table = FALSE)
-    }, once = TRUE, ignoreInit = TRUE)
+    observeEvent(
+      input$ui_ready,
+      {
+        refresh_all(record_selected = character(0))
+        clear_form(reset_record = FALSE, clear_table = FALSE)
+      },
+      once = TRUE,
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$record_id,
@@ -748,12 +734,23 @@ manageSensors <- function(id, language) {
             tryCatch(
               {
                 sensor_type_id <- resolve_sensor_type_id(input$sensor_type)
-                sensor_make_id <- resolve_sensor_make_id(input$sensor_make)
-                sensor_model_id <- resolve_sensor_model_id(input$sensor_model)
+                make_id <- resolve_equipment_sensor_make(
+                  con,
+                  input$sensor_make,
+                  blank_to_na(input$new_sensor_make_description),
+                  sensor_data$makes
+                )
+                sensor_model_id <- resolve_equipment_sensor_model(
+                  con,
+                  input$sensor_model,
+                  blank_to_na(input$new_sensor_model_description),
+                  make_id,
+                  sensor_data$models
+                )
                 params <- list(
                   sensor_type_id,
                   safe_text(input$sensor_serial),
-                  sensor_make_id,
+                  make_id,
                   sensor_model_id,
                   int_or_na(input$owner),
                   int_or_na(input$supplier_id),
@@ -769,7 +766,7 @@ manageSensors <- function(id, language) {
                   out <- DBI::dbGetQuery(
                     con,
                     "INSERT INTO instruments.sensors
-                     (sensor_type, sensor_serial, sensor_make, sensor_model,
+                     (sensor_type, sensor_serial, make_id, sensor_model,
                       owner, supplier_id, sensor_asset_tag, date_in_service,
                       date_purchased, retired_by, date_retired,
                       date_maintenance_due, sensor_notes)
@@ -784,7 +781,7 @@ manageSensors <- function(id, language) {
                     "UPDATE instruments.sensors
                      SET sensor_type = $1,
                          sensor_serial = $2,
-                         sensor_make = $3,
+                         make_id = $3,
                          sensor_model = $4,
                          owner = $5,
                          supplier_id = $6,
