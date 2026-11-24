@@ -49,7 +49,7 @@ imgTableView <- function(id, language) {
       imgs = dbGetQueryDT(
         session$userData$AquaCache,
         paste0(
-          "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM files.images AS i JOIN files.image_series AS ii ON i.img_series_id = ii.img_series_id JOIN public.locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
+          "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type_id AS image_type FROM files.images AS i JOIN files.image_series AS ii ON i.img_series_id = ii.img_series_id JOIN public.locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
           Sys.Date() - 14,
           "' ORDER BY datetime DESC;"
         )
@@ -167,7 +167,7 @@ imgTableView <- function(id, language) {
             imgs$imgs <- dbGetQueryDT(
               session$userData$AquaCache,
               paste0(
-                "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM files.images AS i JOIN files.image_series AS ii ON i.img_series_id = ii.img_series_id JOIN public.locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
+                "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type_id AS image_type FROM files.images AS i JOIN files.image_series AS ii ON i.img_series_id = ii.img_series_id JOIN public.locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
                 input$dates[1],
                 "';"
               )
@@ -177,7 +177,7 @@ imgTableView <- function(id, language) {
             extra <- dbGetQueryDT(
               session$userData$AquaCache,
               paste0(
-                "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM files.images AS i JOIN files.image_series AS ii ON i.img_series_id = ii.img_series_id JOIN public.locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
+                "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type_id AS image_type FROM files.images AS i JOIN files.image_series AS ii ON i.img_series_id = ii.img_series_id JOIN public.locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
                 input$dates[1],
                 "' AND i.datetime < '",
                 min(imgs$imgs$datetime, na.rm = TRUE),

@@ -14,13 +14,13 @@ test_that("discrete import rows retain laboratory result identifiers", {
   profile <- data.frame(timezone = "UTC", stringsAsFactors = FALSE)
   profile$defaults <- I(list(list(
     media_id = 1L,
-    collection_method = 27L,
-    sample_type = 34L,
+    collection_method_id = 27L,
+    sample_type_id = 34L,
     owner = 1L,
-    result_type = 2L,
+    result_type_id = 2L,
     matrix_state_id = 1L,
-    result_value_type = 1L,
-    laboratory = 2L
+    result_value_type_id = 1L,
+    lab_id = 2L
   )))
 
   row <- env$addDiscData_common_rows(

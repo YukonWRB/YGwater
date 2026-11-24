@@ -477,10 +477,10 @@ addCompoundTimeseries <- function(id, language) {
           "una.unit_name AS units_na,",
           "una.unit_name AS units_not_applicable",
           "FROM public.parameters p",
-          "LEFT JOIN public.units ul ON p.units_liquid = ul.unit_id",
-          "LEFT JOIN public.units us ON p.units_solid = us.unit_id",
-          "LEFT JOIN public.units ug ON p.units_gas = ug.unit_id",
-          "LEFT JOIN public.units una ON p.units_na = una.unit_id",
+          "LEFT JOIN public.units ul ON p.liquid_unit_id = ul.unit_id",
+          "LEFT JOIN public.units us ON p.solid_unit_id = us.unit_id",
+          "LEFT JOIN public.units ug ON p.gas_unit_id = ug.unit_id",
+          "LEFT JOIN public.units una ON p.not_applicable_unit_id = una.unit_id",
           "ORDER BY p.param_name ASC"
         )
       )

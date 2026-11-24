@@ -7,9 +7,9 @@ existing_discrete_sample_module <- function() {
 test_that("parsed workbook rows start without an existing destination sample", {
   env <- existing_discrete_sample_module()
   profile <- data.frame(timezone = "UTC")
-  profile$defaults <- I(list(list(media_id = 1L, collection_method = 27L,
-    sample_type = 34L, owner = 1L, result_type = 2L, matrix_state_id = 1L,
-    result_value_type = 1L)))
+  profile$defaults <- I(list(list(media_id = 1L, collection_method_id = 27L,
+    sample_type_id = 34L, owner = 1L, result_type_id = 2L, matrix_state_id = 1L,
+    result_value_type_id = 1L)))
   rows <- env$addDiscData_common_rows(source_code = "LAB", profile = profile,
     source_location_name = "Site", sample_date = "2026-11-09", sample_time = "12:00:00",
     source_sample_id = "LAB-1", source_parameter_code = "A", source_parameter_name = "Analyte",

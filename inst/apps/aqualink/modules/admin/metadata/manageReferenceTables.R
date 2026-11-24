@@ -135,9 +135,9 @@ reference_deployment_choices_query <- function(
     "FROM public.locations_metadata_instruments AS lmi",
     "LEFT JOIN public.locations AS l ON lmi.location_id = l.location_id",
     "LEFT JOIN instruments.instruments AS i ON lmi.instrument_id = i.instrument_id",
-    "LEFT JOIN instruments.instrument_makes AS mk ON i.make = mk.make_id",
-    "LEFT JOIN instruments.instrument_models AS mdl ON i.model = mdl.model_id",
-    "LEFT JOIN instruments.instrument_types AS it ON i.type = it.type_id",
+    "LEFT JOIN instruments.instrument_makes AS mk ON i.instrument_make_id = mk.make_id",
+    "LEFT JOIN instruments.instrument_models AS mdl ON i.instrument_model_id = mdl.model_id",
+    "LEFT JOIN instruments.instrument_types AS it ON i.instrument_type_id = it.type_id",
     where_sql,
     "ORDER BY l.location_code, i.serial_no, lmi.start_datetime DESC, lmi.metadata_id DESC"
   )
@@ -231,6 +231,7 @@ reference_transmission_route_choices_query <- function() {
     "  '#', r.transmission_route_id::text,",
     "  ' | ', COALESCE(l.location_code, '?'),",
     "  ' | ', COALESCE(r.route_name, '[unnamed route]'),",
+    "  ' | ', to_char(greatest(r.start_datetime, s.start_datetime) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'), ' UTC',",
     "  ' | ', COALESCE(tm.method_name, '?'),",
     "  CASE WHEN s.provider_name IS NOT NULL THEN CONCAT(' | ', s.provider_name) ELSE '' END,",
     "  CASE WHEN s.platform_identifier IS NOT NULL THEN CONCAT(' | ', s.platform_identifier) ELSE '' END",
@@ -620,7 +621,7 @@ reference_table_configs <- function() {
         reference_textarea_field("description", "Description"),
         reference_textarea_field("description_fr", "Description (French)"),
         reference_select_field(
-          "units_liquid",
+          "liquid_unit_id",
           "Liquid unit",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -629,7 +630,7 @@ reference_table_configs <- function() {
           )
         ),
         reference_select_field(
-          "units_solid",
+          "solid_unit_id",
           "Solid unit",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -638,7 +639,7 @@ reference_table_configs <- function() {
           )
         ),
         reference_select_field(
-          "units_gas",
+          "gas_unit_id",
           "Gas unit",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -647,7 +648,7 @@ reference_table_configs <- function() {
           )
         ),
         reference_select_field(
-          "units_na",
+          "not_applicable_unit_id",
           "Not applicable unit",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -942,7 +943,7 @@ reference_table_configs <- function() {
           choices_query = reference_timeseries_choices_query()
         ),
         reference_select_field(
-          "signal_units",
+          "signal_unit_id",
           "Signal units",
           choices_query = paste(
             "SELECT unit_id AS value, unit_name AS label",
@@ -1034,14 +1035,15 @@ reference_table_configs <- function() {
       key = "transmission_routes",
       title = "Transmission Routes",
       description = paste(
-        "Manage route-level transmission schedules and endpoints for each",
-        "telemetry setup."
+        "Use New version to schedule a change to a route's format, schedule or",
+        "source-field mappings. The new version inherits its mappings."
       ),
       schema = "public",
       table = "locations_metadata_transmission_routes",
       pk = "transmission_route_id",
       id_label = "Transmission Route ID",
-      order_by = c("transmission_setup_id", "route_name"),
+      order_by = c("transmission_setup_id", "route_name", "start_datetime"),
+      insert_only = c("transmission_setup_id", "route_name"),
       audit_columns = audit_cols,
       columns = list(
         reference_select_field(
@@ -1051,6 +1053,11 @@ reference_table_configs <- function() {
           required = TRUE
         ),
         reference_text_field("route_name", "Route name", required = TRUE),
+        reference_text_field(
+          "start_datetime",
+          "Version start (UTC ISO timestamp)"
+        ),
+        reference_text_field("end_datetime", "Version end (UTC ISO timestamp)"),
         reference_text_field("endpoint_identifier", "Endpoint identifier"),
         reference_text_field("message_format", "Message format"),
         reference_text_field(
@@ -1087,8 +1094,8 @@ reference_table_configs <- function() {
       title = "Transmission Timeseries Mappings",
       description = paste(
         "Map provider or payload fields from a transmission route to basic",
-        "continuous timeseries. The target timeseries must belong to the",
-        "same location as the route's logger deployment."
+        "continuous timeseries at the same site. Each mapping applies for",
+        "the period of the selected route version."
       ),
       schema = "continuous",
       table = "transmission_timeseries_mappings",
@@ -1250,6 +1257,14 @@ reference_table_configs <- function() {
           required = TRUE
         ),
         reference_checkbox_field("is_primary", "Primary for this role"),
+        reference_text_field(
+          "start_datetime",
+          "Assignment start (UTC ISO timestamp)"
+        ),
+        reference_text_field(
+          "end_datetime",
+          "Assignment end (UTC ISO timestamp)"
+        ),
         reference_textarea_field("note", "Note")
       )
     )
@@ -1854,6 +1869,9 @@ referenceTableManagerUI <- function(id, config, title = NULL) {
             class = "d-flex gap-2 flex-wrap mb-3",
             actionButton(ns("save"), "Save", class = "btn-primary"),
             actionButton(ns("new_record"), "New record"),
+            if (identical(config$key, "transmission_routes")) {
+              actionButton(ns("new_route_version"), "New version")
+            },
             actionButton(ns("reload"), "Reload")
           ),
           reference_render_fields_ui(
@@ -2123,6 +2141,68 @@ referenceTableManager <- function(
     )
 
     observeEvent(
+      input$new_route_version,
+      {
+        req(
+          editable,
+          identical(config$key, "transmission_routes"),
+          current_record_id()
+        )
+        showModal(modalDialog(
+          title = "New transmission route version",
+          textInput(
+            session$ns("route_version_start"),
+            "Effective from (UTC ISO timestamp)",
+            value = format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = "UTC")
+          ),
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(
+              session$ns("create_route_version"),
+              "Create version",
+              class = "btn-primary"
+            )
+          )
+        ))
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$create_route_version,
+      {
+        req(
+          editable,
+          identical(config$key, "transmission_routes"),
+          current_record_id()
+        )
+        tryCatch(
+          {
+            version <- DBI::dbGetQuery(
+              con,
+              "SELECT public.revise_transmission_route($1::integer, $2::timestamptz) AS id",
+              params = list(
+                as.integer(current_record_id()),
+                input$route_version_start
+              )
+            )$id[[1L]]
+            removeModal()
+            clear_reference_caches(session)
+            refresh_editor(selected_id = version)
+            showNotification(
+              "Route version created with the previous mappings.",
+              type = "message"
+            )
+          },
+          error = function(e) {
+            showNotification(conditionMessage(e), type = "error", duration = 10)
+          }
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
       input$save,
       {
         if (!editable) {
@@ -2323,7 +2403,12 @@ fetch_parameter_relationship_choices <- function(con) {
 
 parameter_unit_fields <- function() {
   data.frame(
-    unit_column = c("units_liquid", "units_solid", "units_gas", "units_na"),
+    unit_column = c(
+      "liquid_unit_id",
+      "solid_unit_id",
+      "gas_unit_id",
+      "not_applicable_unit_id"
+    ),
     unit_label = c(
       "Liquid unit",
       "Solid unit",
@@ -2347,7 +2432,7 @@ fetch_parameter_unit_values <- function(con, parameter_id) {
   DBI::dbGetQuery(
     con,
     paste(
-      "SELECT units_liquid, units_solid, units_gas, units_na",
+      "SELECT liquid_unit_id, solid_unit_id, gas_unit_id, not_applicable_unit_id",
       "FROM public.parameters",
       "WHERE parameter_id = $1"
     ),
@@ -5300,18 +5385,23 @@ manageParameters <- function(id, language) {
           errors <- c(errors, paste(field$label, "is required."))
         }
       }
-      unit_fields <- c("units_liquid", "units_solid", "units_gas", "units_na")
+      unit_fields <- c(
+        "liquid_unit_id",
+        "solid_unit_id",
+        "gas_unit_id",
+        "not_applicable_unit_id"
+      )
       assigned_units <- !vapply(
         values[unit_fields],
         reference_is_missing_value,
         logical(1)
       )
       has_regular_units <- any(assigned_units[c(
-        "units_liquid",
-        "units_solid",
-        "units_gas"
+        "liquid_unit_id",
+        "solid_unit_id",
+        "gas_unit_id"
       )])
-      has_not_applicable_unit <- assigned_units[["units_na"]]
+      has_not_applicable_unit <- assigned_units[["not_applicable_unit_id"]]
       if (!any(assigned_units)) {
         errors <- c(
           errors,

@@ -1202,14 +1202,15 @@ resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
 #' @param con DBI database connection object
 #' @param layer_name Character string of the spatial layer name in the database
 #' @param additional_query Optional character string for additional WHERE conditions
-#' @return sf object in WGS84 (EPSG:4326) coordinate system, or \code{NULL} if no data found
+#' @param epsg EPSG code for the output geometry. Defaults to WGS84.
+#' @return An sf object in the requested CRS, or `NULL` when the layer has no data.
 #'
 #' @description
-#' Queries the spatial.vectors table and transforms geometries to WGS84.
+#' Queries the spatial.vectors table and transforms geometries to the requested CRS.
 #' Used for loading administrative boundaries, communities, roads, etc.
 #' @details
 #' The function first verifies that the requested layer exists in the database,
-#' then downloads and transforms the geometry to WGS84 for consistent mapping.
+#' then downloads and transforms the geometry for consistent mapping.
 #' Additional SQL WHERE conditions can be specified for filtering.
 #'
 #' @examples
@@ -2081,6 +2082,8 @@ get_indices <- function(param_name, ts, start_date, end_date) {
 #' @param ts Wide-format data.frame with 'datetime' column and station columns
 #' @param param_name Character string specifying the parameter name.
 #' @param end_months_historical Integer vector of months to calculate norms for
+#' @param october_start Whether to start aggregation in the preceding October
+#'   for months that would otherwise start in the previous month.
 #' @param completeness_per_aggr_period Numeric (0-1) minimum data completeness
 #'   required for aggregation period (e.g., oct-feb for march bulletin)
 #' @param completeness_per_norm_period Numeric (0-1) minimum data completeness
@@ -2188,6 +2191,8 @@ get_norms <- function(
 #' @param bulletin_year Integer bulletin year
 #' @param ts Wide-format data.frame with 'datetime' column and station columns
 #' @param param_name Character string specifying the parameter name.
+#' @param october_start Whether to aggregate from the preceding October
+#'   for months that would otherwise start in the previous month.
 #' @return Named numeric vector of bulletin values for each station
 #' @noRd
 get_bulletin_value <- function(
@@ -3984,7 +3989,7 @@ create_survey_summary <- function(
 
     # Query for snow water equivalent
     query_swe <- "
-    SELECT s.location_id, r.result as snow_water_equivalent, r.result_value_type as result_value_type
+    SELECT s.location_id, r.result as snow_water_equivalent, r.result_value_type_id as result_value_type
     FROM discrete.samples s
     JOIN discrete.results r ON s.sample_id = r.sample_id
     WHERE s.location_id = ANY($1)
@@ -4440,7 +4445,8 @@ load_bulletin_shapefiles <- function(con, epsg = 4326) {
     return(snowbull_shapefiles)
 }
 
-# ' Generate HTML content for SWE map popups
+#' Generate HTML content for snow bulletin map popups
+#'
 #' @param swe Numeric SWE value at the station
 #' @param relative_to_med Numeric percent of median SWE value
 #' @param historic_median Numeric historical median SWE value
@@ -4450,12 +4456,16 @@ load_bulletin_shapefiles <- function(con, epsg = 4326) {
 #' @param percentile Optional numeric percentile value for the station
 #' @param language Character string for language ("English" or "French")
 #' @param label Character string indicating data type label for translation
+#' @param param_name Parameter name used to select the measurement labels.
+#' @param geom Geometry key used for labels, such as `"point"` or `"poly"`.
+#' @param continuity Sampling type used for labels, such as `"discrete"` or
+#'   `"continuous"`.
 #' @return Character string containing HTML content for the popup
 #' @description
 #' Generates HTML content for leaflet map popups displaying SWE information
 #' at basins, discrete survey stations, or continuous pillow stations.
 #' Includes SWE value, percent of median, historical median, and optional plot button.
-#' #'
+#' @keywords internal
 #' @noRd
 generate_popup_content <- function(
     swe,
@@ -4601,6 +4611,12 @@ filter_stations_by_latest_date <- function(df, input_date, cutoff_days) {
     ]
 }
 
+#' Choose a snow bulletin text colour from the historical median comparison
+#'
+#' @param relative_to_med One value expressed as a percentage of historical median SWE.
+#' @return A hexadecimal colour string, or `"black"` for missing or nonscalar input.
+#' @keywords internal
+#' @noRd
 get_text_colour <- function(relative_to_med) {
     # If input is not a single value or NA, return "black"
     if (length(relative_to_med) != 1 || is.na(relative_to_med)) {
@@ -4625,7 +4641,12 @@ get_text_colour <- function(relative_to_med) {
     }
 }
 
-# Add a 'snowbull_rmd_' tag to preposition column based on perc_hist_med
+#' Choose a translation key for the historical median comparison
+#'
+#' @param val One value expressed as a percentage of historical median SWE.
+#' @return A snow bulletin translation key for the comparison category.
+#' @keywords internal
+#' @noRd
 get_rmd_preposition <- function(val) {
     if (is.na(val)) {
         return("rmd_no_data")
@@ -4648,12 +4669,16 @@ get_rmd_preposition <- function(val) {
     }
 }
 
-#' Get SWE values for inputted type at basins, surveys, and pillows for a given year and month. Updates data fields and popup content.
+#' Build snow bulletin display data for a month
 #'
+#' @param dataset One bulletin dataset with timeseries, geometry, and metadata.
 #' @param year Integer year for data extraction
 #' @param month Integer month for data extraction
-#' @param snowbull_timeseries List containing all loaded base data
-#' @return A list containing processed SWE data at basins, surveys, and pillows
+#' @param statistic Statistic to use for the map's displayed values.
+#' @param october_start Whether to use the preceding October as the aggregation start.
+#' @param language Language used for map labels and popup text.
+#' @return The dataset's spatial rows with the selected month's values, display
+#'   labels, and popup content.
 #'
 #' @description
 #' Extracts SWE data at basins, discrete survey stations, and continuous pillow stations
@@ -4865,6 +4890,9 @@ get_display_data <- function(
 #' @param hydrometric scalar flow 'relative_to_med' value
 #' @param swe scalar swe 'relative_to_med' value
 #' @param language Character string indicating the language for labels and legends (default "English")
+#' @return A list of the outlook value, display colour, description, and
+#'   translation key for the comparison.
+#' @keywords internal
 get_future_flow_conditions <- function(hydrometric, swe, language = "English") {
     # Define the categories
     # Numeric bins for flow and swe (relative_to_med)
@@ -4967,6 +4995,7 @@ get_future_flow_conditions <- function(hydrometric, swe, language = "English") {
 #' @param month Integer month for map title
 #' @param year Integer year for map title
 #' @param filename Optional character string for HTML output file path
+#' @param param_name Parameter name used for titles and legend labels.
 #'
 #' @return A Leaflet map object with interactive features:
 #' \describe{
@@ -5495,6 +5524,8 @@ remove_unused_bins <- function(
 #' @param point_data_secondary sf object containing secondary point data (pillows)
 #' @param statistic Character string indicating which SWE value to visualize
 #' @param snowbull_shapefiles List containing all loaded shapefiles
+#' @param param_name Optional parameter name used for map labels.
+#' @param units Unit label used in the legend.
 #' @param language Character string for language ("English" or "Fran\u00e7ais, default "English")
 #' @param month Integer month for map title
 #' @param year Integer year for map title
@@ -5502,6 +5533,8 @@ remove_unused_bins <- function(
 #' @param dpi Numeric resolution in dots per inch (default 300)
 #' @param height Numeric height in inches (default 14)
 #' @param width Numeric width in inches (default 8)
+#' @param start_year_historical Optional first year of the historical reference period.
+#' @param end_year_historical Optional last year of the historical reference period.
 #'
 #' @return A ggplot2 object with publication-ready styling:
 #' \describe{

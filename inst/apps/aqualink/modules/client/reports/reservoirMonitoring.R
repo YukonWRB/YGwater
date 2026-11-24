@@ -226,7 +226,7 @@ yec_dashboard_data <- function(
             "           reading.datetime AS latest_time, u.unit_name AS units",
             "    FROM continuous.timeseries ts",
             "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-            "    LEFT JOIN public.units u ON u.unit_id = p.units_liquid",
+            "    LEFT JOIN public.units u ON u.unit_id = p.liquid_unit_id",
             "    CROSS JOIN LATERAL (",
             "        SELECT mc.datetime, mc.value",
             "        FROM continuous.measurements_continuous mc",

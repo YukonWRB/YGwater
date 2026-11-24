@@ -535,7 +535,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
       )
       sub_locs <- DBI::dbGetQuery(
         con,
-        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM public.sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM discrete.samples) ORDER BY sub_location_name ASC;"
+        "SELECT location_id, sub_location_id, sub_location_name, sub_location_name_fr FROM public.sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM discrete.samples) ORDER BY sub_location_name ASC;"
       )
       params <- DBI::dbGetQuery(
         con,
@@ -561,20 +561,18 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
       )
       sample_types <- DBI::dbGetQuery(
         con,
-        "SELECT st.sample_type_id, st.sample_type, COALESCE(st.sample_type_fr, st.sample_type) AS sample_type_fr FROM discrete.sample_types AS st WHERE EXISTS (SELECT 1 FROM discrete.samples AS s WHERE st.sample_type_id = s.sample_type);"
+        "SELECT st.sample_type_id, st.sample_type, COALESCE(st.sample_type_fr, st.sample_type) AS sample_type_fr FROM discrete.sample_types AS st WHERE EXISTS (SELECT 1 FROM discrete.samples AS s WHERE st.sample_type_id = s.sample_type_id);"
       )
       samples <- DBI::dbGetQuery(
         con,
-        "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type FROM discrete.samples;"
+        "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type_id AS sample_type FROM discrete.samples;"
       )
 
       locations_projects <- DBI::dbGetQuery(
         con,
-        paste0(
-          "SELECT project_id, location_id FROM public.locations_projects WHERE location_id IN (",
-          paste(locs$location_id, collapse = ", "),
-          ");"
-        )
+        "SELECT project_id, location_id FROM public.locations_projects lp
+         WHERE EXISTS (SELECT 1 FROM discrete.samples s
+                       WHERE s.location_id = lp.location_id);"
       )
       if (nrow(locations_projects) > 0) {
         projects <- DBI::dbGetQuery(
@@ -599,11 +597,9 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
 
       locations_networks <- DBI::dbGetQuery(
         con,
-        paste0(
-          "SELECT network_id, location_id FROM public.locations_networks WHERE location_id IN (",
-          paste(locs$location_id, collapse = ", "),
-          ");"
-        )
+        "SELECT network_id, location_id FROM public.locations_networks ln
+         WHERE EXISTS (SELECT 1 FROM discrete.samples s
+                       WHERE s.location_id = ln.location_id);"
       )
       if (nrow(locations_networks) > 0) {
         networks <- DBI::dbGetQuery(
@@ -615,7 +611,11 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
           )
         )
       } else {
-        networks <- data.frame()
+        networks <- data.frame(
+          network_id = integer(),
+          name = character(),
+          name_fr = character()
+        )
       }
 
       if (any(!is.na(parameter_relationships$group_id))) {
@@ -832,7 +832,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
             ", ms.matrix_state_name AS matrix_state, m.media_type,",
             "s.media_id, r.parameter_id, NULL AS aggregation_type_id,",
             "MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime,",
-            "MIN(s.z) AS z, 'discrete' AS data_type",
+            "MIN(s.depth_height_m) AS z, 'discrete' AS data_type",
             "FROM discrete.results r",
             "JOIN discrete.samples s ON r.sample_id = s.sample_id",
             "LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id",
@@ -977,7 +977,7 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
           "SELECT
              w.well_id,
              w.well_name,
-             w.casing_material,
+             w.casing_material_id AS casing_material,
              w.casing_diameter_mm,
              w.casing_depth_to_m,
              w.stick_up_height_m,

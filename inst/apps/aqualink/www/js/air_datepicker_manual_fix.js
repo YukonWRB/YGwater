@@ -1,5 +1,6 @@
 (function() {
   var PATCH_FLAG = "__ygManualTextFixPatched";
+  var MANUALLY_EDITED = new WeakSet();
   var FORMAT_CACHE = Object.create(null);
   var TIMEZONE_FORMATTER_CACHE = Object.create(null);
   var TOKEN_PATTERNS = {
@@ -388,9 +389,33 @@
     });
   }
 
+  function trackManualInput(event) {
+    if (event.isTrusted && isAirDatepickerInput(event.target)) {
+      MANUALLY_EDITED.add(event.target);
+    }
+  }
+
+  function openCalendarFromButton(event) {
+    var target = event.target;
+    var button = target.closest && target.closest(".dp-addon");
+    var input = button && button.parentElement.querySelector(".sw-air-picker");
+    if (!input || button.disabled || input.disabled) {
+      return;
+    }
+
+    var binding = getBinding();
+    var picker = binding && binding.store && binding.store[input.id];
+    if (picker) {
+      input.focus();
+      if (!picker.visible) {
+        picker.show();
+      }
+    }
+  }
+
   function handleManualSyncEvent(event) {
     var el = event && event.target;
-    if (!isAirDatepickerInput(el)) {
+    if (!MANUALLY_EDITED.has(el)) {
       return;
     }
 
@@ -399,6 +424,9 @@
       return;
     }
 
+    // Calendar clicks can blur the input before the picker updates its text.
+    // Only synchronize text entered by the user so the click can finish.
+    MANUALLY_EDITED.delete(el);
     var syncStatus = syncInstanceFromInput(binding, el);
     if (syncStatus === "synced" || syncStatus === "cleared") {
       pushInputValue(binding, el);
@@ -1004,6 +1032,8 @@
   }
 
   if (!window[PATCH_FLAG]) {
+    document.addEventListener("click", openCalendarFromButton);
+    document.addEventListener("input", trackManualInput, true);
     document.addEventListener("change", handleManualSyncEvent, true);
     document.addEventListener("focusout", handleManualSyncEvent, true);
     ensureBindingPatch();

@@ -11,16 +11,11 @@ test_that("HEIF uploads are converted to temporary JPEGs before callbacks", {
     skip("ImageMagick was built without HEIC support.")
   }
 
-  heif_path <- tempfile(fileext = ".heic")
+  # A build may decode HEIC without being able to encode the test input.
+  fixture <- testthat::test_path("fixtures", "upload-sample.heic")
   upload_path <- tempfile()
-  on.exit(unlink(heif_path, force = TRUE), add = TRUE)
   on.exit(unlink(upload_path, force = TRUE), add = TRUE)
-  magick::image_write(
-    magick::image_blank(width = 8, height = 6, color = "red"),
-    path = heif_path,
-    format = "heic"
-  )
-  expect_true(file.copy(heif_path, upload_path))
+  expect_true(file.copy(fixture, upload_path))
 
   converted_path <- NULL
   result <- YGwater:::with_heif_upload_as_jpeg(
@@ -43,11 +38,7 @@ test_that("HEIF uploads are converted to temporary JPEGs before callbacks", {
 
   heif_path <- tempfile(fileext = ".heif")
   on.exit(unlink(heif_path, force = TRUE), add = TRUE)
-  magick::image_write(
-    magick::image_blank(width = 8, height = 6, color = "blue"),
-    path = heif_path,
-    format = "heic"
-  )
+  expect_true(file.copy(fixture, heif_path))
   converted_heif <- YGwater:::convert_heif_to_jpeg(
     heif_path,
     extension = "heif"
@@ -61,15 +52,13 @@ test_that("HEIF uploads are converted to temporary JPEGs before callbacks", {
 })
 
 test_that("HEIF uploads are rejected when JPEG conversion is unavailable", {
-  helper_environment <- new.env(parent = globalenv())
-  sys.source(
-    system.file("R/heif_upload_helpers.R", package = "YGwater"),
-    envir = helper_environment
+  testthat::local_mocked_bindings(
+    heif_jpeg_conversion_available = function() FALSE,
+    .package = "YGwater"
   )
-  helper_environment$heif_jpeg_conversion_available <- function() FALSE
   callback_called <- FALSE
   expect_error(
-    helper_environment$with_heif_upload_as_jpeg(
+    YGwater:::with_heif_upload_as_jpeg(
       "missing.heic",
       function(path) {
         callback_called <<- TRUE
@@ -97,15 +86,11 @@ test_that("simplerIndex normalizes HEIC and HEIF images to JPEG pages", {
   output_dir <- tempfile("simplerIndex_heif_test_")
   dir.create(output_dir)
   on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  fixture <- testthat::test_path("fixtures", "upload-sample.heic")
 
   for (extension in c("heic", "heif")) {
-    input_path <- tempfile(fileext = paste0(".", extension))
-    on.exit(unlink(input_path, force = TRUE), add = TRUE)
-    magick::image_write(
-      magick::image_blank(width = 8, height = 6, color = "green"),
-      path = input_path,
-      format = "heic"
-    )
+    input_path <- file.path(output_dir, paste0("input.", extension))
+    expect_true(file.copy(fixture, input_path))
     rendered <- helper_environment$render_document_pages(
       document_path = input_path,
       document_type = extension,

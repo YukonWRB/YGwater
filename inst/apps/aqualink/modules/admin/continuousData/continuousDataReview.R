@@ -944,41 +944,41 @@ continuousDataReview <- function(id, language) {
                         gt.grade_type_description AS description,
                         COALESCE(gt.color_code, '#4E79A7') AS color_code,
                         COALESCE(g.no_source_update, FALSE) AS no_source_update,
-                        g.start_dt, g.end_dt, g.created, g.modified AS updated
+                        g.start_datetime AS start_dt, g.end_datetime AS end_dt, g.created, g.modified AS updated
                  FROM continuous.grades AS g
                  LEFT JOIN public.grade_types AS gt
                    ON g.grade_type_id = gt.grade_type_id
                  WHERE g.timeseries_id = $1
-                 ORDER BY g.start_dt",
+                 ORDER BY g.start_datetime",
         approval = "SELECT a.approval_id AS record_id,
                            a.approval_type_id AS type_id,
                            at.approval_type_code AS type_code,
                            at.approval_type_description AS description,
                            COALESCE(at.color_code, '#F28E2B') AS color_code,
                            COALESCE(a.no_source_update, FALSE) AS no_source_update,
-                           a.start_dt, a.end_dt, a.created, a.modified AS updated
+                           a.start_datetime AS start_dt, a.end_datetime AS end_dt, a.created, a.modified AS updated
                     FROM continuous.approvals AS a
                     LEFT JOIN public.approval_types AS at
                       ON a.approval_type_id = at.approval_type_id
                     WHERE a.timeseries_id = $1
-                    ORDER BY a.start_dt",
+                    ORDER BY a.start_datetime",
         qualifier = "SELECT q.qualifier_id AS record_id,
                             q.qualifier_type_id AS type_id,
                             qt.qualifier_type_code AS type_code,
                             qt.qualifier_type_description AS description,
                             COALESCE(qt.color_code, '#E15759') AS color_code,
                             COALESCE(q.no_source_update, FALSE) AS no_source_update,
-                            q.start_dt, q.end_dt, q.created, q.modified AS updated
+                            q.start_datetime AS start_dt, q.end_datetime AS end_dt, q.created, q.modified AS updated
                      FROM continuous.qualifiers AS q
                      LEFT JOIN public.qualifier_types AS qt
                        ON q.qualifier_type_id = qt.qualifier_type_id
                      WHERE q.timeseries_id = $1
-                     ORDER BY q.start_dt",
+                     ORDER BY q.start_datetime",
         correction = "SELECT c.correction_id AS record_id,
                              c.correction_type AS type_id,
                              ct.correction_type AS description,
                              '#7A9A01' AS color_code,
-                             c.start_dt, c.end_dt,
+                             c.start_datetime AS start_dt, c.end_datetime AS end_dt,
                              c.created, c.modified AS updated,
                              ct.priority, c.value1, c.value2,
                              EXTRACT(EPOCH FROM c.timestep_window)::integer
@@ -988,7 +988,7 @@ continuousDataReview <- function(id, language) {
                       LEFT JOIN continuous.correction_types AS ct
                         ON ct.correction_type_id = c.correction_type
                       WHERE c.timeseries_id = $1
-                      ORDER BY c.start_dt, ct.priority, c.correction_id"
+                      ORDER BY c.start_datetime, ct.priority, c.correction_id"
       )
       df <- safe_query(DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -1200,14 +1200,14 @@ continuousDataReview <- function(id, language) {
                   ELSE 'Instrument calibration'
                 END AS event_type,
                 COALESCE(NULLIF(c.purpose, ''), 'No purpose') AS purpose,
-                COALESCE(i.serial_no, i.asset_tag, c.id_sensor_holder::text)
+                COALESCE(i.serial_no, i.asset_tag, c.sensor_holder_instrument_id::text)
                   AS instrument,
                 STRING_AGG(DISTINCT parts.component, ', ' ORDER BY parts.component)
                   AS components
          FROM instruments.calibrations AS c
          INNER JOIN deployments AS d
-           ON c.id_sensor_holder = d.instrument_id
-              OR c.id_handheld_meter = d.instrument_id
+           ON c.sensor_holder_instrument_id = d.instrument_id
+              OR c.handheld_meter_instrument_id = d.instrument_id
          LEFT JOIN instruments.instruments AS i
            ON i.instrument_id = d.instrument_id
          LEFT JOIN LATERAL (
@@ -1244,7 +1244,7 @@ continuousDataReview <- function(id, language) {
            AND d.start_datetime <= $3
            AND (d.end_datetime IS NULL OR d.end_datetime >= $2)
          GROUP BY c.calibration_id, c.obs_datetime, c.purpose,
-                  i.serial_no, i.asset_tag, c.id_sensor_holder
+                  i.serial_no, i.asset_tag, c.sensor_holder_instrument_id
          ORDER BY c.obs_datetime",
         params = list(selected_ts(), rng$start, rng$end)
       ))
@@ -2113,7 +2113,7 @@ continuousDataReview <- function(id, language) {
         existing <- DBI::dbGetQuery(
           con,
           sprintf(
-            "SELECT %s AS record_id, %s AS type_id, start_dt, end_dt,
+            "SELECT %s AS record_id, %s AS type_id, start_datetime AS start_dt, end_datetime AS end_dt,
                     COALESCE(no_source_update, FALSE) AS no_source_update
              FROM %s WHERE timeseries_id = $1",
             spec$id,
@@ -2132,7 +2132,8 @@ continuousDataReview <- function(id, language) {
           editing_row <- if (is.null(action$record)) {
             rep(TRUE, nrow(existing))
           } else {
-            as.character(existing$record_id) != as.character(action$record$record_id)
+            as.character(existing$record_id) !=
+              as.character(action$record$record_id)
           }
           conflict_start <- action$start_dt
           conflict_end <- action$end_dt
@@ -2155,9 +2156,13 @@ continuousDataReview <- function(id, language) {
             as.numeric(existing$start_dt) < as.numeric(conflict_end) &
             as.numeric(existing$end_dt) > as.numeric(conflict_start)
           conflict <- if (action$type_code %in% c("UNK", "UNS")) {
-            editing_row & interval_overlap & existing$type_code != action$type_code
+            editing_row &
+              interval_overlap &
+              existing$type_code != action$type_code
           } else {
-            editing_row & interval_overlap & existing$type_code %in% c("UNK", "UNS")
+            editing_row &
+              interval_overlap &
+              existing$type_code %in% c("UNK", "UNS")
           }
           if (any(conflict, na.rm = TRUE)) {
             stop(
@@ -2191,7 +2196,7 @@ continuousDataReview <- function(id, language) {
               DBI::dbExecute(
                 con,
                 sprintf(
-                  "UPDATE %s SET end_dt = $1 WHERE %s = $2",
+                  "UPDATE %s SET end_datetime = $1 WHERE %s = $2",
                   spec$table,
                   spec$id
                 ),
@@ -2200,7 +2205,7 @@ continuousDataReview <- function(id, language) {
               DBI::dbExecute(
                 con,
                 sprintf(
-                  "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt,
+                  "INSERT INTO %s (timeseries_id, %s, start_datetime, end_datetime,
                                   no_source_update)
                    VALUES ($1, $2, $3, $4, $5)",
                   spec$table,
@@ -2218,7 +2223,7 @@ continuousDataReview <- function(id, language) {
               DBI::dbExecute(
                 con,
                 sprintf(
-                  "UPDATE %s SET end_dt = $1 WHERE %s = $2",
+                  "UPDATE %s SET end_datetime = $1 WHERE %s = $2",
                   spec$table,
                   spec$id
                 ),
@@ -2228,7 +2233,7 @@ continuousDataReview <- function(id, language) {
               DBI::dbExecute(
                 con,
                 sprintf(
-                  "UPDATE %s SET start_dt = $1 WHERE %s = $2",
+                  "UPDATE %s SET start_datetime = $1 WHERE %s = $2",
                   spec$table,
                   spec$id
                 ),
@@ -2251,7 +2256,7 @@ continuousDataReview <- function(id, language) {
             DBI::dbExecute(
               con,
               sprintf(
-                "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt,
+                "INSERT INTO %s (timeseries_id, %s, start_datetime, end_datetime,
                                 no_source_update)
                  VALUES ($1, $2, $3, $4, $5)",
                 spec$table,
@@ -2269,7 +2274,7 @@ continuousDataReview <- function(id, language) {
             DBI::dbExecute(
               con,
               sprintf(
-                "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3,
+                "UPDATE %s SET %s = $1, start_datetime = $2, end_datetime = $3,
                                no_source_update = $4
                  WHERE %s = $5",
                 spec$table,
@@ -2327,7 +2332,7 @@ continuousDataReview <- function(id, language) {
             DBI::dbExecute(
               con,
               sprintf(
-                "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3,
+                "UPDATE %s SET %s = $1, start_datetime = $2, end_datetime = $3,
                                no_source_update = $4
                  WHERE %s = $5",
                 spec$table,
@@ -2346,7 +2351,7 @@ continuousDataReview <- function(id, language) {
             DBI::dbExecute(
               con,
               sprintf(
-                "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt,
+                "INSERT INTO %s (timeseries_id, %s, start_datetime, end_datetime,
                                 no_source_update)
                  VALUES ($1, $2, $3, $4, $5)",
                 spec$table,
@@ -2393,7 +2398,7 @@ continuousDataReview <- function(id, language) {
         if (is.null(record)) {
           query <- paste(
             "INSERT INTO continuous.corrections",
-            "(timeseries_id, start_dt, end_dt, correction_type, value1,",
+            "(timeseries_id, start_datetime, end_datetime, correction_type, value1,",
             " value2, timestep_window, equation)",
             "VALUES ($1, $2, $3, $4, $5, $6,",
             " CASE WHEN $7::integer IS NULL THEN NULL",
@@ -2413,7 +2418,7 @@ continuousDataReview <- function(id, language) {
         } else {
           query <- paste(
             "UPDATE continuous.corrections",
-            "SET correction_type = $1, start_dt = $2, end_dt = $3,",
+            "SET correction_type = $1, start_datetime = $2, end_datetime = $3,",
             "    value1 = $4, value2 = $5,",
             "    timestep_window = CASE WHEN $6::integer IS NULL THEN NULL",
             "      ELSE make_interval(secs => $6::integer) END,",

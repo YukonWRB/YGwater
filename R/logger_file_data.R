@@ -51,6 +51,13 @@ read_logger_file_data <- function(file, file_type = NULL, default_tz = "UTC") {
   stop("Unsupported logger file extension: .", ext, call. = FALSE)
 }
 
+#' Read measurements from a Solinst XLE export
+#'
+#' @param file Path to a Solinst XLE file.
+#' @param default_tz Fallback time zone name or numeric UTC offset in hours.
+#' @return A data frame of UTC datetimes and standardized measurements with a time-zone note.
+#' @keywords internal
+#' @noRd
 read_solinst_xle_data <- function(file, default_tz = "UTC") {
   xml_file <- xml2::read_xml(file)
   if (!identical(xml2::xml_name(xml2::xml_root(xml_file)), "Body_xle")) {
@@ -126,6 +133,13 @@ read_solinst_xle_data <- function(file, default_tz = "UTC") {
   out
 }
 
+#' Read measurements from an In-Situ HTML export
+#'
+#' @param file Path to an In-Situ logger HTML export.
+#' @param default_tz Fallback time zone name or numeric UTC offset in hours.
+#' @return A data frame of UTC datetimes and standardized measurements with a time-zone note.
+#' @keywords internal
+#' @noRd
 read_insitu_html_data <- function(file, default_tz = "UTC") {
   html <- xml2::read_html(file)
   if (!is_insitu_html_logger_file(html)) {
@@ -198,6 +212,12 @@ read_insitu_html_data <- function(file, default_tz = "UTC") {
   out
 }
 
+#' Recognize the In-Situ HTML logger layout
+#'
+#' @param html Parsed HTML document.
+#' @return A logical flag indicating whether the expected table, rows, and offset metadata are present.
+#' @keywords internal
+#' @noRd
 is_insitu_html_logger_file <- function(html) {
   has_data_table <- length(rvest::html_elements(html, "[isi-data-table]")) > 0L
   has_data_rows <- length(rvest::html_elements(html, "[isi-data-row]")) > 0L
@@ -210,6 +230,13 @@ is_insitu_html_logger_file <- function(html) {
   has_data_table && has_data_rows && has_time_offset
 }
 
+#' Read a supported Onset HOBO binary file
+#'
+#' @param file Path to a HOBO binary file from a U24-001 or UTBI-001 logger.
+#' @param default_tz Fallback time zone or offset used in the note when the file has no offset metadata.
+#' @return A data frame of UTC datetimes and measurements with a time-zone note.
+#' @keywords internal
+#' @noRd
 read_hobo_data <- function(file, default_tz = "UTC") {
   hobo <- parse_hobo_binary(file)
   model <- hobo_tag_text(hobo, 0x05)
@@ -235,6 +262,12 @@ read_hobo_data <- function(file, default_tz = "UTC") {
   out
 }
 
+#' Decode measurements from a U24 conductivity logger
+#'
+#' @param hobo Parsed HOBO record from `parse_hobo_binary()`.
+#' @return A data frame with UTC datetimes and the enabled conductivity or temperature measurements.
+#' @keywords internal
+#' @noRd
 read_hobo_u24_data <- function(hobo) {
   active <- hobo_u24_active_channels(hobo)
   if (!any(active)) {
@@ -292,6 +325,12 @@ read_hobo_u24_data <- function(hobo) {
   as.data.frame(out)
 }
 
+#' Decode measurements from a TidbiT temperature logger
+#'
+#' @param hobo Parsed HOBO record from `parse_hobo_binary()`.
+#' @return A data frame with UTC datetimes and temperatures in degrees Celsius.
+#' @keywords internal
+#' @noRd
 read_hobo_tidbit_data <- function(hobo) {
   raw_values <- hobo_tidbit_raw_values(hobo)
   if (length(raw_values) == 0L) {
@@ -305,6 +344,12 @@ read_hobo_tidbit_data <- function(hobo) {
   as.data.frame(out)
 }
 
+#' Read HOBO header tags and retain the binary payload
+#'
+#' @param file Path to a HOBO binary file.
+#' @return A list of integer `bytes` and parsed `tags` with values and offsets.
+#' @keywords internal
+#' @noRd
 parse_hobo_binary <- function(file) {
   bytes <- readBin(file, "raw", n = file.info(file)$size)
   int_bytes <- as.integer(bytes)
@@ -337,6 +382,13 @@ parse_hobo_binary <- function(file) {
   list(bytes = int_bytes, tags = tags)
 }
 
+#' Collect byte payloads for a HOBO header tag
+#'
+#' @param hobo Parsed HOBO record.
+#' @param tag Numeric tag code.
+#' @return A list of integer byte vectors in file order.
+#' @keywords internal
+#' @noRd
 hobo_tag_values <- function(hobo, tag) {
   lapply(
     hobo$tags[vapply(hobo$tags, function(x) x$tag == tag, logical(1))],
@@ -345,6 +397,14 @@ hobo_tag_values <- function(hobo, tag) {
   )
 }
 
+#' Read the first occurrence of a HOBO header tag
+#'
+#' @param hobo Parsed HOBO record.
+#' @param tag Numeric tag code.
+#' @param required Whether to error when the tag is absent.
+#' @return An integer byte vector, empty for an absent optional tag.
+#' @keywords internal
+#' @noRd
 hobo_tag_value <- function(hobo, tag, required = TRUE) {
   values <- hobo_tag_values(hobo, tag)
   if (length(values) == 0L) {
@@ -359,6 +419,13 @@ hobo_tag_value <- function(hobo, tag, required = TRUE) {
   values[[1L]]
 }
 
+#' Read a text value from a HOBO header tag
+#'
+#' @param hobo Parsed HOBO record.
+#' @param tag Numeric tag code.
+#' @return The decoded text, or an empty string for an absent tag.
+#' @keywords internal
+#' @noRd
 hobo_tag_text <- function(hobo, tag) {
   value <- hobo_tag_value(hobo, tag, required = FALSE)
   if (length(value) == 0L) {
@@ -367,10 +434,24 @@ hobo_tag_text <- function(hobo, tag) {
   rawToChar(as.raw(value))
 }
 
+#' Read an integer from a HOBO header tag
+#'
+#' @param hobo Parsed HOBO record.
+#' @param tag Numeric tag code.
+#' @return The first tag payload interpreted as an unsigned big-endian integer.
+#' @keywords internal
+#' @noRd
 hobo_tag_int <- function(hobo, tag) {
   hobo_big_endian_int(hobo_tag_value(hobo, tag))
 }
 
+#' Decode floating-point HOBO tag payloads
+#'
+#' @param hobo Parsed HOBO record.
+#' @param tag Numeric tag code.
+#' @return A list of numeric vectors decoded as four-byte big-endian floats.
+#' @keywords internal
+#' @noRd
 hobo_tag_floats <- function(hobo, tag) {
   lapply(hobo_tag_values(hobo, tag), function(value) {
     readBin(
@@ -383,15 +464,35 @@ hobo_tag_floats <- function(hobo, tag) {
   })
 }
 
+#' Decode an unsigned big-endian byte sequence
+#'
+#' @param value Integer or raw byte values in most-significant-first order.
+#' @return A numeric scalar representing the integer.
+#' @keywords internal
+#' @noRd
 hobo_big_endian_int <- function(value) {
   sum(as.integer(value) * 256^rev(seq_along(value) - 1L))
 }
 
+#' Extract the recorded HOBO UTC offset
+#'
+#' @param hobo Parsed HOBO record.
+#' @return The offset in seconds, or `NA_real_` when absent or invalid.
+#' @keywords internal
+#' @noRd
 hobo_utc_offset_seconds <- function(hobo) {
   offset <- hobo_tag_text(hobo, 0x14)
   parse_logger_utc_offset(offset)
 }
 
+#' Build UTC timestamps for regularly spaced HOBO records
+#'
+#' @param hobo Parsed HOBO record containing launch and timing tags.
+#' @param n Number of records.
+#' @param first_row_offset Number of logging intervals between the first logged record and the first requested record.
+#' @return A UTC `POSIXct` vector of length `n`.
+#' @keywords internal
+#' @noRd
 hobo_datetimes <- function(hobo, n, first_row_offset = 0L) {
   launch_info <- hobo_tag_value(hobo, 0x22)
   if (length(launch_info) < 11L) {
@@ -412,16 +513,36 @@ hobo_datetimes <- function(hobo, n, first_row_offset = 0L) {
   start_time + seq.int(0L, length.out = n) * interval_seconds
 }
 
+#' Read the measurement payload offset from the HOBO header
+#'
+#' @param hobo Parsed HOBO record.
+#' @return The zero-based byte offset of the measurement payload.
+#' @keywords internal
+#' @noRd
 hobo_data_offset <- function(hobo) {
   hobo_tag_int(hobo, 0x0D)
 }
 
+#' Split the HOBO measurement payload into four-bit values
+#'
+#' @param hobo Parsed HOBO record.
+#' @return A numeric vector with the high nibble followed by the low nibble of each byte.
+#' @keywords internal
+#' @noRd
 hobo_payload_nibbles <- function(hobo) {
   offset <- hobo_data_offset(hobo)
   bytes <- hobo$bytes[(offset + 1L):length(hobo$bytes)]
   as.vector(rbind(floor(bytes / 16L), bytes %% 16L))
 }
 
+#' Decode fixed-width packed HOBO records
+#'
+#' @param hobo Parsed HOBO record.
+#' @param channel_widths Named vector giving the width of each channel in nibbles.
+#' @param marker_width Width in nibbles of the marker after the first record.
+#' @return A data.table of integer channels in record order.
+#' @keywords internal
+#' @noRd
 hobo_decode_packed_records <- function(hobo, channel_widths, marker_width) {
   nibbles <- hobo_payload_nibbles(hobo)
   record_width <- sum(channel_widths)
@@ -449,10 +570,22 @@ hobo_decode_packed_records <- function(hobo, channel_widths, marker_width) {
   out
 }
 
+#' Decode a big-endian base-16 integer
+#'
+#' @param nibbles Nibble values from 0 to 15 in most-significant-first order.
+#' @return A numeric scalar representing the integer.
+#' @keywords internal
+#' @noRd
 hobo_nibbles_to_int <- function(nibbles) {
   sum(as.integer(nibbles) * 16^rev(seq_along(nibbles) - 1L))
 }
 
+#' Read the channel configuration of a HOBO U24 logger
+#'
+#' @param hobo Parsed HOBO U24 record.
+#' @return Named logical flags for low-range, full-range, and temperature channels.
+#' @keywords internal
+#' @noRd
 hobo_u24_active_channels <- function(hobo) {
   channel_flags <- hobo_tag_values(hobo, 0x0B)
   channel_flags <- vapply(
@@ -471,6 +604,14 @@ hobo_u24_active_channels <- function(hobo) {
   out
 }
 
+#' Calibrate and temperature-compensate U24 conductivity
+#'
+#' @param raw_values Numeric vector of raw conductivity values.
+#' @param temp_c Corresponding temperatures in degrees Celsius.
+#' @param calibration Six polynomial coefficients, ordered by ascending power.
+#' @return Numeric conductivity values in microsiemens per centimetre.
+#' @keywords internal
+#' @noRd
 hobo_u24_conductivity <- function(raw_values, temp_c, calibration) {
   conductivity <- rowSums(vapply(
     seq_len(6L),
@@ -487,6 +628,12 @@ hobo_u24_conductivity <- function(raw_values, temp_c, calibration) {
   conductivity * (1.0323 - 0.001064 * temp_c)
 }
 
+#' Extract usable raw TidbiT temperature records
+#'
+#' @param hobo Parsed HOBO TidbiT record.
+#' @return Packed temperature values after filtering out-of-range values and decoding artifacts.
+#' @keywords internal
+#' @noRd
 hobo_tidbit_raw_values <- function(hobo) {
   values <- hobo_decode_packed_records(
     hobo = hobo,
@@ -496,6 +643,12 @@ hobo_tidbit_raw_values <- function(hobo) {
   hobo_tidbit_clean_raw_values(values[values > 0x500 & values < 0xF00])
 }
 
+#' Remove isolated jumps and trailing artifacts from TidbiT records
+#'
+#' @param values Numeric raw temperature readings in record order.
+#' @return The retained readings in input order.
+#' @keywords internal
+#' @noRd
 hobo_tidbit_clean_raw_values <- function(values) {
   if (length(values) < 3L) {
     return(values)
@@ -541,6 +694,12 @@ hobo_tidbit_clean_raw_values <- function(values) {
   values[keep]
 }
 
+#' Convert a TidbiT channel to degrees Celsius
+#'
+#' @param raw_values Numeric raw values from a TidbiT temperature channel.
+#' @return Numeric calibrated temperatures.
+#' @keywords internal
+#' @noRd
 hobo_tidbit_temperature <- function(raw_values) {
   coefficients <- c(
     108.1188,
@@ -557,6 +716,13 @@ hobo_tidbit_temperature <- function(raw_values) {
   ))
 }
 
+#' Read the first matching XML element in an XLE node
+#'
+#' @param node An xml2 node or document.
+#' @param name Element selector passed to `xml2::xml_find_first()`.
+#' @return The element text, or `NA_character_` when absent.
+#' @keywords internal
+#' @noRd
 xle_node_text <- function(node, name) {
   child <- xml2::xml_find_first(node, name)
   if (inherits(child, "xml_missing")) {
@@ -565,6 +731,12 @@ xle_node_text <- function(node, name) {
   xml2::xml_text(child)
 }
 
+#' Split logger measurement headings into parameter and unit
+#'
+#' @param headers Character vector of source column headings.
+#' @return A data.table with `parameter` and `unit` columns. Missing units are `NA`.
+#' @keywords internal
+#' @noRd
 parse_logger_headers <- function(headers) {
   data.table::rbindlist(lapply(headers, function(header) {
     header <- trimws(header)
@@ -582,6 +754,14 @@ parse_logger_headers <- function(headers) {
   }))
 }
 
+#' Interpret local logger timestamps and convert them to UTC
+#'
+#' @param x Timestamp strings from a logger export.
+#' @param default_tz Fallback time zone or fixed offset used when the export has no offset.
+#' @param offset_seconds Recorded local offset from UTC in seconds, or `NA` to use `default_tz`.
+#' @return A UTC `POSIXct` vector.
+#' @keywords internal
+#' @noRd
 parse_logger_local_datetime <- function(
   x,
   default_tz,
@@ -615,6 +795,12 @@ parse_logger_local_datetime <- function(
   parsed
 }
 
+#' Normalize an input time zone or fixed logger offset
+#'
+#' @param default_tz A scalar Olson time-zone name, formatted offset, or numeric offset in hours.
+#' @return A list with `tz` and `offset_seconds`. Named time zones have an `NA` offset.
+#' @keywords internal
+#' @noRd
 normalize_logger_default_tz <- function(default_tz) {
   if (length(default_tz) != 1L || is.na(default_tz)) {
     stop(
@@ -659,6 +845,12 @@ normalize_logger_default_tz <- function(default_tz) {
   )
 }
 
+#' Convert an offset given in hours to seconds
+#'
+#' @param offset_hours Finite numeric offset in hours with magnitude at most 24.
+#' @return The corresponding numeric offset in seconds.
+#' @keywords internal
+#' @noRd
 utc_offset_hours_to_seconds <- function(offset_hours) {
   offset_hours <- as.numeric(offset_hours)
   if (!is.finite(offset_hours) || abs(offset_hours) > 24) {
@@ -670,6 +862,12 @@ utc_offset_hours_to_seconds <- function(offset_hours) {
   offset_hours * 3600
 }
 
+#' Parse a written logger UTC offset
+#'
+#' @param value One offset string, such as `UTC-07:00` or `+0530`.
+#' @return The offset in seconds, or `NA_real_` if the string cannot be parsed.
+#' @keywords internal
+#' @noRd
 parse_logger_utc_offset <- function(value) {
   value <- trimws(as.character(value))
   if (toupper(value) %in% c("UTC", "GMT")) {
@@ -701,6 +899,14 @@ parse_logger_utc_offset <- function(value) {
   sign * (hours * 3600 + minutes * 60)
 }
 
+#' Describe how logger timestamps were interpreted
+#'
+#' @param offset_seconds UTC offset recorded by the file, in seconds.
+#' @param default_tz Fallback time zone or UTC offset when no offset is recorded.
+#' @param file_has_offset Whether the file supplied an explicit UTC offset.
+#' @return A character string describing the UTC conversion for display.
+#' @keywords internal
+#' @noRd
 logger_timezone_note <- function(offset_seconds, default_tz, file_has_offset) {
   if (isTRUE(file_has_offset)) {
     offset_label <- format_logger_utc_offset(offset_seconds)
@@ -750,6 +956,12 @@ logger_timezone_note <- function(offset_seconds, default_tz, file_has_offset) {
   )
 }
 
+#' Format a UTC offset for the logger time-zone note
+#'
+#' @param offset_seconds Signed offset from UTC in seconds.
+#' @return A string such as `UTC-07:00`.
+#' @keywords internal
+#' @noRd
 format_logger_utc_offset <- function(offset_seconds) {
   sign <- if (offset_seconds < 0) "-" else "+"
   abs_seconds <- abs(offset_seconds)
@@ -758,6 +970,11 @@ format_logger_utc_offset <- function(offset_seconds) {
   sprintf("UTC%s%02d:%02d", sign, hours, minutes)
 }
 
+#' List accepted logger timestamp formats
+#'
+#' @return A character vector of formats for `as.POSIXct()`.
+#' @keywords internal
+#' @noRd
 logger_datetime_formats <- function() {
   c(
     "%Y-%m-%d %H:%M:%S",
@@ -769,6 +986,12 @@ logger_datetime_formats <- function() {
   )
 }
 
+#' Read the UTC offset recorded in an In-Situ HTML export
+#'
+#' @param html Parsed In-Situ HTML document.
+#' @return A signed offset in seconds, or `NA_real_` when absent or unreadable.
+#' @keywords internal
+#' @noRd
 html_time_offset_seconds <- function(html) {
   offset_node <- rvest::html_element(
     html,
@@ -797,6 +1020,14 @@ html_time_offset_seconds <- function(html) {
       ))
 }
 
+#' Normalize a logger measurement column and its label
+#'
+#' @param values Measurement values.
+#' @param parameter Source parameter label.
+#' @param unit Unit label from the source column heading.
+#' @return A list with the output column `name` and `values`. Supported parameters are converted to standard units.
+#' @keywords internal
+#' @noRd
 convert_logger_values <- function(values, parameter, unit) {
   parameter_label <- trimws(as.character(parameter))
   if (is.na(parameter_label) || !nzchar(parameter_label)) {
@@ -846,6 +1077,12 @@ convert_logger_values <- function(values, parameter, unit) {
   list(name = paste0(parameter_label, unit_label), values = values)
 }
 
+#' Normalize a logger unit label for matching
+#'
+#' @param unit Unit text from a source header.
+#' @return Lowercase unit text with common degree and micro symbols normalized.
+#' @keywords internal
+#' @noRd
 logger_unit_key <- function(unit) {
   unit <- trimws(as.character(unit))
   unit <- gsub("\u00B5", "u", unit, fixed = TRUE)
@@ -854,6 +1091,13 @@ logger_unit_key <- function(unit) {
   tolower(unit)
 }
 
+#' Convert level or pressure readings to metres of water
+#'
+#' @param values Numeric level or pressure measurements.
+#' @param unit Normalized input unit label.
+#' @return Numeric readings in metres of water.
+#' @keywords internal
+#' @noRd
 convert_logger_level <- function(values, unit) {
   factors <- c(
     "m" = 1,
@@ -870,6 +1114,13 @@ convert_logger_level <- function(values, unit) {
   convert_logger_by_factor(values, unit, factors, "level/pressure")
 }
 
+#' Convert logger depth readings to metres
+#'
+#' @param values Numeric depth measurements.
+#' @param unit Normalized input unit label.
+#' @return Numeric depths in metres.
+#' @keywords internal
+#' @noRd
 convert_logger_depth <- function(values, unit) {
   factors <- c(
     "m" = 1,
@@ -881,6 +1132,13 @@ convert_logger_depth <- function(values, unit) {
   convert_logger_by_factor(values, unit, factors, "depth")
 }
 
+#' Convert logger temperatures to degrees Celsius
+#'
+#' @param values Numeric measurements in Celsius or Fahrenheit.
+#' @param unit Normalized input unit label.
+#' @return Numeric temperatures in degrees Celsius.
+#' @keywords internal
+#' @noRd
 convert_logger_temperature <- function(values, unit) {
   if (unit %in% c("deg c", "c", "celsius", "degc")) {
     return(values)
@@ -891,6 +1149,13 @@ convert_logger_temperature <- function(values, unit) {
   stop("Unrecognized temperature unit: ", unit, call. = FALSE)
 }
 
+#' Convert conductivity to microsiemens per centimetre
+#'
+#' @param values Numeric conductivity measurements.
+#' @param unit Normalized input unit label.
+#' @return Numeric conductivity measurements in microsiemens per centimetre.
+#' @keywords internal
+#' @noRd
 convert_logger_conductivity <- function(values, unit) {
   if (unit %in% c("us/cm", "us/cm.", "umhos/cm")) {
     return(values)
@@ -901,6 +1166,15 @@ convert_logger_conductivity <- function(values, unit) {
   stop("Unrecognized conductivity unit: ", unit, call. = FALSE)
 }
 
+#' Apply the conversion factor for a logger unit
+#'
+#' @param values Numeric measurements to convert.
+#' @param unit Normalized input unit label.
+#' @param factors Named numeric conversion factors indexed by unit.
+#' @param label Measurement name used in an unknown-unit error.
+#' @return Numeric measurements scaled by the matching factor.
+#' @keywords internal
+#' @noRd
 convert_logger_by_factor <- function(values, unit, factors, label) {
   if (unit %in% names(factors)) {
     return(values * unname(factors[[unit]]))

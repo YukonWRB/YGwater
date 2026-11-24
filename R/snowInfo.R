@@ -214,7 +214,7 @@ snowInfo <- function(
       FROM discrete.results AS r 
       JOIN discrete.samples AS s ON s.sample_id = r.sample_id
       JOIN public.parameters AS p ON p.parameter_id = r.parameter_id 
-      JOIN discrete.result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type
+      JOIN discrete.result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type_id
       WHERE r.sample_id IN ('",
       paste(samples$sample_id, collapse = "', '"),
       "') AND p.parameter_id IN (21, 1220) ",

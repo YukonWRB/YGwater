@@ -90,12 +90,18 @@ ygwater_module_privilege_requirements <- function() {
         "instruments.instrument_models",
         "instruments.instrument_types",
         "instruments.observers",
-        "public.organizations"
+        "public.organizations",
+        "instruments.sensors",
+        "instruments.sensor_types",
+        "instruments.instrument_sensor_events",
+        "instruments.instrument_sensor_event_slots",
+        "instruments.suppliers"
       ),
       c(
         rep(default_write, 8),
         list(c("INSERT", "UPDATE")),
-        rep(list("INSERT"), 5)
+        rep(list("INSERT"), 5),
+        rep(list("SELECT"), 5)
       )
     ),
     manageInstruments = req(
@@ -117,7 +123,7 @@ ygwater_module_privilege_requirements <- function() {
       c(
         "instruments.sensors",
         "instruments.sensor_types",
-        "instruments.sensor_makes",
+        "instruments.instrument_makes",
         "instruments.sensor_models",
         "public.organizations",
         "instruments.suppliers"
@@ -137,7 +143,6 @@ ygwater_module_privilege_requirements <- function() {
         "instruments.instrument_sensor_event_slots",
         "instruments.sensors",
         "instruments.sensor_types",
-        "instruments.sensor_makes",
         "instruments.sensor_models",
         "instruments.observers",
         "instruments.instrument_makes",
@@ -157,7 +162,6 @@ ygwater_module_privilege_requirements <- function() {
         c("SELECT", "INSERT"),
         c("SELECT", "INSERT"),
         c("SELECT", "INSERT"),
-        "SELECT",
         "SELECT",
         "SELECT",
         "SELECT",

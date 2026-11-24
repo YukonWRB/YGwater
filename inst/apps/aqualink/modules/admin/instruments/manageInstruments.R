@@ -74,13 +74,13 @@ manageInstrumentsUI <- function(id) {
           multiple = TRUE,
           options = list(maxItems = 1, placeholder = "Required", create = TRUE)
         ),
-        selectizeInput(
+        shinyjs::disabled(selectizeInput(
           ns("model"),
           "Model (type to add new)",
           choices = NULL,
           multiple = TRUE,
           options = list(maxItems = 1, placeholder = "Required", create = TRUE)
-        ),
+        )),
         selectizeInput(
           ns("type"),
           "Type (type to add new)",
@@ -127,8 +127,8 @@ manageInstrumentsUI <- function(id) {
       tags$h5("Lifecycle"),
       bslib::layout_columns(
         col_widths = c(6, 6),
-        dateInput(ns("date_in_service"), "Date in service", value = NULL),
-        dateInput(ns("date_purchased"), "Date purchased", value = NULL),
+        equipment_date_input(ns("date_in_service"), "Date in service"),
+        equipment_date_input(ns("date_purchased"), "Date purchased"),
         numericInput(
           ns("purchase_price"),
           "Purchase price dollars",
@@ -137,12 +137,8 @@ manageInstrumentsUI <- function(id) {
           step = 0.01
         ),
         textInput(ns("retired_by"), "Retired by"),
-        dateInput(ns("date_retired"), "Date retired", value = NULL),
-        dateInput(
-          ns("date_end_of_life"),
-          "Expected end of life",
-          value = NULL
-        )
+        equipment_date_input(ns("date_retired"), "Date retired"),
+        equipment_date_input(ns("date_end_of_life"), "Expected end of life")
       ),
       tags$hr(),
       tags$h5("Technical details"),
@@ -369,6 +365,28 @@ manageInstruments <- function(id, language) {
       )
     }
 
+    model_selector_make <- reactiveVal(character())
+    pending_model_make <- reactiveVal(NA_integer_)
+    update_model_selector <- function(make, model = character()) {
+      model_selector_make(normalize_select_value(make))
+      make_id <- equipment_catalogue_id(
+        make,
+        instrument_data$makes,
+        "make_id",
+        "make"
+      )
+      matching <- equipment_models_for_make(instrument_data$models, make_id)
+      choices <- equipment_model_choices(matching)
+      updateSelectizeInput(
+        session,
+        "model",
+        choices = choices,
+        selected = intersect(normalize_select_value(model), unname(choices)),
+        server = TRUE
+      )
+      shinyjs::toggleState("model", condition = !is.na(make_id))
+    }
+
     update_lookup_selectors <- function(selected = current_lookup_selection()) {
       updateSelectizeInput(
         session,
@@ -381,20 +399,18 @@ manageInstruments <- function(id, language) {
         selected = normalize_select_value(selected$observer),
         server = TRUE
       )
+      make_choices <- build_choices(instrument_data$makes, "make_id", "make")
       updateSelectizeInput(
         session,
         "make",
-        choices = build_choices(instrument_data$makes, "make_id", "make"),
-        selected = normalize_select_value(selected$make),
+        choices = make_choices,
+        selected = intersect(
+          normalize_select_value(selected$make),
+          unname(make_choices)
+        ),
         server = TRUE
       )
-      updateSelectizeInput(
-        session,
-        "model",
-        choices = build_choices(instrument_data$models, "model_id", "model"),
-        selected = normalize_select_value(selected$model),
-        server = TRUE
-      )
+      update_model_selector(selected$make, selected$model)
       updateSelectizeInput(
         session,
         "type",
@@ -436,13 +452,10 @@ manageInstruments <- function(id, language) {
           "ORDER BY observer_first, observer_last, organization"
         )
       )
-      instrument_data$makes <- DBI::dbGetQuery(
-        con,
-        "SELECT make_id, make FROM instruments.instrument_makes ORDER BY make"
-      )
+      instrument_data$makes <- read_equipment_manufacturers(con)
       instrument_data$models <- DBI::dbGetQuery(
         con,
-        "SELECT model_id, model FROM instruments.instrument_models ORDER BY model"
+        "SELECT model_id, make_id, model FROM instruments.instrument_models ORDER BY model"
       )
       instrument_data$types <- DBI::dbGetQuery(
         con,
@@ -486,9 +499,9 @@ manageInstruments <- function(id, language) {
         paste(
           "SELECT i.instrument_id, i.obs_datetime, i.observer,",
           "CONCAT(o.observer_first, ' ', o.observer_last, ' (', o.organization, ')') AS observer_name,",
-          "i.make, mk.make AS make_name,",
-          "i.model, mdl.model AS model_name,",
-          "i.type, tp.type AS type_name,",
+          "mdl.make_id AS make, mk.make AS make_name,",
+          "i.instrument_model_id AS model, mdl.model AS model_name,",
+          "i.instrument_type_id AS type, tp.type AS type_name,",
           "i.holds_replaceable_sensors, i.serial_no, i.asset_tag,",
           "i.date_in_service, i.date_purchased, i.retired_by, i.date_retired,",
           "i.owner, org.name AS owner_name, i.date_end_of_life,",
@@ -499,9 +512,9 @@ manageInstruments <- function(id, language) {
           "i.can_be_logger, i.can_be_telemetry_component",
           "FROM instruments.instruments AS i",
           "LEFT JOIN instruments.observers AS o ON i.observer = o.observer_id",
-          "LEFT JOIN instruments.instrument_makes AS mk ON i.make = mk.make_id",
-          "LEFT JOIN instruments.instrument_models AS mdl ON i.model = mdl.model_id",
-          "LEFT JOIN instruments.instrument_types AS tp ON i.type = tp.type_id",
+          "LEFT JOIN instruments.instrument_models AS mdl ON i.instrument_model_id = mdl.model_id",
+          "LEFT JOIN instruments.instrument_makes AS mk ON mdl.make_id = mk.make_id",
+          "LEFT JOIN instruments.instrument_types AS tp ON i.instrument_type_id = tp.type_id",
           "LEFT JOIN public.organizations AS org ON i.owner = org.organization_id",
           "LEFT JOIN instruments.suppliers AS s ON i.supplier_id = s.supplier_id",
           "ORDER BY i.date_retired NULLS FIRST, i.serial_no, i.instrument_id"
@@ -553,7 +566,7 @@ manageInstruments <- function(id, language) {
 
       updateSelectizeInput(session, "observer", selected = character(0))
       updateSelectizeInput(session, "make", selected = character(0))
-      updateSelectizeInput(session, "model", selected = character(0))
+      update_model_selector(character())
       updateSelectizeInput(session, "type", selected = character(0))
       updateSelectizeInput(session, "owner", selected = character(0))
       updateSelectizeInput(session, "supplier_id", selected = character(0))
@@ -571,10 +584,10 @@ manageInstruments <- function(id, language) {
       updateTextInput(session, "serial_no", value = "")
       updateTextInput(session, "asset_tag", value = "")
       updateTextInput(session, "retired_by", value = "")
-      updateDateInput(session, "date_in_service", value = NULL)
-      updateDateInput(session, "date_purchased", value = NULL)
-      updateDateInput(session, "date_retired", value = NULL)
-      updateDateInput(session, "date_end_of_life", value = NULL)
+      update_equipment_date_input(session, "date_in_service")
+      update_equipment_date_input(session, "date_purchased")
+      update_equipment_date_input(session, "date_retired")
+      update_equipment_date_input(session, "date_end_of_life")
       updateNumericInput(session, "purchase_price", value = NA_real_)
       updateNumericInput(session, "cable_length_m", value = NA_real_)
       updateTextInput(session, "firmware_version", value = "")
@@ -621,17 +634,21 @@ manageInstruments <- function(id, language) {
         "retired_by",
         value = safe_text(record$retired_by)
       )
-      updateDateInput(
+      update_equipment_date_input(
         session,
         "date_in_service",
-        value = record$date_in_service
+        record$date_in_service
       )
-      updateDateInput(session, "date_purchased", value = record$date_purchased)
-      updateDateInput(session, "date_retired", value = record$date_retired)
-      updateDateInput(
+      update_equipment_date_input(
+        session,
+        "date_purchased",
+        record$date_purchased
+      )
+      update_equipment_date_input(session, "date_retired", record$date_retired)
+      update_equipment_date_input(
         session,
         "date_end_of_life",
-        value = record$date_end_of_life
+        record$date_end_of_life
       )
       updateNumericInput(
         session,
@@ -788,20 +805,25 @@ manageInstruments <- function(id, language) {
       )
     })
 
-    observeEvent(input$ui_ready, {
-      refresh_all(
-        record_selected = character(0),
-        lookup_selected = list(
-          observer = character(0),
-          make = character(0),
-          model = character(0),
-          type = character(0),
-          owner = character(0),
-          supplier_id = character(0)
+    observeEvent(
+      input$ui_ready,
+      {
+        refresh_all(
+          record_selected = character(0),
+          lookup_selected = list(
+            observer = character(0),
+            make = character(0),
+            model = character(0),
+            type = character(0),
+            owner = character(0),
+            supplier_id = character(0)
+          )
         )
-      )
-      clear_form(reset_record = FALSE, clear_table = FALSE)
-    }, once = TRUE, ignoreInit = TRUE)
+        clear_form(reset_record = FALSE, clear_table = FALSE)
+      },
+      once = TRUE,
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$timezone,
@@ -979,6 +1001,11 @@ manageInstruments <- function(id, language) {
     observeEvent(
       input$make,
       {
+        if (
+          !identical(normalize_select_value(input$make), model_selector_make())
+        ) {
+          update_model_selector(input$make, input$model)
+        }
         created_value <- blank_to_na(input$make)
         if (
           is.na(created_value) ||
@@ -1008,14 +1035,20 @@ manageInstruments <- function(id, language) {
           easyClose = TRUE
         ))
       },
-      ignoreInit = TRUE
+      ignoreInit = TRUE,
+      ignoreNULL = FALSE
     )
 
     observeEvent(
       input$add_new_make,
       {
-        if (!nzchar(trimws(input$new_make))) {
+        make <- safe_text(input$new_make)
+        if (!nzchar(make)) {
           showNotification("Make is required.", type = "error")
+          return()
+        }
+        if (tolower(make) == equipment_placeholder_make) {
+          showNotification("Enter the manufacturer's name.", type = "error")
           return()
         }
         existing_id <- lookup_id_from_label(
@@ -1043,7 +1076,7 @@ manageInstruments <- function(id, language) {
               VALUES ($1, $2)
               RETURNING make_id",
             params = list(
-              trimws(input$new_make),
+              make,
               blank_to_na(input$new_make_desc)
             )
           )$make_id[[1]]
@@ -1066,15 +1099,21 @@ manageInstruments <- function(id, language) {
       input$model,
       {
         created_value <- blank_to_na(input$model)
+        make_id <- int_or_na(input$make)
+        matching <- equipment_models_for_make(instrument_data$models, make_id)
         if (
           is.na(created_value) ||
             has_lookup_id(created_value, instrument_data$models, "model_id")
         ) {
           return()
         }
+        if (!has_lookup_id(make_id, instrument_data$makes, "make_id")) {
+          update_model_selector(input$make)
+          return()
+        }
         existing_id <- lookup_id_from_label(
           created_value,
-          instrument_data$models,
+          matching,
           "model_id",
           "model"
         )
@@ -1083,6 +1122,7 @@ manageInstruments <- function(id, language) {
           return()
         }
         updateSelectizeInput(session, "model", selected = character(0))
+        pending_model_make(make_id)
         showModal(modalDialog(
           title = "Add new model",
           textInput(ns("new_model"), "Model", value = created_value),
@@ -1100,13 +1140,18 @@ manageInstruments <- function(id, language) {
     observeEvent(
       input$add_new_model,
       {
+        make_id <- pending_model_make()
+        req(
+          has_lookup_id(make_id, instrument_data$makes, "make_id"),
+          identical(make_id, int_or_na(input$make))
+        )
         if (!nzchar(trimws(input$new_model))) {
           showNotification("Model is required.", type = "error")
           return()
         }
         existing_id <- lookup_id_from_label(
           input$new_model,
-          instrument_data$models,
+          equipment_models_for_make(instrument_data$models, make_id),
           "model_id",
           "model"
         )
@@ -1125,10 +1170,11 @@ manageInstruments <- function(id, language) {
           DBI::dbGetQuery(
             con,
             "INSERT INTO instruments.instrument_models
-              (model, description)
-              VALUES ($1, $2)
+              (make_id, model, description)
+              VALUES ($1, $2, $3)
               RETURNING model_id",
             params = list(
+              make_id,
               trimws(input$new_model),
               blank_to_na(input$new_model_desc)
             )
@@ -1454,6 +1500,7 @@ manageInstruments <- function(id, language) {
         current_id <- normalize_record_id(input$record_id)
         obs_datetime <- scalar_utc_datetime(input$obs_datetime)
         serial_no <- safe_text(input$serial_no)
+        make_id <- int_or_na(input$make)
 
         missing_fields <- c()
         if (!nzchar(serial_no)) {
@@ -1462,11 +1509,17 @@ manageInstruments <- function(id, language) {
         if (is.na(int_or_na(input$observer))) {
           missing_fields <- c(missing_fields, "Observer")
         }
-        if (is.na(int_or_na(input$make))) {
+        if (!has_lookup_id(make_id, instrument_data$makes, "make_id")) {
           missing_fields <- c(missing_fields, "Make")
         }
-        if (is.na(int_or_na(input$model))) {
-          missing_fields <- c(missing_fields, "Model")
+        if (
+          !int_or_na(input$model) %in%
+            equipment_models_for_make(
+              instrument_data$models,
+              make_id
+            )$model_id
+        ) {
+          missing_fields <- c(missing_fields, "Model for the selected make")
         }
         if (is.na(int_or_na(input$type))) {
           missing_fields <- c(missing_fields, "Type")
@@ -1510,7 +1563,7 @@ manageInstruments <- function(id, language) {
         params <- list(
           obs_datetime,
           int_or_na(input$observer),
-          int_or_na(input$make),
+          make_id,
           int_or_na(input$model),
           int_or_na(input$type),
           isTRUE(input$holds_replaceable_sensors),
@@ -1539,7 +1592,7 @@ manageInstruments <- function(id, language) {
             DBI::dbGetQuery(
               con,
               "INSERT INTO instruments.instruments 
-                  (obs_datetime, observer, make, model, type, holds_replaceable_sensors, serial_no, asset_tag, date_in_service, date_purchased, retired_by, date_retired, owner, date_end_of_life, supplier_id, purchase_price, takes_measurements, can_be_logger, can_be_telemetry_component, cable_length_m, firmware_version, voltage, power_active_ma, power_quiescent_ma)
+                  (obs_datetime, observer, instrument_make_id, instrument_model_id, instrument_type_id, holds_replaceable_sensors, serial_no, asset_tag, date_in_service, date_purchased, retired_by, date_retired, owner, date_end_of_life, supplier_id, purchase_price, takes_measurements, can_be_logger, can_be_telemetry_component, cable_length_m, firmware_version, voltage, power_active_ma, power_quiescent_ma)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
                 RETURNING instrument_id",
               params = params
@@ -1554,9 +1607,9 @@ manageInstruments <- function(id, language) {
                 SET 
                   obs_datetime = $1, 
                   observer = $2, 
-                  make = $3, 
-                  model = $4,
-                  type = $5, 
+                  instrument_make_id = $3,
+                  instrument_model_id = $4,
+                  instrument_type_id = $5,
                   holds_replaceable_sensors = $6, 
                   serial_no = $7,
                   asset_tag = $8, 

@@ -1,21 +1,34 @@
 test_that("Reservoir monitoring plot renders selected traces", {
   env <- new.env(parent = globalenv())
   sys.source(
-    file.path(
-      "inst", "apps", "aqualink", "modules", "client", "reports",
-      "reservoirMonitoring.R"
+    system.file(
+      "apps/aqualink/modules/client/reports/reservoirMonitoring.R",
+      package = "YGwater",
+      mustWork = TRUE
     ),
     env
   )
-  env$yec_dashboard_thresholds <- function(...) list(thresholds = data.frame(), types = data.frame(), colours = data.frame())
+  env$yec_dashboard_thresholds <- function(...) {
+    list(
+      thresholds = data.frame(),
+      types = data.frame(),
+      colours = data.frame()
+    )
+  }
   env$yec_dashboard_threshold_segments <- function(...) data.frame()
-  env$yec_dashboard_threshold_margins <- function(dat, ...) data.frame(
-    below_fsl = rep(NA_real_, nrow(dat)), above_lsl = NA_real_,
-    below_alert = NA_real_, above_min_flow = NA_real_
-  )
+  env$yec_dashboard_threshold_margins <- function(dat, ...) {
+    data.frame(
+      below_fsl = rep(NA_real_, nrow(dat)),
+      above_lsl = NA_real_,
+      below_alert = NA_real_,
+      above_min_flow = NA_real_
+    )
+  }
   dat <- expand.grid(
-    location_code = c("09DC007", "09AB001"), parameter = c("Water level", "Discharge"),
-    index = 1:3, stringsAsFactors = FALSE
+    location_code = c("09DC007", "09AB001"),
+    parameter = c("Water level", "Discharge"),
+    index = 1:3,
+    stringsAsFactors = FALSE
   )
   dat$name <- dat$location_code
   dat$latitude <- 60 + as.numeric(dat$location_code == "09AB001")
@@ -23,7 +36,10 @@ test_that("Reservoir monitoring plot renders selected traces", {
   dat$latest_value <- dat$index
   dat$latest_time <- as.POSIXct("2026-09-18 12:00:00", tz = "UTC")
   dat$units <- ifelse(dat$parameter == "Water level", "m", "cms")
-  dat$change_24h <- 1; dat$change_48h <- 2; dat$change_1w <- 3; dat$data_age_hours <- 1
+  dat$change_24h <- 1
+  dat$change_48h <- 2
+  dat$change_1w <- 3
+  dat$data_age_hours <- 1
   dat$datetime <- dat$latest_time - (4 - dat$index) * 3600
   dat$value <- dat$index
   dat$start_time <- dat$latest_time - 7 * 86400

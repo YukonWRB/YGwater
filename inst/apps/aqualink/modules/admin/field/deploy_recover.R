@@ -94,6 +94,42 @@ deploy_recover <- function(id, language) {
       .POSIXct(Sys.time(), tz = "UTC")
     }
 
+    render_deployment_datetime <- function(id, value, timezone) {
+      force(id)
+      force(value)
+      tz <- air_datetime_widget_timezone(timezone)
+      output[[paste0(id, "_ui")]] <- renderUI({
+        shinyWidgets::airDatepickerInput(
+          ns(id),
+          label = if (id == "start_datetime") {
+            "Deployment start"
+          } else {
+            "Recovery time"
+          },
+          value = value,
+          timepicker = TRUE,
+          maxDate = Sys.Date() + 365,
+          startView = Sys.Date(),
+          update_on = "change",
+          tz = tz,
+          timepickerOpts = shinyWidgets::timepickerOptions(
+            minutesStep = 15,
+            timeFormat = "HH:mm"
+          )
+        )
+      })
+    }
+    render_deployment_datetime(
+      "start_datetime",
+      default_datetime(),
+      default_input_timezone()
+    )
+    render_deployment_datetime(
+      "end_datetime",
+      default_datetime(),
+      default_input_timezone()
+    )
+
     shift_datetime_input_timezone <- function(input_id, tz_name) {
       current_value <- coerce_utc_datetime(input[[input_id]])
       if (
@@ -101,6 +137,10 @@ deploy_recover <- function(id, language) {
           !length(current_value) ||
           all(is.na(current_value))
       ) {
+        return(invisible(NULL))
+      }
+      if (input_id %in% c("start_datetime", "end_datetime")) {
+        render_deployment_datetime(input_id, current_value, tz_name)
         return(invisible(NULL))
       }
       shinyWidgets::updateAirDateInput(
@@ -329,11 +369,10 @@ deploy_recover <- function(id, language) {
         return(integer(0))
       }
 
-      if (deployment_has_signal_rows(record)) {
-        return(record_signal_timeseries_ids(record))
-      }
-
-      record_direct_timeseries_ids(record)
+      union(
+        record_direct_timeseries_ids(record),
+        record_signal_timeseries_ids(record)
+      )
     }
 
     deployment_has_signal_rows <- function(record) {
@@ -350,6 +389,9 @@ deploy_recover <- function(id, language) {
       }
 
       if (deployment_has_signal_rows(record)) {
+        if (length(record_direct_timeseries_ids(record))) {
+          return("Deployment links and connection signals")
+        }
         if (
           !is.na(record$distinct_signal_timeseries_count[[1]]) &&
             record$distinct_signal_timeseries_count[[1]] > 1
@@ -558,17 +600,7 @@ deploy_recover <- function(id, language) {
     }
 
     selected_timeseries_persist_values <- function() {
-      record <- selected_record()
-
-      if (deployment_has_signal_rows(record)) {
-        return(record_direct_timeseries_ids(record))
-      }
-
       normalize_integer_vector(selected_timeseries_ids())
-    }
-
-    timeseries_association_locked <- function(record = selected_record()) {
-      deployment_has_signal_rows(record)
     }
 
     find_timeseries_row <- function(timeseries_id) {
@@ -742,6 +774,12 @@ deploy_recover <- function(id, language) {
       )
 
       available <- available[sub_location_matches & z_matches, , drop = FALSE]
+      available <- available[
+        !available$timeseries_id %in%
+          record_signal_timeseries_ids(selected_record()),
+        ,
+        drop = FALSE
+      ]
 
       if (nrow(available) == 0) {
         return(available)
@@ -1111,18 +1149,16 @@ deploy_recover <- function(id, language) {
         choices = character(0),
         selected = character(0)
       )
-      shinyWidgets::updateAirDateInput(
-        session,
+      render_deployment_datetime(
         "start_datetime",
-        value = default_datetime(),
-        tz = air_datetime_widget_timezone(input$start_timezone)
+        default_datetime(),
+        input$start_timezone
       )
       updateCheckboxInput(session, "has_end_datetime", value = FALSE)
-      shinyWidgets::updateAirDateInput(
-        session,
+      render_deployment_datetime(
         "end_datetime",
-        value = default_datetime(),
-        tz = air_datetime_widget_timezone(input$end_timezone)
+        default_datetime(),
+        input$end_timezone
       )
       updateTextAreaInput(session, "note", value = "")
     }
@@ -1200,11 +1236,11 @@ deploy_recover <- function(id, language) {
           i.date_retired
         FROM instruments.instruments AS i
         LEFT JOIN instruments.instrument_makes AS mk
-          ON i.make = mk.make_id
+          ON i.instrument_make_id = mk.make_id
         LEFT JOIN instruments.instrument_models AS mdl
-          ON i.model = mdl.model_id
+          ON i.instrument_model_id = mdl.model_id
         LEFT JOIN instruments.instrument_types AS it
-          ON i.type = it.type_id
+          ON i.instrument_type_id = it.type_id
         ORDER BY i.serial_no ASC, i.instrument_id ASC
         "
       )
@@ -1285,11 +1321,10 @@ deploy_recover <- function(id, language) {
           COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])
             AS direct_timeseries_ids,
           COALESCE(lmit.timeseries_count, 0) AS direct_timeseries_count,
-          CASE
-            WHEN COALESCE(conn.signal_row_count, 0) > 0
-              THEN COALESCE(conn.signal_timeseries_ids, ARRAY[]::integer[])
-            ELSE COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])
-          END AS associated_timeseries_ids,
+          COALESCE(conn.signal_timeseries_ids, ARRAY[]::integer[]) AS signal_timeseries_ids,
+          ARRAY(
+            SELECT unnest(lmit.timeseries_ids) UNION SELECT unnest(conn.signal_timeseries_ids)
+          ) AS associated_timeseries_ids,
           COALESCE(conn.connection_count, 0) AS connection_count,
           COALESCE(conn.signal_row_count, 0) AS signal_row_count,
           COALESCE(conn.mapped_signal_count, 0) AS mapped_signal_count,
@@ -1314,6 +1349,14 @@ deploy_recover <- function(id, language) {
           lmi.start_datetime,
           lmi.end_datetime,
           lmi.note,
+          lmi.deployment_visit_id,
+          lmi.recovery_visit_id,
+          lmi.firmware_version,
+          lmi.logger_program_revision,
+          lmi.record_unit_id,
+          lmi.record_interval_seconds,
+          lmi.record_duration_seconds,
+          lmi.record_aggregation_type_id,
           lmi.created,
           lmi.created_by,
           lmi.modified,
@@ -1418,11 +1461,11 @@ deploy_recover <- function(id, language) {
         LEFT JOIN instruments.instruments AS i
           ON lmi.instrument_id = i.instrument_id
         LEFT JOIN instruments.instrument_makes AS mk
-          ON i.make = mk.make_id
+          ON i.instrument_make_id = mk.make_id
         LEFT JOIN instruments.instrument_models AS mdl
-          ON i.model = mdl.model_id
+          ON i.instrument_model_id = mdl.model_id
         LEFT JOIN instruments.instrument_types AS it
-          ON i.type = it.type_id
+          ON i.instrument_type_id = it.type_id
         ORDER BY lmi.start_datetime DESC, lmi.metadata_id DESC
         "
       )
@@ -1485,6 +1528,131 @@ deploy_recover <- function(id, language) {
 
     selected_timeseries_details <- reactive({
       find_timeseries_rows(selected_timeseries_ids())
+    })
+
+    visit_choices <- reactive({
+      location_id <- as_nullable_integer(input$location_id)
+      if (is.na(location_id)) {
+        return(c("None" = ""))
+      }
+      visits <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT field_visit_id,
+                concat_ws(' | ', to_char(start_datetime AT TIME ZONE 'UTC',
+                    'YYYY-MM-DD HH24:MI') || ' UTC', NULLIF(purpose, '')) AS label
+         FROM field.field_visits WHERE location_id = $1
+         ORDER BY start_datetime DESC, field_visit_id DESC",
+        params = list(location_id)
+      )
+      c(
+        "None" = "",
+        stats::setNames(as.character(visits$field_visit_id), visits$label)
+      )
+    })
+
+    output$deployment_visit_fields <- renderUI({
+      choices <- visit_choices()
+      record <- selected_record()
+      visit_id <- function(name) {
+        if (
+          is.null(record) ||
+            !identical(
+              as_nullable_integer(input$location_id),
+              record$location_id[[1L]]
+            )
+        ) {
+          return("")
+        }
+        value <- record[[name]][1L]
+        if (is.na(value)) "" else as.character(value)
+      }
+      visit_input <- function(name, label) {
+        selected <- visit_id(name)
+        if (!selected %in% choices) {
+          choices <- c(
+            choices,
+            stats::setNames(selected, paste("Field visit", selected))
+          )
+        }
+        selectInput(ns(name), label, choices, selected = selected)
+      }
+      tagList(
+        visit_input("deployment_visit_id", "Installation visit"),
+        conditionalPanel(
+          "input.has_end_datetime",
+          ns = ns,
+          visit_input("recovery_visit_id", "Recovery visit")
+        )
+      )
+    })
+
+    recording_choices <- reactive({
+      con <- session$userData$AquaCache
+      units <- DBI::dbGetQuery(
+        con,
+        "SELECT unit_id, unit_name FROM public.units ORDER BY unit_name"
+      )
+      aggregations <- DBI::dbGetQuery(
+        con,
+        "SELECT aggregation_type_id, aggregation_type FROM continuous.aggregation_types
+         ORDER BY aggregation_type"
+      )
+      list(
+        units = c("None" = "", stats::setNames(units$unit_id, units$unit_name)),
+        aggregations = c(
+          "None" = "",
+          stats::setNames(
+            aggregations$aggregation_type_id,
+            aggregations$aggregation_type
+          )
+        )
+      )
+    })
+
+    output$deployment_recording_fields <- renderUI({
+      record <- selected_record()
+      choices <- recording_choices()
+      value <- function(name) if (is.null(record)) NA else record[[name]][1L]
+      tags$details(
+        tags$summary("Equipment and recording settings"),
+        textInput(
+          ns("firmware_version"),
+          "Firmware at deployment",
+          value = safe_text(value("firmware_version"))[1L]
+        ),
+        textInput(
+          ns("logger_program_revision"),
+          "Logger program revision",
+          value = safe_text(value("logger_program_revision"))[1L]
+        ),
+        numericInput(
+          ns("record_interval_seconds"),
+          "Record interval (seconds)",
+          value = as.numeric(value("record_interval_seconds"))[1L],
+          min = 0
+        ),
+        numericInput(
+          ns("record_duration_seconds"),
+          "Sampling duration (seconds)",
+          value = as.numeric(value("record_duration_seconds"))[1L],
+          min = 0
+        ),
+        selectInput(
+          ns("record_unit_id"),
+          "Default record unit",
+          choices$units,
+          selected = as.character(value("record_unit_id"))
+        ),
+        selectInput(
+          ns("record_aggregation_type_id"),
+          "Default aggregation",
+          choices$aggregations,
+          selected = as.character(value("record_aggregation_type_id"))
+        ),
+        helpText(
+          "For mixed deployments, record the unit for each signal under Connection signals."
+        )
+      )
     })
 
     timeseries_matches_current_filters <- reactive({
@@ -1686,7 +1854,7 @@ deploy_recover <- function(id, language) {
         return(invisible(NULL))
       }
 
-      selected_timeseries_ids(record_associated_timeseries_ids(record))
+      selected_timeseries_ids(record_direct_timeseries_ids(record))
 
       updateSelectizeInput(
         session,
@@ -1719,26 +1887,24 @@ deploy_recover <- function(id, language) {
           as.character(record$z_id[[1]])
         }
       )
-      shinyWidgets::updateAirDateInput(
-        session,
+      render_deployment_datetime(
         "start_datetime",
-        value = coerce_utc_datetime(record$start_datetime[[1]]),
-        tz = air_datetime_widget_timezone(input$start_timezone)
+        coerce_utc_datetime(record$start_datetime[[1L]]),
+        input$start_timezone
       )
       updateCheckboxInput(
         session,
         "has_end_datetime",
         value = !is.na(record$end_datetime[[1]])
       )
-      shinyWidgets::updateAirDateInput(
-        session,
+      render_deployment_datetime(
         "end_datetime",
-        value = if (is.na(record$end_datetime[[1]])) {
+        if (is.na(record$end_datetime[[1]])) {
           default_datetime()
         } else {
           coerce_utc_datetime(record$end_datetime[[1]])
         },
-        tz = air_datetime_widget_timezone(input$end_timezone)
+        input$end_timezone
       )
       updateTextAreaInput(
         session,
@@ -1770,6 +1936,20 @@ deploy_recover <- function(id, language) {
     }
 
     collect_form_values <- function() {
+      metadata <- list(
+        as_nullable_integer(input$deployment_visit_id),
+        if (isTRUE(input$has_end_datetime)) {
+          as_nullable_integer(input$recovery_visit_id)
+        } else {
+          NA_integer_
+        },
+        as_nullable_text(input$firmware_version),
+        as_nullable_text(input$logger_program_revision),
+        as_nullable_integer(input$record_unit_id),
+        as.numeric(input$record_interval_seconds)[1L],
+        as.numeric(input$record_duration_seconds)[1L],
+        as_nullable_integer(input$record_aggregation_type_id)
+      )
       list(
         instrument_id = as_nullable_integer(input$instrument_id),
         location_id = as_nullable_integer(input$location_id),
@@ -1782,7 +1962,8 @@ deploy_recover <- function(id, language) {
         } else {
           empty_utc_datetime()
         },
-        note = as_nullable_text(input$note)
+        note = as_nullable_text(input$note),
+        metadata = metadata
       )
     }
 
@@ -1790,7 +1971,6 @@ deploy_recover <- function(id, language) {
       if (require_selected && is.null(selected_metadata_id())) {
         stop("Select an existing deployment record first.")
       }
-      current_record <- selected_record()
       if (is.na(values$instrument_id)) {
         stop("Select an instrument.")
       }
@@ -1848,22 +2028,6 @@ deploy_recover <- function(id, language) {
       ) {
         stop("Recovery time must be after the deployment start time.")
       }
-      if (
-        require_selected &&
-          deployment_has_signal_rows(current_record) &&
-          !same_integer_set(
-            values$timeseries_ids,
-            record_direct_timeseries_ids(current_record)
-          )
-      ) {
-        stop(
-          paste(
-            "This deployment's timeseries association is managed through",
-            "signal-level connection metadata. Update it under",
-            "Acquisition / telemetry -> Connection signals."
-          )
-        )
-      }
       for (timeseries_id in normalize_integer_vector(values$timeseries_ids)) {
         timeseries_row <- find_timeseries_row(timeseries_id)
         if (is.null(timeseries_row)) {
@@ -1884,7 +2048,9 @@ deploy_recover <- function(id, language) {
     replace_deployment_timeseries <- function(metadata_id, timeseries_ids) {
       metadata_id <- as_nullable_integer(metadata_id)
       if (is.na(metadata_id)) {
-        stop("A deployment metadata_id is required to update continuous.timeseries links.")
+        stop(
+          "A deployment metadata_id is required to update continuous.timeseries links."
+        )
       }
 
       timeseries_ids <- normalize_integer_vector(timeseries_ids)
@@ -1918,6 +2084,35 @@ deploy_recover <- function(id, language) {
       invisible(NULL)
     }
 
+    deployment_params <- function(values) {
+      unname(c(
+        values[c(
+          "location_id",
+          "sub_location_id",
+          "instrument_id",
+          "start_datetime",
+          "end_datetime",
+          "note",
+          "z_id"
+        )],
+        values$metadata
+      ))
+    }
+
+    insert_deployment <- function(values) {
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "INSERT INTO public.locations_metadata_instruments (
+           location_id, sub_location_id, instrument_id, start_datetime, end_datetime,
+           note, z_id, deployment_visit_id, recovery_visit_id, firmware_version,
+           logger_program_revision, record_unit_id, record_interval_seconds,
+           record_duration_seconds, record_aggregation_type_id
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         RETURNING metadata_id",
+        params = deployment_params(values)
+      )$metadata_id[[1L]]
+    }
+
     upsert_record <- function(
       values,
       metadata_id = NULL,
@@ -1943,27 +2138,7 @@ deploy_recover <- function(id, language) {
 
       if (is.null(metadata_id)) {
         DBI::dbWithTransaction(session$userData$AquaCache, {
-          inserted <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            "
-            INSERT INTO public.locations_metadata_instruments (
-              location_id, sub_location_id, instrument_id, start_datetime,
-              end_datetime, note, z_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING metadata_id
-            ",
-            params = list(
-              values$location_id,
-              values$sub_location_id,
-              values$instrument_id,
-              values$start_datetime,
-              values$end_datetime,
-              values$note,
-              values$z_id
-            )
-          )
-
-          metadata_id <- inserted$metadata_id[[1]]
+          metadata_id <- insert_deployment(values)
           replace_deployment_timeseries(metadata_id, values$timeseries_ids)
           metadata_id
         })
@@ -1980,19 +2155,14 @@ deploy_recover <- function(id, language) {
               start_datetime = $4,
               end_datetime = $5,
               note = $6,
-              z_id = $7
-            WHERE metadata_id = $8
+              z_id = $7,
+              deployment_visit_id = $8, recovery_visit_id = $9, firmware_version = $10,
+              logger_program_revision = $11, record_unit_id = $12,
+              record_interval_seconds = $13, record_duration_seconds = $14,
+              record_aggregation_type_id = $15
+            WHERE metadata_id = $16
             ",
-            params = list(
-              values$location_id,
-              values$sub_location_id,
-              values$instrument_id,
-              values$start_datetime,
-              values$end_datetime,
-              values$note,
-              values$z_id,
-              metadata_id
-            )
+            params = c(deployment_params(values), list(metadata_id))
           )
           replace_deployment_timeseries(metadata_id, values$timeseries_ids)
           metadata_id
@@ -2061,27 +2231,7 @@ deploy_recover <- function(id, language) {
             params = list(current_end_datetime, metadata_id)
           )
 
-          inserted <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            "
-            INSERT INTO public.locations_metadata_instruments (
-              location_id, sub_location_id, instrument_id, start_datetime,
-              end_datetime, note, z_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING metadata_id
-            ",
-            params = list(
-              values$location_id,
-              values$sub_location_id,
-              values$instrument_id,
-              values$start_datetime,
-              values$end_datetime,
-              values$note,
-              values$z_id
-            )
-          )
-
-          inserted_metadata_id <- inserted$metadata_id[[1]]
+          inserted_metadata_id <- insert_deployment(values)
           replace_deployment_timeseries(
             inserted_metadata_id,
             values$timeseries_ids
@@ -2125,8 +2275,12 @@ deploy_recover <- function(id, language) {
 
     output$timeseries_selection_ui <- renderUI({
       record <- selected_record()
-      timeseries_rows <- selected_timeseries_details()
-      selected_tsids <- normalize_integer_vector(selected_timeseries_ids())
+      signal_ids <- record_signal_timeseries_ids(record)
+      selected_tsids <- union(
+        normalize_integer_vector(selected_timeseries_ids()),
+        signal_ids
+      )
+      timeseries_rows <- find_timeseries_rows(selected_tsids)
       signal_managed <- deployment_has_signal_rows(record)
       note_ui <- p(
         class = "help-block",
@@ -2140,9 +2294,8 @@ deploy_recover <- function(id, language) {
         div(
           class = "alert alert-info",
           paste(
-            "This deployment uses connection-signal metadata. Manage",
-            "timeseries links in Acquisition / telemetry -> Connection",
-            "signals."
+            "Manage signal links in Acquisition / telemetry → Connection signals.",
+            "This form edits direct deployment links."
           )
         )
       } else {
@@ -2230,6 +2383,9 @@ deploy_recover <- function(id, language) {
               class = "well well-sm",
               tags$strong(format_timeseries_title(timeseries_row)),
               tags$br(),
+              if (timeseries_row$timeseries_id[[1L]] %in% signal_ids) {
+                tagList(tags$span("Connection signal"), tags$br())
+              },
               format_timeseries_meta(timeseries_row),
               if (
                 !is.na(timeseries_row$note[[1]]) &&
@@ -2317,25 +2473,17 @@ deploy_recover <- function(id, language) {
     })
 
     output$timeseries_action_button <- renderUI({
-      button_label <- if (timeseries_association_locked()) {
-        "Timeseries associations managed in Connection signals"
-      } else if (!length(selected_timeseries_ids())) {
-        "Associate with one or more timeseries"
+      button_label <- if (!length(selected_timeseries_ids())) {
+        "Link a timeseries directly"
       } else {
-        "Modify timeseries associations"
+        "Edit direct timeseries links"
       }
 
-      button <- actionButton(
+      actionButton(
         ns("associate_timeseries"),
         button_label,
         width = "100%"
       )
-
-      if (timeseries_association_locked()) {
-        return(shinyjs::disabled(button))
-      }
-
-      button
     })
 
     output$module_ui <- renderUI({
@@ -2416,22 +2564,7 @@ deploy_recover <- function(id, language) {
               ),
               column(
                 7,
-                shinyWidgets::airDatepickerInput(
-                  ns("start_datetime"),
-                  label = "Deployment start",
-                  value = default_datetime(),
-                  range = FALSE,
-                  multiple = FALSE,
-                  timepicker = TRUE,
-                  maxDate = Sys.Date() + 365,
-                  startView = Sys.Date(),
-                  update_on = "change",
-                  tz = air_datetime_widget_timezone(default_input_timezone()),
-                  timepickerOpts = shinyWidgets::timepickerOptions(
-                    minutesStep = 15,
-                    timeFormat = "HH:mm"
-                  )
-                )
+                uiOutput(ns("start_datetime_ui"))
               )
             ),
             checkboxInput(
@@ -2456,22 +2589,7 @@ deploy_recover <- function(id, language) {
                 ),
                 column(
                   7,
-                  shinyWidgets::airDatepickerInput(
-                    ns("end_datetime"),
-                    label = "Recovery time",
-                    value = default_datetime(),
-                    range = FALSE,
-                    multiple = FALSE,
-                    timepicker = TRUE,
-                    maxDate = Sys.Date() + 365,
-                    startView = Sys.Date(),
-                    update_on = "change",
-                    tz = air_datetime_widget_timezone(default_input_timezone()),
-                    timepickerOpts = shinyWidgets::timepickerOptions(
-                      minutesStep = 15,
-                      timeFormat = "HH:mm"
-                    )
-                  )
+                  uiOutput(ns("end_datetime_ui"))
                 )
               )
             ),
@@ -2481,6 +2599,8 @@ deploy_recover <- function(id, language) {
               width = "100%",
               height = "120px"
             ),
+            uiOutput(ns("deployment_visit_fields")),
+            uiOutput(ns("deployment_recording_fields")),
             uiOutput(ns("record_action_button"))
           ),
           column(
@@ -2617,19 +2737,6 @@ deploy_recover <- function(id, language) {
     })
 
     show_timeseries_modal <- function() {
-      if (timeseries_association_locked()) {
-        showNotification(
-          paste(
-            "This deployment uses connection-signal metadata. Update",
-            "timeseries links under Acquisition / telemetry -> Connection",
-            "signals."
-          ),
-          type = "warning",
-          duration = 12
-        )
-        return(invisible(NULL))
-      }
-
       available_timeseries_ids <- timeseries_table_data()$timeseries_id
       current_timeseries_ids <- normalize_integer_vector(
         selected_timeseries_ids()

@@ -97,11 +97,11 @@ addDocs <- function(id, language) {
       )
       moduleData$docs <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT d.document_id, d.name, d.description, d.publish_date, d.url, d.authors, d.tags, d.share_with, d.type, dt.document_type_en FROM files.documents d LEFT JOIN files.document_types dt ON d.type = dt.document_type_id ORDER BY d.name ASC;"
+        "SELECT d.document_id, d.name, d.description, d.publish_date, d.url, d.authors, d.tags, d.share_with, d.document_type_id AS type, dt.document_type_en FROM files.documents d LEFT JOIN files.document_types dt ON d.document_type_id = dt.document_type_id ORDER BY d.name ASC;"
       )
       moduleData$docs_display <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT d.document_id, d.name, dt.document_type_en AS type, d.publish_date FROM files.documents d LEFT JOIN files.document_types dt ON d.type = dt.document_type_id ORDER BY d.name ASC;"
+        "SELECT d.document_id, d.name, dt.document_type_en AS type, d.publish_date FROM files.documents d LEFT JOIN files.document_types dt ON d.document_type_id = dt.document_type_id ORDER BY d.name ASC;"
       )
       moduleData$doc_geoms <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -528,7 +528,7 @@ addDocs <- function(id, language) {
               new_doc <- DBI::dbGetQuery(
                 session$userData$AquaCache,
                 "SELECT document_id FROM files.documents
-                WHERE name = $1 AND type = $2
+                WHERE name = $1 AND document_type_id = $2
                 ORDER BY document_id DESC
                 LIMIT 1;",
                 params = list(input$doc_name, dsa_type_id)
@@ -650,7 +650,7 @@ addDocs <- function(id, language) {
             "UPDATE files.documents
             SET name = $1,
               description = $2,
-              type = $3,
+              document_type_id = $3,
               publish_date = $4,
               url = $5,
               authors = $6,

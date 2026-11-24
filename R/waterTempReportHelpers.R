@@ -2,6 +2,13 @@
 # Keep these in the package namespace so mirai workers can call them without
 # serializing a Shiny module environment.
 
+#' Build a localized filename for a water temperature report
+#'
+#' @param site_name Site name used in the filename. Missing names use a translated default.
+#' @param lang Language identifier accepted by `tr()`.
+#' @return A ZIP filename including the site name and current date.
+#' @keywords internal
+#' @noRd
 water_temp_build_report_filename <- function(site_name, lang) {
   site_name <- as.character(site_name)
   if (
@@ -26,6 +33,12 @@ water_temp_build_report_filename <- function(site_name, lang) {
 }
 
 
+#' Fill gaps in a report's calendar-aligned daily series
+#'
+#' @param data Table with a `fake_date` column of reference-year dates.
+#' @return The table with one row added per missing day between its first and last dates.
+#' @keywords internal
+#' @noRd
 complete_fake_dates <- function(data) {
   if (nrow(data) == 0) {
     return(data)
@@ -40,6 +53,12 @@ complete_fake_dates <- function(data) {
   )
 }
 
+#' Find the minimum of the available observations
+#'
+#' @param x Numeric vector, possibly containing missing observations.
+#' @return The minimum, or `NA_real_` when no values are available.
+#' @keywords internal
+#' @noRd
 safe_min <- function(x) {
   if (all(is.na(x))) {
     return(NA_real_)
@@ -47,6 +66,12 @@ safe_min <- function(x) {
   min(x, na.rm = TRUE)
 }
 
+#' Find the maximum of the available observations
+#'
+#' @param x Numeric vector, possibly containing missing observations.
+#' @return The maximum, or `NA_real_` when no values are available.
+#' @keywords internal
+#' @noRd
 safe_max <- function(x) {
   if (all(is.na(x))) {
     return(NA_real_)
@@ -54,6 +79,12 @@ safe_max <- function(x) {
   max(x, na.rm = TRUE)
 }
 
+#' Find the mean of the available observations
+#'
+#' @param x Numeric vector, possibly containing missing observations.
+#' @return The mean, or `NA_real_` when no values are available.
+#' @keywords internal
+#' @noRd
 safe_mean <- function(x) {
   if (all(is.na(x))) {
     return(NA_real_)
@@ -61,6 +92,13 @@ safe_mean <- function(x) {
   mean(x, na.rm = TRUE)
 }
 
+#' Summarize water temperatures by reference-year calendar day
+#'
+#' @param data Table with `fake_date` and a numeric series.
+#' @param value_col Name of the numeric series to summarize.
+#' @return A table with dates, minima, maxima, and means, with missing days filled.
+#' @keywords internal
+#' @noRd
 summarise_fake_date <- function(data, value_col) {
   if (nrow(data) == 0) {
     return(data.frame(
@@ -83,6 +121,13 @@ summarise_fake_date <- function(data, value_col) {
   complete_fake_dates(out)
 }
 
+#' Add selected temperature thresholds to a water temperature plot
+#'
+#' @param plot_obj A ggplot object with temperature on the vertical axis.
+#' @param thresholds A vector of thresholds in degrees Celsius.
+#' @return The plot with dashed lines for the selected thresholds among 13, 18, and 20.
+#' @keywords internal
+#' @noRd
 add_threshold_lines <- function(plot_obj, thresholds) {
   thresholds <- as.character(thresholds)
   threshold_cols <- c(
@@ -105,6 +150,17 @@ add_threshold_lines <- function(plot_obj, thresholds) {
   plot_obj
 }
 
+#' Calculate statistics and render water temperature report plots
+#'
+#' @param ts_data Observations with `datetime`, `value_corrected`, `name`, and
+#'   optionally `name_fr`. Temperatures are in degrees Celsius.
+#' @param highlight_range Two dates defining the highlighted period, inclusive.
+#' @param thresholds Thresholds to draw in degrees Celsius.
+#' @param language_abbrev Report language abbreviation, `"en"` or `"fr"`.
+#' @return A list of observations, daily statistics, report metadata, and plots
+#'   of daily mean, daily maximum, and seven-day average maximum temperature.
+#' @keywords internal
+#' @noRd
 water_temp_build_plot_bundle <- function(
   ts_data,
   highlight_range,
@@ -336,4 +392,3 @@ water_temp_build_plot_bundle <- function(
     seven_day_max_plot = seven_day_max_plot
   )
 }
-

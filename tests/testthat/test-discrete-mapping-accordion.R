@@ -118,16 +118,22 @@ test_that("parsed previews open mappings only when file values need attention", 
 
 discrete_mapping_panels_fixture <- function() {
   env <- new.env(parent = asNamespace("YGwater"))
-  sys.source(
-    system.file(
-      "apps/aqualink/modules/admin/discreteData/addDiscData.R",
-      package = "YGwater"
-    ),
-    env
-  )
+  for (file in c("chemistry_form.R", "discrete_protocols.R", "addDiscData.R")) {
+    sys.source(
+      system.file(
+        "apps/aqualink/modules/admin/discreteData",
+        file,
+        package = "YGwater"
+      ),
+      env
+    )
+  }
   statements <- as.list(body(env$addDiscData)[[2]][[3]][[3]])[-1]
   wanted <- c(
     "mapping_rows",
+    "selected_mapping_row",
+    "selected_parameter_mapping",
+    "mapping_editor",
     "location_mapping_rows",
     "result_flag_mapping_rows",
     "selected_result_flag_mapping",
@@ -171,6 +177,36 @@ discrete_mapping_panels_fixture <- function() {
     )
     selected_profile <- function() {
       data.frame(source_code = "LAB", profile_code = "workbook")
+    }
+    params <- function() {
+      data.frame(
+        parameter_id = 1L,
+        param_name = "Acenaphthene",
+        unit_liquid = "mg/L",
+        unit_solid = NA_character_,
+        unit_gas = NA_character_
+      )
+    }
+    matrix_states <- data.frame(
+      matrix_state_id = 1L,
+      matrix_state_name = "Liquid"
+    )
+    sample_fractions <- data.frame(
+      sample_fraction_id = 1L,
+      sample_fraction = "Total"
+    )
+    result_types <- data.frame(result_type_id = 2L, result_type = "Lab")
+    result_value_types <- data.frame(
+      result_value_type_id = 1L,
+      result_value_type = "Direct"
+    )
+    reporting_bases <- data.frame(
+      reporting_basis_id = 1L,
+      reporting_basis = "As reported"
+    )
+    chemistry_catalogues <- list()
+    protocols_methods <- function() {
+      data.frame(protocol_method_id = 21L, protocol_name = "EPA 8270")
     }
     result_conditions <- data.frame(
       result_condition_id = 1L,
@@ -227,6 +263,148 @@ test_that("each mapping table can show unresolved or already mapped values", {
       c("note_only", NA_character_)
     )
   })
+})
+
+test_that("parameter editors identify the selected method and default to its effective scope", {
+  fixture <- discrete_mapping_panels_fixture()
+  shiny::testServer(fixture$server, {
+    data$df$source_parameter_code <- "Acenaphthene"
+    data$df$source_unit <- c("ug/L", "ug/L", "mg/L")
+    data$df$source_matching_values <- c(
+      '{"source.Method":"FAKE"}',
+      '{"source.Method":"E641A"}',
+      '{"source.Method":"FAKE"}'
+    )
+    data$df$parameter_id <- 1L
+    data$df$parameter_mapping_id <- c(100L, 101L, 102L)
+    data$preview_mapping_snapshot$mappings$parameters <- list(
+      list(
+        import_mapping_id = 100L,
+        profile_specific = TRUE,
+        protocol_method_id = 21L
+      ),
+      list(import_mapping_id = 101L, profile_specific = FALSE),
+      list(import_mapping_id = 102L, profile_specific = FALSE)
+    )
+    session$setInputs(show_all_mappings = TRUE)
+    expect_equal(nrow(mapping_rows()), 3L)
+    session$setInputs(
+      mapping_summary_rows_selected = match(
+        100L,
+        mapping_rows()$parameter_mapping_id
+      )
+    )
+    expect_match(output$mapping_editor$html, "Method = FAKE", fixed = TRUE)
+    expect_match(
+      output$mapping_editor$html,
+      'value="profile" selected',
+      fixed = TRUE
+    )
+    expect_match(
+      output$mapping_editor$html,
+      'value="21" selected',
+      fixed = TRUE
+    )
+    expect_match(
+      output$mapping_editor$html,
+      'mapping_protocol" data-eval=',
+      fixed = TRUE
+    )
+    session$setInputs(
+      mapping_summary_rows_selected = match(
+        101L,
+        mapping_rows()$parameter_mapping_id
+      )
+    )
+    expect_match(output$mapping_editor$html, "Method = E641A", fixed = TRUE)
+    expect_match(
+      output$mapping_editor$html,
+      'value="source" selected',
+      fixed = TRUE
+    )
+  })
+})
+
+test_that("saving one method overrides a broader workbook mapping for that method only", {
+  env <- discrete_mapping_panels_fixture()$env
+  mappings <- data.frame(
+    import_mapping_id = 1:2,
+    source_match = c(
+      '{"parameter_code":"Acenaphthene","unit":"ug/L"}',
+      '{"parameter_code":"Acenaphthene","unit":"ug/L","source.Method":"FAKE"}'
+    ),
+    profile_specific = c(TRUE, FALSE),
+    priority = c(10L, 50L),
+    parameter_id = 263L,
+    protocol_method_id = NA_integer_,
+    result_type_id = 2L,
+    sample_fraction_id = NA_integer_,
+    result_value_type_id = 1L,
+    reporting_basis_id = NA_integer_,
+    matrix_state_id = 1L,
+    conversion = 1,
+    result_offset = 0
+  )
+  rows <- env$initial_rows
+  rows$source_parameter_code <- "Acenaphthene"
+  rows$source_unit <- c("ug/L", "ug/L", "mg/L")
+  rows$source_matching_values <- c(
+    '{"source.Method":"FAKE"}',
+    '{"source.Method":"E641A"}',
+    '{"source.Method":"FAKE"}'
+  )
+  rows$source_result <- 2
+  env$addDiscData_fetch_mappings <- function(...) mappings
+  env$addDiscData_fetch_result_flag_mappings <- function(...) data.frame()
+  local_mocked_bindings(
+    upsertImportParameterMappings = function(
+      con,
+      mappings,
+      match_columns,
+      profile_code,
+      ...
+    ) {
+      row <- as.list(mappings)
+      row$source_match <- as.character(jsonlite::toJSON(
+        row[match_columns],
+        auto_unbox = TRUE
+      ))
+      row$profile_specific <- identical(profile_code, "xlr")
+      row
+    },
+    .package = "AquaCache"
+  )
+  initial <- env$addDiscData_apply_mappings(rows, NULL, "xlr")
+  expect_identical(initial$parameter_mapping_id, c(1L, 1L, NA_integer_))
+  saved <- env$addDiscData_upsert_mapping(
+    con = NULL,
+    source_code = "ALS",
+    source_name = "ALS",
+    parameter_code = rows$source_parameter_code[[1]],
+    unit = rows$source_unit[[1]],
+    source_matching_values = rows$source_matching_values[[1]],
+    parameter_id = 263L,
+    protocol_method_id = 21L,
+    result_type_id = 2L,
+    sample_fraction_id = NA_integer_,
+    result_value_type_id = 1L,
+    reporting_basis_id = NA_integer_,
+    matrix_state_id = 1L,
+    conversion = 0.001,
+    result_offset = 0,
+    note = NA_character_,
+    profile_code = "xlr",
+    applied_mapping = as.list(mappings[1, ])
+  )
+  expect_true(saved$profile_specific)
+  expect_identical(saved$priority, 10L)
+  expect_identical(jsonlite::fromJSON(saved$source_match)$source.Method, "FAKE")
+  saved$import_mapping_id <- 3L
+  mappings <- rbind(mappings, as.data.frame(saved[names(mappings)]))
+  refreshed <- env$addDiscData_apply_mappings(rows, NULL, "xlr")
+  expect_identical(refreshed$parameter_mapping_id, c(3L, 1L, NA_integer_))
+  expect_equal(refreshed$result, c(0.002, 2, 2))
+  expect_identical(refreshed$protocol_method_id, c(21L, NA_integer_, NA_integer_))
 })
 
 test_that("flag selection renders from preview metadata without a connection", {

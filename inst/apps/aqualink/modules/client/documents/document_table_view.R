@@ -56,7 +56,7 @@ docTableView <- function(id, language) {
           "dt.document_type_en, dt.document_type_fr, ",
           "o.name AS owner_name, c.name AS contributor_name ",
           "FROM files.documents d ",
-          "LEFT JOIN files.document_types dt ON d.type = dt.document_type_id ",
+          "LEFT JOIN files.document_types dt ON d.document_type_id = dt.document_type_id ",
           "LEFT JOIN public.organizations o ON d.owner = o.organization_id ",
           "LEFT JOIN public.organizations c ON d.contributor = c.organization_id ",
           "ORDER BY d.publish_date DESC NULLS LAST, d.name ASC;"

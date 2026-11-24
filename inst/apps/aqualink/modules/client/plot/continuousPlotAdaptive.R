@@ -3074,7 +3074,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ownership_tbl <- DBI::dbGetQuery(
         session$userData$AquaCache,
         paste0(
-          "SELECT o.start_dt, o.end_dt, ",
+          "SELECT o.start_datetime AS start_dt, o.end_datetime AS end_dt, ",
           if (language$abbrev == "fr") {
             "COALESCE(org.name_fr, org.name) AS owner"
           } else {
@@ -3085,7 +3085,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           "ON o.organization_id = org.organization_id ",
           "WHERE o.timeseries_id = ",
           ts_id,
-          " ORDER BY o.start_dt;"
+          " ORDER BY o.start_datetime;"
         )
       )
       if (nrow(ownership_tbl) == 0) {
@@ -4179,7 +4179,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 corrections <- YGwater::dbGetQueryDT(
                   con,
                   paste0(
-                    "SELECT c.timeseries_id, c.start_dt, c.end_dt,
+                    "SELECT c.timeseries_id, c.start_datetime AS start_dt, c.end_datetime AS end_dt,
                         c.value1, c.value2, c.timestep_window, c.equation,
                         ct.correction_type, ct.priority
                  FROM continuous.corrections c
@@ -4187,10 +4187,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                    ON c.correction_type = ct.correction_type_id
                  WHERE c.timeseries_id IN (",
                     ids_sql,
-                    ") AND c.start_dt <= $2
-                   AND c.end_dt >= $1
+                    ") AND c.start_datetime <= $2
+                   AND c.end_datetime >= $1
                  ORDER BY c.timeseries_id, ct.priority ASC,
-                          c.start_dt ASC, c.correction_id ASC;"
+                          c.start_datetime ASC, c.correction_id ASC;"
                   ),
                   params = list(min_start, max_end)
                 )
@@ -4203,16 +4203,16 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   unusable_intervals <- YGwater::dbGetQueryDT(
                     con,
                     paste0(
-                      "SELECT g.timeseries_id, g.start_dt, g.end_dt
+                      "SELECT g.timeseries_id, g.start_datetime AS start_dt, g.end_datetime AS end_dt
                    FROM continuous.grades g
                    JOIN public.grade_types gt
                      ON gt.grade_type_id = g.grade_type_id
                    WHERE g.timeseries_id IN (",
                       ids_sql,
                       ") AND gt.grade_type_code = 'N'
-                     AND g.start_dt <= $2
-                     AND g.end_dt >= $1
-                   ORDER BY g.timeseries_id, g.start_dt, g.end_dt;"
+                     AND g.start_datetime <= $2
+                     AND g.end_datetime >= $1
+                   ORDER BY g.timeseries_id, g.start_datetime, g.end_datetime;"
                     ),
                     params = list(min_start, max_end)
                   )

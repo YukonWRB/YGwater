@@ -40,7 +40,7 @@ discrete_preview_fixture <- function() {
     ),
     upload_options = list(
       negative_values_are_mdl = FALSE,
-      negative_mdl_exclusions = character(),
+      negative_mdl_exclusions = env$addDiscData_negative_mdl_defaults(),
       location_project_id = NULL
     )
   )
@@ -77,7 +77,7 @@ discrete_preview_server_state <- function(env, path) {
   state <- new.env(parent = env)
   state$data <- new.env()
   state$data$raw_file_path <- path
-  state$data$negative_mdl_exclusions <- character()
+  state$data$negative_mdl_exclusions <- env$addDiscData_negative_mdl_defaults()
   state$data$df <- env$addDiscData_empty_table()
   state$data$preview_base <- env$addDiscData_empty_table()
   state$data$preview_profile_key <- env$addDiscData_profile_key(
@@ -262,6 +262,40 @@ test_that("refreshes parse with the captured current profile and reject old work
   )
 })
 
+test_that("refreshing a newly mapped location leaves the selection to the sample form", {
+  fixture <- discrete_preview_fixture()
+  env <- fixture$env
+  path <- tempfile()
+  writeLines("preview fixture", path)
+  on.exit(unlink(path))
+  state <- discrete_preview_server_state(env, path)
+  state$input$edit_sample_location <- ""
+  state$catalogue <- data.frame(location_id = 1L)
+  state$locations <- function(new) {
+    if (!missing(new)) {
+      state$catalogue <- new
+    }
+    state$catalogue
+  }
+  state$read_locations <- function() data.frame(location_id = c(1L, 2L))
+  state$update_location_selectize <- function(selected) {
+    state$selection_override <- selected
+  }
+  env$addDiscData_location_match <- function(rows, locations, mappings, ...) {
+    rows$location_id <- intersect(mappings$location_id, locations$location_id)
+    rows
+  }
+  local_mocked_bindings(
+    getImportLocationMappings = function(...) data.frame(location_id = 2L),
+    .package = "AquaCache"
+  )
+
+  expect_true(state$refresh_current_preview(discrete_preview_profile(env)))
+  expect_identical(state$locations()$location_id, c(1L, 2L))
+  expect_identical(state$data$df$location_id, 2L)
+  expect_null(state$selection_override)
+})
+
 test_that("the normal parse task carries its captured configuration through the result handler", {
   fixture <- discrete_preview_fixture()
   env <- fixture$env
@@ -366,7 +400,7 @@ test_that("mapping-save refreshes carry the snapshot used by the worker", {
     refresh_preview = TRUE,
     path = "fixture",
     negative_values_are_mdl = FALSE,
-    negative_mdl_exclusions = character(),
+    negative_mdl_exclusions = env$addDiscData_negative_mdl_defaults(),
     locations = data.frame(),
     sample_types = data.frame()
   )
@@ -473,7 +507,6 @@ test_that("created locations reset the form and refresh location choices and pre
     create_mapping = c(TRUE, FALSE),
     elevation_fallback = c(FALSE, FALSE)
   )
-  state$location_create_task <- list(result = function() result)
   value <- function(initial) {
     current <- initial
     function(new) {
@@ -483,7 +516,7 @@ test_that("created locations reset the form and refresh location choices and pre
       current
     }
   }
-  state$created_location_sources <- value(character())
+  state$created_location_sources <- shiny::reactiveVal(character())
   state$location_project_id <- function() NULL
   state$selected_profile <- function() result$profile
   state$new_location_map_center <- value(list(lat = 60, lon = -130, zoom = 15))
@@ -491,63 +524,110 @@ test_that("created locations reset the form and refresh location choices and pre
   state$new_location_map_row <- value(1L)
   state$new_location_map_selection <- value(list(lat = 60, lon = -135))
   state$mapping_revision <- value(0L)
-  state$locations <- value(data.frame())
+  state$locations <- shiny::reactiveVal(result$added[FALSE, ])
   state$read_locations <- function() result$added
   state$data <- new.env()
   state$data$raw_file_path <- "workbook"
-  state$session <- list()
+  state$data$df <- data.frame(
+    source_location_name = c(result$sources, "Still missing"),
+    location_id = NA_integer_,
+    location_mapping_status = "unmapped"
+  )
   state$tags <- htmltools::tags
   state$modalDialog <- shiny::modalDialog
   state$modalButton <- shiny::modalButton
   state$showModal <- function(...) invisible(NULL)
-  state$updateSelectizeInput <- function(session, inputId, choices, ...) {
-    state$updated <- list(inputId = inputId, choices = choices)
-  }
   state$refresh_current_preview <- function(profile, preserve_edits) {
     state$refreshed <- profile
     TRUE
   }
   statements <- as.list(body(env$addDiscData)[[2]][[3]][[3]])[-1]
-  update <- Filter(
+  assignments <- Filter(
     function(x) {
       is.call(x) &&
         identical(x[[1]], quote(`<-`)) &&
-        identical(x[[2]], quote(update_location_selectize))
+        tail(as.character(x[[2]]), 1L) %in%
+          c(
+            "unmapped_location_sources",
+            "location_mapping_editor"
+          )
     },
     statements
-  )[[1]]
-  eval(update, state)
-  handler <- Filter(
+  )
+  observer <- Filter(
     function(x) {
       is.call(x) &&
         identical(x[[1]], quote(observeEvent)) &&
         identical(x[[2]], quote(location_create_task$result()))
     },
     statements
-  )[[1]][[3]]
-  eval(handler, state)
-  expect_identical(state$created_location_sources(), result$sources)
-  expect_true(is.na(state$new_location_map_row()))
-  expect_null(state$new_location_map_selection())
-  expect_identical(state$locations(), result$added)
-  expect_identical(state$updated$inputId, "edit_sample_location")
-  expect_true(all(c("101", "102") %in% unname(state$updated$choices)))
-  expect_identical(state$refreshed, result$profile)
-  expect_identical(
-    state$new_location_map_center(),
-    list(lat = 64, lon = -135, zoom = 4)
-  )
-  expect_true(is.na(state$new_location_map_zoom()))
-  state$created_location_sources(character())
-  state$refreshed <- NULL
-  state$location_project_id <- function() 2L
-  state$new_location_map_selection(list(lat = 62, lon = -130))
-  eval(handler, state)
-  expect_identical(state$created_location_sources(), character())
-  expect_null(state$refreshed)
-  expect_identical(
-    state$new_location_map_selection(),
-    list(lat = 62, lon = -130)
-  )
-  expect_true(state$data$preview_is_stale)
+  )[[1]]
+  server <- function(input, output, session) {
+    state$input <- input
+    state$output <- output
+    state$session <- session
+    state$ns <- session$ns
+    state$selected_location_mapping <- function() state$data$df[3L, ]
+    state$sub_locations <- data.frame(
+      sub_location_id = integer(),
+      sub_location_name = character(),
+      location_id = integer()
+    )
+    state$location_create_task <- shiny::ExtendedTask$new(
+      promises::promise_resolve
+    )
+    for (expr in assignments) {
+      eval(expr, state)
+    }
+    eval(observer, state)
+  }
+  shiny::testServer(server, {
+    session$flushReact()
+    expect_setequal(
+      state$unmapped_location_sources(),
+      state$data$df$source_location_name
+    )
+    expect_no_match(output$location_mapping_editor$html, "New A")
+    complete_location_task <- function() {
+      state$location_create_task$invoke(result)
+      session$flushReact()
+      later::run_now()
+      session$flushReact()
+      expect_identical(state$location_create_task$status(), "success")
+    }
+    complete_location_task()
+    expect_identical(state$unmapped_location_sources(), "Still missing")
+    expect_true(is.na(state$new_location_map_row()))
+    expect_null(state$new_location_map_selection())
+    expect_identical(state$locations(), result$added)
+    expect_match(
+      output$location_mapping_editor$html,
+      "New A | Code: A",
+      fixed = TRUE
+    )
+    expect_match(
+      output$location_mapping_editor$html,
+      "New B | Code: B",
+      fixed = TRUE
+    )
+    expect_identical(state$refreshed, result$profile)
+    expect_identical(
+      state$new_location_map_center(),
+      list(lat = 64, lon = -135, zoom = 4)
+    )
+    expect_true(is.na(state$new_location_map_zoom()))
+
+    state$created_location_sources(character())
+    state$refreshed <- NULL
+    state$location_project_id <- function() 2L
+    state$new_location_map_selection(list(lat = 62, lon = -130))
+    complete_location_task()
+    expect_identical(state$created_location_sources(), character())
+    expect_null(state$refreshed)
+    expect_identical(
+      state$new_location_map_selection(),
+      list(lat = 62, lon = -130)
+    )
+    expect_true(state$data$preview_is_stale)
+  })
 })

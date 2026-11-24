@@ -124,7 +124,11 @@ WQReport <- function(id, mdb_files, language) {
           date_ids,
           function(date_id) {
             value <- input[[paste0("date_approx_", date_id)]]
-            if (is.null(value)) NA_real_ else suppressWarnings(as.numeric(value))
+            if (is.null(value)) {
+              NA_real_
+            } else {
+              suppressWarnings(as.numeric(value))
+            }
           },
           numeric(1)
         ))
@@ -776,7 +780,7 @@ WQReport <- function(id, mdb_files, language) {
           " r.matrix_state_id, r.sample_fraction_id",
           " FROM date_range d JOIN discrete.samples s",
           " ON s.datetime::date BETWEEN d.range_start AND d.range_end",
-          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type_id",
           " JOIN discrete.results r ON r.sample_id = s.sample_id",
           " WHERE s.location_id IN (SELECT value::integer FROM",
           " jsonb_array_elements_text($2::jsonb))",
@@ -813,7 +817,7 @@ WQReport <- function(id, mdb_files, language) {
           " FROM date_requests d",
           " JOIN discrete.samples s ON s.datetime::date BETWEEN",
           " d.requested_date - d.date_approx AND d.requested_date + d.date_approx",
-          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type_id",
           " JOIN discrete.results r ON r.sample_id = s.sample_id",
           " WHERE s.location_id IN (SELECT value::integer FROM",
           " jsonb_array_elements_text($2::jsonb))",
@@ -898,13 +902,17 @@ WQReport <- function(id, mdb_files, language) {
       date_distance <- as.integer(
         candidate_dates$sample_date - candidate_dates$requested_date
       )
-      candidate_dates <- candidate_dates[order(
-        candidate_dates$requested_date,
-        candidate_dates$location_id,
-        abs(date_distance),
-        -as.integer(date_distance >= 0),
-        candidate_dates$sample_date
-      ), , drop = FALSE]
+      candidate_dates <- candidate_dates[
+        order(
+          candidate_dates$requested_date,
+          candidate_dates$location_id,
+          abs(date_distance),
+          -as.integer(date_distance >= 0),
+          candidate_dates$sample_date
+        ),
+        ,
+        drop = FALSE
+      ]
       candidate_dates <- candidate_dates[
         !duplicated(candidate_dates[c("requested_date", "location_id")]),
         ,
@@ -998,60 +1006,64 @@ WQReport <- function(id, mdb_files, language) {
       millis = 200
     )
 
-    observeEvent(ac_selector_choices_debounced(), {
-      choices <- ac_selector_choices_debounced()
-      if (is.null(choices) || is.null(language$language)) {
-        return()
-      }
-      param_label_column <- if (identical(language$language, "Français")) {
-        "param_name_fr"
-      } else {
-        "param_name"
-      }
-      parameter_choices <- choices_from_metadata(
-        choices$parameters,
-        moduleData$AC_params,
-        "parameter_id",
-        param_label_column,
-        "param_name"
-      )
-      matrix_choices <- choices_from_metadata(
-        choices$matrix_states,
-        moduleData$AC_matrix_states,
-        "matrix_state_id",
-        "matrix_state_name"
-      )
-      fraction_choices <- choices_from_metadata(
-        choices$sample_fractions,
-        moduleData$AC_sample_fractions,
-        "sample_fraction_id",
-        "sample_fraction"
-      )
-
-      choice_sets <- list(
-        parameters_AC = parameter_choices,
-        matrix_states_AC = matrix_choices,
-        sample_fractions_AC = fraction_choices
-      )
-      for (id in names(choice_sets)) {
-        new_choices <- choice_sets[[id]]
-        if (identical(isolate(ac_selector_choice_cache[[id]]), new_choices)) {
-          next
+    observeEvent(
+      ac_selector_choices_debounced(),
+      {
+        choices <- ac_selector_choices_debounced()
+        if (is.null(choices) || is.null(language$language)) {
+          return()
         }
-        selected <- isolate(input[[id]])
-        if (is.null(selected)) {
-          selected <- saved_input(id, character())
+        param_label_column <- if (identical(language$language, "Français")) {
+          "param_name_fr"
+        } else {
+          "param_name"
         }
-        ac_selector_choice_cache[[id]] <- new_choices
-        updateSelectizeInput(
-          session,
-          id,
-          choices = new_choices,
-          selected = intersect(as.character(selected), unname(new_choices)),
-          server = FALSE
+        parameter_choices <- choices_from_metadata(
+          choices$parameters,
+          moduleData$AC_params,
+          "parameter_id",
+          param_label_column,
+          "param_name"
         )
-      }
-    }, ignoreNULL = FALSE)
+        matrix_choices <- choices_from_metadata(
+          choices$matrix_states,
+          moduleData$AC_matrix_states,
+          "matrix_state_id",
+          "matrix_state_name"
+        )
+        fraction_choices <- choices_from_metadata(
+          choices$sample_fractions,
+          moduleData$AC_sample_fractions,
+          "sample_fraction_id",
+          "sample_fraction"
+        )
+
+        choice_sets <- list(
+          parameters_AC = parameter_choices,
+          matrix_states_AC = matrix_choices,
+          sample_fractions_AC = fraction_choices
+        )
+        for (id in names(choice_sets)) {
+          new_choices <- choice_sets[[id]]
+          if (identical(isolate(ac_selector_choice_cache[[id]]), new_choices)) {
+            next
+          }
+          selected <- isolate(input[[id]])
+          if (is.null(selected)) {
+            selected <- saved_input(id, character())
+          }
+          ac_selector_choice_cache[[id]] <- new_choices
+          updateSelectizeInput(
+            session,
+            id,
+            choices = new_choices,
+            selected = intersect(as.character(selected), unname(new_choices)),
+            server = FALSE
+          )
+        }
+      },
+      ignoreNULL = FALSE
+    )
 
     output$AC_selectors_ui <- renderUI({
       req(language$language)
@@ -1183,14 +1195,19 @@ WQReport <- function(id, mdb_files, language) {
       ) {
         return(NULL)
       }
-      tolerances <- if (range_mode) integer() else suppressWarnings(as.integer(
-        report_date_tolerances_AC(dates)
-      ))
-      if (!range_mode && (
-        anyNA(tolerances) ||
-          any(tolerances < 0L) ||
-          any(tolerances > .Machine$integer.max)
-      )) {
+      tolerances <- if (range_mode) {
+        integer()
+      } else {
+        suppressWarnings(as.integer(
+          report_date_tolerances_AC(dates)
+        ))
+      }
+      if (
+        !range_mode &&
+          (anyNA(tolerances) ||
+            any(tolerances < 0L) ||
+            any(tolerances > .Machine$integer.max))
+      ) {
         return(NULL)
       }
       matrix_states <- suppressWarnings(as.integer(input$matrix_states_AC))
@@ -1232,7 +1249,7 @@ WQReport <- function(id, mdb_files, language) {
           " SELECT DISTINCT r.result_id, s.datetime::date AS sample_date",
           " FROM date_range d JOIN discrete.samples s",
           " ON s.datetime::date BETWEEN d.range_start AND d.range_end",
-          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type_id",
           " JOIN discrete.results r ON r.sample_id = s.sample_id",
           " WHERE s.location_id IN (SELECT value::integer FROM",
           " jsonb_array_elements_text($2::jsonb))",
@@ -1255,7 +1272,7 @@ WQReport <- function(id, mdb_files, language) {
           " FROM date_requests d JOIN discrete.samples s",
           " ON s.datetime::date BETWEEN d.requested_date - d.date_approx",
           " AND d.requested_date + d.date_approx",
-          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type_id",
           " WHERE s.location_id IN (SELECT value::integer FROM",
           " jsonb_array_elements_text($2::jsonb))",
           " AND (st.sample_type IS NULL OR st.sample_type !~* 'blank')",
@@ -1276,7 +1293,7 @@ WQReport <- function(id, mdb_files, language) {
           " SELECT DISTINCT r.result_id, s.datetime::date AS sample_date",
           " FROM best_dates b JOIN discrete.samples s",
           " ON s.location_id = b.location_id AND s.datetime::date = b.sample_date",
-          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type",
+          " LEFT JOIN discrete.sample_types st ON st.sample_type_id = s.sample_type_id",
           " JOIN discrete.results r ON r.sample_id = s.sample_id",
           " WHERE r.parameter_id IN (SELECT value::integer FROM",
           " jsonb_array_elements_text($3::jsonb))",
@@ -1328,27 +1345,27 @@ WQReport <- function(id, mdb_files, language) {
         {
           tryCatch(
             {
-            con <- YGwater::AquaConnect(
-              name = db_config$dbName,
-              host = db_config$dbHost,
-              port = db_config$dbPort,
-              username = db_config$dbUser,
-              password = db_config$dbPass,
-              silent = TRUE
-            )
-            on.exit(DBI::dbDisconnect(con), add = TRUE)
-            DBI::dbExecute(
-              con,
-              "SET application_name TO 'YGwater_shiny'"
-            )
-            list(
-              key = request$key,
-              guidelines = DBI::dbGetQuery(
-                con,
-                request$sql,
-                params = request$params
+              con <- YGwater::AquaConnect(
+                name = db_config$dbName,
+                host = db_config$dbHost,
+                port = db_config$dbPort,
+                username = db_config$dbUser,
+                password = db_config$dbPass,
+                silent = TRUE
               )
-            )
+              on.exit(DBI::dbDisconnect(con), add = TRUE)
+              DBI::dbExecute(
+                con,
+                "SET application_name TO 'YGwater_shiny'"
+              )
+              list(
+                key = request$key,
+                guidelines = DBI::dbGetQuery(
+                  con,
+                  request$sql,
+                  params = request$params
+                )
+              )
             },
             error = function(e) {
               list(
@@ -1777,13 +1794,13 @@ WQReport <- function(id, mdb_files, language) {
       if (
         !(identical(source, "AC") &&
           identical(input$date_mode_AC, "range")) &&
-        (!length(tolerances) ||
-          anyNA(tolerances) ||
-          any(!is.finite(tolerances)) ||
-          any(tolerances < 0) ||
-          any(tolerances > .Machine$integer.max) ||
-          any(tolerances != trunc(tolerances)) ||
-          length(tolerances) != expected_tolerance_count)
+          (!length(tolerances) ||
+            anyNA(tolerances) ||
+            any(!is.finite(tolerances)) ||
+            any(tolerances < 0) ||
+            any(tolerances > .Machine$integer.max) ||
+            any(tolerances != trunc(tolerances)) ||
+            length(tolerances) != expected_tolerance_count)
       ) {
         issues <- c(
           issues,
@@ -2077,151 +2094,158 @@ WQReport <- function(id, mdb_files, language) {
     report_task <- ExtendedTask$new(function(req, db_config) {
       mirai::mirai(
         {
-        work_dir <- tempfile("WQReport_")
-        dir.create(work_dir, recursive = TRUE)
-        tryCatch(
-          {
-            report_warning <- NULL
-            if (identical(req$data_source, "AC")) {
-              con <- YGwater::AquaConnect(
-                name = db_config$dbName,
-                host = db_config$dbHost,
-                port = db_config$dbPort,
-                username = db_config$dbUser,
-                password = db_config$dbPass,
-                silent = TRUE
-              )
-              on.exit(DBI::dbDisconnect(con), add = TRUE)
-              DBI::dbExecute(
-                con,
-                "SET application_name TO 'YGwater_shiny'"
-              )
-              output_path <- file.path(work_dir, "water-quality-report.xlsx")
-              result <- YGwater::AquaCacheReport(
-                date = req$date,
-                location_ids = req$location_ids,
-                parameter_ids = req$parameter_ids,
-                matrix_state_ids = req$matrix_state_ids,
-                sample_fraction_ids = req$sample_fraction_ids,
-                guideline_ids = req$guideline_ids,
-                date_approx = req$date_approx,
-                date_range = req$date_range,
-                format = req$format,
-                sd_multiplier = req$sd_multiplier,
-                sd_start = req$sd_start,
-                sd_end = req$sd_end,
-                sd_day_of_year = req$sd_day_of_year,
-                output_path = output_path,
-                lang = req$lang,
-                con = con
-              )
-              report_path <- result$xlsx_path
-              if (result$reused_sample_count > 0L) {
-                report_warning <- if (result$reused_sample_count == 1L) {
-                  YGwater:::tr("wq_report_sample_reuse_one", req$ui_language)
-                } else {
-                  sprintf(
-                    YGwater:::tr("wq_report_sample_reuse_many", req$ui_language),
-                    result$reused_sample_count
+          work_dir <- tempfile("WQReport_")
+          dir.create(work_dir, recursive = TRUE)
+          tryCatch(
+            {
+              report_warning <- NULL
+              if (identical(req$data_source, "AC")) {
+                con <- YGwater::AquaConnect(
+                  name = db_config$dbName,
+                  host = db_config$dbHost,
+                  port = db_config$dbPort,
+                  username = db_config$dbUser,
+                  password = db_config$dbPass,
+                  silent = TRUE
+                )
+                on.exit(DBI::dbDisconnect(con), add = TRUE)
+                DBI::dbExecute(
+                  con,
+                  "SET application_name TO 'YGwater_shiny'"
+                )
+                output_path <- file.path(work_dir, "water-quality-report.xlsx")
+                result <- YGwater::AquaCacheReport(
+                  date = req$date,
+                  location_ids = req$location_ids,
+                  parameter_ids = req$parameter_ids,
+                  matrix_state_ids = req$matrix_state_ids,
+                  sample_fraction_ids = req$sample_fraction_ids,
+                  guideline_ids = req$guideline_ids,
+                  date_approx = req$date_approx,
+                  date_range = req$date_range,
+                  format = req$format,
+                  sd_multiplier = req$sd_multiplier,
+                  sd_start = req$sd_start,
+                  sd_end = req$sd_end,
+                  sd_day_of_year = req$sd_day_of_year,
+                  output_path = output_path,
+                  lang = req$lang,
+                  con = con
+                )
+                report_path <- result$xlsx_path
+                if (result$reused_sample_count > 0L) {
+                  report_warning <- if (result$reused_sample_count == 1L) {
+                    YGwater:::tr("wq_report_sample_reuse_one", req$ui_language)
+                  } else {
+                    sprintf(
+                      YGwater:::tr(
+                        "wq_report_sample_reuse_many",
+                        req$ui_language
+                      ),
+                      result$reused_sample_count
+                    )
+                  }
+                  report_warning <- paste(
+                    report_warning,
+                    YGwater:::tr(
+                      if (identical(req$format, "by_date")) {
+                        "wq_report_reuse_worksheets"
+                      } else {
+                        "wq_report_reuse_date_columns"
+                      },
+                      req$ui_language
+                    )
                   )
                 }
-                report_warning <- paste(
-                  report_warning,
-                  YGwater:::tr(
-                    if (identical(req$format, "by_date")) {
-                      "wq_report_reuse_worksheets"
-                    } else {
-                      "wq_report_reuse_date_columns"
-                    },
-                    req$ui_language
+              } else {
+                EQWin <- YGwater::AccessConnect(req$eqwin_source, silent = TRUE)
+                on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
+                YGwater::EQWinReport(
+                  date = req$date,
+                  date_approx = req$date_approx,
+                  stations = req$stations,
+                  stnGrp = req$stnGrp,
+                  parameters = req$parameters,
+                  paramGrp = req$paramGrp,
+                  stds = req$stds,
+                  stnStds = req$stnStds,
+                  SD_exceed = req$sd_multiplier,
+                  SD_start = req$sd_start,
+                  SD_end = req$sd_end,
+                  SD_doy = req$sd_day_of_year,
+                  save_path = work_dir,
+                  con = EQWin
+                )
+                files <- list.files(work_dir, full.names = TRUE)
+                files <- files[file.exists(files)]
+                matched <- files[grepl(
+                  "\\.xlsx$",
+                  basename(files),
+                  ignore.case = TRUE
+                )]
+                if (length(matched) == 1L) {
+                  report_path <- matched[[1]]
+                } else if (length(matched) > 1L) {
+                  stop(
+                    YGwater:::tr(
+                      "wq_err_multiple_report_files",
+                      req$ui_language
+                    ),
+                    call. = FALSE
                   )
-                )
+                } else if (length(files) == 1L) {
+                  report_path <- files[[1]]
+                } else if (length(files) == 0L) {
+                  stop(
+                    YGwater:::tr("wq_err_no_report_files", req$ui_language),
+                    call. = FALSE
+                  )
+                } else {
+                  stop(
+                    YGwater:::tr(
+                      "wq_err_expected_report_file",
+                      req$ui_language
+                    ),
+                    call. = FALSE
+                  )
+                }
               }
-            } else {
-              EQWin <- YGwater::AccessConnect(req$eqwin_source, silent = TRUE)
-              on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
-              YGwater::EQWinReport(
-                date = req$date,
-                date_approx = req$date_approx,
-                stations = req$stations,
-                stnGrp = req$stnGrp,
-                parameters = req$parameters,
-                paramGrp = req$paramGrp,
-                stds = req$stds,
-                stnStds = req$stnStds,
-                SD_exceed = req$sd_multiplier,
-                SD_start = req$sd_start,
-                SD_end = req$sd_end,
-                SD_doy = req$sd_day_of_year,
-                save_path = work_dir,
-                con = EQWin
-              )
-              files <- list.files(work_dir, full.names = TRUE)
-              files <- files[file.exists(files)]
-              matched <- files[grepl("\\.xlsx$", basename(files), ignore.case = TRUE)]
-              if (length(matched) == 1L) {
-                report_path <- matched[[1]]
-              } else if (length(matched) > 1L) {
-                stop(
-                  YGwater:::tr(
-                    "wq_err_multiple_report_files",
-                    req$ui_language
-                  ),
-                  call. = FALSE
+
+              date_label <- if (!is.null(req$date_range)) {
+                paste(
+                  format(req$date_range[[1]], "%Y-%m-%d"),
+                  format(req$date_range[[2]], "%Y-%m-%d"),
+                  sep = if (identical(req$lang, "fr")) " au " else " to "
                 )
-              } else if (length(files) == 1L) {
-                report_path <- files[[1]]
-              } else if (length(files) == 0L) {
-                stop(
-                  YGwater:::tr("wq_err_no_report_files", req$ui_language),
-                  call. = FALSE
+              } else if (
+                length(req$date) > 1L &&
+                  all(diff(as.integer(req$date)) == 1L)
+              ) {
+                paste(
+                  format(req$date[[1]], "%Y-%m-%d"),
+                  format(req$date[[length(req$date)]], "%Y-%m-%d"),
+                  sep = if (identical(req$lang, "fr")) " au " else " to "
                 )
               } else {
-                stop(
-                  YGwater:::tr(
-                    "wq_err_expected_report_file",
-                    req$ui_language
-                  ),
-                  call. = FALSE
-                )
+                paste(format(req$date, "%Y-%m-%d"), collapse = ", ")
               }
-            }
-
-            date_label <- if (!is.null(req$date_range)) {
-              paste(
-                format(req$date_range[[1]], "%Y-%m-%d"),
-                format(req$date_range[[2]], "%Y-%m-%d"),
-                sep = if (identical(req$lang, "fr")) " au " else " to "
+              list(
+                path = report_path,
+                filename = sprintf(
+                  YGwater:::tr("wq_report_filename", req$ui_language),
+                  date_label,
+                  Sys.Date()
+                ),
+                warning_message = report_warning
               )
-            } else if (
-              length(req$date) > 1L &&
-                all(diff(as.integer(req$date)) == 1L)
-            ) {
-              paste(
-                format(req$date[[1]], "%Y-%m-%d"),
-                format(req$date[[length(req$date)]], "%Y-%m-%d"),
-                sep = if (identical(req$lang, "fr")) " au " else " to "
-              )
-            } else {
-              paste(format(req$date, "%Y-%m-%d"), collapse = ", ")
+            },
+            error = function(e) {
+              if (dir.exists(work_dir)) {
+                unlink(work_dir, recursive = TRUE, force = TRUE)
+              }
+              e$message
             }
-            list(
-              path = report_path,
-              filename = sprintf(
-                YGwater:::tr("wq_report_filename", req$ui_language),
-                date_label,
-                Sys.Date()
-              ),
-              warning_message = report_warning
-            )
-          },
-          error = function(e) {
-            if (dir.exists(work_dir)) {
-              unlink(work_dir, recursive = TRUE, force = TRUE)
-            }
-            e$message
-          }
-        )
+          )
         },
         req = req,
         db_config = db_config,

@@ -1,3 +1,8 @@
+#' Check for HEIF reading and JPEG writing support
+#'
+#' @return A logical flag based on the local ImageMagick configuration.
+#' @keywords internal
+#' @noRd
 heif_jpeg_conversion_available <- function() {
   if (!requireNamespace("magick", quietly = TRUE)) {
     return(FALSE)
@@ -10,17 +15,31 @@ heif_jpeg_conversion_available <- function() {
   !is.null(config) && isTRUE(config$heic) && isTRUE(config$jpeg)
 }
 
+#' Convert one HEIC or HEIF image to JPEG
+#'
+#' @param path Path to the source image.
+#' @param output_path Destination JPEG path. `NULL` uses a temporary filename.
+#' @param extension Source extension, including when the uploaded file has a temporary name.
+#' @return The normalized path to the oriented JPEG. The caller manages its lifetime.
+#' @keywords internal
+#' @noRd
 convert_heif_to_jpeg <- function(
   path,
   output_path = NULL,
   extension = tools::file_ext(path)
 ) {
   if (length(extension) != 1L || is.na(extension)) {
-    stop("The HEIC/HEIF image extension could not be determined.", call. = FALSE)
+    stop(
+      "The HEIC/HEIF image extension could not be determined.",
+      call. = FALSE
+    )
   }
   extension <- tolower(sub("^\\.", "", extension))
   if (!extension %in% c("heic", "heif")) {
-    stop("Only HEIC and HEIF images can be converted by this helper.", call. = FALSE)
+    stop(
+      "Only HEIC and HEIF images can be converted by this helper.",
+      call. = FALSE
+    )
   }
   if (!heif_jpeg_conversion_available()) {
     stop(
@@ -75,6 +94,14 @@ convert_heif_to_jpeg <- function(
   normalizePath(output_path, winslash = "/", mustWork = TRUE)
 }
 
+#' Process an upload with temporary HEIF conversion
+#'
+#' @param path Path to the uploaded file.
+#' @param callback Function that accepts the original path or a converted JPEG path.
+#' @param extension Source extension used to decide whether conversion is needed.
+#' @return The value returned by `callback`. A temporary JPEG is removed on exit.
+#' @keywords internal
+#' @noRd
 with_heif_upload_as_jpeg <- function(
   path,
   callback,
@@ -85,7 +112,10 @@ with_heif_upload_as_jpeg <- function(
   }
 
   if (length(extension) != 1L || is.na(extension)) {
-    stop("The HEIC/HEIF image extension could not be determined.", call. = FALSE)
+    stop(
+      "The HEIC/HEIF image extension could not be determined.",
+      call. = FALSE
+    )
   }
   extension <- tolower(sub("^\\.", "", extension))
   if (!extension %in% c("heic", "heif")) {

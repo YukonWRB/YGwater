@@ -67,8 +67,8 @@ timeseries_transmission_choices <- function(con, location_id, source_fx) {
        AND sac.enabled
        AND sac.requires_transmission_mapping
        AND s.location_id = $2
-       AND s.start_datetime <= CURRENT_TIMESTAMP
-       AND (s.end_datetime IS NULL OR s.end_datetime > CURRENT_TIMESTAMP)
+       AND greatest(s.start_datetime, r.start_datetime) <= CURRENT_TIMESTAMP
+       AND COALESCE(least(s.end_datetime, r.end_datetime), 'infinity'::timestamptz) > CURRENT_TIMESTAMP
      ORDER BY r.route_name, r.transmission_route_id",
     params = list(source_fx, location_id)
   )
@@ -128,8 +128,8 @@ timeseries_transmission_choices <- function(con, location_id, source_fx) {
      FROM public.locations_metadata_instruments lmi
      JOIN instruments.instruments i
        ON i.instrument_id = lmi.instrument_id
-     LEFT JOIN instruments.instrument_makes mk ON mk.make_id = i.make
-     LEFT JOIN instruments.instrument_models mdl ON mdl.model_id = i.model
+     LEFT JOIN instruments.instrument_makes mk ON mk.make_id = i.instrument_make_id
+     LEFT JOIN instruments.instrument_models mdl ON mdl.model_id = i.instrument_model_id
      WHERE lmi.location_id = $1
        AND i.can_be_logger
        AND lmi.start_datetime <= CURRENT_TIMESTAMP
@@ -166,8 +166,10 @@ timeseries_route_config_fields <- function(capability, message_format = NULL) {
     return(list())
   }
 
-  filter_by_format <- !is.null(message_format) && length(message_format) &&
-    !is.na(message_format[[1L]]) && nzchar(trimws(message_format[[1L]]))
+  filter_by_format <- !is.null(message_format) &&
+    length(message_format) &&
+    !is.na(message_format[[1L]]) &&
+    nzchar(trimws(message_format[[1L]]))
   normalized_format <- if (filter_by_format) {
     toupper(trimws(as.character(message_format[[1L]])))
   } else {
@@ -182,7 +184,8 @@ timeseries_route_config_fields <- function(capability, message_format = NULL) {
         field$message_formats,
         use.names = FALSE
       ))
-      !filter_by_format || !length(formats) ||
+      !filter_by_format ||
+        !length(formats) ||
         normalized_format %in% toupper(trimws(formats))
     },
     fields
@@ -253,7 +256,9 @@ timeseries_route_config_with_ui_fields <- function(
     }
     value <- values[[name]]
     value_type <- as.character(field$value_type[[1L]])
-    missing <- is.null(value) || !length(value) || is.na(value[[1L]]) ||
+    missing <- is.null(value) ||
+      !length(value) ||
+      is.na(value[[1L]]) ||
       (is.character(value[[1L]]) && !nzchar(trimws(value[[1L]])))
     if (missing) {
       config <- set_path(config, path, NULL)
@@ -316,6 +321,8 @@ timeseries_transmission_mapping <- function(con, timeseries_id) {
      JOIN public.locations_metadata_transmission_setups s
        ON s.transmission_setup_id = r.transmission_setup_id
      WHERE m.timeseries_id = $1
+       AND greatest(s.start_datetime, r.start_datetime) <= CURRENT_TIMESTAMP
+       AND COALESCE(least(s.end_datetime, r.end_datetime), 'infinity'::timestamptz) > CURRENT_TIMESTAMP
      ORDER BY m.enabled DESC, m.transmission_mapping_id",
     params = list(timeseries_id)
   )
@@ -338,8 +345,9 @@ timeseries_normalize_transmission_mapping <- function(
   if (is.na(route_id) || route_id <= 0L) {
     stop("Select a transmission route.")
   }
-  if (length(source_field) != 1L || is.na(source_field) ||
-      !nzchar(source_field)) {
+  if (
+    length(source_field) != 1L || is.na(source_field) || !nzchar(source_field)
+  ) {
     stop("Enter the provider or payload field for this timeseries.")
   }
   if (is.na(value_multiplier) || value_multiplier == 0) {
@@ -475,14 +483,65 @@ timeseries_sync_transmission_mapping <- function(
     }
   }
 
-  DBI::dbExecute(
-    con,
-    "DELETE FROM continuous.transmission_timeseries_mappings
-     WHERE timeseries_id = $1",
-    params = list(timeseries_id)
+  current <- timeseries_transmission_mapping(con, timeseries_id)
+  requested_ids <- vapply(
+    mappings,
+    function(x) as.integer(x$transmission_route_id),
+    integer(1)
   )
-
-  for (mapping_row in mappings) {
+  for (route_id in union(current$transmission_route_id, requested_ids)) {
+    ix <- match(route_id, requested_ids)
+    mapping_row <- if (is.na(ix)) NULL else mappings[[ix]]
+    if (!is.null(mapping_row)) {
+      unchanged <- DBI::dbGetQuery(
+        con,
+        "SELECT EXISTS (
+           SELECT 1 FROM continuous.transmission_timeseries_mappings m
+           WHERE m.transmission_route_id = $1 AND m.timeseries_id = $2 AND m.enabled
+             AND m.source_field = $3 AND m.value_multiplier = $4 AND m.value_offset = $5
+             AND m.missing_values = $6::jsonb AND m.mapping_config = $7::jsonb
+         ) AS unchanged",
+        params = list(
+          route_id,
+          timeseries_id,
+          mapping_row$source_field,
+          mapping_row$value_multiplier,
+          mapping_row$value_offset,
+          mapping_row$missing_values,
+          mapping_row$mapping_config
+        )
+      )$unchanged[[1L]]
+      if (isTRUE(unchanged)) next
+    }
+    target <- DBI::dbGetQuery(
+      con,
+      "SELECT CASE WHEN r.created < transaction_timestamp() AND EXISTS (
+                 SELECT 1 FROM continuous.transmission_timeseries_mappings
+                 WHERE transmission_route_id = r.transmission_route_id
+               )
+               THEN public.revise_transmission_route(r.transmission_route_id, clock_timestamp())
+               ELSE r.transmission_route_id END AS id
+       FROM public.locations_metadata_transmission_routes r
+       JOIN public.locations_metadata_transmission_setups s USING (transmission_setup_id)
+       WHERE r.transmission_route_id = $1
+         AND greatest(s.start_datetime, r.start_datetime) <= clock_timestamp()
+         AND COALESCE(least(s.end_datetime, r.end_datetime), 'infinity'::timestamptz) > clock_timestamp()",
+      params = list(route_id)
+    )$id
+    if (length(target) != 1L) {
+      stop(
+        "The selected transmission route is no longer effective. Reload and try again."
+      )
+    }
+    DBI::dbExecute(
+      con,
+      "DELETE FROM continuous.transmission_timeseries_mappings
+       WHERE transmission_route_id = $1 AND timeseries_id = $2",
+      params = list(target, timeseries_id)
+    )
+    if (is.null(mapping_row)) {
+      next
+    }
     DBI::dbExecute(
       con,
       "INSERT INTO continuous.transmission_timeseries_mappings (
@@ -496,7 +555,7 @@ timeseries_sync_transmission_mapping <- function(
          enabled
        ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, TRUE)",
       params = list(
-        mapping_row$transmission_route_id,
+        target,
         mapping_row$source_field,
         timeseries_id,
         mapping_row$value_multiplier,
@@ -562,8 +621,12 @@ timeseries_save_transmission_route <- function(
   }
   transmission_config <- nullable_text(transmission_config)
   route_config <- nullable_text(route_config)
-  if (is.na(transmission_config)) transmission_config <- "{}"
-  if (is.na(route_config)) route_config <- "{}"
+  if (is.na(transmission_config)) {
+    transmission_config <- "{}"
+  }
+  if (is.na(route_config)) {
+    route_config <- "{}"
+  }
   for (entry in list(
     transmission_config = transmission_config,
     route_config = route_config
@@ -587,11 +650,47 @@ timeseries_save_transmission_route <- function(
 
   DBI::dbBegin(con)
   active <- TRUE
-  on.exit({
-    if (active) DBI::dbRollback(con)
-  }, add = TRUE)
+  on.exit(
+    {
+      if (active) DBI::dbRollback(con)
+    },
+    add = TRUE
+  )
 
   if (!is.na(route_id)) {
+    route_values <- list(
+      route_id,
+      location_id,
+      route_name,
+      nullable_text(endpoint_identifier),
+      nullable_text(message_format),
+      nullable_text(schedule_reference_time_utc),
+      nullable_integer(transmit_interval_seconds),
+      nullable_integer(transmit_window_seconds),
+      nullable_integer(payload_size_bytes),
+      route_config
+    )
+    target <- DBI::dbGetQuery(
+      con,
+      "SELECT CASE WHEN greatest(s.start_datetime, r.start_datetime) < CURRENT_TIMESTAMP
+                   AND ROW(r.endpoint_identifier, r.message_format, r.schedule_reference_time_utc,
+                           r.transmit_interval_seconds, r.transmit_window_seconds, r.payload_size_bytes,
+                           r.route_config) IS DISTINCT FROM
+                       ROW($4::text, $5::text, $6::time, $7::integer, $8::integer, $9::integer, $10::jsonb)
+                   THEN public.revise_transmission_route(r.transmission_route_id, CURRENT_TIMESTAMP)
+                   ELSE r.transmission_route_id END AS id
+       FROM public.locations_metadata_transmission_routes r
+       JOIN public.locations_metadata_transmission_setups s USING (transmission_setup_id)
+       WHERE r.transmission_route_id = $1 AND s.location_id = $2 AND r.route_name = $3
+         AND COALESCE(least(s.end_datetime, r.end_datetime), 'infinity'::timestamptz) > CURRENT_TIMESTAMP",
+      params = route_values
+    )$id
+    if (length(target) != 1L) {
+      stop(
+        "The selected route has ended, changed, or belongs to another location. Reload and try again."
+      )
+    }
+    route_values[[1L]] <- target
     route_id <- DBI::dbGetQuery(
       con,
       "UPDATE public.locations_metadata_transmission_routes r
@@ -608,18 +707,7 @@ timeseries_save_transmission_route <- function(
          AND r.transmission_setup_id = s.transmission_setup_id
          AND s.location_id = $2
        RETURNING r.transmission_route_id",
-      params = list(
-        route_id,
-        location_id,
-        route_name,
-        nullable_text(endpoint_identifier),
-        nullable_text(message_format),
-        nullable_text(schedule_reference_time_utc),
-        nullable_integer(transmit_interval_seconds),
-        nullable_integer(transmit_window_seconds),
-        nullable_integer(payload_size_bytes),
-        route_config
-      )
+      params = route_values
     )$transmission_route_id
     if (length(route_id) != 1L) {
       stop("The selected transmission route no longer exists at this location.")

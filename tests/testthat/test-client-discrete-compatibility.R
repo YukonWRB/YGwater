@@ -132,13 +132,13 @@ test_that("metadata downloads use bilingual identity columns and parameter scope
     collapse = "\n"
   )
   expect_match(
-    code,
-    'sample_ids_str,\n        ") AND r.parameter_id IN (",',
+    gsub("[[:space:]]+", " ", code),
+    'sample_ids_str, ") AND r.parameter_id IN (", paste(request$parameter_ids,',
     fixed = TRUE
   )
   expect_match(
     code,
-    "parameter_ids = filteredData$params$parameter_id",
+    "parameter_ids = request$parameter_ids",
     fixed = TRUE
   )
 })
@@ -182,7 +182,7 @@ test_that("report matrices and SD calculations distinguish result value types", 
       ) {
         expect_match(
           statement,
-          "r.result_value_type AS result_value_type_id",
+          "r.result_value_type_id",
           fixed = TRUE
         )
         return(history)
@@ -290,7 +290,7 @@ test_that("plots resolve matrix units and show a guideline for one result", {
           "units"
         )]))
       }
-      if (grepl("r.result_type AS result_type_id", statement, fixed = TRUE)) {
+      if (grepl("r.result_type_id", statement, fixed = TRUE)) {
         expect_match(
           statement,
           "public.get_parameter_unit_name(p.parameter_id, r.matrix_state_id) AS units",

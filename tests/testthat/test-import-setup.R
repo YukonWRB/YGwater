@@ -145,22 +145,23 @@ test_that("an unspecified laboratory stays unassigned in workbook defaults", {
   env <- import_setup_environment()
   profile <- data.frame(profile_code = "no_lab")
   profile$defaults <- I(list(list(owner = 1L, media_id = 1L)))
-  expect_true(is.na(env$addDiscData_defaults(profile)$laboratory))
-  profile$defaults[[1]]$laboratory <- 7L
-  expect_identical(env$addDiscData_defaults(profile)$laboratory, 7L)
+  expect_true(is.na(env$addDiscData_defaults(profile)$lab_id))
+  profile$defaults[[1]]$lab_id <- 7L
+  expect_identical(env$addDiscData_defaults(profile)$lab_id, 7L)
 })
 
 test_that("all workbook metadata defaults can remain unset", {
   env <- import_setup_environment()
   fields <- c(
     "media_id",
-    "collection_method",
-    "sample_type",
+    "collection_method_id",
+    "sample_type_id",
     "owner",
-    "result_type",
+    "result_type_id",
     "matrix_state_id",
-    "result_value_type",
-    "laboratory"
+    "result_value_type_id",
+    "lab_id",
+    "protocol_method_id"
   )
   profile <- data.frame(profile_code = "optional_defaults")
   for (value in list(
@@ -228,6 +229,10 @@ test_that("workbook default selectors preserve blank and existing values", {
     result_value_type_id = 18L,
     result_value_type = "Actual"
   )
+  state$protocol_methods <- data.frame(
+    protocol_method_id = 19L,
+    protocol_name = "EPA method"
+  )
   environment(render) <- state
   html <- as.character(render())
   expect_equal(
@@ -236,14 +241,42 @@ test_that("workbook default selectors preserve blank and existing values", {
       html,
       fixed = TRUE
     )[[1]]),
-    8L
+    9L
   )
   profile <- data.frame(profile_code = "existing")
-  profile$defaults <- I(list(list(media_id = 11L, owner = 14L)))
+  profile$defaults <- I(list(list(
+    media_id = 11L,
+    owner = 14L,
+    protocol_method_id = 19L
+  )))
   state$new_profile_template <- function() profile
   html <- as.character(render())
   expect_match(html, '<option value="11" selected>Water</option>', fixed = TRUE)
   expect_match(html, '<option value="14" selected>Owner</option>', fixed = TRUE)
+  expect_match(
+    html,
+    '<option value="19" selected>EPA method</option>',
+    fixed = TRUE
+  )
+
+  collect_defaults <- Filter(
+    function(x) {
+      is.call(x) &&
+        identical(x[[1L]], quote(`<-`)) &&
+        identical(x[[2L]], quote(profile_defaults))
+    },
+    statements
+  )[[1L]]
+  eval(collect_defaults, state)
+  profile$defaults[[1L]]$grade_type_id <- 3L
+  state$input <- list(new_profile_default_protocol = "20")
+  expect_identical(state$profile_defaults(profile)$protocol_method_id, 20L)
+  expect_identical(state$profile_defaults(profile)$grade_type_id, 3L)
+  state$input$new_profile_default_protocol <- ""
+  expect_identical(
+    state$profile_defaults(profile)$protocol_method_id,
+    NA_integer_
+  )
 })
 
 test_that("required record metadata is checked before upload", {
@@ -278,27 +311,27 @@ test_that("required record metadata is checked before upload", {
   df$datetime <- as.POSIXct("2026-11-16", tz = "UTC")
   for (field in c(
     "media_id",
-    "collection_method",
+    "collection_method_id",
     "owner",
     "parameter_id",
-    "result_type",
+    "result_type_id",
     "matrix_state_id",
     "location_id"
   )) {
     df[[field]] <- 1L
   }
-  df$sample_type <- 34L
+  df$sample_type_id <- 34L
   df$result <- 1
   df$result_flag_action <- "keep"
   expect_true(state$validate_upload_rows(df))
   for (field in c(
     "datetime",
     "media_id",
-    "collection_method",
-    "sample_type",
+    "collection_method_id",
+    "sample_type_id",
     "owner",
     "parameter_id",
-    "result_type",
+    "result_type_id",
     "matrix_state_id"
   )) {
     missing <- df

@@ -15,6 +15,9 @@ clear_cached(key, env = .GlobalEnv, all_scopes = FALSE)
 a colon, such as database/user-scoped copies. Defaults to FALSE for exact
 key matching. Unrelated keys with similar names are retained.}
 }
+\value{
+Invisibly returns \code{NULL}.
+}
 \description{
 Remove a value from the cache
 }

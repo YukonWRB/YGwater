@@ -1641,9 +1641,9 @@ function(client_id, query) {
         g.grade_type_description
       FROM grade_ranges g
       WHERE g.timeseries_id = m.timeseries_id
-        AND g.start_dt <= m.datetime
-        AND g.end_dt >= m.datetime
-      ORDER BY g.start_dt DESC, g.grade_id DESC
+        AND g.start_datetime <= m.datetime
+        AND g.end_datetime >= m.datetime
+      ORDER BY g.start_datetime DESC, g.grade_id DESC
       LIMIT 1
     ) grade ON TRUE
     LEFT JOIN LATERAL (
@@ -1652,9 +1652,9 @@ function(client_id, query) {
         a.approval_type_description
       FROM approval_ranges a
       WHERE a.timeseries_id = m.timeseries_id
-        AND a.start_dt <= m.datetime
-        AND a.end_dt >= m.datetime
-      ORDER BY a.start_dt DESC, a.approval_id DESC
+        AND a.start_datetime <= m.datetime
+        AND a.end_datetime >= m.datetime
+      ORDER BY a.start_datetime DESC, a.approval_id DESC
       LIMIT 1
     ) approval ON TRUE
     LEFT JOIN LATERAL (
@@ -1673,18 +1673,18 @@ function(client_id, query) {
           q.qualifier_type_description
         FROM qualifier_ranges q
         WHERE q.timeseries_id = m.timeseries_id
-          AND q.start_dt <= m.datetime
-          AND q.end_dt >= m.datetime
-        ORDER BY q.qualifier_type_id, q.start_dt DESC, q.qualifier_id DESC
+          AND q.start_datetime <= m.datetime
+          AND q.end_datetime >= m.datetime
+        ORDER BY q.qualifier_type_id, q.start_datetime DESC, q.qualifier_id DESC
       ) q
     ) qualifier ON TRUE
     LEFT JOIN LATERAL (
       SELECT o.owner_organization_id
       FROM owner_ranges o
       WHERE o.timeseries_id = m.timeseries_id
-        AND o.start_dt <= m.datetime
-        AND o.end_dt >= m.datetime
-      ORDER BY o.start_dt DESC, o.owner_id DESC
+        AND o.start_datetime <= m.datetime
+        AND o.end_datetime >= m.datetime
+      ORDER BY o.start_datetime DESC, o.owner_id DESC
       LIMIT 1
     ) owner_range ON TRUE
     LEFT JOIN public.organizations owner_org
@@ -1693,9 +1693,9 @@ function(client_id, query) {
       SELECT c.contributor_organization_id
       FROM contributor_ranges c
       WHERE c.timeseries_id = m.timeseries_id
-        AND c.start_dt <= m.datetime
-        AND c.end_dt >= m.datetime
-      ORDER BY c.start_dt DESC, c.contributor_id DESC
+        AND c.start_datetime <= m.datetime
+        AND c.end_datetime >= m.datetime
+      ORDER BY c.start_datetime DESC, c.contributor_id DESC
       LIMIT 1
     ) contributor_range ON TRUE
     LEFT JOIN public.organizations contributor_org
@@ -1735,58 +1735,58 @@ function(client_id, query) {
          modified_ranges AS MATERIALIZED (
            SELECT
              tt.root_timeseries_id AS timeseries_id,
-             c.start_dt,
-             c.end_dt
+             c.start_datetime,
+             c.end_datetime
            FROM timeseries_tree tt
            JOIN continuous.corrections c
              ON c.timeseries_id = tt.source_timeseries_id
-           WHERE c.start_dt <= $2
-             AND c.end_dt >= $1
+           WHERE c.start_datetime <= $2
+             AND c.end_datetime >= $1
              AND (c.created >= $3 OR c.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, g.start_dt, g.end_dt
+           SELECT st.timeseries_id, g.start_datetime, g.end_datetime
            FROM selected_timeseries st
            JOIN continuous.grades g USING (timeseries_id)
-           WHERE g.start_dt <= $2
-             AND g.end_dt >= $1
+           WHERE g.start_datetime <= $2
+             AND g.end_datetime >= $1
              AND (g.created >= $3 OR g.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, a.start_dt, a.end_dt
+           SELECT st.timeseries_id, a.start_datetime, a.end_datetime
            FROM selected_timeseries st
            JOIN continuous.approvals a USING (timeseries_id)
-           WHERE a.start_dt <= $2
-             AND a.end_dt >= $1
+           WHERE a.start_datetime <= $2
+             AND a.end_datetime >= $1
              AND (a.created >= $3 OR a.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, q.start_dt, q.end_dt
+           SELECT st.timeseries_id, q.start_datetime, q.end_datetime
            FROM selected_timeseries st
            JOIN continuous.qualifiers q USING (timeseries_id)
-           WHERE q.start_dt <= $2
-             AND q.end_dt >= $1
+           WHERE q.start_datetime <= $2
+             AND q.end_datetime >= $1
              AND (q.created >= $3 OR q.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, o.start_dt, o.end_dt
+           SELECT st.timeseries_id, o.start_datetime, o.end_datetime
            FROM selected_timeseries st
            JOIN continuous.owners o USING (timeseries_id)
-           WHERE o.start_dt <= $2
-             AND o.end_dt >= $1
+           WHERE o.start_datetime <= $2
+             AND o.end_datetime >= $1
              AND (o.created >= $3 OR o.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, c.start_dt, c.end_dt
+           SELECT st.timeseries_id, c.start_datetime, c.end_datetime
            FROM selected_timeseries st
            JOIN continuous.contributors c USING (timeseries_id)
-           WHERE c.start_dt <= $2
-             AND c.end_dt >= $1
+           WHERE c.start_datetime <= $2
+             AND c.end_datetime >= $1
              AND (c.created >= $3 OR c.modified >= $3)
          ),
     "
@@ -1798,8 +1798,8 @@ function(client_id, query) {
            SELECT 1
            FROM modified_ranges changed
            WHERE changed.timeseries_id = mc.timeseries_id
-             AND changed.start_dt <= mc.datetime
-             AND changed.end_dt >= mc.datetime
+             AND changed.start_datetime <= mc.datetime
+             AND changed.end_datetime >= mc.datetime
          )
        )"
     compound_modified_filter_sql <- "
@@ -1810,8 +1810,8 @@ function(client_id, query) {
            SELECT 1
            FROM modified_ranges changed
            WHERE changed.timeseries_id = m.timeseries_id
-             AND changed.start_dt <= m.datetime
-             AND changed.end_dt >= m.datetime
+             AND changed.start_datetime <= m.datetime
+             AND changed.end_datetime >= m.datetime
          )
        )"
     query_params <- list(start, end, modified_since, lim)
@@ -1925,8 +1925,8 @@ function(client_id, query) {
          grade_ranges AS MATERIALIZED (
            SELECT
              g.timeseries_id,
-             g.start_dt,
-             g.end_dt,
+             g.start_datetime,
+             g.end_datetime,
              g.grade_id,
              g.grade_type_id,
              gt.grade_type_description
@@ -1935,14 +1935,14 @@ function(client_id, query) {
              ON g.timeseries_id = st.timeseries_id
            LEFT JOIN public.grade_types gt
              ON g.grade_type_id = gt.grade_type_id
-           WHERE g.start_dt <= $2
-             AND g.end_dt >= $1
+           WHERE g.start_datetime <= $2
+             AND g.end_datetime >= $1
          ),
          approval_ranges AS MATERIALIZED (
            SELECT
              a.timeseries_id,
-             a.start_dt,
-             a.end_dt,
+             a.start_datetime,
+             a.end_datetime,
              a.approval_id,
              a.approval_type_id,
              at.approval_type_description
@@ -1951,14 +1951,14 @@ function(client_id, query) {
              ON a.timeseries_id = st.timeseries_id
            LEFT JOIN public.approval_types at
              ON a.approval_type_id = at.approval_type_id
-           WHERE a.start_dt <= $2
-             AND a.end_dt >= $1
+           WHERE a.start_datetime <= $2
+             AND a.end_datetime >= $1
          ),
          qualifier_ranges AS MATERIALIZED (
            SELECT
              q.timeseries_id,
-             q.start_dt,
-             q.end_dt,
+             q.start_datetime,
+             q.end_datetime,
              q.qualifier_id,
              q.qualifier_type_id,
              qt.qualifier_type_description
@@ -1967,34 +1967,34 @@ function(client_id, query) {
              ON q.timeseries_id = st.timeseries_id
            LEFT JOIN public.qualifier_types qt
              ON q.qualifier_type_id = qt.qualifier_type_id
-           WHERE q.start_dt <= $2
-             AND q.end_dt >= $1
+           WHERE q.start_datetime <= $2
+             AND q.end_datetime >= $1
          ),
          owner_ranges AS MATERIALIZED (
            SELECT
              o.timeseries_id,
-             o.start_dt,
-             o.end_dt,
+             o.start_datetime,
+             o.end_datetime,
              o.owner_id,
              o.organization_id AS owner_organization_id
            FROM selected_timeseries st
            JOIN continuous.owners o
              ON o.timeseries_id = st.timeseries_id
-           WHERE o.start_dt <= $2
-             AND o.end_dt >= $1
+           WHERE o.start_datetime <= $2
+             AND o.end_datetime >= $1
          ),
          contributor_ranges AS MATERIALIZED (
            SELECT
              c.timeseries_id,
-             c.start_dt,
-             c.end_dt,
+             c.start_datetime,
+             c.end_datetime,
              c.contributor_id,
              c.organization_id AS contributor_organization_id
            FROM selected_timeseries st
            JOIN continuous.contributors c
              ON c.timeseries_id = st.timeseries_id
-           WHERE c.start_dt <= $2
-             AND c.end_dt >= $1
+           WHERE c.start_datetime <= $2
+             AND c.end_datetime >= $1
          ),
          basic_slow_correction_timeseries AS MATERIALIZED (
            SELECT DISTINCT c.timeseries_id
@@ -2004,8 +2004,8 @@ function(client_id, query) {
            JOIN continuous.correction_types ct
              ON c.correction_type = ct.correction_type_id
            WHERE st.timeseries_type = 'basic'
-             AND c.start_dt <= $2
-             AND c.end_dt >= $1
+             AND c.start_datetime <= $2
+             AND c.end_datetime >= $1
              AND ct.correction_type NOT IN (
                'delete',
                'trim',
@@ -2128,8 +2128,8 @@ function(client_id, query) {
                PARTITION BY c.timeseries_id
                ORDER BY ct.priority ASC, c.correction_id ASC
              ) AS correction_step,
-             c.start_dt,
-             c.end_dt,
+             c.start_datetime,
+             c.end_datetime,
              c.value1,
              c.value2,
              c.timestep_window,
@@ -2143,8 +2143,8 @@ function(client_id, query) {
              ON slow.timeseries_id = st.timeseries_id
            WHERE st.timeseries_type = 'basic'
              AND slow.timeseries_id IS NULL
-             AND c.start_dt <= $2
-             AND c.end_dt >= $1
+             AND c.start_datetime <= $2
+             AND c.end_datetime >= $1
          ),
          basic_correction_counts AS MATERIALIZED (
            SELECT
@@ -2177,8 +2177,8 @@ function(client_id, query) {
              CASE
                WHEN r.value_corrected IS NULL THEN NULL
                WHEN NOT (
-                 c.start_dt <= r.datetime
-                 AND c.end_dt >= r.datetime
+                 c.start_datetime <= r.datetime
+                 AND c.end_datetime >= r.datetime
                ) THEN r.value_corrected
                WHEN c.correction_type = 'delete' THEN NULL
                WHEN c.correction_type = 'trim' THEN
@@ -2194,8 +2194,8 @@ function(client_id, query) {
                WHEN c.correction_type = 'offset two-point' THEN
                  r.value_corrected + c.value1 + (
                    (c.value2 - c.value1) /
-                   EXTRACT(EPOCH FROM (c.end_dt - c.start_dt)) *
-                   EXTRACT(EPOCH FROM (r.datetime - c.start_dt))
+                   EXTRACT(EPOCH FROM (c.end_datetime - c.start_datetime)) *
+                   EXTRACT(EPOCH FROM (r.datetime - c.start_datetime))
                  )
                WHEN c.correction_type = 'scale' THEN
                  r.value_corrected * (c.value1 / 100.0)
@@ -2203,7 +2203,7 @@ function(client_id, query) {
                  r.value_corrected + (
                    c.value1 /
                    EXTRACT(EPOCH FROM c.timestep_window) *
-                   EXTRACT(EPOCH FROM (r.datetime - c.start_dt))
+                   EXTRACT(EPOCH FROM (r.datetime - c.start_datetime))
                  )
                ELSE r.value_corrected
              END AS value_corrected,
@@ -2843,7 +2843,7 @@ function(client_id, query) {
       b.depth_m,
       b.bedrock_reached,
       b.depth_to_bedrock_m,
-      b.drilled_by AS driller_id,
+      b.driller_id,
       d.name AS driller_name,
       b.approval_type_id AS borehole_approval_type_id,
       ba.approval_type_description AS borehole_approval,
@@ -2857,7 +2857,7 @@ function(client_id, query) {
       wa.approval_type_description AS well_approval,
       w.well_purpose_id,
       wp.purpose_name AS well_purpose,
-      w.casing_material,
+      w.casing_material_id AS casing_material,
       w.casing_diameter_mm,
       w.casing_depth_to_m,
       w.stick_up_height_m,
@@ -2876,7 +2876,7 @@ function(client_id, query) {
     LEFT JOIN boreholes.wells w
       ON w.borehole_id = b.borehole_id
     LEFT JOIN boreholes.drillers d
-      ON d.driller_id = b.drilled_by
+      ON d.driller_id = b.driller_id
     LEFT JOIN boreholes.borehole_well_purposes bp
       ON bp.borehole_well_purpose_id = b.borehole_purpose_id
     LEFT JOIN boreholes.borehole_well_purposes wp
@@ -3003,7 +3003,7 @@ function(client_id, query) {
       d.publish_date,
       d.url,
       d.format,
-      d.type AS document_type_id,
+      d.document_type_id AS document_type_id,
       dt.document_type_en,
       dt.document_type_fr,
       d.owner AS owner_organization_id,
@@ -3012,7 +3012,7 @@ function(client_id, query) {
       contributor.name AS contributor
     FROM files.documents d
     LEFT JOIN files.document_types dt
-      ON dt.document_type_id = d.type
+      ON dt.document_type_id = d.document_type_id
     LEFT JOIN public.organizations owner
       ON owner.organization_id = d.owner
     LEFT JOIN public.organizations contributor
@@ -3676,7 +3676,7 @@ function(client_id, query) {
         i.location_id,
         l.name AS location_name,
         l.name_fr AS location_name_fr,
-        i.image_type AS image_type_id,
+        i.image_type_id AS image_type_id,
         it.image_type,
         i.format,
         i.file
@@ -3684,7 +3684,7 @@ function(client_id, query) {
       LEFT JOIN public.locations l
         ON l.location_id = i.location_id
       LEFT JOIN files.image_types it
-        ON it.image_type_id = i.image_type
+        ON it.image_type_id = i.image_type_id
       WHERE LOWER(COALESCE(l.name, '')) = LOWER($1)
         AND LOWER(COALESCE(it.image_type, '')) = LOWER($2)
       ORDER BY i.datetime DESC,
@@ -3708,7 +3708,7 @@ function(client_id, query) {
         i.location_id,
         l.name AS location_name,
         l.name_fr AS location_name_fr,
-        i.image_type AS image_type_id,
+        i.image_type_id AS image_type_id,
         it.image_type,
         i.format,
         i.file
@@ -3716,7 +3716,7 @@ function(client_id, query) {
       LEFT JOIN public.locations l
         ON l.location_id = i.location_id
       LEFT JOIN files.image_types it
-        ON it.image_type_id = i.image_type
+        ON it.image_type_id = i.image_type_id
       WHERE LOWER(COALESCE(l.name, '')) = LOWER($1)
       ORDER BY i.datetime DESC,
         i.image_id DESC
@@ -3737,7 +3737,7 @@ function(client_id, query) {
         i.location_id,
         l.name AS location_name,
         l.name_fr AS location_name_fr,
-        i.image_type AS image_type_id,
+        i.image_type_id AS image_type_id,
         it.image_type,
         i.format,
         i.file
@@ -3745,7 +3745,7 @@ function(client_id, query) {
       LEFT JOIN public.locations l
         ON l.location_id = i.location_id
       LEFT JOIN files.image_types it
-        ON it.image_type_id = i.image_type
+        ON it.image_type_id = i.image_type_id
       WHERE LOWER(COALESCE(l.name, '')) = LOWER($2)
         AND LOWER(COALESCE(it.image_type, '')) = LOWER($3)
       ORDER BY ABS(EXTRACT(EPOCH FROM (i.datetime - $1))),
@@ -3766,7 +3766,7 @@ function(client_id, query) {
         i.location_id,
         l.name AS location_name,
         l.name_fr AS location_name_fr,
-        i.image_type AS image_type_id,
+        i.image_type_id AS image_type_id,
         it.image_type,
         i.format,
         i.file
@@ -3774,7 +3774,7 @@ function(client_id, query) {
       LEFT JOIN public.locations l
         ON l.location_id = i.location_id
       LEFT JOIN files.image_types it
-        ON it.image_type_id = i.image_type
+        ON it.image_type_id = i.image_type_id
       WHERE LOWER(COALESCE(l.name, '')) = LOWER($2)
       ORDER BY ABS(EXTRACT(EPOCH FROM (i.datetime - $1))),
         i.datetime DESC,
@@ -3796,7 +3796,7 @@ function(client_id, query) {
         i.location_id,
         l.name AS location_name,
         l.name_fr AS location_name_fr,
-        i.image_type AS image_type_id,
+        i.image_type_id AS image_type_id,
         it.image_type,
         i.format,
         i.file
@@ -3804,7 +3804,7 @@ function(client_id, query) {
       LEFT JOIN public.locations l
         ON l.location_id = i.location_id
       LEFT JOIN files.image_types it
-        ON it.image_type_id = i.image_type
+        ON it.image_type_id = i.image_type_id
       WHERE i.datetime >= $1
         AND i.datetime <= $2
         AND LOWER(COALESCE(l.name, '')) = LOWER($3)
@@ -3832,7 +3832,7 @@ function(client_id, query) {
         i.location_id,
         l.name AS location_name,
         l.name_fr AS location_name_fr,
-        i.image_type AS image_type_id,
+        i.image_type_id AS image_type_id,
         it.image_type,
         i.format,
         i.file
@@ -3840,7 +3840,7 @@ function(client_id, query) {
       LEFT JOIN public.locations l
         ON l.location_id = i.location_id
       LEFT JOIN files.image_types it
-        ON it.image_type_id = i.image_type
+        ON it.image_type_id = i.image_type_id
       WHERE i.datetime >= $1
         AND i.datetime <= $2
         AND LOWER(COALESCE(l.name, '')) = LOWER($3)
@@ -3864,7 +3864,7 @@ function(client_id, query) {
         i.location_id,
         l.name AS location_name,
         l.name_fr AS location_name_fr,
-        i.image_type AS image_type_id,
+        i.image_type_id AS image_type_id,
         it.image_type,
         i.format,
         i.file
@@ -3872,7 +3872,7 @@ function(client_id, query) {
       LEFT JOIN public.locations l
         ON l.location_id = i.location_id
       LEFT JOIN files.image_types it
-        ON it.image_type_id = i.image_type
+        ON it.image_type_id = i.image_type_id
       WHERE i.datetime >= $1
         AND i.datetime <= $2
         AND LOWER(COALESCE(l.name, '')) = LOWER($3)
@@ -3899,7 +3899,7 @@ function(client_id, query) {
         i.location_id,
         l.name AS location_name,
         l.name_fr AS location_name_fr,
-        i.image_type AS image_type_id,
+        i.image_type_id AS image_type_id,
         it.image_type,
         i.format,
         i.file
@@ -3907,7 +3907,7 @@ function(client_id, query) {
       LEFT JOIN public.locations l
         ON l.location_id = i.location_id
       LEFT JOIN files.image_types it
-        ON it.image_type_id = i.image_type
+        ON it.image_type_id = i.image_type_id
       WHERE i.datetime >= $1
         AND i.datetime <= $2
         AND LOWER(COALESCE(l.name, '')) = LOWER($3)
@@ -4186,7 +4186,7 @@ function(request, response, query) {
      JOIN public.locations l
        ON l.location_id = i.location_id
      LEFT JOIN files.image_types it
-       ON it.image_type_id = i.image_type
+       ON it.image_type_id = i.image_type_id
      WHERE i.datetime >= $1
        %s
      GROUP BY l.location_id, l.location_code, l.name, l.name_fr

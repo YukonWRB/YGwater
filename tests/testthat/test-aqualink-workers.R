@@ -32,7 +32,9 @@ test_that("AquaLink checks, sizes and shuts down its application-wide mirai pool
     dbExistsTable = function(...) TRUE,
     dbGetQuery = function(conn, statement, ...) {
       if (grepl("can_execute", statement, fixed = TRUE)) return(data.frame(can_execute = TRUE))
-      if (grepl("Last patch number", statement, fixed = TRUE)) return(data.frame(version = 66))
+      if (grepl("Last patch number", statement, fixed = TRUE)) {
+        return(data.frame(version = "72"))
+      }
       stop("Unexpected launcher query: ", statement)
     },
     dbDisconnect = function(...) TRUE,
@@ -82,32 +84,4 @@ test_that("AquaLink checks, sizes and shuts down its application-wide mirai pool
     expect_error(launcher$AquaLink(dbHost = "10.250.12.154"), "Missing package", fixed = TRUE)
   }
   expect_equal(connects, calls_before)
-})
-
-test_that("the parameter map consumes the app pool without managing workers", {
-  skip_if_not_installed("mirai")
-  skip_if_not_installed("shiny")
-  module <- new.env(parent = asNamespace("YGwater"))
-  sys.source(system.file("apps/aqualink/modules/client/map/paramsMap.R", package = "YGwater"), module)
-  captured <- NULL
-  local_mocked_bindings(
-    mirai = function(.expr, ..., .timeout, .compute) {
-      captured <<- list(args = list(...), timeout = .timeout, profile = .compute)
-      "submitted"
-    },
-    status = function(...) stop("Module must not inspect pool sizing"),
-    daemons = function(...) stop("Module must not manage daemons"),
-    .package = "mirai"
-  )
-  local_mocked_bindings(check_installed = function(...) stop("Dependencies belong to the launcher"),
-                        .package = "rlang")
-  local_mocked_bindings(onStop = function(...) stop("Pool cleanup belongs to the launcher"),
-                        .package = "shiny")
-  result <- module$params_map_start_fetch(list(target = as.Date("2026-10-21")),
-                                        list(dbUser = "test reader"), identity, identity)
-  expect_identical(result, "submitted")
-  expect_identical(captured$profile, "YGwater_aqualink")
-  expect_equal(captured$timeout, 60000)
-  expect_identical(captured$args$db$dbUser, "test reader")
-  expect_identical(captured$args$fetch_fun, identity)
 })

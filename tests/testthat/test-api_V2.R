@@ -192,7 +192,10 @@ test_that("API V2 async routes declare their finalizers", {
   lines <- readLines(v2_route_file(), warn = FALSE)
   # Split on every endpoint method: GET and POST /samples/results each have
   # their own async handler and finalizer. @any annotations belong to filters.
-  route_starts <- grep("^#\\* @(get|post|put|patch|delete|head|options)\\s+", lines)
+  route_starts <- grep(
+    "^#\\* @(get|post|put|patch|delete|head|options)\\s+",
+    lines
+  )
   route_ends <- c(route_starts[-1L] - 1L, length(lines))
   routes <- sub("^#\\* @", "", lines[route_starts])
   async_routes <- c(
@@ -293,7 +296,11 @@ test_that("API measurement SQL limits rows before metadata range joins", {
       "limited_measurement_rows"
     }
     expect_match(block, paste0(limited_cte, " AS MATERIALIZED"), fixed = TRUE)
-    limit_start <- regexpr(paste0(limited_cte, " AS MATERIALIZED"), block, fixed = TRUE)[[1L]]
+    limit_start <- regexpr(
+      paste0(limited_cte, " AS MATERIALIZED"),
+      block,
+      fixed = TRUE
+    )[[1L]]
     limited_sql <- substring(block, limit_start)
     expect_match(
       limited_sql,
@@ -357,12 +364,12 @@ test_that("API measurement modifiedSince includes related range changes", {
     expect_match(block, "FROM modified_ranges changed", fixed = TRUE)
     expect_match(
       block,
-      "changed.start_dt <= mc.datetime",
+      "changed.start_datetime <= mc.datetime",
       fixed = TRUE
     )
     expect_match(
       block,
-      "changed.start_dt <= m.datetime",
+      "changed.start_datetime <= m.datetime",
       fixed = TRUE
     )
   }

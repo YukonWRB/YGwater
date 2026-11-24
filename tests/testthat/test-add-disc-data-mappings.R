@@ -42,14 +42,14 @@ add_disc_data_test_profile <- function(parser_family = "xlr") {
   }
   defaults <- list(
     media_id = 1L,
-    collection_method = 27L,
-    sample_type = 34L,
+    collection_method_id = 27L,
+    sample_type_id = 34L,
     owner = 1L,
     contributor = 9L,
-    result_type = 2L,
+    result_type_id = 2L,
     matrix_state_id = 1L,
-    result_value_type = 1L,
-    laboratory = 2L,
+    result_value_type_id = 1L,
+    lab_id = 2L,
     grade_type_id = 3L,
     approval_type_id = 4L,
     sample_no_source_update = TRUE,
@@ -137,13 +137,13 @@ test_that("missing workbook defaults remain empty in parsed preview rows", {
   )
   fields <- c(
     "media_id",
-    "collection_method",
-    "sample_type",
+    "collection_method_id",
+    "sample_type_id",
     "owner",
-    "result_type",
+    "result_type_id",
     "matrix_state_id",
-    "result_value_type",
-    "laboratory"
+    "result_value_type_id",
+    "lab_id"
   )
   expect_true(all(is.na(rows[fields])))
   expect_equal(rows$result, 1.2)
@@ -200,9 +200,9 @@ test_that("mapping conversion and offset are applied once", {
       source_code = "ALS",
       source_match = '{"parameter_code":"Aluminum, dissolved","unit":"ug/L"}',
       parameter_id = 10L,
-      result_type = 2L,
+      result_type_id = 2L,
       sample_fraction_id = 5L,
-      result_value_type = 1L,
+      result_value_type_id = 1L,
       reporting_basis_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
@@ -249,9 +249,9 @@ test_that("source-specific result-flag mappings use typed detection limits", {
       source_code = "ALS",
       source_match = '{"parameter_code":"Aluminum, dissolved","unit":"ug/L"}',
       parameter_id = 10L,
-      result_type = 2L,
+      result_type_id = 2L,
       sample_fraction_id = 5L,
-      result_value_type = 1L,
+      result_value_type_id = 1L,
       reporting_basis_id = NA_integer_,
       matrix_state_id = 1L,
       conversion = 0.001,
@@ -277,7 +277,7 @@ test_that("source-specific result-flag mappings use typed detection limits", {
   mapped_again <- env$addDiscData_apply_mappings(mapped, con = NULL)
 
   expect_true(is.na(mapped$result))
-  expect_identical(mapped$result_condition, 1L)
+  expect_identical(mapped$result_condition_id, 1L)
   expect_equal(mapped$result_condition_value, 0.02)
   expect_identical(mapped$result_flag_action, "set_result_null")
   expect_identical(
@@ -285,6 +285,72 @@ test_that("source-specific result-flag mappings use typed detection limits", {
     "Source note; Not detected by the laboratory."
   )
   expect_identical(mapped_again$note, mapped$note)
+})
+
+test_that("workbook upload preserves qualifiers and the profile protocol", {
+  env <- add_disc_data_mapping_environment()
+  profile <- add_disc_data_test_profile("long")
+  profile$defaults[[1L]]$protocol_method_id <- 77L
+  profile$column_map[[1L]]$result_flag <- "Qual"
+  path <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(path))
+  openxlsx::write.xlsx(
+    data.frame(
+      Station_Code = "Site",
+      Smpl_CollectDate = "2026-09-01",
+      Smpl_CollectTime = "10:00",
+      Lab_Param_Code = c("A", "A", "B", "B"),
+      `Parameter Description` = "Aluminum",
+      Result = c("<0.01", ">100", "-0.2", "3.5"),
+      Units = "ug/L",
+      `Lab_Smpl_#` = "S1",
+      Qual = c("NOTE", "", "", ""),
+      check.names = FALSE
+    ),
+    path
+  )
+  env$addDiscData_fetch_mappings <- function(...) {
+    data.frame(
+      import_mapping_id = c(1L, 2L),
+      source_match = c('{"parameter_code":"A"}', '{"parameter_code":"B"}'),
+      parameter_id = c(100L, 101L),
+      protocol_method_id = c(NA_integer_, 88L),
+      result_type_id = 2L,
+      sample_fraction_id = NA_integer_,
+      result_value_type_id = 1L,
+      reporting_basis_id = NA_integer_,
+      matrix_state_id = 1L,
+      conversion = 1,
+      result_offset = 0
+    )
+  }
+  env$addDiscData_fetch_result_flag_mappings <- function(...) {
+    data.frame(
+      import_result_flag_mapping_id = 1L,
+      source_flag_column = "Qual",
+      source_flag_value = "NOTE",
+      result_condition_id = NA_integer_,
+      result_condition_value_source = "none",
+      result_condition_value_literal = NA_real_,
+      result_action = "note_only",
+      note_template = "Lab note",
+      priority = 10L,
+      profile_specific = TRUE
+    )
+  }
+
+  parsed <- env$addDiscData_parse_upload(
+    path,
+    profile,
+    negative_values_are_mdl = TRUE
+  )
+  mapped <- env$addDiscData_apply_mappings(parsed, con = NULL)
+  rows <- env$addDiscData_upload_plan(mapped)$df
+  expect_identical(rows$result_condition_id, c(1L, 2L, 1L, NA_integer_))
+  expect_equal(rows$result_condition_value, c(0.01, 100, 0.2, NA_real_))
+  expect_equal(rows$result, c(NA_real_, NA_real_, NA_real_, 3.5))
+  expect_identical(rows$protocol_method_id, c(77L, 77L, 88L, 88L))
+  expect_identical(rows$note[[1L]], "Lab note")
 })
 
 test_that("unit-specific mappings do not become ambiguous code-only fallbacks", {
@@ -690,7 +756,7 @@ test_that("Mayo-style sample reports suggest and parse transposed results", {
     c("pH", "Nitrate", "pH", "Nitrate")
   )
   expect_identical(
-    parsed$result_condition,
+    parsed$result_condition_id,
     c(NA_integer_, 1L, NA_integer_, NA_integer_)
   )
   nitrate_context <- jsonlite::fromJSON(
@@ -784,6 +850,7 @@ test_that("saved location mappings override incidental location labels", {
     source_location_code = "lab-1",
     location_id = 12L,
     sub_location_id = NA_integer_,
+    project_id = NA_integer_,
     profile_specific = TRUE
   )
 
@@ -885,7 +952,7 @@ test_that("mapped-result preview uses source text and lookup labels", {
     ),
     laboratories = data.frame(lab_id = 2L, lab_name = "ALS Environmental"),
     protocols_methods = data.frame(
-      protocol_id = integer(),
+      protocol_method_id = integer(),
       protocol_name = character()
     ),
     grade_types = data.frame(
@@ -907,8 +974,8 @@ test_that("mapped-result preview uses source text and lookup labels", {
   expect_false(any(
     c(
       "parameter_id",
-      "result_condition",
-      "laboratory",
+      "result_condition_id",
+      "lab_id",
       "conversion",
       "result_offset",
       "source_result_condition_value"
@@ -966,20 +1033,20 @@ test_that("negative numeric results are opt-in MDLs with source exclusions", {
   )
 
   expect_true(is.na(parsed$result[[1]]))
-  expect_identical(parsed$result_condition[[1]], 1L)
+  expect_identical(parsed$result_condition_id[[1]], 1L)
   expect_equal(parsed$result_condition_value[[1]], 0.25)
   expect_identical(parsed$result[2:3], c(-2, -3))
-  expect_true(all(is.na(parsed$result_condition[2:3])))
+  expect_true(all(is.na(parsed$result_condition_id[2:3])))
 
   unchanged <- env$addDiscData_parse_result(
     "-0.25",
     negative_values_are_mdl = FALSE
   )
   expect_identical(unchanged$result[[1]], -0.25)
-  expect_true(is.na(unchanged$result_condition[[1]]))
+  expect_true(is.na(unchanged$result_condition_id[[1]]))
 })
 
-test_that("signed and non-Kelvin temperature parameters are auto-excluded", {
+test_that("negative MDL conversion excludes pH, non-Kelvin temperature, and signed parameters", {
   env <- add_disc_data_mapping_environment()
   parameter <- c(
     "Temperature Celsius",
@@ -994,12 +1061,13 @@ test_that("signed and non-Kelvin temperature parameters are auto-excluded", {
     "water depth",
     "gauge pressure",
     "flow velocity",
+    "flow",
     "discharge",
     "Dissolved aluminum"
   )
 
   expect_identical(
-    env$addDiscData_negative_mdl_auto_excluded(
+    env$addDiscData_negative_mdl_excluded(
       parameter,
       parameter,
       c(
@@ -1015,6 +1083,7 @@ test_that("signed and non-Kelvin temperature parameters are auto-excluded", {
         "m",
         "kPa",
         "m/s",
+        "m3/s",
         "m3/s",
         "ug/L"
       )
@@ -1032,10 +1101,73 @@ test_that("signed and non-Kelvin temperature parameters are auto-excluded", {
       TRUE,
       TRUE,
       TRUE,
-      TRUE,
+      FALSE,
+      FALSE,
       FALSE
     )
   )
+})
+
+test_that("negative MDL conversion uses the edited parameter and unit exclusions", {
+  env <- add_disc_data_mapping_environment()
+  profile <- add_disc_data_test_profile("long")
+  exclusions <- env$addDiscData_negative_mdl_defaults()
+  exclusions$parameters <- c(
+    setdiff(exclusions$parameters, "rule:ph"),
+    "value:water balance"
+  )
+  exclusions$units <- "value:percent"
+  exclusions$pairs <- env$addDiscData_negative_mdl_key("pair", "A")
+  parse_rows <- function(
+    path,
+    profile,
+    negative_values_are_mdl,
+    negative_mdl_exclusions
+  ) {
+    env$addDiscData_common_rows(
+      source_code = "FIXTURE",
+      profile = profile,
+      source_location_name = "Site",
+      sample_date = "2026-11-01",
+      sample_time = NA,
+      source_sample_id = "S1",
+      source_parameter_code = c(
+        "pH",
+        "ORP",
+        "reading",
+        "reading",
+        "WB",
+        "pair",
+        "pair"
+      ),
+      source_parameter_name = c(
+        "pH",
+        "ORP",
+        "reading",
+        "reading",
+        "Water balance",
+        "pair",
+        "pair"
+      ),
+      source_unit = c("pH", "mV", "mV", " Percent ", "L", "A", "B"),
+      result_raw = rep("-0.2", 7L),
+      negative_values_are_mdl = negative_values_are_mdl,
+      negative_mdl_exclusions = negative_mdl_exclusions
+    )
+  }
+  env$addDiscData_parse_als_eqwin <- parse_rows
+  direct <- parse_rows("unused", profile, TRUE, exclusions)
+  upload <- env$addDiscData_parse_upload("unused", profile, TRUE, exclusions)
+  for (rows in list(direct, upload)) {
+    expect_identical(
+      rows$result,
+      c(NA_real_, -0.2, NA_real_, -0.2, -0.2, -0.2, NA_real_)
+    )
+    expect_identical(
+      rows$result_condition_id,
+      c(1L, NA_integer_, 1L, NA_integer_, NA_integer_, NA_integer_, 1L)
+    )
+  }
 })
 
 test_that("wide workbook headers retain Unicode-minus units", {
@@ -1200,7 +1332,7 @@ test_that("source exclusions apply across layouts before text conversion", {
     rows <- env$addDiscData_parse_upload("unused", profile, TRUE)
     expect_identical(rows$source_parameter_code, c("code2", "code3"))
     expect_identical(seen, c("Field", "<0.1"))
-    expect_equal(rows$result_condition, c(1L, 1L))
+    expect_equal(rows$result_condition_id, c(1L, 1L))
     expect_equal(rows$result_condition_value, c(1, 0.1))
     report <- attr(rows, "analyte_exclusions")
     expect_equal(c(report$found, report$excluded, report$retained), c(3, 1, 2))
@@ -1238,7 +1370,8 @@ test_that("project mappings show conflicts and narrow automatic location matches
     location_id = c(11L, 12L),
     sub_location_id = NA_integer_,
     project_id = 1:2,
-    project_name = c("Project A", "Project B")
+    project_name = c("Project A", "Project B"),
+    profile_specific = FALSE
   )
   unresolved <- env$addDiscData_location_match(rows, locations, mappings)
   expect_true(is.na(unresolved$location_id))

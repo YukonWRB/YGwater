@@ -54,7 +54,7 @@ imgMapView <- function(id, language) {
     images <- reactiveValues(
       images = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE i.datetime > NOW() - INTERVAL '7 days'"
+        "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type_id AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type_id = it.image_type_id WHERE i.datetime > NOW() - INTERVAL '7 days'"
       )
     )
     images$unique_types <- images$images[
@@ -544,9 +544,9 @@ imgMapView <- function(id, language) {
       {
         images$images <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type
+          "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type_id AS image_type_id, it.image_type
            FROM files.images i
-           LEFT JOIN files.image_types it ON i.image_type = it.image_type_id
+           LEFT JOIN files.image_types it ON i.image_type_id = it.image_type_id
            WHERE datetime > $1",
           params = list(as.POSIXct(input$dates[1], tz = "Etc/GMT+7") - 7 * 60)
         )
@@ -593,9 +593,9 @@ imgMapView <- function(id, language) {
         ) {
           images$images <- DBI::dbGetQuery(
             session$userData$AquaCache,
-            "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type
+            "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type_id AS image_type_id, it.image_type
              FROM files.images i
-             LEFT JOIN files.image_types it ON i.image_type = it.image_type_id
+             LEFT JOIN files.image_types it ON i.image_type_id = it.image_type_id
              WHERE datetime > $1",
             params = list(as.POSIXct(input$dates[1], tz = "Etc/GMT+7") - 7 * 60)
           )

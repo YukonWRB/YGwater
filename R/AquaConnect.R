@@ -3,7 +3,7 @@
 #' @description
 #'
 #' This function exists to facilitate connecting to the aquacache database. You can pass your own database connection parameters, for example to connect to a dev instance instead of the default production instance.
-#' Database superusers or admins will have access to all database records (unless your instance of aquacache was set up differently), but other users will be asked to provide their row level security username and password to access records other than the 'public' ones. Note that this is *not necessarily* the same username and password as the one used to log into the database itself.
+#' Record and table visibility as well as table privileges depends on the user account used to connect to the database. If you are unsure of your account's permissions, please contact your system administrator.
 #'
 #' @details
 #' An attribute is added to the connection object to track if a transaction is active. This can be used by functions to determine if a transaction is already open, in which case functions can forgo opening a new transaction and instead use the existing one.
@@ -48,14 +48,19 @@ AquaConnect <- function(
       # Check if the database is at a minimum version. Within a try block in case the user can't see the information schema or the table.
       try(
         {
-          version <- DBI::dbGetQuery(
-            con,
-            "SELECT version FROM information.version_info WHERE item = 'Last patch number'"
-          )[1, 1]
+          version <- as.integer(
+            DBI::dbGetQuery(
+              con,
+              "SELECT version FROM information.version_info WHERE item = 'Last patch number'"
+            )$version
+          )
 
-          if (version < 20) {
+          if (length(version) == 1L && !is.na(version) && version < 74L) {
             warning(
-              "This database schema is of a version older than what the YGwater package is expecting. Be aware that some features may not work as expected. Contact the database administrator to update the database schema or revert to an earlier version of the YGwater package for best performance.."
+              "YGwater requires AquaCache Patch 74 or later. This database is at Patch ",
+              version,
+              ".",
+              call. = FALSE
             )
           }
         },

@@ -21,19 +21,19 @@
 #' @return One character key per row; result values and provenance are excluded.
 field_visit_result_keys <- function(results) {
   identity <- c(
-    "result_type",
+    "result_type_id",
     "parameter_id",
     "matrix_state_id",
     "sample_fraction_id",
-    "result_value_type",
+    "result_value_type_id",
     "reporting_basis_id",
     "result_speciation_id",
     "result_target_id",
     "endpoint_mode",
     "endpoint_ph",
     "analysis_conditions",
-    "protocol_method",
-    "laboratory",
+    "protocol_method_id",
+    "lab_id",
     "analysis_datetime"
   )
   values <- lapply(identity, function(column) {
@@ -97,21 +97,22 @@ field_visit_write_results <- function(con, sample_id, results, overwrites) {
     "SELECT * FROM discrete.results WHERE sample_id = $1 FOR UPDATE",
     params = list(as.integer(sample_id))
   )
+
   stored_keys <- field_visit_result_keys(stored)
   approved_keys <- field_visit_result_keys(overwrites)
-  payload <- c("result", "result_condition", "result_condition_value", "note")
+  payload <- c("result", "result_condition_id", "result_condition_value", "note")
   columns <- c(
     "sample_id",
-    "result_type",
+    "result_type_id",
     "parameter_id",
-    "protocol_method",
+    "protocol_method_id",
     "sample_fraction_id",
     "result",
-    "result_condition",
+    "result_condition_id",
     "result_condition_value",
-    "result_value_type",
+    "result_value_type_id",
     "reporting_basis_id",
-    "laboratory",
+    "lab_id",
     "analysis_datetime",
     "lab_report_no",
     "lab_sample_no",
@@ -151,7 +152,7 @@ field_visit_write_results <- function(con, sample_id, results, overwrites) {
       saved <- DBI::dbGetQuery(
         con,
         "UPDATE discrete.results
-            SET result = $1, result_condition = $2,
+            SET result = $1, result_condition_id = $2,
                 result_condition_value = $3, note = $4
           WHERE result_id = $5 AND sample_id = $6
           RETURNING result_id",
@@ -174,9 +175,9 @@ field_visit_write_results <- function(con, sample_id, results, overwrites) {
       saved <- DBI::dbGetQuery(
         con,
         "INSERT INTO discrete.results (
-           sample_id, result_type, parameter_id, protocol_method, sample_fraction_id,
-           result, result_condition, result_condition_value, result_value_type,
-           reporting_basis_id, laboratory, analysis_datetime, lab_report_no,
+           sample_id, result_type_id, parameter_id, protocol_method_id, sample_fraction_id,
+           result, result_condition_id, result_condition_value, result_value_type_id,
+           reporting_basis_id, lab_id, analysis_datetime, lab_report_no,
            lab_sample_no, grade_type_id, approval_type_id, matrix_state_id,
            no_source_update, note, share_with, result_speciation_id, result_target_id,
            endpoint_mode, endpoint_ph, analysis_conditions
@@ -536,7 +537,7 @@ visit <- function(id, language) {
                 u.unit_name AS unit_liquid
            FROM public.parameters AS p
            LEFT JOIN public.units AS u
-             ON u.unit_id = p.units_liquid
+             ON u.unit_id = p.liquid_unit_id
           ORDER BY p.param_name"
       )
       moduleData$field_parameter_ids <- DBI::dbGetQuery(
@@ -604,13 +605,13 @@ visit <- function(id, language) {
       )
       moduleData$protocols_methods <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT protocol_id, protocol_name
+        "SELECT protocol_method_id, protocol_name
            FROM discrete.protocols_methods
           ORDER BY protocol_name"
       )
       moduleData$instruments <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT i.instrument_id, i.serial_no, instrument_makes.make, instrument_models.model, instrument_types.type, i.owner FROM instruments.instruments AS i LEFT JOIN instruments.instrument_makes ON i.make = instrument_makes.make_id LEFT JOIN instruments.instrument_models ON i.model = instrument_models.model_id LEFT JOIN instruments.instrument_types ON i.type = instrument_types.type_id ORDER BY i.instrument_id"
+        "SELECT i.instrument_id, i.serial_no, instrument_makes.make, instrument_models.model, instrument_types.type, i.owner FROM instruments.instruments AS i LEFT JOIN instruments.instrument_makes ON i.instrument_make_id = instrument_makes.make_id LEFT JOIN instruments.instrument_models ON i.instrument_model_id = instrument_models.model_id LEFT JOIN instruments.instrument_types ON i.instrument_type_id = instrument_types.type_id ORDER BY i.instrument_id"
       )
       moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -658,11 +659,11 @@ visit <- function(id, language) {
                   AS field_result_count
            FROM discrete.samples AS s
            JOIN discrete.sample_types AS st
-             ON st.sample_type_id = s.sample_type
+             ON st.sample_type_id = s.sample_type_id
            LEFT JOIN discrete.results AS r
              ON r.sample_id = s.sample_id
            LEFT JOIN discrete.result_types AS rt
-             ON rt.result_type_id = r.result_type
+             ON rt.result_type_id = r.result_type_id
           WHERE s.field_visit_id = $1
           GROUP BY s.sample_id, st.sample_type
           ORDER BY s.datetime, s.sample_id",
@@ -1013,7 +1014,7 @@ visit <- function(id, language) {
       rows <- lapply(seq_along(pending$new), function(index) {
         item <- pending$new[[index]]
         sample_type_index <- match(
-          as.integer(item$sample$sample_type[[1]]),
+          as.integer(item$sample$sample_type_id[[1]]),
           moduleData$sample_types$sample_type_id
         )
         data.frame(
@@ -1517,7 +1518,7 @@ visit <- function(id, language) {
               "Protocol/method (optional)",
               choices = field_id_choices(
                 moduleData$protocols_methods,
-                "protocol_id",
+                "protocol_method_id",
                 "protocol_name",
                 include_blank = TRUE
               ),
@@ -1719,13 +1720,13 @@ visit <- function(id, language) {
       ) {
         stop("Choose a parameter from the field group.", call. = FALSE)
       }
-      result_value_type <- scalar_id(input$field_result_value_type)
-      if (is.na(result_value_type)) {
+      result_value_type_id <- scalar_id(input$field_result_value_type)
+      if (is.na(result_value_type_id)) {
         stop("Choose a result value type.", call. = FALSE)
       }
       result_value <- scalar_number(input$field_result)
-      result_condition <- scalar_id(input$field_result_condition)
-      if (is.na(result_value) && is.na(result_condition)) {
+      result_condition_id <- scalar_id(input$field_result_condition)
+      if (is.na(result_value) && is.na(result_condition_id)) {
         stop(
           "Enter a result value or choose a result condition.",
           call. = FALSE
@@ -1734,21 +1735,21 @@ visit <- function(id, language) {
       if (!is.na(result_value) && !is.finite(result_value)) {
         stop("Result value must be finite.", call. = FALSE)
       }
-      if (!is.na(result_value) && !is.na(result_condition)) {
+      if (!is.na(result_value) && !is.na(result_condition_id)) {
         stop(
           "Enter a result value or a result condition, not both.",
           call. = FALSE
         )
       }
       if (
-        !is.na(result_condition) &&
-          !result_condition %in%
+        !is.na(result_condition_id) &&
+          !result_condition_id %in%
             moduleData$result_conditions$result_condition_id
       ) {
         stop("Choose a valid result condition.", call. = FALSE)
       }
       condition_value <- scalar_number(input$field_result_condition_value)
-      if (result_condition %in% c(1L, 2L) && is.na(condition_value)) {
+      if (result_condition_id %in% c(1L, 2L) && is.na(condition_value)) {
         stop(
           "A condition value is required for below/above-limit results.",
           call. = FALSE
@@ -1757,7 +1758,7 @@ visit <- function(id, language) {
       if (!is.na(condition_value) && !is.finite(condition_value)) {
         stop("Condition value must be finite.", call. = FALSE)
       }
-      if (!result_condition %in% c(1L, 2L)) {
+      if (!result_condition_id %in% c(1L, 2L)) {
         condition_value <- NA_real_
       }
       sample_fraction_id <- scalar_id(input$field_sample_fraction)
@@ -1778,20 +1779,20 @@ visit <- function(id, language) {
       measurement_datetime <- scalar_utc_datetime(input$field_result_datetime)
       result <- data.frame(
         parameter_id = parameter_id,
-        result_type = as.integer(result_type_id[[1]]),
-        protocol_method = scalar_id(input$field_protocol),
+        result_type_id = as.integer(result_type_id[[1]]),
+        protocol_method_id = scalar_id(input$field_protocol),
         sample_fraction_id = sample_fraction_id,
         result = result_value,
-        result_condition = result_condition,
+        result_condition_id = result_condition_id,
         result_condition_value = condition_value,
-        result_value_type = result_value_type,
+        result_value_type_id = result_value_type_id,
         reporting_basis_id = reporting_basis_id,
         result_speciation_id = NA_integer_,
         result_target_id = NA_integer_,
         endpoint_mode = NA_character_,
         endpoint_ph = NA_real_,
         analysis_conditions = "{}",
-        laboratory = NA_integer_,
+        lab_id = NA_integer_,
         analysis_datetime = measurement_datetime,
         lab_report_no = NA_character_,
         lab_sample_no = NA_character_,
@@ -1839,19 +1840,19 @@ visit <- function(id, language) {
           match(results$parameter_id, moduleData$parameters$parameter_id)
         ],
         Type = moduleData$result_types$result_type[
-          match(results$result_type, moduleData$result_types$result_type_id)
+          match(results$result_type_id, moduleData$result_types$result_type_id)
         ],
         Value = results$result,
         Condition = moduleData$result_conditions$result_condition[
           match(
-            results$result_condition,
+            results$result_condition_id,
             moduleData$result_conditions$result_condition_id
           )
         ],
         Limit = results$result_condition_value,
         `Value type` = moduleData$result_value_types$result_value_type[
           match(
-            results$result_value_type,
+            results$result_value_type_id,
             moduleData$result_value_types$result_value_type_id
           )
         ],
@@ -1869,8 +1870,8 @@ visit <- function(id, language) {
         ],
         Method = moduleData$protocols_methods$protocol_name[
           match(
-            results$protocol_method,
-            moduleData$protocols_methods$protocol_id
+            results$protocol_method_id,
+            moduleData$protocols_methods$protocol_method_id
           )
         ],
         `Measurement time (UTC)` = format(
@@ -2009,7 +2010,7 @@ visit <- function(id, language) {
           moduleData$parameters$parameter_id
         )
         condition_index <- match(
-          results$result_condition,
+          results$result_condition_id,
           moduleData$result_conditions$result_condition_id
         )
         fraction_index <- match(
@@ -2037,7 +2038,7 @@ visit <- function(id, language) {
           Limit = results$result_condition_value,
           `Value type` = moduleData$result_value_types$result_value_type[
             match(
-              results$result_value_type,
+              results$result_value_type_id,
               moduleData$result_value_types$result_value_type_id
             )
           ],
@@ -2049,8 +2050,8 @@ visit <- function(id, language) {
           ],
           Method = moduleData$protocols_methods$protocol_name[
             match(
-              results$protocol_method,
-              moduleData$protocols_methods$protocol_id
+              results$protocol_method_id,
+              moduleData$protocols_methods$protocol_method_id
             )
           ],
           `Measurement time (UTC)` = format(
@@ -2246,7 +2247,7 @@ visit <- function(id, language) {
                 s.note
            FROM discrete.samples AS s
            JOIN discrete.sample_types AS st
-             ON st.sample_type_id = s.sample_type
+             ON st.sample_type_id = s.sample_type_id
            LEFT JOIN public.sub_locations AS sl
              ON sl.sub_location_id = s.sub_location_id
           WHERE s.location_id = $1
@@ -2486,13 +2487,13 @@ visit <- function(id, language) {
             if (is.na(sample_datetime)) {
               stop("Sample time is required.", call. = FALSE)
             }
-            sample_type <- suppressWarnings(as.integer(input$field_sample_type))
+            sample_type_id <- suppressWarnings(as.integer(input$field_sample_type))
             media_id <- suppressWarnings(as.integer(input$field_sample_media))
-            collection_method <- suppressWarnings(as.integer(
+            collection_method_id <- suppressWarnings(as.integer(
               input$field_sample_method
             ))
             owner <- suppressWarnings(as.integer(input$field_sample_owner))
-            if (anyNA(c(sample_type, media_id, collection_method, owner))) {
+            if (anyNA(c(sample_type_id, media_id, collection_method_id, owner))) {
               stop(
                 "Choose a sample type, media, collection method, and owner.",
                 call. = FALSE
@@ -2523,8 +2524,8 @@ visit <- function(id, language) {
               },
               media_id = media_id,
               datetime = sample_datetime,
-              collection_method = collection_method,
-              sample_type = sample_type,
+              collection_method_id = collection_method_id,
+              sample_type_id = sample_type_id,
               owner = owner,
               note = if (isTruthy(input$field_sample_note)) {
                 as.character(input$field_sample_note)
@@ -2613,6 +2614,7 @@ visit <- function(id, language) {
               "SELECT * FROM discrete.samples WHERE sample_id = $1",
               params = list(as.integer(sample$sample_id[[1]]))
             )
+
             if (nrow(sample) != 1L) {
               stop("This sample is no longer available.", call. = FALSE)
             }
@@ -2621,6 +2623,7 @@ visit <- function(id, language) {
               "SELECT * FROM discrete.results WHERE sample_id = $1 ORDER BY analysis_datetime, result_id",
               params = list(as.integer(sample$sample_id[[1]]))
             )
+
           }
           selected_sample(sample)
           sample_editor_target(target)
@@ -3220,6 +3223,7 @@ visit <- function(id, language) {
                       "SELECT * FROM discrete.samples WHERE sample_id = $1",
                       params = list(as.integer(sample_id))
                     )
+
                     field_visit_write_results(
                       session$userData$AquaCache,
                       sample_id,

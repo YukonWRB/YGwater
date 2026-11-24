@@ -918,7 +918,6 @@ plotTimeseries <- function(
         "grade_type_description_fr"
       )
     )
-
   }
   if (approvals) {
     approvals_dt <- fetch_continuous_qc_intervals(
@@ -1431,17 +1430,23 @@ plotTimeseries <- function(
     }
     if (grades) {
       grades_dt <- continuous_qc_display_intervals(
-        grades_dt, qc_record_rate, "grade_type_code"
+        grades_dt,
+        qc_record_rate,
+        "grade_type_code"
       )
     }
     if (approvals) {
       approvals_dt <- continuous_qc_display_intervals(
-        approvals_dt, qc_record_rate, "approval_type_code"
+        approvals_dt,
+        qc_record_rate,
+        "approval_type_code"
       )
     }
     if (qualifiers) {
       qualifiers_dt <- continuous_qc_display_intervals(
-        qualifiers_dt, qc_record_rate, "qualifier_type_code"
+        qualifiers_dt,
+        qc_record_rate,
+        "qualifier_type_code"
       )
     }
   }
@@ -1987,13 +1992,11 @@ plotTimeseries <- function(
             ),
             y = approvals_y_set,
             color = .SD$color_code[1L],
-            4L,
             text = if (lang == "en") {
               paste0("Approval: ", .SD$approval_type_description[1L])
             } else {
               paste0("Approbation:", .SD$approval_type_description_fr[1L])
-            },
-            id = "id"
+            }
           ),
           by = "id"
         ]
@@ -2015,13 +2018,11 @@ plotTimeseries <- function(
             ),
             y = grades_y_set,
             color = .SD$color_code[1L],
-            4L,
             text = if (lang == "en") {
               paste0("Grade: ", .SD$grade_type_description[1L])
             } else {
               paste0("Cote:", .SD$grade_type_description_fr[1L])
-            },
-            id = "id"
+            }
           ),
           by = "id"
         ]
@@ -2043,13 +2044,11 @@ plotTimeseries <- function(
             ),
             y = qualifiers_y_set,
             color = .SD$color_code[1L],
-            4L,
             text = if (lang == "en") {
               paste0("Qualifier: ", .SD$qualifier_type_description[1L])
             } else {
               paste0("Qualificatif:", .SD$qualifier_type_description_fr[1L])
-            },
-            id = "id"
+            }
           ),
           by = "id"
         ]

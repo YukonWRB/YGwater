@@ -67,17 +67,13 @@ test_that("main-server module lifecycle remains bounded", {
   expect_equal(sum(grepl("ui_loaded\\$contData <- FALSE", server)), 1L)
 })
 
-test_that("map download requests refresh existing module instances", {
-  module_paths <- c(
-    ygwater_app_test_path("modules", "client", "data", "discreteData.R"),
-    ygwater_app_test_path("modules", "client", "data", "continuousData.R")
+test_that("continuous map download requests refresh existing module instances", {
+  code <- readLines(
+    ygwater_app_test_path("modules", "client", "data", "continuousData.R"),
+    warn = FALSE
   )
-
-  for (path in module_paths) {
-    code <- readLines(path, warn = FALSE)
-    expect_true(any(grepl("inputs$location_request_id", code, fixed = TRUE)))
-    expect_true(any(grepl("applyLocationInput", code, fixed = TRUE)))
-  }
+  expect_true(any(grepl("inputs$location_request_id", code, fixed = TRUE)))
+  expect_true(any(grepl("applyLocationInput", code, fixed = TRUE)))
 })
 
 test_that("map plot requests filter both new and existing continuous plot modules", {

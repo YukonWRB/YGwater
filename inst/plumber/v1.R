@@ -433,9 +433,9 @@ function(
         g.grade_type_description
       FROM grade_ranges g
       WHERE g.timeseries_id = m.timeseries_id
-        AND g.start_dt <= m.datetime
-        AND g.end_dt >= m.datetime
-      ORDER BY g.start_dt DESC, g.grade_id DESC
+        AND g.start_datetime <= m.datetime
+        AND g.end_datetime >= m.datetime
+      ORDER BY g.start_datetime DESC, g.grade_id DESC
       LIMIT 1
     ) grade ON TRUE
     LEFT JOIN LATERAL (
@@ -444,9 +444,9 @@ function(
         a.approval_type_description
       FROM approval_ranges a
       WHERE a.timeseries_id = m.timeseries_id
-        AND a.start_dt <= m.datetime
-        AND a.end_dt >= m.datetime
-      ORDER BY a.start_dt DESC, a.approval_id DESC
+        AND a.start_datetime <= m.datetime
+        AND a.end_datetime >= m.datetime
+      ORDER BY a.start_datetime DESC, a.approval_id DESC
       LIMIT 1
     ) approval ON TRUE
     LEFT JOIN LATERAL (
@@ -465,18 +465,18 @@ function(
           q.qualifier_type_description
         FROM qualifier_ranges q
         WHERE q.timeseries_id = m.timeseries_id
-          AND q.start_dt <= m.datetime
-          AND q.end_dt >= m.datetime
-        ORDER BY q.qualifier_type_id, q.start_dt DESC, q.qualifier_id DESC
+          AND q.start_datetime <= m.datetime
+          AND q.end_datetime >= m.datetime
+        ORDER BY q.qualifier_type_id, q.start_datetime DESC, q.qualifier_id DESC
       ) q
     ) qualifier ON TRUE
     LEFT JOIN LATERAL (
       SELECT o.owner_organization_id
       FROM owner_ranges o
       WHERE o.timeseries_id = m.timeseries_id
-        AND o.start_dt <= m.datetime
-        AND o.end_dt >= m.datetime
-      ORDER BY o.start_dt DESC, o.owner_id DESC
+        AND o.start_datetime <= m.datetime
+        AND o.end_datetime >= m.datetime
+      ORDER BY o.start_datetime DESC, o.owner_id DESC
       LIMIT 1
     ) owner_range ON TRUE
     LEFT JOIN public.organizations owner_org
@@ -485,9 +485,9 @@ function(
       SELECT c.contributor_organization_id
       FROM contributor_ranges c
       WHERE c.timeseries_id = m.timeseries_id
-        AND c.start_dt <= m.datetime
-        AND c.end_dt >= m.datetime
-      ORDER BY c.start_dt DESC, c.contributor_id DESC
+        AND c.start_datetime <= m.datetime
+        AND c.end_datetime >= m.datetime
+      ORDER BY c.start_datetime DESC, c.contributor_id DESC
       LIMIT 1
     ) contributor_range ON TRUE
     LEFT JOIN public.organizations contributor_org
@@ -527,58 +527,58 @@ function(
          modified_ranges AS MATERIALIZED (
            SELECT
              tt.root_timeseries_id AS timeseries_id,
-             c.start_dt,
-             c.end_dt
+             c.start_datetime,
+             c.end_datetime
            FROM timeseries_tree tt
            JOIN continuous.corrections c
              ON c.timeseries_id = tt.source_timeseries_id
-           WHERE c.start_dt <= $2
-             AND c.end_dt >= $1
+           WHERE c.start_datetime <= $2
+             AND c.end_datetime >= $1
              AND (c.created >= $3 OR c.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, g.start_dt, g.end_dt
+           SELECT st.timeseries_id, g.start_datetime, g.end_datetime
            FROM selected_timeseries st
            JOIN continuous.grades g USING (timeseries_id)
-           WHERE g.start_dt <= $2
-             AND g.end_dt >= $1
+           WHERE g.start_datetime <= $2
+             AND g.end_datetime >= $1
              AND (g.created >= $3 OR g.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, a.start_dt, a.end_dt
+           SELECT st.timeseries_id, a.start_datetime, a.end_datetime
            FROM selected_timeseries st
            JOIN continuous.approvals a USING (timeseries_id)
-           WHERE a.start_dt <= $2
-             AND a.end_dt >= $1
+           WHERE a.start_datetime <= $2
+             AND a.end_datetime >= $1
              AND (a.created >= $3 OR a.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, q.start_dt, q.end_dt
+           SELECT st.timeseries_id, q.start_datetime, q.end_datetime
            FROM selected_timeseries st
            JOIN continuous.qualifiers q USING (timeseries_id)
-           WHERE q.start_dt <= $2
-             AND q.end_dt >= $1
+           WHERE q.start_datetime <= $2
+             AND q.end_datetime >= $1
              AND (q.created >= $3 OR q.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, o.start_dt, o.end_dt
+           SELECT st.timeseries_id, o.start_datetime, o.end_datetime
            FROM selected_timeseries st
            JOIN continuous.owners o USING (timeseries_id)
-           WHERE o.start_dt <= $2
-             AND o.end_dt >= $1
+           WHERE o.start_datetime <= $2
+             AND o.end_datetime >= $1
              AND (o.created >= $3 OR o.modified >= $3)
 
            UNION ALL
 
-           SELECT st.timeseries_id, c.start_dt, c.end_dt
+           SELECT st.timeseries_id, c.start_datetime, c.end_datetime
            FROM selected_timeseries st
            JOIN continuous.contributors c USING (timeseries_id)
-           WHERE c.start_dt <= $2
-             AND c.end_dt >= $1
+           WHERE c.start_datetime <= $2
+             AND c.end_datetime >= $1
              AND (c.created >= $3 OR c.modified >= $3)
          ),
     "
@@ -590,8 +590,8 @@ function(
            SELECT 1
            FROM modified_ranges changed
            WHERE changed.timeseries_id = mc.timeseries_id
-             AND changed.start_dt <= mc.datetime
-             AND changed.end_dt >= mc.datetime
+             AND changed.start_datetime <= mc.datetime
+             AND changed.end_datetime >= mc.datetime
          )
        )"
     compound_modified_filter_sql <- "
@@ -602,8 +602,8 @@ function(
            SELECT 1
            FROM modified_ranges changed
            WHERE changed.timeseries_id = m.timeseries_id
-             AND changed.start_dt <= m.datetime
-             AND changed.end_dt >= m.datetime
+             AND changed.start_datetime <= m.datetime
+             AND changed.end_datetime >= m.datetime
          )
        )"
     query_params <- list(start, end, modifiedSince, lim)
@@ -665,8 +665,8 @@ function(
          grade_ranges AS MATERIALIZED (
            SELECT
              g.timeseries_id,
-             g.start_dt,
-             g.end_dt,
+             g.start_datetime,
+             g.end_datetime,
              g.grade_id,
              g.grade_type_id,
              gt.grade_type_description
@@ -675,14 +675,14 @@ function(
              ON g.timeseries_id = st.timeseries_id
            LEFT JOIN public.grade_types gt
              ON g.grade_type_id = gt.grade_type_id
-           WHERE g.start_dt <= $2
-             AND g.end_dt >= $1
+           WHERE g.start_datetime <= $2
+             AND g.end_datetime >= $1
          ),
          approval_ranges AS MATERIALIZED (
            SELECT
              a.timeseries_id,
-             a.start_dt,
-             a.end_dt,
+             a.start_datetime,
+             a.end_datetime,
              a.approval_id,
              a.approval_type_id,
              at.approval_type_description
@@ -691,14 +691,14 @@ function(
              ON a.timeseries_id = st.timeseries_id
            LEFT JOIN public.approval_types at
              ON a.approval_type_id = at.approval_type_id
-           WHERE a.start_dt <= $2
-             AND a.end_dt >= $1
+           WHERE a.start_datetime <= $2
+             AND a.end_datetime >= $1
          ),
          qualifier_ranges AS MATERIALIZED (
            SELECT
              q.timeseries_id,
-             q.start_dt,
-             q.end_dt,
+             q.start_datetime,
+             q.end_datetime,
              q.qualifier_id,
              q.qualifier_type_id,
              qt.qualifier_type_description
@@ -707,34 +707,34 @@ function(
              ON q.timeseries_id = st.timeseries_id
            LEFT JOIN public.qualifier_types qt
              ON q.qualifier_type_id = qt.qualifier_type_id
-           WHERE q.start_dt <= $2
-             AND q.end_dt >= $1
+           WHERE q.start_datetime <= $2
+             AND q.end_datetime >= $1
          ),
          owner_ranges AS MATERIALIZED (
            SELECT
              o.timeseries_id,
-             o.start_dt,
-             o.end_dt,
+             o.start_datetime,
+             o.end_datetime,
              o.owner_id,
              o.organization_id AS owner_organization_id
            FROM selected_timeseries st
            JOIN continuous.owners o
              ON o.timeseries_id = st.timeseries_id
-           WHERE o.start_dt <= $2
-             AND o.end_dt >= $1
+           WHERE o.start_datetime <= $2
+             AND o.end_datetime >= $1
          ),
          contributor_ranges AS MATERIALIZED (
            SELECT
              c.timeseries_id,
-             c.start_dt,
-             c.end_dt,
+             c.start_datetime,
+             c.end_datetime,
              c.contributor_id,
              c.organization_id AS contributor_organization_id
            FROM selected_timeseries st
            JOIN continuous.contributors c
              ON c.timeseries_id = st.timeseries_id
-           WHERE c.start_dt <= $2
-             AND c.end_dt >= $1
+           WHERE c.start_datetime <= $2
+             AND c.end_datetime >= $1
          ),
          basic_slow_correction_timeseries AS MATERIALIZED (
            SELECT DISTINCT c.timeseries_id
@@ -744,8 +744,8 @@ function(
            JOIN continuous.correction_types ct
              ON c.correction_type = ct.correction_type_id
            WHERE st.timeseries_type = 'basic'
-             AND c.start_dt <= $2
-             AND c.end_dt >= $1
+             AND c.start_datetime <= $2
+             AND c.end_datetime >= $1
              AND ct.correction_type NOT IN (
                'delete',
                'trim',
@@ -809,8 +809,8 @@ function(
                PARTITION BY c.timeseries_id
                ORDER BY ct.priority ASC, c.correction_id ASC
              ) AS correction_step,
-             c.start_dt,
-             c.end_dt,
+             c.start_datetime,
+             c.end_datetime,
              c.value1,
              c.value2,
              c.timestep_window,
@@ -824,8 +824,8 @@ function(
              ON slow.timeseries_id = st.timeseries_id
            WHERE st.timeseries_type = 'basic'
              AND slow.timeseries_id IS NULL
-             AND c.start_dt <= $2
-             AND c.end_dt >= $1
+             AND c.start_datetime <= $2
+             AND c.end_datetime >= $1
          ),
          basic_correction_counts AS MATERIALIZED (
            SELECT
@@ -857,8 +857,8 @@ function(
              CASE
                WHEN r.value_corrected IS NULL THEN NULL
                WHEN NOT (
-                 c.start_dt <= r.datetime
-                 AND c.end_dt >= r.datetime
+                 c.start_datetime <= r.datetime
+                 AND c.end_datetime >= r.datetime
                ) THEN r.value_corrected
                WHEN c.correction_type = 'delete' THEN NULL
                WHEN c.correction_type = 'trim' THEN
@@ -874,8 +874,8 @@ function(
                WHEN c.correction_type = 'offset two-point' THEN
                  r.value_corrected + c.value1 + (
                    (c.value2 - c.value1) /
-                   EXTRACT(EPOCH FROM (c.end_dt - c.start_dt)) *
-                   EXTRACT(EPOCH FROM (r.datetime - c.start_dt))
+                   EXTRACT(EPOCH FROM (c.end_datetime - c.start_datetime)) *
+                   EXTRACT(EPOCH FROM (r.datetime - c.start_datetime))
                  )
                WHEN c.correction_type = 'scale' THEN
                  r.value_corrected * (c.value1 / 100.0)
@@ -883,7 +883,7 @@ function(
                  r.value_corrected + (
                    c.value1 /
                    EXTRACT(EPOCH FROM c.timestep_window) *
-                   EXTRACT(EPOCH FROM (r.datetime - c.start_dt))
+                   EXTRACT(EPOCH FROM (r.datetime - c.start_datetime))
                  )
                ELSE r.value_corrected
              END AS value_corrected,

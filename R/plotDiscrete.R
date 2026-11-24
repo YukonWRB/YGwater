@@ -1563,17 +1563,17 @@ ORDER BY ag.result_id, ag.guideline_id;"
       selected_value_clause(media, "s.media_id", "mt.media_type"),
       selected_value_clause(
         sample_types,
-        "s.sample_type",
+        "s.sample_type_id",
         "st.sample_type"
       ),
       selected_value_clause(
         collection_methods,
-        "s.collection_method",
+        "s.collection_method_id",
         "cm.collection_method"
       ),
       selected_value_clause(
         result_types,
-        "r.result_type",
+        "r.result_type_id",
         "rt.result_type"
       ),
       selected_value_clause(
@@ -1583,7 +1583,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
       ),
       selected_value_clause(
         result_value_types,
-        "r.result_value_type",
+        "r.result_value_type_id",
         "rvt.result_value_type"
       ),
       selected_value_clause(
@@ -1591,20 +1591,44 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "r.reporting_basis_id",
         "rs.reporting_basis"
       ),
-      selected_value_clause(result_speciations, "r.result_speciation_id", "spec.result_speciation"),
-      selected_value_clause(result_targets, "r.result_target_id", "target.result_target"),
-      selected_value_clause(endpoint_modes, "r.endpoint_mode", "r.endpoint_mode")
+      selected_value_clause(
+        result_speciations,
+        "r.result_speciation_id",
+        "spec.result_speciation"
+      ),
+      selected_value_clause(
+        result_targets,
+        "r.result_target_id",
+        "target.result_target"
+      ),
+      selected_value_clause(
+        endpoint_modes,
+        "r.endpoint_mode",
+        "r.endpoint_mode"
+      )
     )
     if (!is.null(endpoint_ph) && length(endpoint_ph)) {
       ph <- suppressWarnings(as.numeric(endpoint_ph))
-      if (any(!is.finite(ph))) stop("Endpoint pH filters must be finite numbers.")
+      if (any(!is.finite(ph))) {
+        stop("Endpoint pH filters must be finite numbers.")
+      }
       placeholder <- bind_query_value(jsonlite::toJSON(ph, auto_unbox = FALSE))
-      where_clauses <- c(where_clauses, paste0("r.endpoint_ph IN (SELECT value::numeric FROM jsonb_array_elements_text(", placeholder, "::jsonb))"))
+      where_clauses <- c(
+        where_clauses,
+        paste0(
+          "r.endpoint_ph IN (SELECT value::numeric FROM jsonb_array_elements_text(",
+          placeholder,
+          "::jsonb))"
+        )
+      )
     }
     if (!is.null(analysis_conditions)) {
       conditions <- AquaCache::normalizeAnalysisConditions(analysis_conditions)
       placeholder <- bind_query_value(conditions)
-      where_clauses <- c(where_clauses, paste0("r.analysis_conditions = ", placeholder, "::jsonb"))
+      where_clauses <- c(
+        where_clauses,
+        paste0("r.analysis_conditions = ", placeholder, "::jsonb")
+      )
     }
     if (!isTRUE(include_blanks)) {
       where_clauses <- c(
@@ -1674,18 +1698,21 @@ ORDER BY ag.result_id, ag.guideline_id;"
     }
 
     unit_sql <- ac_parameter_unit_select_sql(
-      AC, "p", "units", matrix_state_alias = "r"
+      AC,
+      "p",
+      "units",
+      matrix_state_alias = "r"
     )
     samp_query <- paste0(
       "SELECT
          r.result_id,
          r.sample_id,
          r.parameter_id,
-         r.result_type AS result_type_id,
+         r.result_type_id AS result_type_id,
          r.result,
-         r.result_condition,
+         r.result_condition_id AS result_condition,
          r.result_condition_value,
-         r.result_value_type AS result_value_type_id,
+         r.result_value_type_id AS result_value_type_id,
          r.sample_fraction_id,
          r.reporting_basis_id, r.result_speciation_id, r.result_target_id,
          r.endpoint_mode, r.endpoint_ph, r.analysis_conditions, r.analysis_conditions_key,
@@ -1704,14 +1731,14 @@ ORDER BY ag.result_id, ag.guideline_id;"
          s.media_id,
          mt.media_type,
          mt.media_type_fr,
-         s.z,
+         s.depth_height_m,
          s.datetime,
          s.target_datetime,
          replicate_group.replicate_group_id,
          replicate_group.replicate_group_count,
-         s.collection_method AS collection_method_id,
+         s.collection_method_id AS collection_method_id,
          cm.collection_method,
-         s.sample_type AS sample_type_id,
+         s.sample_type_id AS sample_type_id,
          st.sample_type,
          gt.grade_type_description,
          gt.grade_type_description_fr,
@@ -1759,12 +1786,12 @@ ORDER BY ag.result_id, ag.guideline_id;"
        INNER JOIN public.parameters AS p ON r.parameter_id = p.parameter_id
        LEFT JOIN public.media_types AS mt ON s.media_id = mt.media_id
        LEFT JOIN discrete.collection_methods AS cm
-         ON s.collection_method = cm.collection_method_id
+         ON s.collection_method_id = cm.collection_method_id
        LEFT JOIN discrete.sample_types AS st
-         ON s.sample_type = st.sample_type_id
-       LEFT JOIN public.grade_types AS gt ON s.sample_grade = gt.grade_type_id
+         ON s.sample_type_id = st.sample_type_id
+       LEFT JOIN public.grade_types AS gt ON s.grade_type_id = gt.grade_type_id
        LEFT JOIN public.approval_types AS at
-         ON s.sample_approval = at.approval_type_id
+         ON s.approval_type_id = at.approval_type_id
        LEFT JOIN public.grade_types AS result_grade
          ON r.grade_type_id = result_grade.grade_type_id
        LEFT JOIN public.approval_types AS result_approval
@@ -1790,9 +1817,9 @@ ORDER BY ag.result_id, ag.guideline_id;"
        LEFT JOIN public.sub_locations AS sl
          ON s.sub_location_id = sl.sub_location_id
        LEFT JOIN discrete.result_types AS rt
-         ON r.result_type = rt.result_type_id
+         ON r.result_type_id = rt.result_type_id
        LEFT JOIN discrete.result_conditions AS rc
-         ON r.result_condition = rc.result_condition_id
+         ON r.result_condition_id = rc.result_condition_id
        LEFT JOIN discrete.sample_fractions AS sf
          ON r.sample_fraction_id = sf.sample_fraction_id
        LEFT JOIN discrete.reporting_bases AS rs
@@ -1800,7 +1827,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
        LEFT JOIN discrete.result_speciations spec ON spec.result_speciation_id = r.result_speciation_id
        LEFT JOIN discrete.result_targets target ON target.result_target_id = r.result_target_id
        LEFT JOIN discrete.result_value_types AS rvt
-         ON r.result_value_type = rvt.result_value_type_id
+         ON r.result_value_type_id = rvt.result_value_type_id
        LEFT JOIN public.matrix_states AS ms
          ON r.matrix_state_id = ms.matrix_state_id
        LEFT JOIN discrete.result_aggregations AS ra
@@ -1865,7 +1892,15 @@ ORDER BY ag.result_id, ag.guideline_id;"
     }
 
     data <- samples
-    chemistry_data <- data[, c(chemistry_identity_columns(), "result_speciation", "result_target", "analysis_conditions"), drop = FALSE]
+    chemistry_data <- data[,
+      c(
+        chemistry_identity_columns(),
+        "result_speciation",
+        "result_target",
+        "analysis_conditions"
+      ),
+      drop = FALSE
+    ]
 
     # Now make result_condition column understandable
     #result_condition should get < DL, > DL, or NA depending on if 1 or 2 show up in column 'result_condition'
@@ -2038,7 +2073,11 @@ ORDER BY ag.result_id, ag.guideline_id;"
     # No automatic conversion between as N/as NO3 or dry/wet bases is implied.
     labels <- chemistry_result_labels(data)
     data$parameter_name <- data$param_name
-    data$param_name <- htmltools::htmlEscape(ifelse(nzchar(labels), paste0(data$param_name, " [", labels, "]"), data$param_name))
+    data$param_name <- htmltools::htmlEscape(ifelse(
+      nzchar(labels),
+      paste0(data$param_name, " [", labels, "]"),
+      data$param_name
+    ))
 
     if (!is.null(guidelines)) {
       guidelines <- tolower(guidelines)
@@ -2283,9 +2322,11 @@ ORDER BY ag.result_id, ag.guideline_id;"
           )
         }
       }
-      lab_report <- "lab_report_no" %in% names(df) &&
+      lab_report <- "lab_report_no" %in%
+        names(df) &&
         any(!is.na(df$lab_report_no) & nzchar(df$lab_report_no))
-      lab_sample <- "lab_sample_no" %in% names(df) &&
+      lab_sample <- "lab_sample_no" %in%
+        names(df) &&
         any(!is.na(df$lab_sample_no) & nzchar(df$lab_sample_no))
       qualifier <- FALSE
       if ("qualifier_type_description" %in% names(df)) {
@@ -2310,7 +2351,10 @@ ORDER BY ag.result_id, ag.guideline_id;"
       plot_times <- plot_times[!is.na(plot_times)]
       single_time_range <- NULL
       if (length(plot_times) && length(unique(plot_times)) == 1L) {
-        day_start <- as.POSIXct(as.Date(plot_times[[1]], tz = "UTC"), tz = "UTC")
+        day_start <- as.POSIXct(
+          as.Date(plot_times[[1]], tz = "UTC"),
+          tz = "UTC"
+        )
         single_time_range <- c(day_start, day_start + 24 * 60 * 60)
       }
 
@@ -2369,7 +2413,9 @@ ORDER BY ag.result_id, ag.guideline_id;"
           },
           if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
           if (grade) paste("<br>Sample grade:", grade_type_description),
-          if (approval) paste("<br>Sample approval:", approval_type_description),
+          if (approval) {
+            paste("<br>Sample approval:", approval_type_description)
+          },
           if (result_grade) {
             paste("<br>Result grade:", result_grade_description)
           },
@@ -2441,7 +2487,9 @@ ORDER BY ag.result_id, ag.guideline_id;"
             },
             if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
             if (grade) paste("<br>Sample grade:", grade_type_description),
-            if (approval) paste("<br>Sample approval:", approval_type_description),
+            if (approval) {
+              paste("<br>Sample approval:", approval_type_description)
+            },
             if (result_grade) {
               paste("<br>Result grade:", result_grade_description)
             },

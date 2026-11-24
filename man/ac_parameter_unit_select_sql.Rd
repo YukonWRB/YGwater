@@ -2,8 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{ac_parameter_unit_select_sql}
 \alias{ac_parameter_unit_select_sql}
-\title{Generate SQL expression to select parameter unit with fallback
-Generates a SQL expression to select the unit for a parameter, with fallback logic based on the available columns in the database. The function checks for the presence of unit columns in the 'parameters' table and constructs a SQL expression that retrieves the unit name, either directly from text columns or by joining with the 'units' table if normalized unit ID columns are present. The preference for which unit to return can be specified through the 'prefer' argument.}
+\title{Build SQL to select a parameter unit}
 \usage{
 ac_parameter_unit_select_sql(
   con,
@@ -14,20 +13,20 @@ ac_parameter_unit_select_sql(
 )
 }
 \arguments{
-\item{con}{A DBI connection to the database containing parameter and unit information.}
+\item{con}{A DBI connection for the query that will use the expression.}
 
-\item{parameter_alias}{An optional string representing the table alias for the parameters table in the SQL query. If provided, column references will be prefixed with this alias.}
+\item{parameter_alias}{Optional alias for the parameters table.}
 
-\item{output_alias}{A string representing the desired alias for the output column in the SQL query. Defaults to "unit_default".}
+\item{output_alias}{Column name for the selected unit.}
 
-\item{prefer}{A string indicating the preference for which unit to return if multiple are available. Options are "default_or_solid" (default), "default", "solid", and "solid_or_default".}
+\item{prefer}{Which unit to prefer when no matrix context is supplied.}
 
-\item{...}{Additional arguments for specifying aliases and column names for matrix state and media, which may be used in certain database schemas to resolve the appropriate unit based on the context of the parameter.}
+\item{...}{Optional matrix state and media aliases and column names.}
 }
 \value{
-A string containing the SQL expression to select the parameter unit with appropriate fallback logic based on the database schema.
+A SQL selection expression for the unit name.
 }
 \description{
-Generate SQL expression to select parameter unit with fallback
-Generates a SQL expression to select the unit for a parameter, with fallback logic based on the available columns in the database. The function checks for the presence of unit columns in the 'parameters' table and constructs a SQL expression that retrieves the unit name, either directly from text columns or by joining with the 'units' table if normalized unit ID columns are present. The preference for which unit to return can be specified through the 'prefer' argument.
+With matrix or media context, resolve the unit for that context. Otherwise
+use the preferred unit from the parameter's matrix-specific unit IDs.
 }

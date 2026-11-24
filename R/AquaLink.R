@@ -282,15 +282,13 @@ AquaLink <- function(
   #... there are other necessary tables, but if the user has access to the ones listed above everything is probably fine.
 
   # Check the necessary DB version number
-  ver <- as.numeric(DBI::dbGetQuery(
-    con,
-    "SELECT version FROM information.version_info WHERE item = 'Last patch number';"
-  )[1, 1])
-  if (ver < 62) {
+  patch_query <- "SELECT version FROM information.version_info WHERE item = 'Last patch number'"
+  ver <- as.numeric(DBI::dbGetQuery(con, patch_query)$version)
+  if (length(ver) != 1L || is.na(ver) || ver < 74L) {
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
-      "The aquacache database version is too old. Please update to at least version 62. Current version is ",
+      "AquaLink requires AquaCache Patch 74 or later. Current patch is ",
       ver,
       ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache::AquaConnect documentation for more details."
     )
@@ -313,8 +311,13 @@ AquaLink <- function(
             port = dbPort
           )
 
-          DBI::dbDisconnect(test_con)
-          test_exists <- TRUE
+          test_patch <- tryCatch(
+            as.numeric(DBI::dbGetQuery(test_con, patch_query)$version),
+            finally = DBI::dbDisconnect(test_con)
+          )
+          test_exists <- length(test_patch) == 1L &&
+            !is.na(test_patch) &&
+            test_patch >= 74L
         },
         error = function(e) {
           test_exists <<- FALSE

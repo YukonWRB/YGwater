@@ -2562,7 +2562,10 @@ contData <- function(id, language, inputs) {
                 paste(selected_tsids, collapse = ", "),
                 ") AND date > $1::date AND date < $2::date;"
               ),
-              params = list(input$modal_date_range[1], input$modal_date_range[2])
+              params = list(
+                input$modal_date_range[1],
+                input$modal_date_range[2]
+              )
             )[[1]]
 
             #   query <- paste0("WITH extremes AS (
@@ -2610,7 +2613,10 @@ contData <- function(id, language, inputs) {
                 WHERE m.datetime > $1::timestamptz
                   AND m.datetime < $2::timestamptz;"
               ),
-              params = list(input$modal_date_range[1], input$modal_date_range[2])
+              params = list(
+                input$modal_date_range[1],
+                input$modal_date_range[2]
+              )
             )[[1]]
 
             #   query <- paste0("WITH extremes AS (
@@ -2869,13 +2875,13 @@ contData <- function(id, language, inputs) {
             paste0(
               "SELECT g.timeseries_id, ",
               grade_expr,
-              ", g.start_dt AS ",
+              ", g.start_datetime AS ",
               start_dt_expr,
-              ", g.end_dt AS ",
+              ", g.end_datetime AS ",
               end_dt_expr,
               " FROM continuous.grades g JOIN public.grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+              ") AND start_datetime < $2::timestamptz AND end_datetime > $1::timestamptz ORDER BY timeseries_id, start_datetime;"
             ),
             params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
@@ -2884,13 +2890,13 @@ contData <- function(id, language, inputs) {
             paste0(
               "SELECT a.timeseries_id, ",
               approval_expr,
-              ", a.start_dt AS ",
+              ", a.start_datetime AS ",
               start_dt_expr,
-              ", a.end_dt AS ",
+              ", a.end_datetime AS ",
               end_dt_expr,
               " FROM continuous.approvals a JOIN public.approval_types at ON a.approval_type_id = at.approval_type_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+              ") AND start_datetime < $2::timestamptz AND end_datetime > $1::timestamptz ORDER BY timeseries_id, start_datetime;"
             ),
             params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
@@ -2899,28 +2905,28 @@ contData <- function(id, language, inputs) {
             paste0(
               "SELECT q.timeseries_id, ",
               qualifier_expr,
-              ", q.start_dt AS ",
+              ", q.start_datetime AS ",
               start_dt_expr,
-              ", q.end_dt AS ",
+              ", q.end_datetime AS ",
               end_dt_expr,
               " FROM continuous.qualifiers q JOIN public.qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+              ") AND start_datetime < $2::timestamptz AND end_datetime > $1::timestamptz ORDER BY timeseries_id, start_datetime;"
             ),
             params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
           notes = dbGetQueryDT(
             session$userData$AquaCache,
             paste0(
-              "SELECT n.timeseries_id, n.note, n.start_dt AS ",
+              "SELECT n.timeseries_id, n.note, n.start_datetime AS ",
               start_dt_expr,
-              ", n.end_dt AS ",
+              ", n.end_datetime AS ",
               end_dt_expr,
               " FROM continuous.notes n WHERE n.timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND n.start_dt < ($2::date + 1)::timestamptz ",
-              "AND n.end_dt >= $1::date::timestamptz ",
-              "ORDER BY n.timeseries_id, n.start_dt, n.end_dt, n.note_id;"
+              ") AND n.start_datetime < ($2::date + 1)::timestamptz ",
+              "AND n.end_datetime >= $1::date::timestamptz ",
+              "ORDER BY n.timeseries_id, n.start_datetime, n.end_datetime, n.note_id;"
             ),
             params = list(
               input$modal_date_range[1],
@@ -2932,13 +2938,13 @@ contData <- function(id, language, inputs) {
             paste0(
               "SELECT o.timeseries_id, ",
               orgs_expr,
-              ", o.start_dt AS ",
+              ", o.start_datetime AS ",
               start_dt_expr,
-              ", end_dt AS ",
+              ", end_datetime AS ",
               end_dt_expr,
               " FROM continuous.owners o JOIN public.organizations orgs ON o.organization_id = orgs.organization_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+              ") AND start_datetime < $2::timestamptz AND end_datetime > $1::timestamptz ORDER BY timeseries_id, start_datetime;"
             ),
             params = list(input$modal_date_range[1], input$modal_date_range[2])
           )

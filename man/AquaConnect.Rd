@@ -31,7 +31,7 @@ A connection to the database.
 }
 \description{
 This function exists to facilitate connecting to the aquacache database. You can pass your own database connection parameters, for example to connect to a dev instance instead of the default production instance.
-Database superusers or admins will have access to all database records (unless your instance of aquacache was set up differently), but other users will be asked to provide their row level security username and password to access records other than the 'public' ones. Note that this is \emph{not necessarily} the same username and password as the one used to log into the database itself.
+Record and table visibility as well as table privileges depends on the user account used to connect to the database. If you are unsure of your account's permissions, please contact your system administrator.
 }
 \details{
 An attribute is added to the connection object to track if a transaction is active. This can be used by functions to determine if a transaction is already open, in which case functions can forgo opening a new transaction and instead use the existing one.
