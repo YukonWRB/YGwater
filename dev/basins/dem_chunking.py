@@ -1,6 +1,5 @@
 
 # ============================================================
-# does not work yet
 # HYDROBASINS LEVEL 5 - BUFFERED DEM TILE GENERATION
 # Yukon regional hydrological processing workflow
 # ============================================================
@@ -9,7 +8,10 @@ import geopandas as gpd
 import rasterio
 import numpy as np
 import pandas as pd
-
+from rasterio.windows import from_bounds, Window
+from rasterio.features import geometry_mask
+from rasterio.enums import Resampling
+from affine import Affine
 from rasterio.mask import mask
 from pathlib import Path
 
@@ -43,21 +45,19 @@ dem_dir.mkdir(parents=True, exist_ok=True)
 # 2. PROCESSING PARAMETERS
 # ------------------------------------------------------------
 
-buffer_distance = 40000  # metres
+buffer_distance = 30000  # metres
 
 target_crs = "EPSG:3979"
 
 id_field = "HYBAS_ID"
 
-# Initial technical test:
-# Set to 5 to generate five tiles.
-# Change to None to process every polygon.
+# Maximum  number of basins with valid DEM data to process.print
+# Set to None to process all qualifying basins.
 max_tiles = 5
 
 # Alternatively, specify particular HYBAS_ID values.
-# Leave as None to use the first max_tiles polygons.
+# Leave as None to screen all available basins.
 selected_hybas_ids = None
-
 
 # ------------------------------------------------------------
 # 3. CHECK INPUT FILES
@@ -98,12 +98,26 @@ if basins.crs is None:
 # 5. CHECK DEM CRS AND RESOLUTION
 # ------------------------------------------------------------
 
+# ------------------------------------------------------------
+# 5. CHECK DEM CRS, RESOLUTION AND EXTENT
+# ------------------------------------------------------------
+
+from shapely.geometry import box
+
 with rasterio.open(dem_file) as src:
 
     if src.crs is None:
         raise ValueError("DEM has no CRS.")
 
     dem_crs = src.crs
+    dem_bounds = src.bounds
+
+    dem_extent = box(
+        dem_bounds.left,
+        dem_bounds.bottom,
+        dem_bounds.right,
+        dem_bounds.top
+    )
 
     print("\nDEM information:")
     print(f"CRS: {src.crs}")
@@ -125,9 +139,10 @@ with rasterio.open(dem_file) as src:
 
 # Reproject polygons if necessary
 if basins.crs != dem_crs:
-    print("\nReprojecting polygons to DEM CRS...")
-    basins = basins.to_crs(dem_crs)
 
+    print("\nReprojecting polygons to DEM CRS...")
+
+    basins = basins.to_crs(dem_crs)
 
 # ------------------------------------------------------------
 # 6. CLEAN AND IDENTIFY POLYGONS
@@ -158,7 +173,6 @@ if basins["tile_id"].duplicated().any():
 # Sort consistently
 basins = basins.sort_values("tile_id").reset_index(drop=True)
 
-
 # ------------------------------------------------------------
 # 7. SELECT POLYGONS FOR PROCESSING
 # ------------------------------------------------------------
@@ -181,11 +195,7 @@ if selected_hybas_ids is not None:
             f"Selected basin IDs not found: {missing_ids}"
         )
 
-elif max_tiles is not None:
-
-    basins = basins.head(max_tiles).copy()
-
-print(f"\nTiles selected for processing: {len(basins)}")
+print(f"\nCandidate basins for screening: {len(basins)}")
 
 
 # ------------------------------------------------------------
@@ -212,6 +222,148 @@ buffered["buffered_area_km2"] = (
 
 print("Buffering complete.")
 
+# ------------------------------------------------------------
+# 8B. CALCULATE DEM OVERLAP
+# ------------------------------------------------------------
+
+print("\nCalculating DEM overlap for each basin...")
+
+# Calculate the area of each buffered polygon
+buffered["buffered_area_km2"] = (
+    buffered.geometry.area / 1_000_000
+)
+
+# Calculate the area of each buffer intersecting the DEM extent
+buffered["dem_overlap_area_km2"] = (
+    buffered.geometry.intersection(dem_extent).area
+    / 1_000_000
+)
+
+# Calculate percentage of buffered area covered by DEM
+buffered["dem_coverage_pct"] = (
+    buffered["dem_overlap_area_km2"]
+    / buffered["buffered_area_km2"]
+) * 100
+
+# Identify basins with any overlap
+buffered["intersects_dem"] = (
+    buffered["dem_overlap_area_km2"] > 0
+)
+
+# Print summary
+print("\nDEM overlap summary:")
+
+print(f"Total basins: {len(buffered)}")
+
+print(
+    f"Intersecting DEM: "
+    f"{buffered['intersects_dem'].sum()}"
+)
+
+print(
+    f"Outside DEM: "
+    f"{(~buffered['intersects_dem']).sum()}"
+)
+
+print(
+    f"Mean DEM coverage: "
+    f"{buffered['dem_coverage_pct'].mean():.1f}%"
+)
+
+# Keep only basins with DEM overlap
+buffered = buffered[
+    buffered["intersects_dem"]
+].copy()
+
+print(
+    f"\nBasins retained for DEM processing: {len(buffered)}"
+)
+
+# ------------------------------------------------------------
+# 8C. SCREEN BASINS FOR VALID DEM DATA (LOW-RESOLUTION)
+# ------------------------------------------------------------
+
+print("\nScreening basins for valid DEM data...")
+
+valid_tile_ids = []
+
+with rasterio.open(dem_file) as src:
+
+    for index, (_, basin) in enumerate(
+        buffered.iterrows(),
+        start=1
+    ):
+
+        tile_id = basin["tile_id"]
+
+        print(f"\nChecking basin {index}/{len(buffered)}: {tile_id}")
+
+        # Find the part of the DEM covered by the basin buffer
+        window = from_bounds(
+            *basin.geometry.bounds,
+            transform=src.transform
+        )
+
+        # Restrict the window to the actual DEM dimensions
+        window = window.intersection(
+            Window(0, 0, src.width, src.height)
+        )
+
+        # Read a much smaller version of the DEM validity mask
+        sample_width = min(512, max(1, int(np.ceil(window.width))))
+        sample_height = min(512, max(1, int(np.ceil(window.height))))
+
+        sampled_mask = src.read_masks(
+            1,
+            window=window,
+            out_shape=(sample_height, sample_width),
+            resampling=Resampling.max
+        )
+
+        # Calculate the transform for the smaller sampled raster
+        sample_transform = (
+            src.window_transform(window)
+            * Affine.scale(
+                window.width / sample_width,
+                window.height / sample_height
+            )
+        )
+
+        # Identify which sampled pixels overlap the basin buffer
+        inside_basin = geometry_mask(
+            [basin.geometry.__geo_interface__],
+            out_shape=(sample_height, sample_width),
+            transform=sample_transform,
+            invert=True,
+            all_touched=True
+        )
+
+        # Check for valid DEM data inside the basin buffer
+        has_valid_data = np.any(
+            (sampled_mask > 0) & inside_basin
+        )
+
+        if has_valid_data:
+            valid_tile_ids.append(tile_id)
+            print("Valid DEM data found. Basin retained.")
+        else:
+            print("No valid DEM data found. Basin skipped.")
+
+        # Stop once we have enough candidate basins
+        if max_tiles is not None and len(valid_tile_ids) >= max_tiles:
+            break
+
+# Keep only basins with valid DEM data
+buffered = buffered[
+    buffered["tile_id"].isin(valid_tile_ids)
+].copy()
+
+basins = basins[
+    basins["tile_id"].isin(valid_tile_ids)
+].copy()
+
+print("\nDEM screening complete.")
+print(f"Candidate basins retained: {len(buffered)}")
 
 # ------------------------------------------------------------
 # 9. SAVE ORIGINAL AND BUFFERED POLYGONS
@@ -249,17 +401,6 @@ inventory = []
 
 with rasterio.open(dem_file) as src:
 
-    source_bounds = src.bounds
-
-    from shapely.geometry import box
-
-    dem_extent = box(
-        source_bounds.left,
-        source_bounds.bottom,
-        source_bounds.right,
-        source_bounds.top
-    )
-
     for index, (_, basin) in enumerate(
         buffered.iterrows(),
         start=1
@@ -276,22 +417,6 @@ with rasterio.open(dem_file) as src:
         print("\n" + "=" * 55)
         print(f"Processing tile {index}/{len(buffered)}")
         print(f"HYBAS_ID: {tile_id}")
-
-        # ----------------------------------------------------
-        # Check whether polygon intersects DEM extent
-        # ----------------------------------------------------
-
-        if not geometry.intersects(dem_extent):
-
-            print("WARNING: Basin does not intersect DEM.")
-
-            inventory.append({
-                "HYBAS_ID": tile_id,
-                "status": "outside_dem",
-                "tile_file": None
-            })
-
-            continue
 
         # ----------------------------------------------------
         # Clip DEM to buffered polygon
@@ -348,7 +473,7 @@ with rasterio.open(dem_file) as src:
             compress="deflate",
             predictor=3,
             tiled=True,
-            blocxsize=256,
+            blockxsize=256,
             blockysize=256,
             BIGTIFF="IF_SAFER"
         )
