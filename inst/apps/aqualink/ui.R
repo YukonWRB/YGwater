@@ -675,6 +675,11 @@ app_ui <- function(request) {
               uiOutput("instrumentMaintenance_ui")
             ),
             nav_panel(
+              title = "Instrument records",
+              value = "instrumentRecords",
+              uiOutput("instrumentRecords_ui")
+            ),
+            nav_panel(
               title = "Deploy / recover instruments",
               value = "deploy_recover",
               uiOutput("deploy_recover_ui"), # points to the same module as in Equipment

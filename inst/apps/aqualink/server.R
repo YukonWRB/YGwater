@@ -125,6 +125,7 @@ app_server <- function(input, output, session) {
     "manageInstruments",
     "manageSensors",
     "instrumentMaintenance",
+    "instrumentRecords",
     "addContData",
     "imputeMissing",
     "continuousDataReview",
@@ -214,6 +215,7 @@ app_server <- function(input, output, session) {
     "manageInstruments",
     "manageSensors",
     "instrumentMaintenance",
+    "instrumentRecords",
     "editSamples",
     "addSampleSeries",
     "syncCont",
@@ -1039,7 +1041,8 @@ app_server <- function(input, output, session) {
           session$userData$admin_privs$calibrate,
           session$userData$admin_privs$manageInstruments,
           session$userData$admin_privs$manageSensors,
-          session$userData$admin_privs$instrumentMaintenance
+          session$userData$admin_privs$instrumentMaintenance,
+          session$userData$admin_privs$instrumentRecords
         )
       ) {
         nav_show(id = "navbar", target = "equipTasks")
@@ -1054,6 +1057,9 @@ app_server <- function(input, output, session) {
         }
         if (!isTRUE(session$userData$admin_privs$instrumentMaintenance)) {
           nav_hide(id = "navbar", target = "instrumentMaintenance")
+        }
+        if (!isTRUE(session$userData$admin_privs$instrumentRecords)) {
+          nav_hide(id = "navbar", target = "instrumentRecords")
         }
       } else {
         nav_hide(id = "navbar", target = "equipTasks")
@@ -1766,6 +1772,7 @@ app_server <- function(input, output, session) {
     ui_loaded$manageInstruments <- FALSE
     ui_loaded$manageSensors <- FALSE
     ui_loaded$instrumentMaintenance <- FALSE
+    ui_loaded$instrumentRecords <- FALSE
 
     ui_loaded$addContData <- FALSE
     ui_loaded$imputeMissing <- FALSE
@@ -3427,6 +3434,18 @@ WHERE rolname = current_user;"
         ui_loaded$instrumentMaintenance <- TRUE
         instrumentMaintenance(
           "instrumentMaintenance",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "instrumentRecords") {
+      if (!ui_loaded$instrumentRecords) {
+        output$instrumentRecords_ui <- renderUI(instrumentRecordsUI(
+          "instrumentRecords"
+        ))
+        ui_loaded$instrumentRecords <- TRUE
+        instrumentRecords(
+          "instrumentRecords",
           language = languageSelection
         )
       }

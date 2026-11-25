@@ -196,6 +196,11 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
 
+    source(system.file(
+      "apps/aqualink/modules/admin/field/instrumentDeploymentHelpers.R",
+      package = "YGwater"
+    ))
+
     # equipment sub-modules
     source(system.file(
       "apps/aqualink/modules/admin/instruments/equipmentCatalogue.R",
@@ -215,6 +220,10 @@ YGwater_globals <- function(
     ))
     source(system.file(
       "apps/aqualink/modules/admin/instruments/instrumentMaintenance.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/aqualink/modules/admin/instruments/instrumentRecords.R",
       package = "YGwater"
     ))
 

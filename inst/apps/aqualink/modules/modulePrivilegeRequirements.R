@@ -168,9 +168,38 @@ ygwater_module_privilege_requirements <- function() {
         "SELECT"
       )
     ),
+    instrumentRecords = req(
+      c(
+        "instruments.instruments",
+        "instruments.instrument_makes",
+        "instruments.instrument_models",
+        "instruments.instrument_types",
+        "public.organizations",
+        "instruments.calibrations",
+        "instruments.calibrate_temperature",
+        "instruments.calibrate_specific_conductance",
+        "instruments.calibrate_ph",
+        "instruments.calibrate_orp",
+        "instruments.calibrate_turbidity",
+        "instruments.calibrate_dissolved_oxygen",
+        "instruments.calibrate_depth",
+        "instruments.observers",
+        "instruments.sensors",
+        "instruments.sensor_types",
+        "instruments.instrument_maintenance",
+        "instruments.instrument_maintenance_due",
+        "instruments.instrument_sensor_current",
+        "instruments.instrument_sensor_events",
+        "instruments.instrument_sensor_event_slots"
+      ),
+      list("SELECT")
+    ),
     deploy_recover = req(
       c(
         "public.locations_metadata_instruments",
+        "public.locations_metadata_instrument_timeseries",
+        "public.locations_metadata_instrument_connections",
+        "public.locations_metadata_instrument_connection_signals",
         "public.locations",
         "public.sub_locations",
         "public.locations_z",
@@ -184,7 +213,11 @@ ygwater_module_privilege_requirements <- function() {
         "continuous.transmission_timeseries_mappings",
         "continuous.transmission_import_runs"
       ),
-      c(list(c("SELECT", "INSERT", "UPDATE")), rep(list("SELECT"), 12))
+      c(
+        list(c("SELECT", "INSERT", "UPDATE")),
+        rep(list("SELECT"), 12),
+        list(c("SELECT", "INSERT", "DELETE"), "SELECT", "SELECT")
+      )
     ),
     addContData = req(
       "continuous.measurements_continuous",

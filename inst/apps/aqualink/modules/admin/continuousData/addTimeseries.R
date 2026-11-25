@@ -1884,6 +1884,30 @@ addTimeseries <- function(id, language) {
         )
       }
 
+      selected_record <- DBI::dbGetQuery(
+        con,
+        "SELECT instrument_id, start_datetime, end_datetime
+         FROM public.locations_metadata_instruments
+         WHERE metadata_id = $1",
+        params = list(deployment_metadata_id)
+      )
+      if (nrow(selected_record) != 1L) {
+        stop(
+          "The selected deployment record could not be found. Reload the module and try again."
+        )
+      }
+      proposed_plan <- instrument_deployment_plan_from_values(list(
+        instrument_id = selected_record$instrument_id[[1L]],
+        start_datetime = selected_record$start_datetime[[1L]],
+        end_datetime = selected_record$end_datetime[[1L]],
+        timeseries_ids = timeseries_id
+      ))
+      instrument_deployment_assert_no_conflicts(
+        con,
+        proposed_plan,
+        exclude_metadata_ids = deployment_metadata_id
+      )
+
       DBI::dbExecute(
         con,
         "
@@ -1914,10 +1938,27 @@ addTimeseries <- function(id, language) {
     }
 
     getModuleData <- function() {
-      moduleData$source_adapters <- AquaCache::getSourceAdapterCapabilities(
-        con = session$userData$AquaCache,
-        data_domain = "continuous"
+      source_capabilities <- tryCatch(
+        AquaCache::getSourceAdapterCapabilities(
+          con = session$userData$AquaCache,
+          data_domain = "continuous"
+        ),
+        error = function(e) e
       )
+      moduleData$source_adapters_error <- if (
+        inherits(source_capabilities, "error")
+      ) {
+        conditionMessage(source_capabilities)
+      } else {
+        NULL
+      }
+      moduleData$source_adapters <- if (
+        inherits(source_capabilities, "error")
+      ) {
+        data.frame(source_fx = character(), stringsAsFactors = FALSE)
+      } else {
+        source_capabilities
+      }
       moduleData$source_fx <- sort(unique(
         as.character(moduleData$source_adapters$source_fx)
       ))
@@ -3971,6 +4012,13 @@ addTimeseries <- function(id, language) {
             splitLayout(
               cellWidths = c("50%", "50%"),
               verticalLayout(
+                if (!is.null(moduleData$source_adapters_error)) {
+                  div(
+                    class = "alert alert-warning",
+                    tags$strong("Auto-download options are unavailable. "),
+                    "This database lists a source function that the installed AquaCache package cannot load. Basic timeseries settings remain available; ask an administrator to reconcile the source-function catalog with the installed package."
+                  )
+                },
                 # htmlOutput to tell the user when they should use the source functions and what the arguments are
                 tags$div(
                   class = "alert alert-info",
@@ -5698,8 +5746,21 @@ addTimeseries <- function(id, language) {
       )
     })
 
+    source_test_worker_env <- new.env(parent = asNamespace("YGwater"))
+    source_test_worker_env$source_adapter_decode_args <-
+      source_adapter_decode_args
+    environment(source_test_worker_env$source_adapter_decode_args) <-
+      source_test_worker_env
+    source_test_worker_env$source_adapter_test <- source_adapter_test
+    environment(source_test_worker_env$source_adapter_test) <-
+      source_test_worker_env
+    source_test_worker_env$source_adapter_test_result_text <-
+      source_adapter_test_result_text
+    environment(source_test_worker_env$source_adapter_test_result_text) <-
+      source_test_worker_env
+
     source_test_task <- ExtendedTask$new(function(request) {
-      promises::future_promise(seed = TRUE, expr = {
+      mirai::mirai({
         tryCatch(
           {
             con <- AquaCache::AquaConnect(
@@ -5714,7 +5775,7 @@ addTimeseries <- function(id, language) {
             DBI::dbExecute(con, "SET default_transaction_read_only = on")
             test_warnings <- character()
             result <- withCallingHandlers(
-              source_adapter_test(
+              source_test_worker_env$source_adapter_test(
                 source_fx = request$source_fx,
                 source_fx_args = request$source_fx_args,
                 start_datetime = request$start_datetime,
@@ -5735,7 +5796,9 @@ addTimeseries <- function(id, language) {
               source_fx = request$source_fx,
               start_datetime = request$start_datetime,
               end_datetime = request$end_datetime,
-              output = source_adapter_test_result_text(result),
+              output = source_test_worker_env$source_adapter_test_result_text(
+                result
+              ),
               warnings = test_warnings
             )
           },
@@ -5747,7 +5810,11 @@ addTimeseries <- function(id, language) {
             )
           }
         )
-      })
+      },
+      request = request,
+      source_test_worker_env = source_test_worker_env,
+      .compute = "YGwater_aqualink"
+      )
     }) |>
       bslib::bind_task_button("run_source_test")
 
@@ -7943,6 +8010,34 @@ addTimeseries <- function(id, language) {
       ignoreNULL = TRUE
     )
 
+    # These helpers are sourced into the app environment rather than the
+    # package namespace. Bind them locally so the isolated worker environment
+    # can copy their definitions and dependencies explicitly.
+    share_with_to_array <- share_with_to_array
+    timeseries_transmission_mapping <- timeseries_transmission_mapping
+    timeseries_sync_transmission_mapping <- timeseries_sync_transmission_mapping
+
+    add_timeseries_worker_env <- YGwater:::mirai_worker_environment(
+      helper_names = c(
+        "aggregation_step_or",
+        "aggregation_step_value",
+        "active_deployment_association_rows",
+        "deployment_has_signal_rows",
+        "get_or_create_location_z_id",
+        "insert_aggregation_method_draft",
+        "instrument_deployment_assert_no_conflicts",
+        "instrument_deployment_plan_from_values",
+        "nullable_integer",
+        "nullable_numeric",
+        "nullable_text",
+        "row_has_timeseries",
+        "share_with_to_array",
+        "timeseries_sync_transmission_mapping",
+        "update_timeseries_instrument_association"
+      ),
+      source_env = environment()
+    )
+
     # Add a new timeseries #############
     # Create an extendedTask to add a new timeseries
     addNewTimeseries <- ExtendedTask$new(
@@ -7970,13 +8065,15 @@ addTimeseries <- function(id, language) {
         default_corrections,
         aggregation_methods
       ) {
-        promises::future_promise(seed = TRUE, expr = {
+        mirai::mirai(
+          with(add_timeseries_worker_env, {
           con <- NULL
           transaction_active <- FALSE
+          worker_step <- "connecting to the database"
           tryCatch(
             {
               # Make a connection
-              con <- AquaConnect(
+              con <- YGwater::AquaConnect(
                 name = config$dbName,
                 host = config$dbHost,
                 port = config$dbPort,
@@ -7987,6 +8084,7 @@ addTimeseries <- function(id, language) {
               on.exit(DBI::dbDisconnect(con)) # Disconnect when done
 
               # start a transaction
+              worker_step <- "starting the database transaction"
               DBI::dbBegin(con)
               transaction_active <- TRUE
 
@@ -8023,6 +8121,7 @@ addTimeseries <- function(id, language) {
               }
 
               z <- nullable_numeric(z)
+              worker_step <- "resolving elevation or depth"
               existing_z <- get_or_create_location_z_id(
                 con = con,
                 location_id = loc,
@@ -8031,6 +8130,7 @@ addTimeseries <- function(id, language) {
               )
 
               # Make a new entry to the timeseries table
+              worker_step <- "inserting the timeseries"
               new_timeseries <- DBI::dbGetQuery(
                 con,
                 "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, matrix_state_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT ON CONSTRAINT timeseries_unique DO NOTHING RETURNING timeseries_id;",
@@ -8065,6 +8165,7 @@ addTimeseries <- function(id, language) {
               new_timeseries_id <- new_timeseries[1, 1]
 
               if (length(aggregation_methods) > 0L) {
+                worker_step <- "saving aggregation methods"
                 for (method in aggregation_methods) {
                   insert_aggregation_method_draft(
                     con,
@@ -8075,6 +8176,7 @@ addTimeseries <- function(id, language) {
               }
 
               if (nrow(source_assignments) > 0L) {
+                worker_step <- "saving source adapter settings"
                 for (row_idx in seq_len(nrow(source_assignments))) {
                   DBI::dbExecute(
                     con,
@@ -8095,6 +8197,7 @@ addTimeseries <- function(id, language) {
               }
 
               if (nrow(qc_assignments) > 0L) {
+                worker_step <- "saving quality control settings"
                 AquaCache::setTimeseriesQCRules(
                   con,
                   new_timeseries_id,
@@ -8102,12 +8205,14 @@ addTimeseries <- function(id, language) {
                 )
               }
 
+              worker_step <- "saving transmission mappings"
               timeseries_sync_transmission_mapping(
                 con = con,
                 timeseries_id = new_timeseries_id,
                 mapping = transmission_mappings
               )
 
+              worker_step <- "saving the instrument association"
               update_timeseries_instrument_association(
                 con = con,
                 timeseries_id = new_timeseries_id,
@@ -8118,6 +8223,7 @@ addTimeseries <- function(id, language) {
                 !is.null(default_corrections) &&
                   nrow(default_corrections) > 0
               ) {
+                worker_step <- "saving automatic corrections"
                 for (row_idx in seq_len(nrow(default_corrections))) {
                   DBI::dbExecute(
                     con,
@@ -8147,6 +8253,7 @@ addTimeseries <- function(id, language) {
 
               # Commit configuration before external network work. A temporary
               # provider failure must not erase a valid timeseries and mapping.
+              worker_step <- "committing the timeseries configuration"
               DBI::dbCommit(con)
               transaction_active <- FALSE
 
@@ -8260,39 +8367,34 @@ addTimeseries <- function(id, language) {
                   )
                 ))
               }
-            },
-            warning = function(w) {
-              if (
-                isTRUE(transaction_active) &&
-                  !is.null(con) &&
-                  DBI::dbIsValid(con)
-              ) {
-                try(DBI::dbRollback(con), silent = TRUE)
-                return(list(
-                  status = "error",
-                  timeseries_id = NA_integer_,
-                  message = paste(
-                    "Failure due to warning when adding timeseries:",
-                    conditionMessage(w)
-                  )
-                ))
-              }
-              list(
-                status = "saved_fetch_failed",
-                timeseries_id = if (exists("new_timeseries_id")) {
-                  as.integer(new_timeseries_id)
-                } else {
-                  NA_integer_
-                },
-                message = paste(
-                  "Timeseries configuration was saved, but the initial",
-                  "fetch raised a warning:",
-                  conditionMessage(w)
-                )
-              )
             }
           )
-        })
+          }),
+          config = config,
+          loc = loc,
+          sub_loc = sub_loc,
+          tz = tz,
+          z = z,
+          parameter = parameter,
+          media = media,
+          matrix_state = matrix_state,
+          priority = priority,
+          agg_type = agg_type,
+          rate = rate,
+          owner = owner,
+          note = note,
+          source_assignments = source_assignments,
+          qc_assignments = qc_assignments,
+          allow_empty_initial_fetch = allow_empty_initial_fetch,
+          transmission_mappings = transmission_mappings,
+          instrument_deployment = instrument_deployment,
+          data = data,
+          share_with = share_with,
+          default_corrections = default_corrections,
+          aggregation_methods = aggregation_methods,
+          add_timeseries_worker_env = add_timeseries_worker_env,
+          .compute = "YGwater_aqualink"
+        )
       } # end of ExtendedTask$new
     ) |>
       bslib::bind_task_button("add_timeseries")
@@ -8717,67 +8819,98 @@ addTimeseries <- function(id, language) {
       updateTextAreaInput(session, "note", value = "")
     })
 
-    fetch_modified_timeseries <- function(timeseries_id) {
-      config <- session$userData$config
-      fetch_promise <- promises::future_promise(seed = TRUE, expr = {
-        con <- AquaCache::AquaConnect(
-          name = config$dbName,
-          host = config$dbHost,
-          port = config$dbPort,
-          username = config$dbUser,
-          password = config$dbPass,
-          silent = TRUE
-        )
-        on.exit(DBI::dbDisconnect(con))
-        AquaCache::getNewContinuous(
-          con = con,
-          timeseries_id = timeseries_id
-        )
-      })
-
-      promises::then(
-        fetch_promise,
-        onFulfilled = function(result) {
-          added <- if (
-            is.data.frame(result) &&
-              "rows_added" %in% names(result)
-          ) {
-            sum(result$rows_added, na.rm = TRUE)
-          } else {
-            NA_integer_
-          }
-          showNotification(
-            if (is.na(added)) {
-              paste(
-                "Timeseries updated and the source fetch completed.",
-                "Review synchronization history for details."
+    fetch_modified_task <- ExtendedTask$new(function(request) {
+      mirai::mirai(
+        {
+          con <- NULL
+          tryCatch(
+            {
+              con <- YGwater::AquaConnect(
+                name = config$dbName,
+                host = config$dbHost,
+                port = config$dbPort,
+                username = config$dbUser,
+                password = config$dbPass,
+                silent = TRUE
               )
-            } else {
-              paste(
-                "Timeseries updated and source fetch completed:",
-                added,
-                "new measurement(s)."
+              on.exit(DBI::dbDisconnect(con), add = TRUE)
+              list(
+                ok = TRUE,
+                result = AquaCache::getNewContinuous(
+                  con = con,
+                  timeseries_id = timeseries_id
+                )
               )
             },
-            type = "message",
-            duration = 10
+            error = function(error) {
+              list(ok = FALSE, message = conditionMessage(error))
+            }
           )
-          invisible(result)
         },
-        onRejected = function(error) {
-          showNotification(
-            paste(
-              "Timeseries configuration was saved, but the source fetch",
-              "failed:",
-              conditionMessage(error)
-            ),
-            type = "warning",
-            duration = 15
-          )
-          invisible(NULL)
-        }
+        config = request$config,
+        timeseries_id = request$timeseries_id,
+        .compute = "YGwater_aqualink"
       )
-      invisible(fetch_promise)
+    })
+
+    observeEvent(fetch_modified_task$result(), {
+      result <- fetch_modified_task$result()
+      if (is.null(result)) {
+        return()
+      }
+      if (!isTRUE(result$ok)) {
+        showNotification(
+          paste(
+            "Timeseries configuration was saved, but the source fetch",
+            "failed:",
+            result$message
+          ),
+          type = "warning",
+          duration = 15
+        )
+        return()
+      }
+
+      fetch_result <- result$result
+      added <- if (
+        is.data.frame(fetch_result) &&
+          "rows_added" %in% names(fetch_result)
+      ) {
+        sum(fetch_result$rows_added, na.rm = TRUE)
+      } else {
+        NA_integer_
+      }
+      showNotification(
+        if (is.na(added)) {
+          paste(
+            "Timeseries updated and the source fetch completed.",
+            "Review synchronization history for details."
+          )
+        } else {
+          paste(
+            "Timeseries updated and source fetch completed:",
+            added,
+            "new measurement(s)."
+          )
+        },
+        type = "message",
+        duration = 10
+      )
+    })
+
+    fetch_modified_timeseries <- function(timeseries_id) {
+      config <- session$userData$config[c(
+        "dbName",
+        "dbHost",
+        "dbPort",
+        "dbUser",
+        "dbPass"
+      )]
+      fetch_modified_task$invoke(list(
+        config = config,
+        timeseries_id = timeseries_id
+      ))
+      invisible(NULL)
     }
 
     # Modify existing timeseries ###############

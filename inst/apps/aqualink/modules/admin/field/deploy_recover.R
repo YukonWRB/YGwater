@@ -2046,42 +2046,11 @@ deploy_recover <- function(id, language) {
     }
 
     replace_deployment_timeseries <- function(metadata_id, timeseries_ids) {
-      metadata_id <- as_nullable_integer(metadata_id)
-      if (is.na(metadata_id)) {
-        stop(
-          "A deployment metadata_id is required to update continuous.timeseries links."
-        )
-      }
-
-      timeseries_ids <- normalize_integer_vector(timeseries_ids)
-
-      DBI::dbExecute(
+      instrument_deployment_replace_timeseries(
         session$userData$AquaCache,
-        "
-        DELETE FROM public.locations_metadata_instrument_timeseries
-        WHERE metadata_id = $1
-        ",
-        params = list(metadata_id)
+        metadata_id,
+        timeseries_ids
       )
-
-      if (!length(timeseries_ids)) {
-        return(invisible(NULL))
-      }
-
-      for (timeseries_id in timeseries_ids) {
-        DBI::dbExecute(
-          session$userData$AquaCache,
-          "
-          INSERT INTO public.locations_metadata_instrument_timeseries (
-            metadata_id,
-            timeseries_id
-          ) VALUES ($1, $2)
-          ",
-          params = list(metadata_id, timeseries_id)
-        )
-      }
-
-      invisible(NULL)
     }
 
     deployment_params <- function(values) {
@@ -2100,17 +2069,7 @@ deploy_recover <- function(id, language) {
     }
 
     insert_deployment <- function(values) {
-      DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "INSERT INTO public.locations_metadata_instruments (
-           location_id, sub_location_id, instrument_id, start_datetime, end_datetime,
-           note, z_id, deployment_visit_id, recovery_visit_id, firmware_version,
-           logger_program_revision, record_unit_id, record_interval_seconds,
-           record_duration_seconds, record_aggregation_type_id
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-         RETURNING metadata_id",
-        params = deployment_params(values)
-      )$metadata_id[[1L]]
+      instrument_deployment_insert(session$userData$AquaCache, values)
     }
 
     upsert_record <- function(
@@ -2137,16 +2096,34 @@ deploy_recover <- function(id, language) {
       }
 
       if (is.null(metadata_id)) {
-        DBI::dbWithTransaction(session$userData$AquaCache, {
-          metadata_id <- insert_deployment(values)
-          replace_deployment_timeseries(metadata_id, values$timeseries_ids)
-          metadata_id
-        })
+        plan <- instrument_deployment_plan_from_values(values)
+        instrument_deployment_with_guard(
+          session$userData$AquaCache,
+          plan,
+          action = function() {
+            metadata_id <- insert_deployment(values)
+            replace_deployment_timeseries(metadata_id, values$timeseries_ids)
+            metadata_id
+          }
+        )
       } else {
-        DBI::dbWithTransaction(session$userData$AquaCache, {
-          DBI::dbExecute(
-            session$userData$AquaCache,
-            "
+        record <- selected_record()
+        guard_values <- values
+        guard_values$timeseries_ids <- sort(unique(c(
+          normalize_integer_vector(values$timeseries_ids),
+          record_signal_timeseries_ids(record)
+        )))
+        plan <- instrument_deployment_plan_from_values(guard_values)
+        instrument_deployment_with_guard(
+          session$userData$AquaCache,
+          plan,
+          exclude_metadata_ids = metadata_id,
+          lock_instrument_ids = record$instrument_id[[1L]],
+          lock_timeseries_ids = record_associated_timeseries_ids(record),
+          action = function() {
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              "
             UPDATE public.locations_metadata_instruments
             SET
               location_id = $1,
@@ -2162,11 +2139,12 @@ deploy_recover <- function(id, language) {
               record_aggregation_type_id = $15
             WHERE metadata_id = $16
             ",
-            params = c(deployment_params(values), list(metadata_id))
-          )
-          replace_deployment_timeseries(metadata_id, values$timeseries_ids)
-          metadata_id
-        })
+              params = c(deployment_params(values), list(metadata_id))
+            )
+            replace_deployment_timeseries(metadata_id, values$timeseries_ids)
+            metadata_id
+          }
+        )
       }
     }
 
@@ -2218,9 +2196,14 @@ deploy_recover <- function(id, language) {
         )
       }
 
-      DBI::dbWithTransaction(
+      plan <- instrument_deployment_plan_from_values(values)
+      instrument_deployment_with_guard(
         session$userData$AquaCache,
-        {
+        plan,
+        exclude_metadata_ids = metadata_id,
+        lock_instrument_ids = current_record$instrument_id[[1L]],
+        lock_timeseries_ids = record_associated_timeseries_ids(current_record),
+        action = function() {
           DBI::dbExecute(
             session$userData$AquaCache,
             "

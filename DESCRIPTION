@@ -22,6 +22,7 @@ Depends:
     R (>= 4.2.0)
 Imports:
     cli,
+    codetools,
     cowplot,
     DBI,
     dplyr,
@@ -52,7 +53,7 @@ Imports:
     xml2,
     zoo
 Suggests:
-    AquaCache (>= 2.8.9),
+    AquaCache (>= 2.9.3),
     base64enc,
     bslib,
     bsicons,

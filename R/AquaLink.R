@@ -102,11 +102,11 @@ AquaLink <- function(
   if (!rlang::is_installed("AquaCache", version = "2.8.9")) {
     rlang::check_installed(
       "remotes",
-      reason = "required to install AquaCache from GitHub"
+      reason = "to install AquaCache from GitHub"
     )
     rlang::check_installed(
       "AquaCache",
-      version = "2.8.9",
+      version = "2.9.3",
       reason = "required for Patch 65 chemistry and import mappings in AquaLink",
       action = \(pkg, ...) remotes::install_github("YukonWRB/AquaCache")
     )
@@ -115,23 +115,27 @@ AquaLink <- function(
   if (!public) {
     rlang::check_installed(
       "shinyWidgets",
-      reason = "required to use AquaLink with public = FALSE"
+      reason = "to use AquaLink with public = FALSE"
+    )
+    rlang::check_installed(
+      "shinycssloaders",
+      reason = "to show a 'loading' spinner in the app"
     )
     rlang::check_installed(
       "pdftools",
-      reason = "required to use AquaLink with public = FALSE"
+      reason = "to use AquaLink with public = FALSE"
     )
     rlang::check_installed(
       "tesseract",
-      reason = "required to use Simpler Index in the app"
+      reason = "to use Simpler Index in the app"
     )
     rlang::check_installed(
       "magick",
-      reason = "required to use Simpler Index in the app"
+      reason = "to use Simpler Index in the app"
     )
     rlang::check_installed(
       "readxl",
-      reason = "required to use AquaLink with public = FALSE"
+      reason = "to use AquaLink with public = FALSE"
     )
     rlang::check_installed(
       "foreach",

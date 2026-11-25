@@ -216,6 +216,11 @@ addContDataUI <- function(id) {
           ),
           uiOutput(ns("selected_upload_targets")),
           DT::DTOutput(ns("ts_table"))
+        ),
+        accordion_panel(
+          id = ns("deployment_plan_panel"),
+          title = "Instrument deployments",
+          uiOutput(ns("deployment_plan_ui"))
         )
       ),
 
@@ -466,21 +471,6 @@ addContData <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    ensure_background_future_plan <- function() {
-      current_plan <- future::plan()
-      if (!inherits(current_plan, "sequential")) {
-        return(invisible(FALSE))
-      }
-      if (identical(Sys.info()[["sysname"]], "Windows") || interactive()) {
-        future::plan("multisession")
-      } else {
-        future::plan("multicore")
-      }
-      invisible(TRUE)
-    }
-
-    ensure_background_future_plan()
-
     output$banner <- renderUI({
       req(language$language)
       application_notifications_ui(
@@ -539,7 +529,13 @@ addContData <- function(id, language) {
         session$userData$AquaCache,
         "SELECT
            md.timeseries_id,
+           ts.location_id,
+           ts.sub_location_id,
+           ts.z_id,
            md.location_name AS location,
+           l.location_code,
+           sl.sub_location_name,
+           lz.z_meters,
            md.parameter_name AS parameter,
            md.units,
            md.media_type AS media,
@@ -556,6 +552,12 @@ addContData <- function(id, language) {
          FROM continuous.timeseries_metadata_en md
          INNER JOIN continuous.timeseries ts
            ON md.timeseries_id = ts.timeseries_id
+         INNER JOIN public.locations AS l
+           ON ts.location_id = l.location_id
+         LEFT JOIN public.sub_locations AS sl
+           ON ts.sub_location_id = sl.sub_location_id
+         LEFT JOIN public.locations_z AS lz
+           ON ts.z_id = lz.z_id
          ORDER BY
            md.location_name,
            md.parameter_name,
@@ -690,7 +692,14 @@ addContData <- function(id, language) {
       df$default_owner <- as.factor(df$default_owner)
 
       hidden_columns <- which(
-        names(df) %in% c("timeseries_id", "timeseries_type_code")
+        names(df) %in%
+          c(
+            "timeseries_id",
+            "location_id",
+            "sub_location_id",
+            "z_id",
+            "timeseries_type_code"
+          )
       ) -
         1L
       DT::datatable(
@@ -807,6 +816,7 @@ addContData <- function(id, language) {
     apply_ts_table_selection <- function(sel) {
       upload_jobs(NULL)
       upload_validation$jobs <- NULL
+      clear_deployment_plan()
       if (length(sel) > 0) {
         selected <- ts_meta()[sel, , drop = FALSE]
         if (
@@ -1443,6 +1453,596 @@ addContData <- function(id, language) {
     )
     upload_jobs <- reactiveVal(NULL)
     upload_validation <- reactiveValues(jobs = NULL)
+    deployment_plan <- reactiveVal(list())
+    deployment_conflict_state <- reactiveValues(conflicts = NULL)
+    deployment_state <- reactiveValues(
+      access_checked = FALSE,
+      can_select = FALSE,
+      can_create = FALSE,
+      can_update = FALSE,
+      instruments = data.frame(),
+      saved = FALSE,
+      saved_ids = integer()
+    )
+
+    clear_deployment_plan <- function() {
+      deployment_plan(list())
+      deployment_conflict_state$conflicts <- NULL
+      deployment_state$saved <- FALSE
+      deployment_state$saved_ids <- integer()
+      invisible(NULL)
+    }
+
+    deployment_target_rows <- reactive({
+      if (!identical(input$entry_mode, "file")) {
+        return(data.frame())
+      }
+      jobs <- upload_review_jobs()
+      if (!length(jobs)) {
+        return(data.frame())
+      }
+      jobs <- Filter(
+        function(job) {
+          checkbox_current_value(
+            upload_include_input_id(job$timeseries_id),
+            TRUE
+          )
+        },
+        jobs
+      )
+      if (!length(jobs)) {
+        return(data.frame())
+      }
+
+      meta <- ts_meta()
+      out <- lapply(jobs, function(job) {
+        timeseries_id <- as.integer(job$timeseries_id)
+        row_index <- match(timeseries_id, meta$timeseries_id)
+        if (is.na(row_index)) {
+          return(NULL)
+        }
+        target <- meta[row_index, , drop = FALSE]
+        datetime <- tryCatch(
+          table_datetimes_to_utc(job$data$datetime, input$UTC_offset),
+          error = function(e) as.POSIXct(character(), tz = "UTC")
+        )
+        datetime <- as.POSIXct(datetime, tz = "UTC")
+        datetime <- datetime[!is.na(datetime)]
+        target$file_start <- if (length(datetime)) {
+          min(datetime)
+        } else {
+          as.POSIXct(NA, tz = "UTC")
+        }
+        target$file_last_measurement <- if (length(datetime)) {
+          max(datetime)
+        } else {
+          as.POSIXct(NA, tz = "UTC")
+        }
+        target$file_end <- if (length(datetime)) {
+          max(datetime) + 1
+        } else {
+          as.POSIXct(NA, tz = "UTC")
+        }
+        target$upload_label <- job$label
+        target
+      })
+      out <- Filter(Negate(is.null), out)
+      if (!length(out)) {
+        return(data.frame())
+      }
+      do.call(rbind, out)
+    })
+
+    deployment_context_key <- function(targets) {
+      value <- function(x) ifelse(is.na(x), "<none>", as.character(x))
+      paste(
+        value(targets$location_id),
+        value(targets$sub_location_id),
+        value(targets$z_id),
+        sep = ":"
+      )
+    }
+
+    deployment_context_label <- function(targets) {
+      location <- paste0(targets$location, " [", targets$location_code, "]")
+      sub_location <- ifelse(
+        is.na(targets$sub_location_name) | !nzchar(targets$sub_location_name),
+        "site level",
+        targets$sub_location_name
+      )
+      elevation <- ifelse(
+        is.na(targets$z_meters),
+        "no elevation/depth",
+        paste0(format(targets$z_meters, trim = TRUE), " m")
+      )
+      unique(paste(location, sub_location, elevation, sep = " · "))[[1L]]
+    }
+
+    deployment_target_choices <- function(targets) {
+      if (is.null(targets) || nrow(targets) == 0L) {
+        return(stats::setNames(character(), character()))
+      }
+      labels <- vapply(
+        seq_len(nrow(targets)),
+        function(i) {
+          target <- targets[i, , drop = FALSE]
+          add_cont_data_target_label(target)
+        },
+        character(1)
+      )
+      stats::setNames(as.character(targets$timeseries_id), labels)
+    }
+
+    load_deployment_access <- function() {
+      access <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT
+           has_table_privilege(current_user, 'public.locations_metadata_instruments', 'SELECT') AND
+           has_table_privilege(current_user, 'public.locations_metadata_instrument_timeseries', 'SELECT') AND
+           has_table_privilege(current_user, 'public.locations_metadata_instrument_connections', 'SELECT') AND
+           has_table_privilege(current_user, 'public.locations_metadata_instrument_connection_signals', 'SELECT') AND
+           has_table_privilege(current_user, 'instruments.instruments', 'SELECT') AS can_select,
+           has_table_privilege(current_user, 'public.locations_metadata_instruments', 'INSERT') AND
+           has_table_privilege(current_user, 'public.locations_metadata_instrument_timeseries', 'INSERT') AS can_create,
+           has_table_privilege(current_user, 'public.locations_metadata_instruments', 'UPDATE') AS can_update"
+      )
+      deployment_state$access_checked <- TRUE
+      deployment_state$can_select <- isTRUE(access$can_select[[1L]])
+      deployment_state$can_create <- deployment_state$can_select &&
+        isTRUE(access$can_create[[1L]])
+      deployment_state$can_update <- isTRUE(access$can_update[[1L]])
+      if (deployment_state$can_select) {
+        deployment_state$instruments <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT i.instrument_id, i.serial_no, mk.make, mdl.model, it.type,
+                  i.date_retired
+           FROM instruments.instruments AS i
+           LEFT JOIN instruments.instrument_makes AS mk
+             ON i.instrument_make_id = mk.make_id
+           LEFT JOIN instruments.instrument_models AS mdl
+             ON i.instrument_model_id = mdl.model_id
+           LEFT JOIN instruments.instrument_types AS it
+             ON i.instrument_type_id = it.type_id
+           ORDER BY i.date_retired NULLS FIRST, i.serial_no, i.instrument_id"
+        )
+      }
+      invisible(deployment_state$can_create)
+    }
+
+    deployment_instrument_choices <- function() {
+      instruments <- deployment_state$instruments
+      active <- instruments[is.na(instruments$date_retired), , drop = FALSE]
+      labels <- paste(
+        active$serial_no,
+        active$make,
+        active$model,
+        active$type,
+        sep = " | "
+      )
+      stats::setNames(as.character(active$instrument_id), labels)
+    }
+
+    deployment_timezone_value <- function() {
+      timezone <- input$deployment_timezone
+      if (
+        is.null(timezone) ||
+          !length(timezone) ||
+          is.na(timezone) ||
+          !nzchar(timezone)
+      ) {
+        return(default_input_timezone())
+      }
+      as.character(timezone[[1L]])
+    }
+
+    deployment_datetime_input <- function(
+      input_id,
+      label,
+      value,
+      timezone,
+      preserve_current = TRUE
+    ) {
+      if (isTRUE(preserve_current)) {
+        current <- isolate(input[[input_id]])
+        current_date <- if (is.list(current) && !is.null(current$date)) {
+          unlist(current$date, use.names = FALSE)
+        } else if (!is.null(current)) {
+          unlist(current, use.names = FALSE)
+        } else {
+          character()
+        }
+        if (length(current_date) == 1L && !is.na(current_date[[1L]])) {
+          value <- current_date[[1L]]
+        }
+      }
+      shinyWidgets::airDatepickerInput(
+        ns(input_id),
+        label,
+        value = value,
+        timepicker = TRUE,
+        update_on = "change",
+        tz = air_datetime_widget_timezone(timezone),
+        timepickerOpts = shinyWidgets::timepickerOptions(
+          minutesStep = 1,
+          timeFormat = "HH:mm"
+        )
+      )
+    }
+
+    deployment_recoverable_conflicts <- function(conflicts) {
+      if (is.null(conflicts)) {
+        return(data.frame())
+      }
+      if (!nrow(conflicts)) {
+        return(conflicts[0, , drop = FALSE])
+      }
+      active <- which(is.na(conflicts$existing_end_datetime))
+      if (!length(active)) {
+        return(conflicts[0, , drop = FALSE])
+      }
+      active_ids <- unique(conflicts$metadata_id[active])
+      candidates <- lapply(active_ids, function(metadata_id) {
+        rows <- conflicts[
+          conflicts$metadata_id == metadata_id,
+          ,
+          drop = FALSE
+        ]
+        existing_instrument_id <- rows$existing_instrument_id[[1L]]
+        if (
+          is.na(existing_instrument_id) ||
+            any(is.na(rows$proposed_instrument_id)) ||
+            any(rows$proposed_instrument_id == existing_instrument_id)
+        ) {
+          return(NULL)
+        }
+        recover_before <- min(rows$proposed_start_datetime)
+        if (
+          is.na(recover_before) ||
+            recover_before <= rows$existing_start_datetime[[1L]]
+        ) {
+          return(NULL)
+        }
+        rows <- rows[1L, , drop = FALSE]
+        rows$recover_before_datetime <- as.POSIXct(recover_before, tz = "UTC")
+        rows
+      })
+      candidates <- Filter(Negate(is.null), candidates)
+      if (!length(candidates)) {
+        return(conflicts[0, , drop = FALSE])
+      }
+      do.call(rbind, candidates)
+    }
+
+    show_deployment_conflict_modal <- function(conflicts) {
+      deployment_conflict_state$conflicts <- conflicts
+      recoverable <- if (isTRUE(deployment_state$can_update)) {
+        deployment_recoverable_conflicts(conflicts)
+      } else {
+        conflicts[0, , drop = FALSE]
+      }
+      choices <- if (nrow(recoverable)) {
+        labels <- vapply(seq_len(nrow(recoverable)), function(i) {
+          instrument <- recoverable$existing_serial_no[[i]]
+          if (is.na(instrument) || !nzchar(instrument)) {
+            instrument <- paste("instrument", recoverable$existing_instrument_id[[i]])
+          }
+          paste0(
+            "Deployment #", recoverable$metadata_id[[i]], " (", instrument,
+            ") — recover by ",
+            format(
+              recoverable$recover_before_datetime[[i]],
+              "%Y-%m-%d %H:%M UTC",
+              tz = "UTC"
+            )
+          )
+        }, character(1))
+        stats::setNames(
+          as.character(recoverable$metadata_id),
+          labels
+        )
+      } else {
+        character()
+      }
+      recovery_time <- if (nrow(recoverable)) {
+        recoverable$recover_before_datetime[[1L]]
+      } else {
+        as.POSIXct(NA, tz = "UTC")
+      }
+      recovery_controls <- if (length(choices)) {
+        tagList(
+          div(
+            class = "alert alert-warning",
+            tags$strong("Recover an earlier deployment here"),
+            p(
+              "Choose an active deployment from a different instrument. Its recovery time must be after its start and no later than the earliest overlapping deployment in this upload."
+            ),
+            p(
+              class = "mb-0",
+              "This updates the existing deployment record. If other conflicts remain, they will be listed next."
+            )
+          ),
+          selectInput(
+            ns("recover_conflict_metadata_id"),
+            "Active deployment to recover",
+            choices = choices,
+            selected = as.character(recoverable$metadata_id[[1L]])
+          ),
+          deployment_datetime_input(
+            "recover_conflict_time",
+            "Recovery time",
+            recovery_time,
+            deployment_timezone_value(),
+            preserve_current = FALSE
+          )
+        )
+      } else {
+        div(
+          class = "alert alert-info",
+          if (!isTRUE(deployment_state$can_update)) {
+            "This account can’t update existing deployment records. Ask an administrator to recover the earlier record, or adjust the planned dates in Deploy / recover."
+          } else {
+            "These overlaps cannot be recovered here. Review the existing deployment or adjust the planned dates in Deploy / recover."
+          }
+        )
+      }
+      showModal(modalDialog(
+        title = if (length(choices)) {
+          "An existing deployment overlaps"
+        } else {
+          "Deployment plan needs attention"
+        },
+        tags$pre(
+          style = "white-space: pre-wrap;",
+          instrument_deployment_conflict_message(conflicts)
+        ),
+        recovery_controls,
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Close"),
+          if (length(choices)) {
+            actionButton(
+              ns("recover_conflict_and_retry"),
+              "Recover and retry save",
+              class = "btn-primary"
+            )
+          },
+          actionButton(
+            ns("open_deployment_editor"),
+            "Open Deploy / recover page",
+            class = "btn-outline-primary"
+          )
+        )
+      ))
+    }
+
+    output$deployment_plan_ui <- renderUI({
+      targets <- deployment_target_rows()
+      if (!nrow(targets)) {
+        return(div(
+          class = "alert alert-info",
+          "Upload and map a file first. Deployment records can then be linked to the timeseries in that file."
+        ))
+      }
+      if (isTRUE(deployment_state$saved)) {
+        return(div(
+          class = "alert alert-success",
+          tags$strong("Deployment records saved: "),
+          paste(paste0("#", deployment_state$saved_ids), collapse = ", "),
+          tags$br(),
+          "The measurement upload is still staged. Continue with the upload buttons below."
+        ))
+      }
+      if (!isTRUE(deployment_state$access_checked)) {
+        return(tagList(
+          p(
+            "Use this step when the uploaded measurements came from one or more instrument deployments. Add one group for each instrument and deployment period."
+          ),
+          actionButton(
+            ns("start_deployment_plan"),
+            "Prepare deployment plan",
+            class = "btn-primary"
+          )
+        ))
+      }
+      if (!isTRUE(deployment_state$can_create)) {
+        return(div(
+          class = "alert alert-warning",
+          "This account can upload measurements but cannot create deployment records. Use the full Deploy / recover page or ask an administrator to grant deployment access."
+        ))
+      }
+
+      plan <- deployment_plan()
+      if (!length(plan)) {
+        return(tagList(
+          div(
+            class = "alert alert-info",
+            "No deployment groups have been prepared. The timeseries in this file are listed below."
+          ),
+          tags$ul(lapply(seq_len(nrow(targets)), function(i) {
+            tags$li(targets$upload_label[[i]])
+          })),
+          actionButton(
+            ns("start_deployment_plan"),
+            "Create deployment groups",
+            class = "btn-primary"
+          )
+        ))
+      }
+
+      timezone <- input$deployment_timezone
+      if (is.null(timezone) || !nzchar(timezone)) {
+        timezone <- default_input_timezone()
+      }
+      choices <- deployment_target_choices(targets)
+      tagList(
+        div(
+          class = "alert alert-info",
+          "Deployment start is suggested from the first uploaded measurement. If you mark an instrument recovered, its recovery time is suggested from the last uploaded measurement. These are editable estimates; confirm them against field records. One group represents one instrument deployment, and timeseries can be assigned to multiple groups when they cover separate deployment periods."
+        ),
+        selectizeInput(
+          ns("deployment_timezone"),
+          "Deployment time zone",
+          choices = input_timezone_choices(),
+          selected = timezone,
+          multiple = FALSE,
+          options = list(maxItems = 1)
+        ),
+        lapply(plan, function(card) {
+          id <- as.integer(card$id)
+          target_ids <- isolate(input[[paste0("deployment_timeseries_", id)]])
+          if (is.null(target_ids)) {
+            target_ids <- as.character(card$timeseries_ids)
+          }
+          instrument_id <- isolate(input[[paste0(
+            "deployment_instrument_",
+            id
+          )]])
+          if (is.null(instrument_id)) {
+            instrument_id <- if (is.na(card$instrument_id)) {
+              character()
+            } else {
+              as.character(card$instrument_id)
+            }
+          }
+          note <- isolate(input[[paste0("deployment_note_", id)]])
+          if (is.null(note)) {
+            note <- card$note
+          }
+          has_end_id <- paste0("deployment_has_end_", id)
+          has_end <- isolate(input[[has_end_id]])
+          if (is.null(has_end)) {
+            has_end <- FALSE
+          }
+          card_targets <- targets[
+            targets$timeseries_id %in% as.integer(card$timeseries_ids),
+            ,
+            drop = FALSE
+          ]
+          available_starts <- card_targets$file_start[
+            !is.na(card_targets$file_start)
+          ]
+          available_ends <- card_targets$file_last_measurement[
+            !is.na(card_targets$file_last_measurement)
+          ]
+          first_measurement <- if (length(available_starts)) {
+            min(available_starts)
+          } else {
+            as.POSIXct(NA, tz = "UTC")
+          }
+          last_measurement <- if (length(available_ends)) {
+            max(available_ends)
+          } else {
+            as.POSIXct(NA, tz = "UTC")
+          }
+          suggested_range <- if (
+            length(first_measurement) && length(last_measurement) &&
+              !is.na(first_measurement) && !is.na(last_measurement)
+          ) {
+            paste0(
+              "Measurements in this group run from ",
+              format_utc_datetimes_for_display(first_measurement, timezone),
+              " to ",
+              format_utc_datetimes_for_display(last_measurement, timezone),
+              " (", timezone, ")."
+            )
+          } else {
+            "No uploaded timestamps are available for these timeseries."
+          }
+          context <- if (nrow(card_targets)) {
+            deployment_context_label(card_targets)
+          } else {
+            "Choose timeseries from a single location, sub-location, and elevation/depth."
+          }
+          bslib::card(
+            class = "mb-3",
+            bslib::card_header(paste("Deployment group", id)),
+            bslib::card_body(
+              tags$p(tags$strong("Location context: "), context),
+              tags$p(class = "small text-muted", suggested_range),
+              selectizeInput(
+                ns(paste0("deployment_instrument_", id)),
+                "Instrument",
+                choices = deployment_instrument_choices(),
+                selected = instrument_id,
+                multiple = TRUE,
+                options = list(
+                  maxItems = 1,
+                  placeholder = "Search by serial, make, or model"
+                )
+              ),
+              checkboxGroupInput(
+                ns(paste0("deployment_timeseries_", id)),
+                "Timeseries included in this deployment",
+                choices = choices,
+                selected = target_ids
+              ),
+              fluidRow(
+                column(
+                  6,
+                  deployment_datetime_input(
+                    paste0("deployment_start_", id),
+                    "Deployment start",
+                    card$start_datetime,
+                    timezone
+                  )
+                ),
+                column(
+                  6,
+                  checkboxInput(
+                    ns(has_end_id),
+                    "Instrument has been recovered",
+                    value = isTRUE(has_end)
+                  ),
+                  tags$p(
+                    class = "small text-muted",
+                    "When selected, the recovery time is prefilled from the end of this file. Confirm or edit it before saving."
+                  ),
+                  conditionalPanel(
+                    condition = sprintf("input.%s", has_end_id),
+                    ns = ns,
+                    deployment_datetime_input(
+                      paste0("deployment_end_", id),
+                      "Recovery time",
+                      card$end_datetime,
+                      timezone
+                    )
+                  )
+                )
+              ),
+              textAreaInput(
+                ns(paste0("deployment_note_", id)),
+                "Deployment note (optional)",
+                value = note,
+                rows = 2
+              ),
+              if (id == max(vapply(plan, `[[`, integer(1), "id"))) {
+                actionButton(
+                  ns("remove_last_deployment"),
+                  "Remove this deployment group",
+                  class = "btn-outline-secondary"
+                )
+              }
+            )
+          )
+        }),
+        div(
+          class = "d-flex gap-2 flex-wrap",
+          actionButton(
+            ns("add_deployment_group"),
+            "Add another deployment period"
+          ),
+          actionButton(
+            ns("save_deployment_plan"),
+            "Save deployment records",
+            class = "btn-primary"
+          )
+        ),
+        p(
+          class = "text-muted small mt-2",
+          "Targets not assigned to a deployment group will remain unlinked. A new record is saved only after you click Save deployment records."
+        )
+      )
+    })
 
     unit_conversion_state <- reactiveValues(
       previous_values = list(),
@@ -4484,6 +5084,7 @@ addContData <- function(id, language) {
     # Show modal when user adds file
     observeEvent(input$file, {
       req(input$file)
+      clear_deployment_plan()
       map_modal_state$step <- "columns"
       map_modal_state$pending_df <- NULL
       map_modal_state$pending_jobs <- NULL
@@ -6020,14 +6621,37 @@ addContData <- function(id, language) {
       plot
     }
 
+    preview_plot_worker_env <- new.env(parent = asNamespace("YGwater"))
+    preview_plot_worker_env$thin_plot_data <- thin_plot_data
+    environment(preview_plot_worker_env$thin_plot_data) <-
+      preview_plot_worker_env
+    preview_plot_worker_env$parse_utc_datetime_value <-
+      parse_utc_datetime_value
+    environment(preview_plot_worker_env$parse_utc_datetime_value) <-
+      preview_plot_worker_env
+    preview_plot_worker_env$coerce_utc_datetime <- coerce_utc_datetime
+    environment(preview_plot_worker_env$coerce_utc_datetime) <-
+      preview_plot_worker_env
+    preview_plot_worker_env$add_cont_data_band_polygons <-
+      add_cont_data_band_polygons
+    environment(preview_plot_worker_env$add_cont_data_band_polygons) <-
+      preview_plot_worker_env
+    preview_plot_worker_env$AquaConnect <- YGwater::AquaConnect
+    preview_plot_worker_env$dbGetQueryDT <- YGwater::dbGetQueryDT
+    preview_plot_worker_env$ac_parameter_unit_select_sql <-
+      YGwater::ac_parameter_unit_select_sql
+    preview_plot_worker_env$make_preview_plot <- make_preview_plot
+    environment(preview_plot_worker_env$make_preview_plot) <-
+      preview_plot_worker_env
+
     preview_plot_task <- ExtendedTask$new(function(req) {
-      promises::future_promise({
+      mirai::mirai({
         tryCatch(
           {
             list(
               ok = TRUE,
               timeseries_id = req$timeseries_id,
-              plot = make_preview_plot(req),
+              plot = preview_plot_worker_env$make_preview_plot(req),
               signature = req$signature
             )
           },
@@ -6039,7 +6663,11 @@ addContData <- function(id, language) {
             )
           }
         )
-      })
+      },
+      req = req,
+      preview_plot_worker_env = preview_plot_worker_env,
+      .compute = "YGwater_aqualink"
+      )
     })
 
     next_preview_request <- function() {
@@ -6621,6 +7249,533 @@ addContData <- function(id, language) {
       TRUE
     }
 
+    new_deployment_card <- function(id, timeseries_ids = integer(), targets) {
+      selected_targets <- targets[
+        targets$timeseries_id %in% as.integer(timeseries_ids),
+        ,
+        drop = FALSE
+      ]
+      starts <- selected_targets$file_start[!is.na(selected_targets$file_start)]
+      ends <- selected_targets$file_end[!is.na(selected_targets$file_end)]
+      list(
+        id = as.integer(id),
+        instrument_id = NA_integer_,
+        timeseries_ids = as.integer(timeseries_ids),
+        start_datetime = if (length(starts)) {
+          min(starts)
+        } else {
+          as.POSIXct(NA, tz = "UTC")
+        },
+        end_datetime = if (length(ends)) {
+          max(ends)
+        } else {
+          as.POSIXct(NA, tz = "UTC")
+        },
+        note = ""
+      )
+    }
+
+    start_deployment_plan <- function() {
+      if (!isTRUE(deployment_state$access_checked)) {
+        load_deployment_access()
+      }
+      if (!isTRUE(deployment_state$can_create)) {
+        showNotification(
+          "This account does not have the privileges needed to create deployment records.",
+          type = "error",
+          duration = 12
+        )
+        return(invisible(NULL))
+      }
+
+      targets <- deployment_target_rows()
+      if (!nrow(targets)) {
+        showNotification(
+          "Map a file and select at least one upload target before preparing deployment groups.",
+          type = "error",
+          duration = 10
+        )
+        return(invisible(NULL))
+      }
+      groups <- split(seq_len(nrow(targets)), deployment_context_key(targets))
+      plan <- lapply(seq_along(groups), function(i) {
+        rows <- targets[groups[[i]], , drop = FALSE]
+        new_deployment_card(i, rows$timeseries_id, targets)
+      })
+      deployment_plan(plan)
+      deployment_state$saved <- FALSE
+      deployment_state$saved_ids <- integer()
+      invisible(NULL)
+    }
+
+    collect_deployment_plan <- function() {
+      cards <- deployment_plan()
+      targets <- deployment_target_rows()
+      if (!length(cards)) {
+        stop("Create at least one deployment group first.")
+      }
+      if (!nrow(targets)) {
+        stop(
+          "The staged upload targets are no longer available. Map the file again."
+        )
+      }
+
+      values <- lapply(cards, function(card) {
+        id <- as.integer(card$id)
+        instrument_id <- suppressWarnings(as.integer(
+          input[[paste0("deployment_instrument_", id)]]
+        ))
+        if (length(instrument_id) != 1L || is.na(instrument_id)) {
+          stop(paste("Choose an instrument for deployment group", id, "."))
+        }
+        timeseries_ids <- suppressWarnings(as.integer(
+          input[[paste0("deployment_timeseries_", id)]]
+        ))
+        timeseries_ids <- sort(unique(timeseries_ids[!is.na(timeseries_ids)]))
+        if (!length(timeseries_ids)) {
+          stop(paste(
+            "Select at least one timeseries for deployment group",
+            id,
+            "."
+          ))
+        }
+        if (!all(timeseries_ids %in% targets$timeseries_id)) {
+          stop(paste(
+            "Deployment group",
+            id,
+            "contains a target that is no longer included in the staged upload."
+          ))
+        }
+
+        start_datetime <- scalar_display_datetime_to_utc(
+          input[[paste0("deployment_start_", id)]],
+          deployment_timezone_value()
+        )
+        if (is.na(start_datetime)) {
+          stop(paste("Enter a deployment start time for group", id, "."))
+        }
+        has_end <- isTRUE(input[[paste0("deployment_has_end_", id)]])
+        end_datetime <- if (has_end) {
+          scalar_display_datetime_to_utc(
+            input[[paste0("deployment_end_", id)]],
+            deployment_timezone_value()
+          )
+        } else {
+          empty_utc_datetime()
+        }
+        if (has_end && is.na(end_datetime)) {
+          stop(paste("Enter a recovery time for deployment group", id, "."))
+        }
+        if (!is.na(end_datetime) && end_datetime <= start_datetime) {
+          stop(paste(
+            "Recovery time must be after the start time in group",
+            id,
+            "."
+          ))
+        }
+
+        assigned_targets <- targets[
+          match(timeseries_ids, targets$timeseries_id),
+          ,
+          drop = FALSE
+        ]
+        context_columns <- c("location_id", "sub_location_id", "z_id")
+        same_context <- vapply(
+          context_columns,
+          function(column) {
+            values <- assigned_targets[[column]]
+            all(
+              (is.na(values) & is.na(values[[1L]])) |
+                (!is.na(values) & !is.na(values[[1L]]) & values == values[[1L]])
+            )
+          },
+          logical(1)
+        )
+        if (!all(same_context)) {
+          stop(paste(
+            "Timeseries in deployment group",
+            id,
+            "must share one location, sub-location, and elevation/depth."
+          ))
+        }
+        location_id <- as.integer(assigned_targets$location_id[[1L]])
+        sub_location_id <- as.integer(assigned_targets$sub_location_id[[1L]])
+        z_id <- as.integer(assigned_targets$z_id[[1L]])
+        if (is.na(location_id)) {
+          stop(paste("A location is missing for deployment group", id, "."))
+        }
+        note <- trimws(as.character(input[[paste0("deployment_note_", id)]]))
+        if (!length(note) || is.na(note) || !nzchar(note)) {
+          note <- NA_character_
+        }
+
+        list(
+          plan_id = id,
+          instrument_id = instrument_id,
+          location_id = location_id,
+          sub_location_id = sub_location_id,
+          z_id = z_id,
+          timeseries_ids = timeseries_ids,
+          start_datetime = start_datetime,
+          end_datetime = end_datetime,
+          note = note,
+          metadata = list(
+            NA_integer_,
+            NA_integer_,
+            NA_character_,
+            NA_character_,
+            NA_integer_,
+            NA_real_,
+            NA_real_,
+            NA_integer_
+          )
+        )
+      })
+
+      active_instruments <- deployment_state$instruments$instrument_id[
+        is.na(deployment_state$instruments$date_retired)
+      ]
+      if (
+        any(
+          !vapply(
+            values,
+            function(x) x$instrument_id %in% active_instruments,
+            logical(1)
+          )
+        )
+      ) {
+        stop(
+          "Choose an active instrument. Retired instruments cannot be deployed."
+        )
+      }
+
+      plan_rows <- lapply(values, function(value) {
+        instrument_deployment_plan_from_values(value, plan_id = value$plan_id)
+      })
+      plan <- do.call(rbind, plan_rows)
+      if (nrow(plan) > 1L) {
+        for (i in seq_len(nrow(plan) - 1L)) {
+          for (j in seq.int(i + 1L, nrow(plan))) {
+            overlap <- instrument_deployment_ranges_overlap(
+              plan$start_datetime[[i]],
+              plan$end_datetime[[i]],
+              plan$start_datetime[[j]],
+              plan$end_datetime[[j]]
+            )
+            if (!overlap) {
+              next
+            }
+            shared_timeseries <- intersect(
+              plan$timeseries_ids[[i]],
+              plan$timeseries_ids[[j]]
+            )
+            if (plan$instrument_id[[i]] == plan$instrument_id[[j]]) {
+              stop(paste(
+                "Deployment groups",
+                plan$plan_id[[i]],
+                "and",
+                plan$plan_id[[j]],
+                "use the same instrument at overlapping times. Combine their timeseries or correct the dates."
+              ))
+            }
+            if (length(shared_timeseries)) {
+              stop(paste(
+                "Timeseries",
+                paste(shared_timeseries, collapse = ", "),
+                "is assigned to overlapping deployment groups. End the earlier deployment before starting the next one."
+              ))
+            }
+          }
+        }
+      }
+      list(values = values, plan = plan)
+    }
+
+    insert_deployment_plan_records <- function(values) {
+      ids <- integer(length(values))
+      for (i in seq_along(values)) {
+        value <- values[[i]]
+        ids[[i]] <- instrument_deployment_insert(
+          session$userData$AquaCache,
+          value
+        )
+        instrument_deployment_add_timeseries(
+          session$userData$AquaCache,
+          ids[[i]],
+          value$timeseries_ids
+        )
+      }
+      ids
+    }
+
+    mark_deployment_plan_saved <- function(metadata_ids) {
+      deployment_state$saved_ids <- metadata_ids
+      deployment_state$saved <- TRUE
+      deployment_conflict_state$conflicts <- NULL
+      showNotification(
+        paste(
+          "Saved deployment record(s)",
+          paste(paste0("#", metadata_ids), collapse = ", "),
+          "and linked their timeseries."
+        ),
+        type = "message",
+        duration = 12
+      )
+      invisible(metadata_ids)
+    }
+
+    save_deployment_plan <- function() {
+      collected <- collect_deployment_plan()
+      existing_conflicts <- instrument_deployment_find_conflicts(
+        session$userData$AquaCache,
+        collected$plan
+      )
+      if (nrow(existing_conflicts)) {
+        instrument_deployment_stop_for_conflicts(existing_conflicts)
+      }
+      metadata_ids <- instrument_deployment_with_guard(
+        session$userData$AquaCache,
+        collected$plan,
+        action = function() {
+          insert_deployment_plan_records(collected$values)
+        }
+      )
+      mark_deployment_plan_saved(metadata_ids)
+    }
+
+    recover_conflicting_deployment_and_retry <- function() {
+      collected <- collect_deployment_plan()
+      conflicts <- deployment_conflict_state$conflicts
+      if (is.null(conflicts) || !nrow(conflicts)) {
+        stop("The deployment conflict details have expired. Save the plan again.")
+      }
+      metadata_id <- suppressWarnings(as.integer(
+        input$recover_conflict_metadata_id
+      ))
+      if (length(metadata_id) != 1L || is.na(metadata_id)) {
+        stop("Choose an active deployment to recover.")
+      }
+      current_conflicts <- instrument_deployment_find_conflicts(
+        session$userData$AquaCache,
+        collected$plan
+      )
+      selected_conflicts <- current_conflicts[
+        current_conflicts$metadata_id == metadata_id,
+        ,
+        drop = FALSE
+      ]
+      if (!nrow(selected_conflicts)) {
+        stop("That deployment no longer overlaps this plan. Save the plan again.")
+      }
+      existing_instrument_id <- selected_conflicts$existing_instrument_id[[1L]]
+      if (
+        is.na(existing_instrument_id) ||
+          any(is.na(selected_conflicts$proposed_instrument_id)) ||
+          any(selected_conflicts$proposed_instrument_id == existing_instrument_id)
+      ) {
+        stop("Use the existing deployment record when the instrument is already in this plan.")
+      }
+      recover_before <- min(selected_conflicts$proposed_start_datetime)
+      existing_start <- selected_conflicts$existing_start_datetime[[1L]]
+      recovery_datetime <- scalar_display_datetime_to_utc(
+        input$recover_conflict_time,
+        deployment_timezone_value()
+      )
+      if (is.na(recovery_datetime)) {
+        stop("Enter a recovery time for the earlier deployment.")
+      }
+      if (recovery_datetime <= existing_start) {
+        stop("Recovery time must be after the earlier deployment start.")
+      }
+      if (recovery_datetime > recover_before) {
+        stop(paste(
+          "Recovery time must be no later than",
+          format(recover_before, "%Y-%m-%d %H:%M UTC", tz = "UTC"),
+          "to prevent overlap with this upload."
+        ))
+      }
+
+      existing_records <- instrument_deployment_existing_records(
+        session$userData$AquaCache,
+        collected$plan
+      )
+      associated_timeseries_ids <- unique(existing_records$timeseries_id[
+        existing_records$metadata_id == metadata_id &
+          !is.na(existing_records$timeseries_id)
+      ])
+      transaction_result <- DBI::dbWithTransaction(
+        session$userData$AquaCache,
+        {
+          instrument_deployment_acquire_locks(
+            session$userData$AquaCache,
+            collected$plan,
+            instrument_ids = existing_instrument_id,
+            timeseries_ids = associated_timeseries_ids
+          )
+          current_record <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "SELECT instrument_id, start_datetime, end_datetime
+             FROM public.locations_metadata_instruments
+             WHERE metadata_id = $1
+             FOR UPDATE",
+            params = list(metadata_id)
+          )
+          if (nrow(current_record) != 1L) {
+            stop("The selected deployment could not be found. Reload and try again.")
+          }
+          if (!is.na(current_record$end_datetime[[1L]])) {
+            stop("That deployment has already been recovered. Save the plan again.")
+          }
+          if (as.integer(current_record$instrument_id[[1L]]) != existing_instrument_id) {
+            stop("The selected deployment changed. Save the plan again.")
+          }
+          recovery_datetime <- as.POSIXct(recovery_datetime, tz = "UTC")
+          current_start <- as.POSIXct(current_record$start_datetime[[1L]], tz = "UTC")
+          if (
+            recovery_datetime <= current_start ||
+              recovery_datetime > recover_before
+          ) {
+            stop("The recovery time is no longer valid for the current deployment plan.")
+          }
+          updated <- DBI::dbExecute(
+            session$userData$AquaCache,
+            "UPDATE public.locations_metadata_instruments
+             SET end_datetime = $1
+             WHERE metadata_id = $2 AND end_datetime IS NULL",
+            params = list(recovery_datetime, metadata_id)
+          )
+          if (updated != 1L) {
+            stop("The deployment was changed by another user. Save the plan again.")
+          }
+
+          remaining_conflicts <- instrument_deployment_find_conflicts(
+            session$userData$AquaCache,
+            collected$plan
+          )
+          metadata_ids <- if (!nrow(remaining_conflicts)) {
+            insert_deployment_plan_records(collected$values)
+          } else {
+            integer()
+          }
+          list(
+            remaining_conflicts = remaining_conflicts,
+            metadata_ids = metadata_ids
+          )
+        }
+      )
+      if (length(transaction_result$metadata_ids)) {
+        mark_deployment_plan_saved(transaction_result$metadata_ids)
+        removeModal()
+      } else {
+        showNotification(
+          paste0("Recovered deployment #", metadata_id, ". Review the remaining overlaps below."),
+          type = "message",
+          duration = 10
+        )
+        show_deployment_conflict_modal(transaction_result$remaining_conflicts)
+      }
+      invisible(transaction_result)
+    }
+
+    observeEvent(
+      input$start_deployment_plan,
+      {
+        tryCatch(
+          start_deployment_plan(),
+          error = function(e) {
+            showNotification(
+              paste(
+                "Unable to prepare the deployment plan:",
+                conditionMessage(e)
+              ),
+              type = "error",
+              duration = 12
+            )
+          }
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$add_deployment_group,
+      {
+        plan <- deployment_plan()
+        targets <- deployment_target_rows()
+        next_id <- if (length(plan)) {
+          max(vapply(plan, `[[`, integer(1), "id")) + 1L
+        } else {
+          1L
+        }
+        plan[[length(plan) + 1L]] <- new_deployment_card(
+          next_id,
+          integer(),
+          targets
+        )
+        deployment_plan(plan)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$remove_last_deployment,
+      {
+        plan <- deployment_plan()
+        if (length(plan)) {
+          deployment_plan(plan[-length(plan)])
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$save_deployment_plan,
+      {
+        tryCatch(
+          save_deployment_plan(),
+          error = function(e) {
+            conflict_message <- conditionMessage(e)
+          if (inherits(e, "instrument_deployment_conflict")) {
+            show_deployment_conflict_modal(e$conflicts)
+            } else {
+              showNotification(
+                conflict_message,
+                type = "error",
+                duration = 12
+              )
+            }
+          }
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$recover_conflict_and_retry,
+      {
+        tryCatch(
+          recover_conflicting_deployment_and_retry(),
+          error = function(e) {
+            showNotification(
+              conditionMessage(e),
+              type = "error",
+              duration = 12
+            )
+          }
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$open_deployment_editor,
+      {
+        removeModal()
+        outputs$change_tab <- "deploy_recover"
+      },
+      ignoreInit = TRUE
+    )
+
     empty_continuous_upload_df <- function() {
       data.frame(
         datetime = character(),
@@ -6633,6 +7788,7 @@ addContData <- function(id, language) {
     }
 
     reset_upload_state <- function() {
+      clear_deployment_plan()
       data$df <- empty_continuous_upload_df()
       data$parsed_datetime <- NULL
       data$parsed_value <- NULL
@@ -6685,26 +7841,40 @@ addContData <- function(id, language) {
       values <- rule$rule_args[[1L]]
       arguments <- schema$arguments
       configured <- if (length(arguments)) {
-        Filter(Negate(is.null), lapply(arguments, format_qc_rule_argument, values = values))
+        Filter(
+          Negate(is.null),
+          lapply(arguments, format_qc_rule_argument, values = values)
+        )
       } else {
         character()
       }
       outputs <- as.character(unlist(rule$emits[[1L]], use.names = FALSE))
       tags$li(
-        tags$strong(paste0(rule$rule_fx[[1L]], " v", rule$rule_version[[1L]], ": ")),
+        tags$strong(paste0(
+          rule$rule_fx[[1L]],
+          " v",
+          rule$rule_version[[1L]],
+          ": "
+        )),
         rule$description[[1L]],
-        if (!is.na(rule$note[[1L]]) && nzchar(rule$note[[1L]])) tags$div(
-          class = "text-muted small",
-          paste("Upload rule note:", rule$note[[1L]])
-        ),
-        if (length(outputs)) tags$div(
-          class = "text-muted small",
-          paste("Qualifier code(s):", paste(outputs, collapse = ", "))
-        ),
-        if (length(configured)) tags$div(
-          class = "text-muted small",
-          paste("Configured behavior:", paste(configured, collapse = "; "))
-        )
+        if (!is.na(rule$note[[1L]]) && nzchar(rule$note[[1L]])) {
+          tags$div(
+            class = "text-muted small",
+            paste("Upload rule note:", rule$note[[1L]])
+          )
+        },
+        if (length(outputs)) {
+          tags$div(
+            class = "text-muted small",
+            paste("Qualifier code(s):", paste(outputs, collapse = ", "))
+          )
+        },
+        if (length(configured)) {
+          tags$div(
+            class = "text-muted small",
+            paste("Configured behavior:", paste(configured, collapse = "; "))
+          )
+        }
       )
     }
 
@@ -6765,13 +7935,13 @@ addContData <- function(id, language) {
     }
 
     upload_task <- ExtendedTask$new(function(req) {
-      promises::future_promise({
+      mirai::mirai({
         warnings <- character()
         messages <- character()
 
         tryCatch(
           {
-            con <- AquaConnect(
+            con <- YGwater::AquaConnect(
               name = req$config$dbName,
               host = req$config$dbHost,
               port = req$config$dbPort,
@@ -6856,7 +8026,10 @@ addContData <- function(id, language) {
             )
           }
         )
-      })
+      },
+      req = req,
+      .compute = "YGwater_aqualink"
+      )
     }) |>
       bslib::bind_task_button("upload") |>
       bslib::bind_task_button("upload_overwrite_all") |>
