@@ -462,6 +462,11 @@ app_ui <- function(request) {
             title = uiOutput("imagesNavMapTitle"),
             value = "imgMapView",
             uiOutput("imgMapView_ui")
+          ),
+          nav_panel(
+            title = uiOutput("imagesNavTsTitle"),
+            value = "imgTsView",
+            uiOutput("imgTsView_ui")
           )
         ), # End images nav_menu
 

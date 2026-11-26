@@ -1486,6 +1486,7 @@ app_server <- function(input, output, session) {
     "snowBulletin",
     "imgTableView",
     "imgMapView",
+    "imgTsView",
     "docTableView",
     "discData",
     "contData",
@@ -1742,6 +1743,7 @@ app_server <- function(input, output, session) {
     ui_loaded$FOD <- FALSE
     ui_loaded$imgTableView <- FALSE
     ui_loaded$imgMapView <- FALSE
+    ui_loaded$imgTsView <- FALSE
     ui_loaded$docTableView <- FALSE
     ui_loaded$snowInfo <- FALSE
     ui_loaded$waterInfo <- FALSE
@@ -1846,6 +1848,7 @@ app_server <- function(input, output, session) {
     "snowBulletin",
     "imgTableView",
     "imgMapView",
+    "imgTsView",
     "docTableView",
     "discData",
     "contData",
@@ -2109,6 +2112,9 @@ app_server <- function(input, output, session) {
     })
     output$imagesNavMapTitle <- renderUI({
       tr("images_map", languageSelection$language)
+    })
+    output$imagesNavTsTitle <- renderUI({
+      tr("images_ts", languageSelection$language)
     })
 
     output$documentsNavMenuTitle <- renderUI({
@@ -3037,6 +3043,7 @@ WHERE rolname = current_user;"
           "snowBulletin",
           "imgTableView",
           "imgMapView",
+          "imgTsView",
           "docTableView",
           "about",
           "news",
@@ -3156,6 +3163,14 @@ WHERE rolname = current_user;"
         ui_loaded$imgMapView <- TRUE
         # Call the server
         imgMapView("imgMapView", language = languageSelection)
+      }
+    }
+    if (input$navbar == "imgTsView") {
+      if (!ui_loaded$imgTsView) {
+        output$imgTsView_ui <- renderUI(imgTsViewUI("imgTsView"))
+        ui_loaded$imgTsView <- TRUE
+        # Call the server
+        imgTsView("imgTsView", language = languageSelection)
       }
     }
 

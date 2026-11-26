@@ -99,6 +99,10 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
   source(system.file(
+    "apps/aqualink/modules/client/images/image_timeseries_view.R",
+    package = "YGwater"
+  ))
+  source(system.file(
     "apps/aqualink/modules/client/documents/document_table_view.R",
     package = "YGwater"
   ))
