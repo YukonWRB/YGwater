@@ -14,6 +14,9 @@ from rasterio.enums import Resampling
 from affine import Affine
 from rasterio.mask import mask
 from pathlib import Path
+from rasterio.features import geometry_mask, geometry_window
+from rasterio.windows import Window
+from rasterio.errors import WindowError
 
 
 # ------------------------------------------------------------
@@ -53,7 +56,7 @@ id_field = "HYBAS_ID"
 
 # Maximum  number of basins with valid DEM data to process.print
 # Set to None to process all qualifying basins.
-max_tiles = 5
+max_tiles = None
 
 # Alternatively, specify particular HYBAS_ID values.
 # Leave as None to screen all available basins.
@@ -93,10 +96,6 @@ if id_field not in basins.columns:
 
 if basins.crs is None:
     raise ValueError("HydroBASINS polygons have no CRS.")
-
-# ------------------------------------------------------------
-# 5. CHECK DEM CRS AND RESOLUTION
-# ------------------------------------------------------------
 
 # ------------------------------------------------------------
 # 5. CHECK DEM CRS, RESOLUTION AND EXTENT
@@ -280,12 +279,15 @@ print(
 )
 
 # ------------------------------------------------------------
-# 8C. SCREEN BASINS FOR VALID DEM DATA (LOW-RESOLUTION)
+# 8C. SCREEN BASINS FOR VALID DEM DATA (CHUNKED)
 # ------------------------------------------------------------
 
 print("\nScreening basins for valid DEM data...")
 
 valid_tile_ids = []
+
+# Size of each DEM chunk (pixels)
+chunk_size = 1024
 
 with rasterio.open(dem_file) as src:
 
@@ -296,62 +298,99 @@ with rasterio.open(dem_file) as src:
 
         tile_id = basin["tile_id"]
 
-        print(f"\nChecking basin {index}/{len(buffered)}: {tile_id}")
-
-        # Find the part of the DEM covered by the basin buffer
-        window = from_bounds(
-            *basin.geometry.bounds,
-            transform=src.transform
+        print(
+            f"\nChecking basin {index}/{len(buffered)}: {tile_id}"
         )
 
-        # Restrict the window to the actual DEM dimensions
-        window = window.intersection(
-            Window(0, 0, src.width, src.height)
-        )
+        geometry = basin.geometry
 
-        # Read a much smaller version of the DEM validity mask
-        sample_width = min(512, max(1, int(np.ceil(window.width))))
-        sample_height = min(512, max(1, int(np.ceil(window.height))))
+        has_valid_data = False
 
-        sampled_mask = src.read_masks(
-            1,
-            window=window,
-            out_shape=(sample_height, sample_width),
-            resampling=Resampling.max
-        )
+        try:
 
-        # Calculate the transform for the smaller sampled raster
-        sample_transform = (
-            src.window_transform(window)
-            * Affine.scale(
-                window.width / sample_width,
-                window.height / sample_height
+            # Find the raster window covering the basin buffer
+            window = geometry_window(
+                src,
+                [geometry.__geo_interface__]
             )
-        )
 
-        # Identify which sampled pixels overlap the basin buffer
-        inside_basin = geometry_mask(
-            [basin.geometry.__geo_interface__],
-            out_shape=(sample_height, sample_width),
-            transform=sample_transform,
-            invert=True,
-            all_touched=True
-        )
+            # Restrict the window to the DEM dimensions
+            window = window.intersection(
+                Window(0, 0, src.width, src.height)
+            )
 
-        # Check for valid DEM data inside the basin buffer
-        has_valid_data = np.any(
-            (sampled_mask > 0) & inside_basin
-        )
+            # Read the window in small chunks
+            for row_off in range(
+                int(window.row_off),
+                int(window.row_off + window.height),
+                chunk_size
+            ):
 
+                for col_off in range(
+                    int(window.col_off),
+                    int(window.col_off + window.width),
+                    chunk_size
+                ):
+
+                    # Calculate the dimensions of this chunk
+                    chunk_window = Window(
+                        col_off,
+                        row_off,
+                        min(
+                            chunk_size,
+                            int(window.col_off + window.width) - col_off
+                        ),
+                        min(
+                            chunk_size,
+                            int(window.row_off + window.height) - row_off
+                        )
+                    )
+
+                    # Read the DEM validity mask for this chunk
+                    validity = src.read_masks(
+                        1,
+                        window=chunk_window
+                    )
+
+                    # Identify pixels inside the basin buffer
+                    inside_basin = geometry_mask(
+                        [geometry.__geo_interface__],
+                        out_shape=validity.shape,
+                        transform=src.window_transform(chunk_window),
+                        invert=True,
+                        all_touched=True
+                    )
+
+                    # Check for at least one valid DEM pixel
+                    if np.any(
+                        (validity > 0) & inside_basin
+                    ):
+
+                        has_valid_data = True
+                        break
+
+                # Stop checking chunks once valid data is found
+                if has_valid_data:
+                    break
+
+        except (ValueError, WindowError):
+            has_valid_data = False
+
+        # Retain or skip the basin
         if has_valid_data:
+
             valid_tile_ids.append(tile_id)
+
             print("Valid DEM data found. Basin retained.")
+
         else:
+
             print("No valid DEM data found. Basin skipped.")
 
-        # Stop once we have enough candidate basins
+        # Stop once we have enough qualifying basins
         if max_tiles is not None and len(valid_tile_ids) >= max_tiles:
             break
+
 
 # Keep only basins with valid DEM data
 buffered = buffered[
@@ -391,7 +430,6 @@ buffered.to_file(
 )
 
 print(f"\nSaved polygon GeoPackage: {polygon_file.name}")
-
 
 # ------------------------------------------------------------
 # 10. CLIP DEM FOR EACH BUFFERED BASIN

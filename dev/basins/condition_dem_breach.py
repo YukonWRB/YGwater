@@ -1,6 +1,6 @@
 #1
 
-import math
+
 import rasterio
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +11,7 @@ wbe = wbw.WbEnvironment()
 
 project_dir = Path(r"H:\cmfmacne\basins\code")
 
-def cond_dem_breach(dem_file):
+def cond_dem(dem_file):
 
     dem = wbe.read_raster(str(dem_file))
 
@@ -23,11 +23,11 @@ def cond_dem_breach(dem_file):
     )
 
     stem = dem_file.stem
-
-    wbe.write_raster(
-        breached,
-        str(project_dir / f"{stem}_breached.tif")
-    )
+#this can go
+    # wbe.write_raster(
+    #     breached,
+    #     str(project_dir / f"{stem}_breached.tif")
+    # )
 
     d8_pointer = wbe.hydrology.flow_routing.d8_pointer(
         dem=breached
@@ -38,50 +38,49 @@ def cond_dem_breach(dem_file):
         input_is_pointer=True,
         out_type="cells"
     )
-
+#can I create a new folder here?
     wbe.write_raster(
         flow_accum,
         str(project_dir / f"{stem}_flow_accum.tif")
     )
-
+#can I create a new folder here?
     wbe.write_raster(
         d8_pointer,
         str(project_dir / f"{stem}_flow_dir.tif")
     )    
 
-
+#can change this easily to hb5_
 for dem_file in sorted(project_dir.glob("dtm_*.tif")):
-    cond_dem_breach(dem_file)
-
+    cond_dem(dem_file)
 
 
 #just to take a look
-flow_file = project_dir / "dtm_1_flow_accum.tif"
+# flow_file = project_dir / "dtm_1_flow_accum.tif"
 
-with rasterio.open(flow_file) as src:
+# with rasterio.open(flow_file) as src:
 
-    data = src.read(
-        1,
-        out_shape=(1500, 1500)
-    )
+#     data = src.read(
+#         1,
+#         out_shape=(1500, 1500)
+#     )
 
-    nodata = src.nodata
+#     nodata = src.nodata
 
-display = data.astype(float)
+# display = data.astype(float)
 
-display[data == nodata] = np.nan
+# display[data == nodata] = np.nan
 
-plt.figure(figsize=(10,10))
+# plt.figure(figsize=(10,10))
 
-plt.imshow(
-    np.log10(display),
-    cmap="Blues"
-)
+# plt.imshow(
+#     np.log10(display),
+#     cmap="Blues"
+# )
 
-plt.colorbar()
-plt.title(flow_file.stem)
+# plt.colorbar()
+# plt.title(flow_file.stem)
 
-plt.show()
+# plt.show()
 
 
 
