@@ -1,5 +1,6 @@
 
 # ============================================================
+# Generates candidate pour points
 # AUTOMATED BASIN OUTLET CANDIDATE IDENTIFICATION
 # Yukon basin delineation experiment
 # ============================================================
