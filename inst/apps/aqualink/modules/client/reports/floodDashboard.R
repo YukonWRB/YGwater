@@ -7404,7 +7404,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
 
             result_table
-        })
+            # Client-side processing: the table only holds one community's
+            # stations, and its columns change with the parameter/summary mode.
+            # With server-side processing, a draw request from the previous
+            # table could hit the newly registered data (different columns),
+            # producing DataTables Ajax/"column not found" errors.
+        }, server = FALSE)
 
         # -----------------------------------------------------------------------
         # Synchronize summary-table selection and station Selectize.

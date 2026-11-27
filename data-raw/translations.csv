@@ -26,6 +26,7 @@ data,dataNavMenuTitle,Data,Données
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
 images_map,imagesNavMapTitle,Map selection,À partir de la carte
+images_ts,imagesNavTsTitle,Timeseries selection,À partir d'une série temporelle
 documents,translation,Documents,Documents
 authors,documentsModuleColAuthors,Authors,Auteurs
 document_published,documentsModuleColPublished,Published,Date de publication
@@ -967,3 +968,29 @@ aggregation_quick_start_new_method,Quick-start requires a new method version,Add
 aggregation_quick_start_requires_mean,Quick-start requires a mean timeseries,These examples produce a Mean value. Choose Mean as the timeseries aggregation type to use them.,Ces exemples produisent une moyenne. Choisissez Moyenne comme type d’agrégation de la série temporelle pour les utiliser.
 aggregation_quick_start_staged,Quick-start staged notification,Example staged. Review the weighting and missing-reading assumptions before saving.,Exemple préparé. Vérifiez la pondération et le traitement des mesures manquantes avant l’enregistrement.
 aggregation_quick_start_has_steps,Quick-start preserves existing steps,"This new method already has staged steps. Remove them first to load an example; your current work was kept.","Cette nouvelle méthode contient déjà des étapes préparées. Supprimez-les avant de charger un exemple; votre travail actuel a été conservé."
+img_ts_station_lab,imgTsView station selector label,Hydrometric station (with photos),Station hydrométrique (avec photos)
+img_ts_hydrograph,imgTsView hydrograph card title,Hydrograph,Hydrogramme
+img_ts_click_hint,imgTsView hydrograph card hint,Click anywhere on either plot to show the nearest photo.,Cliquez n'importe où sur l'un ou l'autre des graphiques pour afficher la photo la plus proche.
+img_ts_stage,imgTsView secondary plot variable,Stage,Niveau d'eau
+img_ts_discharge,imgTsView secondary plot variable,Discharge,Débit
+img_ts_air_temp,imgTsView secondary plot variable,Air temperature,Température de l'air
+img_ts_cfdd,imgTsView secondary plot variable (cumulative freezing degree days),CFDD,CDJG
+img_ts_cddt,imgTsView secondary plot variable (cumulative thawing degree days),CDDT,CDJD
+img_ts_day,imgTsView degree-day axis unit,day,jour
+img_ts_daily_precip,imgTsView precipitation axis label,Daily precipitation (mm),Précipitations quotidiennes (mm)
+img_ts_data_to,imgTsView station list: date of last data,data to,données jusqu'au
+img_ts_no_nearby,imgTsView message; %d is a distance in km,No station with this variable within %d km.,Aucune station avec cette variable dans un rayon de %d km.
+img_ts_invalid_dates,imgTsView message,Choose a valid date range.,Choisissez un intervalle de dates valide.
+img_ts_no_hydro_data,imgTsView message,No hydrometric data for this station and date range.,Aucune donnée hydrométrique pour cette station et cet intervalle de dates.
+img_ts_no_secondary_data,imgTsView message,No data for this variable and date range.,Aucune donnée pour cette variable et cet intervalle de dates.
+img_ts_photo,imgTsView plot legend,Photo,Photo
+img_ts_shown_photo,imgTsView plot legend,Shown photo,Photo affichée
+img_ts_photo_n_of_m,imgTsView photo counter; %d placeholders,Photo %d of %d,Photo %d sur %d
+img_ts_no_photos_short,imgTsView photo counter,No photos,Aucune photo
+img_ts_no_photos,imgTsView message,No photos for this station in the selected date range.,Aucune photo pour cette station dans l'intervalle de dates choisi.
+img_ts_photo_alt,imgTsView image alt text; %s is a timestamp,Photo taken %s,Photo prise le %s
+img_ts_normals,imgTsView toggle for climate normals on both plots,Climate normals,Normales climatiques
+img_ts_typical_range,imgTsView normals band (25th-75th percentile),Typical range (25th-75th percentile),Plage typique (25e-75e centile)
+img_ts_historic_range,imgTsView normals band (min-max),Historic range (min-max),Plage historique (min-max)
+img_ts_normal,imgTsView normals line,Normal,Normale
+img_ts_no_normals,imgTsView note when normals are on but unavailable; %d is a number of years,No climate normals for these dates (needs %d years of history),Aucune normale climatique pour ces dates (il faut %d ans de données)
